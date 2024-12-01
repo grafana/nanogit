@@ -16,3 +16,17 @@ just replace `hackathon-2024-12-nanogit` with `nanogit` everywhere. Tools like
 
 Make sure someone owns and maintains this project if you intend on graduating
 it. Otherwise, we may gain security vulnerabilities which we won't solve.
+
+## Resources
+
+Want to learn how Git works? The following resources are useful:
+
+* <https://git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols>
+* <https://git-scm.com/docs/protocol-v2>
+* <https://git-scm.com/docs/pack-protocol>
+* <https://git-scm.com/docs/git-http-backend>
+* <https://git-scm.com/docs/http-protocol>
+* <https://git-scm.com/docs/gitprotocol-http>
+* <https://git-scm.com/docs/gitprotocol-v2>
+* <https://git-scm.com/docs/gitprotocol-pack>
+* <https://git-scm.com/docs/gitprotocol-common>
