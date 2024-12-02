@@ -32,32 +32,53 @@ var (
 	ErrDataTooLarge = errors.New("the data field is too large")
 )
 
-type specialPacket []byte
+type Packet interface {
+	Marshal() ([]byte, error)
+}
+
+type PacketLine []byte
+
+func (p PacketLine) Marshal() ([]byte, error) {
+	// TODO: Verify the length first.
+	out := make([]byte, len(p)+4)
+	copy(out, []byte(fmt.Sprintf("%04x", len(p)+4)))
+	copy(out[4:], p)
+	return out, nil
+}
+
+type SpecialPacket []byte
+
+func (p SpecialPacket) Marshal() ([]byte, error) {
+	// We don't need to do anything special here. The special packets are pre-defined, and known to be valid.
+	return []byte(p), nil
+}
 
 var (
 	// FlushPacket is a packet of length '0000'. It is a special-case, defined by two docs:
 	//   - https://git-scm.com/docs/gitprotocol-common
 	//   - https://git-scm.com/docs/protocol-v2 or https://git-scm.com/docs/gitprotocol-v2
-	FlushPacket = specialPacket("0000")
+	FlushPacket = SpecialPacket("0000")
 
 	// DelimeterPacket is a packet of length '0001'. It is a special-case, defined by the v2 document:
 	// https://git-scm.com/docs/protocol-v2 or https://git-scm.com/docs/gitprotocol-v2
-	DelimeterPacket = specialPacket("0001")
+	DelimeterPacket = SpecialPacket("0001")
 
 	// ResponseEndPacket is a packet of length '0002'. It is a special-case, defined by the v2 document:
 	// https://git-scm.com/docs/protocol-v2 or https://git-scm.com/docs/gitprotocol-v2
-	ResponseEndPacket = specialPacket("0002")
+	ResponseEndPacket = SpecialPacket("0002")
 )
 
-func FormatPacket(packetLines ...[]byte) []byte {
+func FormatPackets(packets ...Packet) ([]byte, error) {
 	var out []byte
-	for _, pl := range packetLines {
-		n := fmt.Sprintf("%04x", len(pl)+4)
-		out = append(out, []byte(n)...)
-		out = append(out, pl...)
+	for _, pl := range packets {
+		marshalled, err := pl.Marshal()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, marshalled...)
 	}
 	out = append(out, FlushPacket...)
-	return out
+	return out, nil
 }
 
 func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {

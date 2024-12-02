@@ -45,13 +45,77 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	refsData, err := cmd(ctx, owner, repo, protocol.FormatPacket(
-		[]byte("command=ls-refs\n"),
-		[]byte("object-format=sha1\n")))
+	pkt, err := protocol.FormatPackets(
+		protocol.PacketLine("command=ls-refs\n"),
+		protocol.PacketLine("object-format=sha1\n"))
+	if err != nil {
+		return err
+	}
+	refsData, err := cmd(ctx, owner, repo, pkt)
 	if err != nil {
 		return err
 	}
 	lines, remainder, err := protocol.ParsePacket(refsData)
+	if err != nil {
+		return err
+	}
+	for _, line := range lines {
+		slog.Info("line in data", "line", string(line))
+	}
+	slog.Info("and here's the remainder", "remainder", remainder)
+
+	pkt, err = protocol.FormatPackets(
+		// https://git-scm.com/docs/protocol-v2#_fetch
+		protocol.PacketLine("command=fetch\n"),
+		protocol.PacketLine("object-format=sha1\n"), // https://git-scm.com/docs/protocol-v2#_object_format
+		protocol.DelimeterPacket,
+		// thin-pack
+		// Request that a thin pack be sent, which is a pack with deltas
+		// which reference base objects not contained within the pack (but
+		// are known to exist at the receiving end). This can reduce the
+		// network traffic significantly, but it requires the receiving end
+		// to know how to "thicken" these packs by adding the missing bases
+		// to the pack.
+		protocol.PacketLine("thin-pack\n"),
+		// no-progress
+		// Request that progress information that would normally be sent on
+		// side-band channel 2, during the packfile transfer, should not be
+		// sent.  However, the side-band channel 3 is still used for error
+		// responses.
+		// TODO: What is a side-band channel in git's protocol??
+		protocol.PacketLine("no-progress\n"),
+		// filter <filter-spec>
+		// Request that various objects from the packfile be omitted
+		// using one of several filtering techniques. These are intended
+		// for use with partial clone and partial fetch operations. See
+		// `rev-list` for possible "filter-spec" values. When communicating
+		// with other processes, senders SHOULD translate scaled integers
+		// (e.g. "1k") into a fully-expanded form (e.g. "1024") to aid
+		// interoperability with older receivers that may not understand
+		// newly-invented scaling suffixes. However, receivers SHOULD
+		// accept the following suffixes: 'k', 'm', and 'g' for 1024,
+		// 1048576, and 1073741824, respectively.
+		protocol.PacketLine("filter blob:none\n"),
+		// want-ref <ref>
+		// Indicates to the server that the client wants to retrieve a
+		// particular ref, where <ref> is the full name of a ref on the
+		// server.
+		protocol.PacketLine("want 6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a\n"),
+		// done
+		// Indicates to the server that negotiation should terminate (or
+		// not even begin if performing a clone) and that the server should
+		// use the information supplied in the request to construct the
+		// packfile.
+		protocol.PacketLine("done\n"),
+	)
+	if err != nil {
+		return err
+	}
+	out, err := cmd(ctx, owner, repo, pkt)
+	if err != nil {
+		return err
+	}
+	lines, remainder, err = protocol.ParsePacket(out)
 	if err != nil {
 		return err
 	}
