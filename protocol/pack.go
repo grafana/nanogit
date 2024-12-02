@@ -71,6 +71,30 @@ var (
 	ResponseEndPacket = SpecialPacket("0002")
 )
 
+type ParseError struct {
+	Line []byte
+	Err  error
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("error parsing line %q: %s", e.Line, e.Err.Error())
+}
+
+func (e *ParseError) Unwrap() error {
+	return e.Err
+}
+
+func NewParseError(line []byte, err error) *ParseError {
+	return &ParseError{
+		Line: line,
+		Err:  err,
+	}
+}
+
+func IsParseError(err error) bool {
+	return errors.As(err, new(*ParseError))
+}
+
 func FormatPackets(packets ...Packet) ([]byte, error) {
 	var out bytes.Buffer
 	for _, pl := range packets {
@@ -90,12 +114,16 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 	// An error packet is a special pkt-line that contains an error string.
 	//    error-line     =  PKT-LINE("ERR" SP explanation-text)
 	// Throughout the protocol, where PKT-LINE(...) is expected, an error packet MAY be sent. Once this packet is sent by a client or a server, the data transfer process defined in this protocol is terminated.
-	for len(b) > 0 {
-		length, err := strconv.ParseInt(string(b[:4]), 16, 32)
-		if err != nil {
-			return nil, b, err
-		}
-		if length < 4 {
+
+	// There should be at least 4 bytes in the packet.
+	for len(b) >= 4 {
+		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
+
+		switch {
+		case err != nil:
+			return nil, b, NewParseError(b, fmt.Errorf("parsing line length: %w", err))
+
+		case length < 4:
 			// This is a special-case packet.
 			// For now, we don't really have a good solution to handle special-case packets.
 			b = b[4:]
@@ -103,14 +131,15 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 				return lines, b, nil
 			}
 			continue
+
+		case len(b) < int(length):
+			return lines, b, NewParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
 		}
+
 		// The length includes the first 4 bytes as well, so we should be good with this.
-		line := b[4:length]
-		lines = append(lines, line)
-		if int(length) > len(line)+4 {
-			return lines, b, fmt.Errorf("packet declared %d bytes, but only had %d", length, len(line)+4)
-		}
+		lines = append(lines, b[4:length])
 		b = b[length:]
 	}
+
 	return lines, b, nil
 }
