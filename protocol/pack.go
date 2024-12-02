@@ -39,7 +39,9 @@ type Packet interface {
 type PacketLine []byte
 
 func (p PacketLine) Marshal() ([]byte, error) {
-	// TODO: Verify the length first.
+	if len(p) > MaxPktLineDataSize {
+		return nil, ErrDataTooLarge
+	}
 	out := make([]byte, len(p)+4)
 	copy(out, []byte(fmt.Sprintf("%04x", len(p)+4)))
 	copy(out[4:], p)
@@ -82,6 +84,11 @@ func FormatPackets(packets ...Packet) ([]byte, error) {
 }
 
 func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
+	// FIXME: We need to parse error packets: https://git-scm.com/docs/gitprotocol-pack#_pkt_line_format
+	//
+	// An error packet is a special pkt-line that contains an error string.
+	//    error-line     =  PKT-LINE("ERR" SP explanation-text)
+	// Throughout the protocol, where PKT-LINE(...) is expected, an error packet MAY be sent. Once this packet is sent by a client or a server, the data transfer process defined in this protocol is terminated.
 	for len(b) > 0 {
 		length, err := strconv.ParseInt(string(b[:4]), 16, 32)
 		if err != nil {

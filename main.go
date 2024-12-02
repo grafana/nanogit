@@ -83,6 +83,7 @@ func run() error {
 		// sent.  However, the side-band channel 3 is still used for error
 		// responses.
 		// TODO: What is a side-band channel in git's protocol??
+		//   Relevant on side-bands: https://git-scm.com/docs/gitprotocol-pack#_packfile_data
 		protocol.PacketLine("no-progress\n"),
 		// filter <filter-spec>
 		// Request that various objects from the packfile be omitted
@@ -121,6 +122,34 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// The format of the output here is:
+	//
+	//     output = acknowledgements flush-pkt |
+	//         [acknowledgments delim-pkt] [shallow-info delim-pkt]
+	//         [wanted-refs delim-pkt] [packfile-uris delim-pkt]
+	//         packfile flush-pkt
+	//
+	//     acknowledgments = PKT-LINE("acknowledgments" LF)
+	//        (nak | *ack)
+	//        (ready)
+	//     ready = PKT-LINE("ready" LF)
+	//     nak = PKT-LINE("NAK" LF)
+	//     ack = PKT-LINE("ACK" SP obj-id LF)
+	//
+	//     shallow-info = PKT-LINE("shallow-info" LF)
+	//        *PKT-LINE((shallow | unshallow) LF)
+	//     shallow = "shallow" SP obj-id
+	//     unshallow = "unshallow" SP obj-id
+	//
+	//     wanted-refs = PKT-LINE("wanted-refs" LF)
+	//         *PKT-LINE(wanted-ref LF)
+	//     wanted-ref = obj-id SP refname
+	//
+	//     packfile-uris = PKT-LINE("packfile-uris" LF) *packfile-uri
+	//     packfile-uri = PKT-LINE(40*(HEXDIGIT) SP *%x20-ff LF)
+	//
+	//     packfile = PKT-LINE("packfile" LF)
+	//         *PKT-LINE(%x01-03 *%x00-ff)
 	for _, line := range lines {
 		slog.Info("line in data", "line", string(line))
 	}
