@@ -10,10 +10,12 @@ The following are goals in this project:
 * Support reading Git trees over HTTPS on github.com.
 * Support writing new Git objects over HTTPS on github.com.
 * Support writing Git object deltas over HTTPS on github.com. (Are these even necessary to push objects?)
+* Support SHA-1 hashing in repositories.
 
 Eventually, these goals will also be relevant:
 
 * Support any HTTPS Git service that supports `git-upload-pack` on `Git-Protocol: version=2`. Gitlab is a good example of this.
+* Support SHA-256 repositories on top of SHA-1 repositories.
 
 These are non-goals (for now?):
 
