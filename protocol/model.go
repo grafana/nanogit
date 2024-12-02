@@ -60,6 +60,7 @@ type WantedRef struct {
 
 type FetchResponse struct {
 	// These fields are in order.
+	// TODO: Do we want a session ID field? It might be useful for OTel tracing?
 
 	Acks       Acknowledgements
 	Shallow    []ShallowInfo
