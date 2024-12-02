@@ -26,6 +26,9 @@ func cmd(ctx context.Context, org, repo string, data []byte) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Add("Git-Protocol", "version=2")
+	if username, password := os.Getenv("GHUSER"), os.Getenv("GHPASS"); username != "" && password != "" {
+		req.SetBasicAuth(username, password)
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -38,7 +41,7 @@ func cmd(ctx context.Context, org, repo string, data []byte) ([]byte, error) {
 }
 
 func run() error {
-	owner, repo := "grafana", "grafana"
+	owner, repo := "grafana", "git-ui-sync-demo"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
