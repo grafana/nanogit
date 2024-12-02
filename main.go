@@ -33,6 +33,7 @@ func cmd(ctx context.Context, org, repo string, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}

@@ -132,7 +132,7 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 			}
 			continue
 
-		case len(b) < int(length):
+		case len(b) < int(length): //nolint:gosec // length is expected to be at most 2^16.
 			return lines, b, NewParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
 		}
 

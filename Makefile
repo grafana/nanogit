@@ -4,7 +4,7 @@ fmt:
 
 .PHONY: lint
 lint:
-	golangci-lint run
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run
 
 .PHONY: test
 test: lint
