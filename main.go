@@ -96,10 +96,12 @@ func run() error {
 		// accept the following suffixes: 'k', 'm', and 'g' for 1024,
 		// 1048576, and 1073741824, respectively.
 		protocol.PacketLine("filter blob:none\n"),
-		// want-ref <ref>
-		// Indicates to the server that the client wants to retrieve a
-		// particular ref, where <ref> is the full name of a ref on the
-		// server.
+		// want <oid>
+		// Indicates to the server an object which the client wants to
+		// retrieve.  Wants can be anything and are not limited to
+		// advertised objects.
+		//
+		// The value here is a commit: https://github.com/grafana/git-ui-sync-demo/commit/6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a
 		protocol.PacketLine("want 6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a\n"),
 		// done
 		// Indicates to the server that negotiation should terminate (or
