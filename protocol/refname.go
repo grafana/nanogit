@@ -34,6 +34,8 @@ var HEAD RefName = RefName{
 //   - It cannot end with '.lock'.
 //   - It cannot contain '@{'.
 //   - It cannot contain a '\\'.
+//
+// See https://git-scm.com/docs/git-check-ref-format
 func ParseRefName(in string) (RefName, error) {
 	if in == "HEAD" {
 		return HEAD, nil
@@ -45,12 +47,58 @@ func ParseRefName(in string) (RefName, error) {
 	}
 	in = in[len("refs/"):]
 
-	categoryIdx := strings.IndexRune(in, '/')
-	if categoryIdx == -1 {
+	sepIdx := strings.IndexRune(in, '/')
+	if sepIdx == -1 {
 		return rn, errors.New("ref name does not include a category")
 	}
-	rn.Category = in[:categoryIdx]
-	rn.Location = in[categoryIdx+1:]
-	// TODO: Ensure the rules are followed.
+
+	// The performance of this function could be improved, possibly by
+	// implementin a state machine, but we need a reference point first.
+
+	if strings.Contains(in, "..") {
+		return rn, errors.New("ref cannot have two consecutive dots `..` anywhere")
+	}
+
+	if strings.Contains(in, "//") {
+		return rn, errors.New("ref cannot contain multiple consecutive slashes")
+	}
+
+	if strings.Contains(in, "@{") {
+		return rn, errors.New("ref cannot contain a sequence `@{`")
+	}
+
+	for _, component := range strings.Split(in, "/") {
+		if component == "" {
+			return rn, errors.New("ref components cannot be empty")
+		}
+
+		if component == "@" {
+			return rn, errors.New("ref components cannot be the single character `@`")
+		}
+
+		if strings.HasPrefix(component, ".") {
+			return rn, errors.New("ref components cannot begin with a dot `.` or end with the sequence .lock")
+		}
+
+		if strings.HasSuffix(component, ".lock") {
+			return rn, errors.New("ref components cannot end with the sequence `.lock`")
+		}
+
+		if strings.HasSuffix(component, ".") {
+			return rn, errors.New("ref components cannot end with a dot `.`")
+		}
+
+		hasInvalidRunes := strings.ContainsFunc(component, func(r rune) bool {
+			return r < 0o040 || r == 0o177 || r == ' ' || r == '~' || r == '^' || r == ':' || r == '?' || r == '*' || r == '[' || r == '\\'
+		})
+
+		if hasInvalidRunes {
+			return rn, errors.New("ref components cannot contain control characters, spaces, `~`, `^`, `:`, `?`, `*`, `[`, `DEL`, or a backslash")
+		}
+	}
+
+	rn.Category = in[:sepIdx]
+	rn.Location = in[sepIdx+1:]
+
 	return rn, nil
 }

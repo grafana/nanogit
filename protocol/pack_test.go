@@ -8,6 +8,8 @@ import (
 )
 
 func TestFormatPackets(t *testing.T) {
+	t.Parallel()
+
 	testcases := map[string]struct {
 		input    []protocol.Packet
 		expected []byte
@@ -44,6 +46,8 @@ func TestFormatPackets(t *testing.T) {
 }
 
 func TestParsePacket(t *testing.T) {
+	t.Parallel()
+
 	type expected struct {
 		lines     [][]byte
 		remainder []byte
