@@ -45,7 +45,9 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	refsData, err := cmd(ctx, owner, repo, protocol.FormatPacket([]byte("command=ls-refs\n"), []byte("object-format=sha1\n")))
+	refsData, err := cmd(ctx, owner, repo, protocol.FormatPacket(
+		[]byte("command=ls-refs\n"),
+		[]byte("object-format=sha1\n")))
 	if err != nil {
 		return err
 	}
