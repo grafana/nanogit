@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -71,16 +72,16 @@ var (
 )
 
 func FormatPackets(packets ...Packet) ([]byte, error) {
-	var out []byte
+	var out bytes.Buffer
 	for _, pl := range packets {
 		marshalled, err := pl.Marshal()
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, marshalled...)
+		out.Write(marshalled)
 	}
-	out = append(out, FlushPacket...)
-	return out, nil
+	out.Write(FlushPacket)
+	return out.Bytes(), nil
 }
 
 func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
