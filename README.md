@@ -9,7 +9,7 @@ The following are goals in this project:
 * Support reading Git files over HTTPS on github.com.
 * Support reading Git trees over HTTPS on github.com.
 * Support writing new Git objects over HTTPS on github.com.
-* Support writing Git object deltas over HTTPS on github.com.
+* Support writing Git object deltas over HTTPS on github.com. (Are these even necessary to push objects?)
 
 Eventually, these goals will also be relevant:
 
@@ -22,6 +22,21 @@ These are non-goals (for now?):
 * Supporting commit signing.
 * Supporting Git signature verification.
 * Supporting proper clones.
+* Creating tags. Reading ones are given by default when we can read commits.
+* Supporting Git hooks.
+* Supporting any Git configuration.
+* Reading any part of the .git directory.
+* Supporting Git deltas (`git diff`) in our outputs or in the API.
+* Supporting "dumb" servers.
+* Supporting branch renames.
+* Supporting permissions. All objects created can be defined as mode 0644 (or 0600?).
+
+By the end of the Hackathon, or by Graduation, we aim for this library to:
+
+* Have a reasonable, stable API.
+* Have a reasonably high test coverage. Test types are not defined for this.
+* There should be some level of documentation _somewhere_ beyond the code. That can be GitHub Wiki, a proper docs page, or some kind of internal tool. TBD.
+* Have a Hackathon output demo/video. It won't be good, promise.
 
 ## Maintenance
 
