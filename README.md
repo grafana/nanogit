@@ -2,6 +2,27 @@
 
 A limited, cloud-ready Git implementation for use in Grafana.
 
+## Project goals
+
+The following are goals in this project:
+
+* Support reading Git files over HTTPS on github.com.
+* Support reading Git trees over HTTPS on github.com.
+* Support writing new Git objects over HTTPS on github.com.
+* Support writing Git object deltas over HTTPS on github.com.
+
+Eventually, these goals will also be relevant:
+
+* Support any HTTPS Git service that supports `git-upload-pack` on `Git-Protocol: version=2`. Gitlab is a good example of this.
+
+These are non-goals (for now?):
+
+* Supporting the `git://` and Git-over-SSH protocols.
+* Supporting the file protocol, i.e. without any wire communications.
+* Supporting commit signing.
+* Supporting Git signature verification.
+* Supporting proper clones.
+
 ## Maintenance
 
 This project is not maintained. It was created as part of a hackathon, and as
