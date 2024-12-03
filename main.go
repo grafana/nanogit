@@ -163,6 +163,4 @@ func run() error {
 		}
 		slog.Info("object read", "ty", obj.Type, "data", obj.Data)
 	}
-
-	return nil
 }
