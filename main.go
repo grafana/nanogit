@@ -119,7 +119,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	lines, remainder, err = protocol.ParsePacket(out)
+
+	// TODO(mem): do something with the remaing data.
+	lines, _, err = protocol.ParsePacket(out)
 	if err != nil {
 		return err
 	}
