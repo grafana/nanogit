@@ -60,7 +60,7 @@ type FetchResponse struct {
 	//	1 - pack data
 	//	2 - progress messages
 	//	3 - fatal error message just before stream aborts
-	Packfile *Packfile
+	Packfile *PackfileReader
 	// When encoded, a flush-pkt is presented here.
 }
 

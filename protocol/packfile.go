@@ -1,6 +1,14 @@
 package protocol
 
-// A Packfile is a compressed, communicable file.
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"io"
+	"slices"
+)
+
+// A PackfileReader is a reader for a set of compressed files (objects).
 // Its wire-format is defined here: https://git-scm.com/docs/pack-format
 // Its negotiation is defined here: https://git-scm.com/docs/pack-protocol#_packfile_negotiation
 //
@@ -18,7 +26,8 @@ package protocol
 //   - For a deltified representation, the same byte and length is given.
 //     Then, we have an object name if OBJ_REF_DELTA or a negative relative offset from the delta object's position in the pack if this is an OBJ_OFS_DELTA object.
 //     Finally, the compressed delta data.
-type Packfile struct {
+type PackfileReader struct {
+	reader io.Reader
 }
 
 type PackedObject struct {
@@ -53,6 +62,31 @@ func (t ObjectType) IsValid() bool {
 	return t != ObjectTypeInvalid && t != ObjectTypeReserved && (t & ^ObjectType(0b111)) == 0
 }
 
-func ParsePackfile(payload []byte) (*Packfile, error) {
-	return nil, nil
+var (
+	ErrNoPackfileSignature        = errors.New("the given payload has no packfile signature")
+	ErrUnsupportedPackfileVersion = errors.New("the version of the packfile payload is unsupported")
+)
+
+func ParsePackfile(payload []byte) (*PackfileReader, error) {
+	// TODO: Accept an io.Reader to the function.
+	if len(payload) < 4 || !slices.Equal(payload[:4], []byte("PACK")) {
+		return nil, ErrNoPackfileSignature
+	}
+	payload = payload[4:] // Without "PACK"
+
+	version := binary.BigEndian.Uint32(payload[:4])
+	if version != 2 && version != 3 {
+		return nil, ErrUnsupportedPackfileVersion
+	}
+	payload = payload[4:] // Without version
+
+	countObjects := binary.BigEndian.Uint32(payload[:4])
+	_ = countObjects      // just clear the warning, for now...
+	payload = payload[4:] // Without version
+
+	// The payload now contains just objects. These are multiple and can be quite large.
+	// Let's pass it off to a caller to read the rest of what's in here.
+	// Eventually, we can even accept an io.Reader directly here, such that we don't need to
+	//   keep the whole original payload in memory, either.
+	return &PackfileReader{reader: bytes.NewReader(payload)}, nil
 }

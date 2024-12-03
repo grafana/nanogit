@@ -117,6 +117,8 @@ func FormatPackets(packets ...Packet) ([]byte, error) {
 }
 
 func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
+	// TODO: Accept an io.Reader to the function, and return a new kind of reader.
+
 	// FIXME: We need to parse error packets: https://git-scm.com/docs/gitprotocol-pack#_pkt_line_format
 	//
 	// An error packet is a special pkt-line that contains an error string.
