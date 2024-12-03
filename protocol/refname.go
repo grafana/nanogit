@@ -67,6 +67,10 @@ func ParseRefName(in string) (RefName, error) {
 		return rn, errors.New("ref cannot contain a sequence `@{`")
 	}
 
+	if strings.HasSuffix(in, ".") {
+		return rn, errors.New("ref cannot end with a dot `.`")
+	}
+
 	for _, component := range strings.Split(in, "/") {
 		if component == "" {
 			return rn, errors.New("ref components cannot be empty")
@@ -82,10 +86,6 @@ func ParseRefName(in string) (RefName, error) {
 
 		if strings.HasSuffix(component, ".lock") {
 			return rn, errors.New("ref components cannot end with the sequence `.lock`")
-		}
-
-		if strings.HasSuffix(component, ".") {
-			return rn, errors.New("ref components cannot end with a dot `.`")
 		}
 
 		hasInvalidRunes := strings.ContainsFunc(component, func(r rune) bool {

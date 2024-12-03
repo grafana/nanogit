@@ -1,14 +1,25 @@
 package protocol_test
 
 import (
+	"bytes"
+	"errors"
+	"os/exec"
 	"testing"
 
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseRefName(t *testing.T) {
 	t.Parallel()
+
+	t.Run("HEAD is valid", func(t *testing.T) {
+		// git check-ref-format does not consider HEAD to be valid,
+		// make a special case for it.
+		refname, err := protocol.ParseRefName("HEAD")
+		require.NoError(t, err, "parsing HEAD should succeed")
+		require.Equal(t, protocol.HEAD, refname, "parsed refname should be HEAD")
+	})
 
 	t.Run("parse valid ref names", func(t *testing.T) {
 		testcases := []struct {
@@ -16,23 +27,21 @@ func TestParseRefName(t *testing.T) {
 			Category string
 			Location string
 		}{
-			{"HEAD", "HEAD", "HEAD"},
 			{"refs/heads/main", "heads", "main"},
 			{"refs/heads/feature/test", "heads", "feature/test"},
-			{"refs/heads/feature.lock/test", "heads", "feature.lock/test"}, // TODO(mem): my reading of the docs is that this is not valid
-			{"refs/heads/feature./test", "heads", "feature./test"},         // TODO(mem): my reading of the docs is that this is not valid
+			{"refs/heads/foo./bar", "heads", "foo./bar"},
 		}
 
 		for _, tc := range testcases {
 			t.Run("parse: "+tc.Full, func(t *testing.T) {
+				require.Truef(t, validateWithGitCheckRefFormat(t, tc.Full), "git check-ref-format considers %q to be valid", tc.Full)
 				rn, err := protocol.ParseRefName(tc.Full)
-				if assert.NoError(t, err, "expected parsing valid refname to succeed, but it failed") {
-					assert.Equal(t, protocol.RefName{
-						FullName: tc.Full,
-						Category: tc.Category,
-						Location: tc.Location,
-					}, rn)
-				}
+				require.NoError(t, err, "expected parsing valid refname to succeed, but it failed")
+				require.Equal(t, protocol.RefName{
+					FullName: tc.Full,
+					Category: tc.Category,
+					Location: tc.Location,
+				}, rn)
 			})
 		}
 	})
@@ -45,16 +54,15 @@ func TestParseRefName(t *testing.T) {
 			{"", "empty"},
 			{"@", "references cannot be the single character @"},
 			{"H", "single H character"},
-			{"\n", "new line"},
 			{"refs/", "only refs prefix"},
 			{"refs//", "all empty"},
 			{"refs//test", "empty category"},
 			{"refs/../test", ".. category"},
 			{"refs/heads/.bar", "no slash-separated component can begin with a dot ."},
 			{"refs/heads/foo.lock", "no slash-separated component can end with the sequence .lock."},
+			{"refs/heads/foo.lock/bar", "no slash-separated component can end with the sequence .lock."},
 			{"refs/heads/.lock", "no slash-separated component can end with the sequence .lock."},
 			{"refs/heads/foo..bar", "references cannot have two consecutive dots .. anywhere."},
-			{"refs/heads/foo\000bar", "references cannot have control characters."},
 			{"refs/heads/foo\001bar", "references cannot have control characters."},
 			{"refs/heads/foo\002bar", "references cannot have control characters."},
 			{"refs/heads/foo\003bar", "references cannot have control characters."},
@@ -112,11 +120,51 @@ func TestParseRefName(t *testing.T) {
 			{"refs/heads\033/test", "otherwise valid category containing a byte < 40"},
 			{"refs/heads/test/", "otherwise valid refname ending with a slash"},
 		}
+
 		for _, tc := range testcases {
 			t.Run("parse: "+tc.Name, func(t *testing.T) {
+				require.Falsef(t, validateWithGitCheckRefFormat(t, tc.Value), "git check-ref-format considers %q to be invalid", tc.Value)
 				_, err := protocol.ParseRefName(tc.Value)
-				assert.Error(t, err, `expected parsing refname "%q" to fail, but it succeeded`, tc.Value)
+				require.Error(t, err, `parsing refname "%q" should fail`, tc.Value)
 			})
 		}
 	})
+
+	// Special cases.
+
+	t.Run("references should not contain NUL", func(t *testing.T) {
+		// A NUL byte cannot be passed as an argument to git check-ref-format.
+		_, err := protocol.ParseRefName("refs/heads/foo\000bar")
+		require.Error(t, err, "parsing refname with NUL byte should fail")
+	})
+}
+
+func validateWithGitCheckRefFormat(t *testing.T, refName string) bool {
+	t.Helper()
+
+	stderr := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+
+	cmd := exec.Command("git", "check-ref-format", refName)
+	cmd.Stderr = stderr
+	cmd.Stdout = stdout
+
+	err := cmd.Run()
+
+	if stdout.Len() > 0 {
+		t.Logf("stdout: %s", stdout.String())
+	}
+
+	if stderr.Len() > 0 {
+		t.Logf("stderr: %s", stderr.String())
+	}
+
+	if err != nil {
+		var execErr *exec.ExitError
+		if !errors.As(err, &execErr) {
+			t.Fatalf("failed to run git check-ref-format: %v\nstderr: %s", err, stderr.String())
+		}
+	}
+
+	return cmd.ProcessState.ExitCode() == 0
 }
