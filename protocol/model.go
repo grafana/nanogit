@@ -109,7 +109,7 @@ func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
 			var err error
 			fr.Packfile, err = ParsePackfile(joined)
 			if err != nil {
-				return nil, nil
+				return nil, err
 			}
 
 			break // there is no more actionable data, so we don't need to iterate more.
