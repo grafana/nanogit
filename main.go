@@ -77,7 +77,7 @@ func run() error {
 		// network traffic significantly, but it requires the receiving end
 		// to know how to "thicken" these packs by adding the missing bases
 		// to the pack.
-		protocol.PacketLine("thin-pack\n"),
+		// protocol.PacketLine("thin-pack\n"),
 		// no-progress
 		// Request that progress information that would normally be sent on
 		// side-band channel 2, during the packfile transfer, should not be
@@ -161,7 +161,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		slog.Info("object read", "obj", *obj)
+		slog.Info("object read", "ty", obj.Type, "data", obj.Data)
 	}
 
 	return nil

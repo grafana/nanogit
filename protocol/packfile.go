@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ var (
 	ErrNoPackfileSignature        = errors.New("the given payload has no packfile signature")
 	ErrUnsupportedPackfileVersion = errors.New("the version of the packfile payload is unsupported")
 	ErrUnsupportedObjectType      = errors.New("the type of the object is unsupported")
+	ErrInflatedDataIncorrectSize  = errors.New("the data is the wrong size post-inflation")
 )
 
 // A PackfileReader is a reader for a set of compressed files (objects).
@@ -52,7 +54,7 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
 		// All good!
 	default:
-		return nil, fmt.Errorf("%w (%s)", ErrUnsupportedObjectType, oty)
+		return nil, fmt.Errorf("%w (%s; original byte: %08b)", ErrUnsupportedObjectType, oty, buf[0])
 	}
 
 	size := int(buf[0] & 0b1111)
@@ -66,15 +68,22 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 		shift += 7
 	}
 
-	data := make([]byte, size)
-	if _, err := p.reader.Read(data); err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil, io.ErrUnexpectedEOF
-		}
+	zr, err := zlib.NewReader(p.reader)
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+
+	var data bytes.Buffer
+	if _, err := io.Copy(&data, zr); err != nil {
 		return nil, err
 	}
 
-	return &PackedObject{Data: data, Type: oty}, nil
+	if data.Len() != size {
+		return nil, ErrInflatedDataIncorrectSize
+	}
+
+	return &PackedObject{Data: data.Bytes(), Type: oty}, nil
 }
 
 type PackedObject struct {
@@ -84,7 +93,7 @@ type PackedObject struct {
 	ObjectName string
 	// If Type == ObjectTypeOfsDelta, this is set.
 	RelativeOffset int
-	// The compressed data.
+	// The data, uncompressed.
 	// If Type is one of ObjectTypeRefDelta and ObjectTypeOfsDelta, this is a delta.
 	Data []byte
 }
