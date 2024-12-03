@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 )
 
@@ -97,14 +98,21 @@ func IsParseError(err error) bool {
 
 func FormatPackets(packets ...Packet) ([]byte, error) {
 	var out bytes.Buffer
+	flushed := false
 	for _, pl := range packets {
 		marshalled, err := pl.Marshal()
 		if err != nil {
 			return nil, err
 		}
 		out.Write(marshalled)
+
+		if sp, ok := pl.(SpecialPacket); ok && slices.Equal(sp, FlushPacket) {
+			flushed = true
+		}
 	}
-	out.Write(FlushPacket)
+	if !flushed {
+		out.Write(FlushPacket)
+	}
 	return out.Bytes(), nil
 }
 

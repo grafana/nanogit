@@ -34,6 +34,18 @@ func TestFormatPackets(t *testing.T) {
 			input:    []protocol.Packet{protocol.PacketLine("")},
 			expected: []byte("00040000"),
 		},
+		"special-case: flush packet input": {
+			input:    []protocol.Packet{protocol.FlushPacket},
+			expected: []byte("0000"),
+		},
+		"special-case: delimeter packet input": {
+			input:    []protocol.Packet{protocol.DelimeterPacket},
+			expected: []byte("00010000"),
+		},
+		"special-case: response end packet input": {
+			input:    []protocol.Packet{protocol.ResponseEndPacket},
+			expected: []byte("00020000"),
+		},
 	}
 
 	for name, tc := range testcases {
