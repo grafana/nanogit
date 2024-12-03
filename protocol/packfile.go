@@ -4,8 +4,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
+)
+
+var (
+	ErrNoPackfileSignature        = errors.New("the given payload has no packfile signature")
+	ErrUnsupportedPackfileVersion = errors.New("the version of the packfile payload is unsupported")
+	ErrUnsupportedObjectType      = errors.New("the type of the object is unsupported")
 )
 
 // A PackfileReader is a reader for a set of compressed files (objects).
@@ -30,11 +37,49 @@ type PackfileReader struct {
 	reader io.Reader
 }
 
+func (p *PackfileReader) ReadObject() (*PackedObject, error) {
+	// TODO: probably smart to use a mutex here.
+
+	var buf [1]byte
+	if _, err := p.reader.Read(buf[:]); err != nil {
+		return nil, err
+	}
+
+	// The first byte is a 3-bit type (stored in 4 bits).
+	// The remaining 4 bits are the start of a varint containing the size.
+	oty := ObjectType((buf[0] >> 4) & 0b111)
+	switch oty {
+	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
+		// All good!
+	default:
+		return nil, fmt.Errorf("%w (%s)", ErrUnsupportedObjectType, oty)
+	}
+
+	size := int(buf[0] & 0b1111)
+	shift := 4
+	for buf[0]&0x80 == 0x80 {
+		if _, err := p.reader.Read(buf[:]); err != nil {
+			return nil, err
+		}
+
+		size += int(buf[0]&0x7f) << shift
+		shift += 7
+	}
+
+	data := make([]byte, size)
+	if _, err := p.reader.Read(data); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		return nil, err
+	}
+
+	return &PackedObject{Data: data, Type: oty}, nil
+}
+
 type PackedObject struct {
 	// The type of the object. 3-bit field.
 	Type ObjectType
-	// Is this a deltified representation?
-	Deltified bool
 	// If Type == ObjectTypeRefDelta, this is set.
 	ObjectName string
 	// If Type == ObjectTypeOfsDelta, this is set.
@@ -58,14 +103,32 @@ const (
 	ObjectTypeRefDelta ObjectType = 7 // 0b111
 )
 
+func (t ObjectType) String() string {
+	switch t {
+	case ObjectTypeInvalid:
+		return "OBJ_INVALID"
+	case ObjectTypeCommit:
+		return "OBJ_COMMIT"
+	case ObjectTypeTree:
+		return "OBJ_TREE"
+	case ObjectTypeBlob:
+		return "OBJ_BLOB"
+	case ObjectTypeTag:
+		return "OBJ_TAG"
+	case ObjectTypeReserved:
+		return "OBJ_RESERVED"
+	case ObjectTypeOfsDelta:
+		return "OBJ_OFS_DELTA"
+	case ObjectTypeRefDelta:
+		return "OBJ_REF_DELTA"
+	default:
+		return fmt.Sprintf("ObjectType(%d)", uint8(t))
+	}
+}
+
 func (t ObjectType) IsValid() bool {
 	return t != ObjectTypeInvalid && t != ObjectTypeReserved && (t & ^ObjectType(0b111)) == 0
 }
-
-var (
-	ErrNoPackfileSignature        = errors.New("the given payload has no packfile signature")
-	ErrUnsupportedPackfileVersion = errors.New("the version of the packfile payload is unsupported")
-)
 
 func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	// TODO: Accept an io.Reader to the function.

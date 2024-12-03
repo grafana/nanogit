@@ -156,6 +156,13 @@ func run() error {
 		return err
 	}
 	slog.Info("fetch response", "parsed", response)
+	for {
+		obj, err := response.Packfile.ReadObject()
+		if err != nil {
+			return err
+		}
+		slog.Info("object read", "obj", *obj)
+	}
 
 	return nil
 }
