@@ -1,5 +1,11 @@
 package protocol
 
+import (
+	"errors"
+	"log/slog"
+	"strings"
+)
+
 // Acknowledgements contains whether a nack ("NAK") was received, or a list of ACKs, and for which objects those apply.
 // If Nack is true, Acks is always empty. If Nack is false, Acks may be non-empty.
 // The objects returned in Acks are always requested. Not all requested objects are necessarily listed.
@@ -25,46 +31,13 @@ type Acknowledgements struct {
 
 // TODO: Do we want to parse the acknowledgements here?
 
-type Shallowness string
-
-const (
-	Shallow   = Shallowness("shallow")
-	Unshallow = Shallowness("unshallow")
-)
-
-// ShallowInfo is sent when a shallow fetch or clone is requested.
-//
-//	shallow-info section
-//	* If the client has requested a shallow fetch/clone, a shallow
-//	  client requests a fetch or the server is shallow then the
-//	  server's response may include a shallow-info section.  The
-//	  shallow-info section will be included if (due to one of the
-//	  above conditions) the server needs to inform the client of any
-//	  shallow boundaries or adjustments to the clients already
-//	  existing shallow boundaries.
-type ShallowInfo struct {
-	Shallowness Shallowness
-	// FIXME: obj-id type?
-	Object string
-}
-
-// TODO: Parse ShallowInfo here?
-
-type WantedRef struct {
-	// FIXME: obj-id type?
-	Object  string
-	RefName RefName
-}
-
-// TODO: Parse WantedRef here?
-
 type FetchResponse struct {
 	// These fields are in order.
 	// TODO: Do we want a session ID field? It might be useful for OTel tracing?
 
-	Acks       Acknowledgements
-	Shallow    []ShallowInfo
-	WantedRefs []WantedRef
+	Acks Acknowledgements
+	// mariell: Intentionally excluding shallow-info because we don't need them right now. Maybe later?
+	// mariell: Intentionally excluding wanted-refs because we don't need them right now. Maybe later?
 	// mariell: Intentionally excluding packfile-uris because I can't see us needing them.
 
 	// The packfile contains the majority of the information we want.
@@ -87,6 +60,65 @@ type FetchResponse struct {
 	//	1 - pack data
 	//	2 - progress messages
 	//	3 - fatal error message just before stream aborts
-	Packfile any // TODO
+	Packfile *Packfile
 	// When encoded, a flush-pkt is presented here.
+}
+
+type FatalFetchError string
+
+func (e FatalFetchError) Error() string {
+	return string(e)
+}
+
+var (
+	ErrInvalidFetchStatus       = errors.New("invalid status in fetch packfile")
+	_                     error = FatalFetchError("")
+)
+
+func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
+	fr := &FetchResponse{}
+	for i, line := range lines {
+		if len(line) > 30 {
+			// Too long to be a section header
+			continue
+		}
+
+		// We SHOULD NOT require a \n.
+		switch strings.TrimSpace(string(line)) {
+		case "acknowledgements":
+			// TODO: Parse!
+			slog.Info("next part", "part", lines[i+1])
+		case "packfile":
+			// These are the final pktlines. That means they're all parts of the packfile.
+			// Because of this, we can just join them! We already know we don't multiplex, so they're all just streamed in multiple lines (due to the pktline size limit).
+			var joined []byte
+			for _, next := range lines[i+1:] {
+				status := next[0]
+				switch status {
+				case 1: // This is the pack data.
+					joined = append(joined, next[1:]...)
+				case 2: // This is progress status. We don't want it.
+					continue
+				case 3: // This is a fatal error message.
+					return nil, FatalFetchError(string(next[1:]))
+				default:
+					return nil, ErrInvalidFetchStatus
+				}
+			}
+
+			var err error
+			fr.Packfile, err = ParsePackfile(joined)
+			if err != nil {
+				return nil, nil
+			}
+
+			break // there is no more actionable data, so we don't need to iterate more.
+
+		case "shallow-info", "wanted-refs":
+			// Ignore.
+		default:
+			// Log??
+		}
+	}
+	return fr, nil
 }

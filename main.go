@@ -151,10 +151,11 @@ func run() error {
 	//
 	//     packfile = PKT-LINE("packfile" LF)
 	//         *PKT-LINE(%x01-03 *%x00-ff)
-	for _, line := range lines {
-		slog.Info("line in data", "line", string(line))
+	response, err := protocol.ParseFetchResponse(lines)
+	if err != nil {
+		return err
 	}
-	slog.Info("and here's the remainder", "remainder", remainder)
+	slog.Info("fetch response", "parsed", response)
 
 	return nil
 }
