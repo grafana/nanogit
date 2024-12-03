@@ -17,6 +17,9 @@ var (
 	ErrInflatedDataIncorrectSize  = errors.New("the data is the wrong size post-inflation")
 )
 
+// MaxUnpackedObjectSize is the maximum size of an unpacked object.
+const MaxUnpackedObjectSize = 10 * 1024 * 1024
+
 // A PackfileReader is a reader for a set of compressed files (objects).
 // Its wire-format is defined here: https://git-scm.com/docs/pack-format
 // Its negotiation is defined here: https://git-scm.com/docs/pack-protocol#_packfile_negotiation
@@ -75,7 +78,13 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 	defer zr.Close()
 
 	var data bytes.Buffer
-	if _, err := io.Copy(&data, zr); err != nil {
+
+	// TODO(mem): this should be limited to the size the packet says it
+	// carries, and we should limit that size above (i.e. if the packet
+	// says it's carrying a huge amount of data we should bail out).
+	lr := io.LimitReader(zr, MaxUnpackedObjectSize)
+
+	if _, err := io.Copy(&data, lr); err != nil {
 		return nil, err
 	}
 
