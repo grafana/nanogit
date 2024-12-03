@@ -56,6 +56,12 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 	switch oty {
 	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
 		// All good!
+
+	case ObjectTypeInvalid, ObjectTypeReserved, ObjectTypeOfsDelta, ObjectTypeRefDelta:
+		// TODO(mem): do we need to do something about these? No
+		// special handling for them yet.
+		fallthrough
+
 	default:
 		return nil, fmt.Errorf("%w (%s; original byte: %08b)", ErrUnsupportedObjectType, oty, buf[0])
 	}
