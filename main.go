@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -213,12 +214,22 @@ func run() error {
 		return err
 	}
 	slog.Info("fetch response", "parsed", response)
-	for range response.Packfile.Objects {
+	for {
 		obj, err := response.Packfile.ReadObject()
+		if errors.Is(err, io.EOF) {
+			break
+		}
 		if err != nil {
 			return err
 		}
-		slog.Info("object read", "ty", obj.Type, "data", obj.Data, "base", obj.ObjectName)
+		if obj.Object != nil {
+			slog.Info("object was read",
+				"ty", obj.Object.Type,
+				"object_name", obj.Object.ObjectName,
+				"data", obj.Object.Data)
+		} else {
+			slog.Info("trailer was read")
+		}
 	}
 
 	return nil

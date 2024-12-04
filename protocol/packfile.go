@@ -21,6 +21,28 @@ var (
 // MaxUnpackedObjectSize is the maximum size of an unpacked object.
 const MaxUnpackedObjectSize = 10 * 1024 * 1024
 
+type PackfileEntry struct {
+	Object  *PackfileObject
+	Trailer *PackfileTrailer
+}
+
+type PackfileObject struct {
+	// The type of the object. 3-bit field.
+	Type ObjectType
+	// The data, uncompressed.
+	// If Type is one of ObjectTypeRefDelta and ObjectTypeOfsDelta, this is a delta.
+	Data []byte
+
+	// If Type == ObjectTypeRefDelta, this is set.
+	ObjectName string
+	// If Type == ObjectTypeOfsDelta, this is set.
+	RelativeOffset int
+}
+
+type PackfileTrailer struct {
+	// TODO: Checksum here. Are there multiple??
+}
+
 // A PackfileReader is a reader for a set of compressed files (objects).
 // Its wire-format is defined here: https://git-scm.com/docs/pack-format
 // Its negotiation is defined here: https://git-scm.com/docs/pack-protocol#_packfile_negotiation
@@ -40,51 +62,87 @@ const MaxUnpackedObjectSize = 10 * 1024 * 1024
 //     Then, we have an object name if OBJ_REF_DELTA or a negative relative offset from the delta object's position in the pack if this is an OBJ_OFS_DELTA object.
 //     Finally, the compressed delta data.
 type PackfileReader struct {
-	reader  io.Reader
-	Objects uint32
+	reader           io.Reader
+	remainingObjects uint32
+
+	// State that shouldn't be set when constructed.
+	trailerRead bool
+	err         error
 }
 
-func (p *PackfileReader) ReadObject() (*PackedObject, error) {
+// ReadObject reads an object from the packfile.
+// The final object is always a PackfileTrailer. It comes with a nil error, not an io.EOF.
+// When the final object is read, a nil and io.EOF is returned.
+// If another error is ever returned, the object is "tainted", and will not read more objects.
+//
+// This function is not concurrency-safe. Use a mutex or a single goroutine+channel when dealing with this.
+// Objects returned are no longer owned by this function once returned; you can pass them around goroutines freely.
+func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	// TODO: probably smart to use a mutex here.
 
-	var buf [1]byte
-	if _, err := p.reader.Read(buf[:]); err != nil {
-		return nil, err
+	entry := PackfileEntry{}
+	if p.err != nil {
+		return entry, fmt.Errorf("ReadObject called after error returned: %w", p.err)
 	}
 
-	obj := &PackedObject{}
+	if p.remainingObjects == 0 {
+		// It's time for the trailer.
+		if p.trailerRead {
+			// We've already read it, so there's no more to do here.
+			return entry, io.EOF
+		}
+
+		// TODO: Read & parse trailer. No idea how that'll work.
+		entry.Trailer = &PackfileTrailer{}
+
+		p.trailerRead = true
+		return entry, nil
+	}
+	p.remainingObjects--
+
+	// TODO(mariell): kinda ugly hack... let's just call another method and set this when an error is returned from it.
+	var err error
+	defer func() {
+		p.err = err
+	}()
+
+	var buf [1]byte
+	if _, err = p.reader.Read(buf[:]); err != nil {
+		return entry, err
+	}
+
+	entry.Object = &PackfileObject{}
 
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
-	obj.Type = ObjectType((buf[0] >> 4) & 0b111)
+	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
-		if _, err := p.reader.Read(buf[:]); err != nil {
-			return nil, err
+		if _, err = p.reader.Read(buf[:]); err != nil {
+			return entry, err
 		}
 
 		size += int(buf[0]&0x7f) << shift
 		shift += 7
 	}
 
-	var err error
-	switch obj.Type {
+	switch entry.Object.Type {
 	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
-		obj.Data, err = p.readAndInflate(size)
+		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
-			return nil, err
+			return entry, err
 		}
 
 	case ObjectTypeRefDelta:
 		var ref [20]byte
-		if _, err := p.reader.Read(ref[:]); err != nil {
-			return nil, err
+		if _, err = p.reader.Read(ref[:]); err != nil {
+			return entry, err
 		}
-		obj.ObjectName = hex.EncodeToString(ref[:])
-		obj.Data, err = p.readAndInflate(size)
+		entry.Object.ObjectName = hex.EncodeToString(ref[:])
+		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
-			return nil, err
+			return entry, err
 		}
 
 	case ObjectTypeOfsDelta:
@@ -99,10 +157,12 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 		fallthrough
 
 	default:
-		return nil, fmt.Errorf("%w (%s; original byte: %08b)", ErrUnsupportedObjectType, obj.Type, buf[0])
+		err = fmt.Errorf("%w (%s; original byte: %08b)",
+			ErrUnsupportedObjectType, entry.Object.Type, buf[0])
+		return entry, err
 	}
 
-	return obj, nil
+	return entry, nil
 }
 
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
@@ -127,18 +187,6 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	}
 
 	return data.Bytes(), nil
-}
-
-type PackedObject struct {
-	// The type of the object. 3-bit field.
-	Type ObjectType
-	// If Type == ObjectTypeRefDelta, this is set.
-	ObjectName string
-	// If Type == ObjectTypeOfsDelta, this is set.
-	RelativeOffset int
-	// The data, uncompressed.
-	// If Type is one of ObjectTypeRefDelta and ObjectTypeOfsDelta, this is a delta.
-	Data []byte
 }
 
 type ObjectType uint8
@@ -178,10 +226,6 @@ func (t ObjectType) String() string {
 	}
 }
 
-func (t ObjectType) IsValid() bool {
-	return t != ObjectTypeInvalid && t != ObjectTypeReserved && (t & ^ObjectType(0b111)) == 0
-}
-
 func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	// TODO: Accept an io.Reader to the function.
 	if len(payload) < 4 || !slices.Equal(payload[:4], []byte("PACK")) {
@@ -202,5 +246,5 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	// Let's pass it off to a caller to read the rest of what's in here.
 	// Eventually, we can even accept an io.Reader directly here, such that we don't need to
 	//   keep the whole original payload in memory, either.
-	return &PackfileReader{reader: bytes.NewReader(payload), Objects: countObjects}, nil
+	return &PackfileReader{reader: bytes.NewReader(payload), remainingObjects: countObjects}, nil
 }
