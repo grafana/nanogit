@@ -5,6 +5,12 @@ import (
 	"io"
 )
 
+type strError string
+
+func (e strError) Error() string {
+	return string(e)
+}
+
 // eofIsUnexpected checks if the error is an io.EOF.
 // If it is, we return io.ErrUnexpectedEOF.
 // If not, we return the input error verbatim.

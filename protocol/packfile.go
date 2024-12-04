@@ -14,11 +14,11 @@ import (
 	"strings"
 )
 
-var (
-	ErrNoPackfileSignature        = errors.New("the given payload has no packfile signature")
-	ErrUnsupportedPackfileVersion = errors.New("the version of the packfile payload is unsupported")
-	ErrUnsupportedObjectType      = errors.New("the type of the object is unsupported")
-	ErrInflatedDataIncorrectSize  = errors.New("the data is the wrong size post-inflation")
+const (
+	ErrNoPackfileSignature        = strError("the given payload has no packfile signature")
+	ErrUnsupportedPackfileVersion = strError("the version of the packfile payload is unsupported")
+	ErrUnsupportedObjectType      = strError("the type of the object is unsupported")
+	ErrInflatedDataIncorrectSize  = strError("the data is the wrong size post-inflation")
 )
 
 // MaxUnpackedObjectSize is the maximum size of an unpacked object.
