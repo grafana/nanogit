@@ -1,6 +1,9 @@
 package protocol_test
 
 import (
+	"io"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
@@ -60,4 +63,41 @@ func TestParsePackfile(t *testing.T) {
 			// number of objects field was read correctly.
 		})
 	}
+}
+
+func TestGolden(t *testing.T) {
+	testcases := map[string]struct {
+		expectedObjects int
+	}{
+		"simple.dat": {
+			expectedObjects: 3,
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			data := loadGolden(t, name)
+			pr, err := protocol.ParsePackfile(data)
+			require.NoError(t, err)
+
+			for range tc.expectedObjects {
+				_, err = pr.ReadObject()
+				require.NoError(t, err)
+			}
+
+			_, err = pr.ReadObject()
+			require.ErrorIs(t, err, io.EOF)
+		})
+	}
+}
+
+func loadGolden(t *testing.T, name string) []byte {
+	t.Helper()
+
+	data, err := os.ReadFile(path.Join("testdata", name))
+	require.NoError(t, err)
+
+	return data
 }
