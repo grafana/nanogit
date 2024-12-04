@@ -67,10 +67,13 @@ func TestParsePackfile(t *testing.T) {
 
 func TestGolden(t *testing.T) {
 	testcases := map[string]struct {
-		expectedObjects int
+		expectedObjects []protocol.ObjectType
 	}{
 		"simple.dat": {
-			expectedObjects: 3,
+			expectedObjects: []protocol.ObjectType{
+				protocol.ObjectTypeTree,
+				protocol.ObjectTypeCommit,
+			},
 		},
 	}
 
@@ -82,10 +85,22 @@ func TestGolden(t *testing.T) {
 			pr, err := protocol.ParsePackfile(data)
 			require.NoError(t, err)
 
-			for range tc.expectedObjects {
-				_, err = pr.ReadObject()
+			for _, obj := range tc.expectedObjects {
+				entry, err := pr.ReadObject()
 				require.NoError(t, err)
+
+				require.NotNil(t, entry.Object)
+				require.Nil(t, entry.Trailer)
+
+				require.Equal(t, obj, entry.Object.Type)
+
 			}
+
+			// There should be a trailer here.
+			entry, err := pr.ReadObject()
+			require.NoError(t, err)
+			require.Nil(t, entry.Object)
+			require.NotNil(t, entry.Trailer)
 
 			_, err = pr.ReadObject()
 			require.ErrorIs(t, err, io.EOF)
