@@ -40,7 +40,8 @@ const MaxUnpackedObjectSize = 10 * 1024 * 1024
 //     Then, we have an object name if OBJ_REF_DELTA or a negative relative offset from the delta object's position in the pack if this is an OBJ_OFS_DELTA object.
 //     Finally, the compressed delta data.
 type PackfileReader struct {
-	reader io.Reader
+	reader  io.Reader
+	Objects uint32
 }
 
 func (p *PackfileReader) ReadObject() (*PackedObject, error) {
@@ -195,12 +196,11 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	payload = payload[4:] // Without version
 
 	countObjects := binary.BigEndian.Uint32(payload[:4])
-	_ = countObjects      // just clear the warning, for now...
 	payload = payload[4:] // Without version
 
 	// The payload now contains just objects. These are multiple and can be quite large.
 	// Let's pass it off to a caller to read the rest of what's in here.
 	// Eventually, we can even accept an io.Reader directly here, such that we don't need to
 	//   keep the whole original payload in memory, either.
-	return &PackfileReader{reader: bytes.NewReader(payload)}, nil
+	return &PackfileReader{reader: bytes.NewReader(payload), Objects: countObjects}, nil
 }

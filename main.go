@@ -213,11 +213,13 @@ func run() error {
 		return err
 	}
 	slog.Info("fetch response", "parsed", response)
-	for {
+	for range response.Packfile.Objects {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
 			return err
 		}
 		slog.Info("object read", "ty", obj.Type, "data", obj.Data, "base", obj.ObjectName)
 	}
+
+	return nil
 }
