@@ -226,7 +226,8 @@ func run() error {
 			slog.Info("object was read",
 				"ty", obj.Object.Type,
 				"object_name", obj.Object.ObjectName,
-				"data", obj.Object.Data)
+				"data", obj.Object.Data,
+				"tree", obj.Object.Tree)
 		} else {
 			slog.Info("trailer was read")
 		}

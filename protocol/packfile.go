@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 )
 
 var (
@@ -37,6 +39,64 @@ type PackfileObject struct {
 	ObjectName string
 	// If Type == ObjectTypeOfsDelta, this is set.
 	RelativeOffset int
+	// If Type == ObjectTypeTree, this is set.
+	Tree []PackfileTreeEntry
+}
+
+func (e *PackfileObject) parseTree() error {
+	reader := bufio.NewReader(bytes.NewReader(e.Data))
+
+	for {
+		fileModeStr, err := reader.ReadString(' ')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// The last entry was already entered.
+				break
+			}
+			return err
+		}
+		fileModeStr = fileModeStr[:len(fileModeStr)-1] // ReadString includes delim
+		fileMode, err := strconv.ParseUint(fileModeStr, 8, 32)
+		if err != nil {
+			return err
+		}
+
+		name, err := reader.ReadString(0)
+		if err != nil {
+			return eofIsUnexpected(err)
+		}
+		name = name[:len(name)-1] // ReadString includes delim
+
+		var hash [20]byte
+		if _, err := io.ReadFull(reader, hash[:]); err != nil {
+			return eofIsUnexpected(err)
+		}
+
+		e.Tree = append(e.Tree, PackfileTreeEntry{
+			FileName: name,
+			FileMode: uint32(fileMode),
+			Hash:     hex.EncodeToString(hash[:]),
+		})
+	}
+
+	return nil
+}
+
+// PackfileTreeEntry represents a part of a packfile tree.
+//
+// The wire-format looks as follows:
+//   - File mode as ASCII text. Dirs are 0o40000.
+//   - A space (0x20).
+//   - A file name. NUL bytes are not legal.
+//   - A NUL byte.
+//   - A hash. 20 or 32 bytes for SHA-1 and SHA-256 respectively.
+//   - Repeat until EOF.
+//
+// Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/tree.go#L216-L273
+type PackfileTreeEntry struct {
+	FileMode uint32
+	FileName string
+	Hash     string
 }
 
 type PackfileTrailer struct {
@@ -108,7 +168,7 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 
 	var buf [1]byte
 	if _, err = p.reader.Read(buf[:]); err != nil {
-		return entry, err
+		return entry, eofIsUnexpected(err)
 	}
 
 	entry.Object = &PackfileObject{}
@@ -120,7 +180,7 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
 		if _, err = p.reader.Read(buf[:]); err != nil {
-			return entry, err
+			return entry, eofIsUnexpected(err)
 		}
 
 		size += int(buf[0]&0x7f) << shift
@@ -131,18 +191,23 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
 		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
-			return entry, err
+			return entry, eofIsUnexpected(err)
+		}
+		if entry.Object.Type == ObjectTypeTree {
+			if err = entry.Object.parseTree(); err != nil {
+				return entry, eofIsUnexpected(err)
+			}
 		}
 
 	case ObjectTypeRefDelta:
 		var ref [20]byte
 		if _, err = p.reader.Read(ref[:]); err != nil {
-			return entry, err
+			return entry, eofIsUnexpected(err)
 		}
 		entry.Object.ObjectName = hex.EncodeToString(ref[:])
 		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
-			return entry, err
+			return entry, eofIsUnexpected(err)
 		}
 
 	case ObjectTypeOfsDelta:
@@ -179,7 +244,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 
 	var data bytes.Buffer
 	if _, err := io.Copy(&data, lr); err != nil {
-		return nil, err
+		return nil, eofIsUnexpected(err)
 	}
 
 	if data.Len() != sz {
