@@ -230,6 +230,7 @@ func run() error {
 				"tree", obj.Object.Tree)
 		} else {
 			slog.Info("trailer was read")
+			break
 		}
 	}
 

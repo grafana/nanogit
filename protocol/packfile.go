@@ -140,11 +140,20 @@ type PackfileReader struct {
 func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	// TODO: probably smart to use a mutex here.
 
-	entry := PackfileEntry{}
 	if p.err != nil {
-		return entry, fmt.Errorf("ReadObject called after error returned: %w", p.err)
+		return PackfileEntry{}, fmt.Errorf("ReadObject called after error returned: %w", p.err)
 	}
 
+	var entry PackfileEntry
+	entry, p.err = p.readObject()
+	if !p.trailerRead {
+		p.err = eofIsUnexpected(p.err)
+	}
+	return entry, p.err
+}
+
+func (p *PackfileReader) readObject() (PackfileEntry, error) {
+	entry := PackfileEntry{}
 	if p.remainingObjects == 0 {
 		// It's time for the trailer.
 		if p.trailerRead {
@@ -160,15 +169,9 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	}
 	p.remainingObjects--
 
-	// TODO(mariell): kinda ugly hack... let's just call another method and set this when an error is returned from it.
-	var err error
-	defer func() {
-		p.err = err
-	}()
-
 	var buf [1]byte
-	if _, err = p.reader.Read(buf[:]); err != nil {
-		return entry, eofIsUnexpected(err)
+	if _, err := p.reader.Read(buf[:]); err != nil {
+		return entry, err
 	}
 
 	entry.Object = &PackfileObject{}
@@ -179,14 +182,15 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
-		if _, err = p.reader.Read(buf[:]); err != nil {
-			return entry, eofIsUnexpected(err)
+		if _, err := p.reader.Read(buf[:]); err != nil {
+			return entry, err
 		}
 
 		size += int(buf[0]&0x7f) << shift
 		shift += 7
 	}
 
+	var err error
 	switch entry.Object.Type {
 	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
 		entry.Object.Data, err = p.readAndInflate(size)
@@ -194,20 +198,20 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 			return entry, eofIsUnexpected(err)
 		}
 		if entry.Object.Type == ObjectTypeTree {
-			if err = entry.Object.parseTree(); err != nil {
-				return entry, eofIsUnexpected(err)
+			if err := entry.Object.parseTree(); err != nil {
+				return entry, err
 			}
 		}
 
 	case ObjectTypeRefDelta:
 		var ref [20]byte
-		if _, err = p.reader.Read(ref[:]); err != nil {
-			return entry, eofIsUnexpected(err)
+		if _, err := p.reader.Read(ref[:]); err != nil {
+			return entry, err
 		}
 		entry.Object.ObjectName = hex.EncodeToString(ref[:])
 		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
-			return entry, eofIsUnexpected(err)
+			return entry, err
 		}
 
 	case ObjectTypeOfsDelta:
