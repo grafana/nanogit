@@ -1,16 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"strings"
 
+	"github.com/grafana/hackathon-2024-12-nanogit/client"
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
 	"github.com/lmittmann/tint"
 )
@@ -24,71 +22,17 @@ func main() {
 	}
 }
 
-func cmd(ctx context.Context, org, repo string, data []byte) ([]byte, error) {
-	body := io.NopCloser(bytes.NewReader(data))
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://github.com/"+org+"/"+repo+"/git-upload-pack", body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Git-Protocol", "version=2")
-
-	if username, password := os.Getenv("GHUSER"), os.Getenv("GHPASS"); username != "" && password != "" {
-		req.SetBasicAuth(username, password)
-	}
-
-	if token := os.Getenv("GH_TOKEN"); token != "" {
-		req.Header.Add("Authorization", "token "+token)
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	return io.ReadAll(res.Body)
-}
-
-func smartInfoRequest(ctx context.Context, org, repo string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://github.com/"+org+"/"+repo+"/info/refs?service=git-upload-pack", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Git-Protocol", "version=2")
-
-	if username, password := os.Getenv("GHUSER"), os.Getenv("GHPASS"); username != "" && password != "" {
-		req.SetBasicAuth(username, password)
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	return io.ReadAll(res.Body)
-}
-
 func run() error {
-	owner, repo := "grafana", "git-ui-sync-demo"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	c, err := client.New("https://github.com/grafana/git-ui-sync-demo")
+	if err != nil {
+		return err
+	}
+
 	{
-		reply, err := smartInfoRequest(ctx, owner, repo)
+		reply, err := c.SmartInfoRequest(ctx)
 		if err != nil {
 			return err
 		}
@@ -111,17 +55,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	refsData, err := cmd(ctx, owner, repo, pkt)
+
+	refsData, err := c.SendCommands(ctx, pkt)
 	if err != nil {
 		return err
 	}
+
 	lines, remainder, err := protocol.ParsePacket(refsData)
 	if err != nil {
 		return err
 	}
+
 	for _, line := range lines {
 		slog.Info("line in data", "line", string(line))
 	}
+
 	slog.Info("and here's the remainder", "remainder", remainder)
 
 	pkt, err = protocol.FormatPackets(
@@ -174,7 +122,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	out, err := cmd(ctx, owner, repo, pkt)
+
+	out, err := c.SendCommands(ctx, pkt)
 	if err != nil {
 		return err
 	}
@@ -184,6 +133,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	// The format of the output here is:
 	//
 	//     output = acknowledgements flush-pkt |
@@ -216,7 +166,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	slog.Info("fetch response", "parsed", response)
+
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if errors.Is(err, io.EOF) {
