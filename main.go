@@ -223,11 +223,16 @@ func run() error {
 			return err
 		}
 		if obj.Object != nil {
-			slog.Info("object was read",
-				"ty", obj.Object.Type,
-				"object_name", obj.Object.ObjectName,
-				"data", obj.Object.Data,
-				"tree", obj.Object.Tree)
+			if obj.Object.Commit != nil {
+				slog.Info("commit was read", "commit", *obj.Object.Commit)
+			} else if obj.Object.Tree != nil {
+				slog.Info("tree was read", "tree", obj.Object.Tree)
+			} else {
+				slog.Info("object was read",
+					"ty", obj.Object.Type,
+					"object_name", obj.Object.ObjectName,
+					"data", obj.Object.Data)
+			}
 		} else {
 			slog.Info("trailer was read")
 			break

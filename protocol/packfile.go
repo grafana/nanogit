@@ -11,6 +11,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -41,6 +42,8 @@ type PackfileObject struct {
 	RelativeOffset int
 	// If Type == ObjectTypeTree, this is set.
 	Tree []PackfileTreeEntry
+	// If Type == ObjectTypeCommit, this is set.
+	Commit *PackfileCommit
 }
 
 func (e *PackfileObject) parseTree() error {
@@ -49,11 +52,11 @@ func (e *PackfileObject) parseTree() error {
 	for {
 		fileModeStr, err := reader.ReadString(' ')
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if fileModeStr == "" && errors.Is(err, io.EOF) {
 				// The last entry was already entered.
 				break
 			}
-			return err
+			return eofIsUnexpected(err)
 		}
 		fileModeStr = fileModeStr[:len(fileModeStr)-1] // ReadString includes delim
 		fileMode, err := strconv.ParseUint(fileModeStr, 8, 32)
@@ -82,6 +85,53 @@ func (e *PackfileObject) parseTree() error {
 	return nil
 }
 
+func (e *PackfileObject) parseCommit() error {
+	reader := bufio.NewReader(bytes.NewReader(e.Data))
+
+	e.Commit = &PackfileCommit{}
+	writingMsg := false
+	msg := strings.Builder{}
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		if len(line) == 0 && errors.Is(err, io.EOF) {
+			break
+		}
+
+		if writingMsg {
+			msg.Write(line)
+			continue
+		}
+
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			writingMsg = true
+			continue
+		}
+
+		command, data, _ := bytes.Cut(line, []byte(" "))
+		switch string(command) {
+		case "committer":
+			e.Commit.Committer = string(data)
+		case "tree":
+			e.Commit.Tree = string(data)
+		case "author":
+			e.Commit.Author = string(data)
+		case "parent":
+			e.Commit.Parent = string(data)
+		default:
+			if e.Commit.Fields == nil {
+				e.Commit.Fields = make(map[string][]byte, 8)
+			}
+			e.Commit.Fields[string(command)] = data
+		}
+	}
+	e.Commit.Message = msg.String()
+	return nil
+}
+
 // PackfileTreeEntry represents a part of a packfile tree.
 //
 // The wire-format looks as follows:
@@ -97,6 +147,27 @@ type PackfileTreeEntry struct {
 	FileMode uint32
 	FileName string
 	Hash     string
+}
+
+// PackfileCommit represents a single commit within a packfile.
+//
+// The wire-format looks as follows:
+//   - A set of attribute fields delimited by '\n's. They are a name, a space (0x20), and a value.
+//   - An empty line (i.e. just \n).
+//   - The commit message. A PGP signature is optionally included here, which will then have a '\n \n\n' at the end of it.
+//
+// Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/commit.go#L185-L275
+type PackfileCommit struct {
+	Tree      string
+	Author    string
+	Committer string
+	Parent    string
+	Message   string
+	// Fields contains any fields beyond the fields that are statically defined.
+	// If a field is statically defined, it SHOULD not show up here.
+	Fields map[string][]byte
+
+	// There is also a gpgsig field.
 }
 
 type PackfileTrailer struct {
@@ -199,6 +270,11 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 		}
 		if entry.Object.Type == ObjectTypeTree {
 			if err := entry.Object.parseTree(); err != nil {
+				return entry, err
+			}
+		}
+		if entry.Object.Type == ObjectTypeCommit {
+			if err := entry.Object.parseCommit(); err != nil {
 				return entry, err
 			}
 		}
