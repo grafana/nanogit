@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -50,22 +51,11 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 		return nil, err
 	}
 
+	obj := &PackedObject{}
+
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
-	oty := ObjectType((buf[0] >> 4) & 0b111)
-	switch oty {
-	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
-		// All good!
-
-	case ObjectTypeInvalid, ObjectTypeReserved, ObjectTypeOfsDelta, ObjectTypeRefDelta:
-		// TODO(mem): do we need to do something about these? No
-		// special handling for them yet.
-		fallthrough
-
-	default:
-		return nil, fmt.Errorf("%w (%s; original byte: %08b)", ErrUnsupportedObjectType, oty, buf[0])
-	}
-
+	obj.Type = ObjectType((buf[0] >> 4) & 0b111)
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
@@ -77,28 +67,65 @@ func (p *PackfileReader) ReadObject() (*PackedObject, error) {
 		shift += 7
 	}
 
+	var err error
+	switch obj.Type {
+	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
+		obj.Data, err = p.readAndInflate(size)
+		if err != nil {
+			return nil, err
+		}
+
+	case ObjectTypeRefDelta:
+		var ref [20]byte
+		if _, err := p.reader.Read(ref[:]); err != nil {
+			return nil, err
+		}
+		obj.ObjectName = hex.EncodeToString(ref[:])
+		obj.Data, err = p.readAndInflate(size)
+		if err != nil {
+			return nil, err
+		}
+
+	case ObjectTypeOfsDelta:
+		// TODO(mariell): we need to handle a ref delta, at least.
+		//   Maybe OFS too? I don't think we need them as that's a
+		//   capability to negotiate.
+		fallthrough
+
+	case ObjectTypeInvalid, ObjectTypeReserved:
+		// TODO(mem): do we need to do something about these? No
+		// special handling for them yet.
+		fallthrough
+
+	default:
+		return nil, fmt.Errorf("%w (%s; original byte: %08b)", ErrUnsupportedObjectType, obj.Type, buf[0])
+	}
+
+	return obj, nil
+}
+
+func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	zr, err := zlib.NewReader(p.reader)
 	if err != nil {
 		return nil, err
 	}
 	defer zr.Close()
 
-	var data bytes.Buffer
-
 	// TODO(mem): this should be limited to the size the packet says it
 	// carries, and we should limit that size above (i.e. if the packet
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(zr, MaxUnpackedObjectSize)
 
+	var data bytes.Buffer
 	if _, err := io.Copy(&data, lr); err != nil {
 		return nil, err
 	}
 
-	if data.Len() != size {
+	if data.Len() != sz {
 		return nil, ErrInflatedDataIncorrectSize
 	}
 
-	return &PackedObject{Data: data.Bytes(), Type: oty}, nil
+	return data.Bytes(), nil
 }
 
 type PackedObject struct {

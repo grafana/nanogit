@@ -218,6 +218,6 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		slog.Info("object read", "ty", obj.Type, "data", obj.Data)
+		slog.Info("object read", "ty", obj.Type, "data", obj.Data, "base", obj.ObjectName)
 	}
 }
