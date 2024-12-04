@@ -122,12 +122,6 @@ func FormatPackets(packets ...Packet) ([]byte, error) {
 func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 	// TODO: Accept an io.Reader to the function, and return a new kind of reader.
 
-	// FIXME: We need to parse error packets: https://git-scm.com/docs/gitprotocol-pack#_pkt_line_format
-	//
-	// An error packet is a special pkt-line that contains an error string.
-	//    error-line     =  PKT-LINE("ERR" SP explanation-text)
-	// Throughout the protocol, where PKT-LINE(...) is expected, an error packet MAY be sent. Once this packet is sent by a client or a server, the data transfer process defined in this protocol is terminated.
-
 	// There should be at least 4 bytes in the packet.
 	for len(b) >= 4 {
 		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
@@ -145,8 +139,31 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 			}
 			continue
 
-		case len(b) < int(length): //nolint:gosec // length is expected to be at most 2^16.
+		case length == 4:
+			// This is an empty packet; it SHOULD not be sent.
+			// https://git-scm.com/docs/gitprotocol-common#_pkt_line_format
+			b = b[4:]
+			continue
+
+		case uint64(len(b)) < length:
 			return lines, b, NewParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
+
+		case bytes.HasPrefix(b[4:], []byte("ERR ")):
+			// This is an error packet.
+			// https://git-scm.com/docs/gitprotocol-pack#_pkt_line_format
+
+			// An error packet is a special pkt-line that contains
+			// an error string.
+			//
+			//    error-line     =  PKT-LINE("ERR" SP explanation-text)
+			//
+			// Throughout the protocol, where PKT-LINE(...) is
+			// expected, an error packet MAY be sent. Once this
+			// packet is sent by a client or a server, the data
+			// transfer process defined in this protocol is
+			// terminated.
+
+			return lines, b[length:], fmt.Errorf("error packet: %s", b[8:length])
 		}
 
 		// The length includes the first 4 bytes as well, so we should be good with this.

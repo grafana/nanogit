@@ -1,6 +1,7 @@
 package protocol_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
@@ -78,8 +79,32 @@ func TestParsePacket(t *testing.T) {
 		input    []byte
 		expected expected
 	}{
-		"empty": {
+		"flush packet": {
 			input: []byte("0000"),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       nil,
+			},
+		},
+		"delimiter packet": {
+			input: []byte("0001"),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       nil,
+			},
+		},
+		"response end packet": {
+			input: []byte("0002"),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       nil,
+			},
+		},
+		"empty": {
+			input: []byte("0004"),
 			expected: expected{
 				lines:     nil,
 				remainder: []byte{},
@@ -133,6 +158,22 @@ func TestParsePacket(t *testing.T) {
 				lines:     nil,
 				remainder: []byte("000Gxxxxxxxxxxxxxxxx"),
 				err:       new(protocol.ParseError),
+			},
+		},
+		"error packet": {
+			input: []byte("000dERR helloF00F"),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte("F00F"),
+				err:       errors.New("error packet: hello"),
+			},
+		},
+		"lines + error packet": {
+			input: []byte("0009hello000dERR helloF00F"),
+			expected: expected{
+				lines:     toBytesSlice("hello"),
+				remainder: []byte("F00F"),
+				err:       errors.New("error packet: hello"),
 			},
 		},
 	}
