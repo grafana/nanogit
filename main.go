@@ -12,9 +12,12 @@ import (
 	"strings"
 
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
+	"github.com/lmittmann/tint"
 )
 
 func main() {
+	slog.SetDefault(slog.New(tint.NewHandler(os.Stdout, &tint.Options{Level: slog.LevelDebug})))
+
 	if err := run(); err != nil {
 		slog.Error("app run returned error", "err", err)
 		os.Exit(1)
