@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 )
 
@@ -40,6 +39,8 @@ type Packet interface {
 
 type PacketLine []byte
 
+var _ Packet = PacketLine{}
+
 func (p PacketLine) Marshal() ([]byte, error) {
 	if len(p) > MaxPktLineDataSize {
 		return nil, ErrDataTooLarge
@@ -50,14 +51,16 @@ func (p PacketLine) Marshal() ([]byte, error) {
 	return out, nil
 }
 
-type SpecialPacket []byte
+type SpecialPacket string
+
+var _ Packet = SpecialPacket("")
 
 func (p SpecialPacket) Marshal() ([]byte, error) {
 	// We don't need to do anything special here. The special packets are pre-defined, and known to be valid.
 	return []byte(p), nil
 }
 
-var (
+const (
 	// FlushPacket is a packet of length '0000'. It is a special-case, defined by two docs:
 	//   - https://git-scm.com/docs/gitprotocol-common
 	//   - https://git-scm.com/docs/protocol-v2 or https://git-scm.com/docs/gitprotocol-v2
@@ -106,12 +109,12 @@ func FormatPackets(packets ...Packet) ([]byte, error) {
 		}
 		out.Write(marshalled)
 
-		if sp, ok := pl.(SpecialPacket); ok && slices.Equal(sp, FlushPacket) {
+		if sp, ok := pl.(SpecialPacket); ok && sp == FlushPacket {
 			flushed = true
 		}
 	}
 	if !flushed {
-		out.Write(FlushPacket)
+		out.Write([]byte(FlushPacket))
 	}
 	return out.Bytes(), nil
 }
