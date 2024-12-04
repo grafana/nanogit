@@ -50,7 +50,8 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 
 		_, _, _ = cmd, payload, originalDeltaSize // clear warnings for now
 	}
-	return delta, nil
+
+	return delta, nil //nolint:govet // TODO: remove this line when the function is implemented
 }
 
 func deltaHeaderSize(b []byte) (uint, []byte) {
