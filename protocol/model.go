@@ -11,7 +11,7 @@ import (
 // The objects returned in Acks are always requested. Not all requested objects are necessarily listed.
 // Not all sent objects are included in the list, and it may even be empty even if a cut point is found. This is an optimisation by the Git server.
 //
-// Git documentation defines the format as:
+// [Git documentation][protocol_fetch] defines the format as:
 //
 //	acknowledgments = PKT-LINE("acknowledgments" LF)
 //	    (nak | *ack)
@@ -19,6 +19,8 @@ import (
 //	ready = PKT-LINE("ready" LF)
 //	nak = PKT-LINE("NAK" LF)
 //	ack = PKT-LINE("ACK" SP obj-id LF)
+//
+// [protocol_fetch]: https://git-scm.com/docs/protocol-v2#_fetch
 type Acknowledgements struct {
 	// Invariant: Nack == true => Acks == nil
 	//            Nack == false => len(Acks) >= 0

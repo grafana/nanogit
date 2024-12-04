@@ -210,6 +210,9 @@ type PackfileReader struct {
 // Objects returned are no longer owned by this function once returned; you can pass them around goroutines freely.
 func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	// TODO: probably smart to use a mutex here.
+	if p == nil {
+		return PackfileEntry{}, io.EOF
+	}
 
 	if p.err != nil {
 		return PackfileEntry{}, fmt.Errorf("ReadObject called after error returned: %w", p.err)
@@ -380,7 +383,7 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 
 	version := binary.BigEndian.Uint32(payload[:4])
 	if version != 2 && version != 3 {
-		return nil, ErrUnsupportedPackfileVersion
+		return nil, fmt.Errorf("version %d: %w", version, ErrUnsupportedPackfileVersion)
 	}
 	payload = payload[4:] // Without version
 
