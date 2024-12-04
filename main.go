@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
 )
@@ -21,30 +22,84 @@ func main() {
 
 func cmd(ctx context.Context, org, repo string, data []byte) ([]byte, error) {
 	body := io.NopCloser(bytes.NewReader(data))
+
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://github.com/"+org+"/"+repo+"/git-upload-pack", body)
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Add("Git-Protocol", "version=2")
+
 	if username, password := os.Getenv("GHUSER"), os.Getenv("GHPASS"); username != "" && password != "" {
 		req.SetBasicAuth(username, password)
 	}
+
+	if token := os.Getenv("GH_TOKEN"); token != "" {
+		req.Header.Add("Authorization", "token "+token)
+	}
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer res.Body.Close()
+
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
-	b, err := io.ReadAll(res.Body)
-	return b, err
+
+	return io.ReadAll(res.Body)
+}
+
+func smartInfoRequest(ctx context.Context, org, repo string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://github.com/"+org+"/"+repo+"/info/refs?service=git-upload-pack", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Git-Protocol", "version=2")
+
+	if username, password := os.Getenv("GHUSER"), os.Getenv("GHPASS"); username != "" && password != "" {
+		req.SetBasicAuth(username, password)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+	}
+
+	return io.ReadAll(res.Body)
 }
 
 func run() error {
 	owner, repo := "grafana", "git-ui-sync-demo"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	{
+		reply, err := smartInfoRequest(ctx, owner, repo)
+		if err != nil {
+			return err
+		}
+
+		lines, _, err := protocol.ParsePacket(reply)
+		if err != nil {
+			return err
+		}
+
+		for _, line := range lines {
+			slog.Info("response", "line", strings.TrimRight(string(line), "\n"))
+		}
+
+		// TODO(mem): parse the response and adjust the following requests accordingly.
+	}
 
 	pkt, err := protocol.FormatPackets(
 		protocol.PacketLine("command=ls-refs\n"),
