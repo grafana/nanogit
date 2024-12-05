@@ -166,6 +166,7 @@ func WithUserAgent(agent string) Option {
 
 // WithGitHub verifies the other options are valid, and modifies those that aren't.
 // This must be the final option, if you wish to apply it.
+// WithGitHub is valid with both GitHub.com and a GitHub Enterprise Server.
 //
 // What does that entail?:
 //   - Check that the token auth header has a "token" prefix, if it is used.
