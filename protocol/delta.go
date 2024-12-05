@@ -65,38 +65,38 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 		// If offset bits that aren't next to each other are set (e.g. offset1 and offset3 are set), they are still treated as their appropriate positions. I.e. offset1 would represent bits 0-7, and offset3 bits 16-23.
 		//
 		// If the entire cmd is 0x0, it is reserved and MUST return an error.
+		// FIXME: We need to safely check if a byte exists, and return err if not. This is to avoid panics.
 		cmd := payload[0]
 		payload = payload[1:]
-		// FIXME: We need to safely check if a byte exists, and return err if not.
-		if cmd&0b1000_0000 != 0 { // Copy data instruction
+		if cmd&0x80 != 0 { // Copy data instruction
 			var offset, size uint64
-			if cmd&1 != 0 {
-				offset = uint64(payload[0])
+			if (cmd & 0b1) != 0 {
+				offset |= uint64(payload[0])
 				payload = payload[1:]
 			}
-			if cmd&0b0000_0010 != 0 {
-				offset = uint64(payload[0]) << 8
+			if (cmd & 0b10) != 0 {
+				offset |= uint64(payload[0]) << 8
 				payload = payload[1:]
 			}
-			if cmd&0b0000_0100 != 0 {
-				offset = uint64(payload[0]) << 16
+			if (cmd & 0b100) != 0 {
+				offset |= uint64(payload[0]) << 16
 				payload = payload[1:]
 			}
-			if cmd&0b0000_1000 != 0 {
-				offset = uint64(payload[0]) << 24
+			if (cmd & 0b1000) != 0 {
+				offset |= uint64(payload[0]) << 24
 				payload = payload[1:]
 			}
 
-			if cmd&0b0001_0000 != 0 {
-				size = uint64(payload[0])
+			if (cmd & 0b10000) != 0 {
+				size |= uint64(payload[0])
 				payload = payload[1:]
 			}
-			if cmd&0b0010_0000 != 0 {
-				size = uint64(payload[0]) << 8
+			if (cmd & 0b100000) != 0 {
+				size |= uint64(payload[0]) << 8
 				payload = payload[1:]
 			}
-			if cmd&0b0100_0000 != 0 {
-				size = uint64(payload[0]) << 16
+			if (cmd & 0b1000000) != 0 {
+				size |= uint64(payload[0]) << 16
 				payload = payload[1:]
 			}
 			if size == 0 { // documented exception
