@@ -20,7 +20,7 @@ func TestParseDelta(t *testing.T) {
 		4, // size1: copy 4 bytes from source.
 		// deltaSize should now be 4 bytes smaller.
 		0x00 | // cmd. Add data instruction
-			3, // size: we have 3 bytes of data
+			4, // size: we have 4 bytes of data
 		0x12, 0x34, 0x45, 0x80, // 4 bytes of data
 	}
 	_, err := parseDelta(parent, payload)
