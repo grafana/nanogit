@@ -174,7 +174,7 @@ func WithUserAgent(agent string) Option {
 func WithGitHub() Option {
 	return func(ci *clientImpl) error {
 		if ci.tokenAuth != nil && !strings.HasPrefix(*ci.tokenAuth, "token ") {
-			fixed := fmt.Sprintf("token %s", *ci.tokenAuth)
+			fixed := "token " + *ci.tokenAuth
 			ci.tokenAuth = &fixed
 		}
 		ci.base.Path = strings.TrimRight(ci.base.Path, "/")
