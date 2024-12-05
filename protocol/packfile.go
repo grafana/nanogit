@@ -165,7 +165,7 @@ type PackfileTreeEntry struct {
 // Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/commit.go#L185-L275
 type PackfileCommit struct {
 	Tree      string
-	Author    string
+	Author    string // TODO: Test for
 	Committer string
 	Parent    string
 	Message   string

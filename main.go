@@ -113,7 +113,7 @@ func run() error {
 		// newly-invented scaling suffixes. However, receivers SHOULD
 		// accept the following suffixes: 'k', 'm', and 'g' for 1024,
 		// 1048576, and 1073741824, respectively.
-		protocol.PacketLine("filter blob:none\n"),
+		// protocol.PacketLine("filter blob:none\n"),
 		// want <oid>
 		// Indicates to the server an object which the client wants to
 		// retrieve.  Wants can be anything and are not limited to
