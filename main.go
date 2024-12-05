@@ -182,10 +182,11 @@ func run() error {
 				slog.Info("commit was read", "commit", *obj.Object.Commit)
 			} else if obj.Object.Tree != nil {
 				slog.Info("tree was read", "tree", obj.Object.Tree)
+			} else if obj.Object.Delta != nil {
+				slog.Info("delta was read", "delta", *obj.Object.Delta)
 			} else {
 				slog.Info("object was read",
 					"ty", obj.Object.Type,
-					"object_name", obj.Object.ObjectName,
 					"data", obj.Object.Data)
 			}
 		} else {

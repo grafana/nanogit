@@ -37,7 +37,7 @@ type PackfileObject struct {
 	Data []byte
 
 	// If Type == ObjectTypeRefDelta, this is set.
-	ObjectName string
+	Delta *Delta
 	// If Type == ObjectTypeOfsDelta, this is set.
 	RelativeOffset int
 	// If Type == ObjectTypeTree, this is set.
@@ -130,6 +130,12 @@ func (e *PackfileObject) parseCommit() error {
 	}
 	e.Commit.Message = msg.String()
 	return nil
+}
+
+func (e *PackfileObject) parseDelta(parent string) error {
+	var err error
+	e.Delta, err = parseDelta(parent, e.Data)
+	return eofIsUnexpected(err)
 }
 
 // PackfileTreeEntry represents a part of a packfile tree.
@@ -287,9 +293,11 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 		if _, err := p.reader.Read(ref[:]); err != nil {
 			return entry, err
 		}
-		entry.Object.ObjectName = hex.EncodeToString(ref[:])
 		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
+			return entry, err
+		}
+		if err := entry.Object.parseDelta(hex.EncodeToString(ref[:])); err != nil {
 			return entry, err
 		}
 
