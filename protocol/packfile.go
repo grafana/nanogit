@@ -396,7 +396,7 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	payload = payload[4:] // Without version
 
 	countObjects := binary.BigEndian.Uint32(payload[:4])
-	payload = payload[4:] // Without version
+	payload = payload[4:] // Without countObjects
 
 	// The payload now contains just objects. These are multiple and can be quite large.
 	// Let's pass it off to a caller to read the rest of what's in here.
