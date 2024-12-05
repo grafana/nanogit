@@ -26,7 +26,16 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	c, err := client.New("https://github.com/grafana/git-ui-sync-demo")
+	var authOption client.Option
+	if username, password := os.Getenv("GH_USER"), os.Getenv("GH_PASS"); username != "" && password != "" {
+		authOption = client.WithBasicAuth(username, password)
+	} else if token := os.Getenv("GH_TOKEN"); token != "" {
+		authOption = client.WithTokenAuth(token)
+	}
+
+	c, err := client.New("https://github.com/grafana/git-ui-sync-demo",
+		authOption,
+		client.WithGitHub())
 	if err != nil {
 		return err
 	}
