@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
+	"github.com/grafana/hackathon-2024-12-nanogit/protocol/object"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,12 +68,12 @@ func TestParsePackfile(t *testing.T) {
 
 func TestGolden(t *testing.T) {
 	testcases := map[string]struct {
-		expectedObjects []protocol.ObjectType
+		expectedObjects []object.Type
 	}{
 		"simple.dat": {
-			expectedObjects: []protocol.ObjectType{
-				protocol.ObjectTypeTree,
-				protocol.ObjectTypeCommit,
+			expectedObjects: []object.Type{
+				object.TypeTree,
+				object.TypeCommit,
 			},
 		},
 	}
