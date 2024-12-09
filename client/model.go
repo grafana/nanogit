@@ -25,7 +25,7 @@ type Commit struct {
 	// AdditionalFields are fields beyond what we know to parse.
 	// This is not a stable field: if we model more fields, they may disappear here.
 	// If a field is statically defined, it SHOULD not show up here.
-	AdditionalFields map[string][]byte
+	AdditionalFields map[string][]byte `json:"additional_fields"`
 }
 
 type FileHistory struct {
@@ -38,4 +38,14 @@ type fileDelta struct {
 	commit string
 	// The delta that this entails, including the parent commit.
 	delta protocol.Delta
+}
+
+// Ideal API:
+//   client.Fetch(ctx, "HEAD" [or other ref]) (*History, error)
+//   client.Snapshot(ctx, history, "file/path", commitRef [optional?]) (*File, error)
+// History needs at least the base commit (ie earliest commit) + its base data. And deltas on each commit since.
+
+type History struct {
+	Ref     string `json:"ref"`
+	Commits []Commit
 }

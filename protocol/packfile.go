@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"crypto"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -12,6 +13,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/grafana/hackathon-2024-12-nanogit/protocol/hash"
+	"github.com/grafana/hackathon-2024-12-nanogit/protocol/object"
 )
 
 const (
@@ -31,10 +35,12 @@ type PackfileEntry struct {
 
 type PackfileObject struct {
 	// The type of the object. 3-bit field.
-	Type ObjectType
+	Type object.Type
 	// The data, uncompressed.
 	// If Type is one of ObjectTypeRefDelta and ObjectTypeOfsDelta, this is a delta.
 	Data []byte
+	// The hash of the object. Might be unset.
+	Hash hash.Hash
 
 	// If Type == ObjectTypeRefDelta, this is set.
 	Delta *Delta
@@ -46,7 +52,13 @@ type PackfileObject struct {
 	Commit *PackfileCommit
 }
 
-func (e *PackfileObject) parseTree() error {
+func (e *PackfileObject) parseTree(algo crypto.Hash) error {
+	var err error
+	e.Hash, err = hash.Object(algo, e.Type, e.Data)
+	if err != nil {
+		return err
+	}
+
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
 
 	for {
@@ -85,7 +97,13 @@ func (e *PackfileObject) parseTree() error {
 	return nil
 }
 
-func (e *PackfileObject) parseCommit() error {
+func (e *PackfileObject) parseCommit(algo crypto.Hash) error {
+	var err error
+	e.Hash, err = hash.Object(algo, e.Type, e.Data)
+	if err != nil {
+		return err
+	}
+
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
 
 	e.Commit = &PackfileCommit{}
@@ -116,16 +134,19 @@ func (e *PackfileObject) parseCommit() error {
 		case "committer":
 			e.Commit.Committer = string(data)
 		case "tree":
-			e.Commit.Tree = string(data)
+			e.Commit.Tree, err = hash.FromHex(string(data))
 		case "author":
 			e.Commit.Author = string(data)
 		case "parent":
-			e.Commit.Parent = string(data)
+			e.Commit.Parent, err = hash.FromHex(string(data))
 		default:
 			if e.Commit.Fields == nil {
 				e.Commit.Fields = make(map[string][]byte, 8)
 			}
 			e.Commit.Fields[string(command)] = data
+		}
+		if err != nil {
+			return err
 		}
 	}
 	e.Commit.Message = msg.String()
@@ -164,10 +185,10 @@ type PackfileTreeEntry struct {
 //
 // Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/commit.go#L185-L275
 type PackfileCommit struct {
-	Tree      string
+	Tree      hash.Hash
 	Author    string // TODO: Test for
 	Committer string
-	Parent    string
+	Parent    hash.Hash
 	Message   string
 	// Fields contains any fields beyond the fields that are statically defined.
 	// If a field is statically defined, it SHOULD not show up here.
@@ -201,6 +222,7 @@ type PackfileTrailer struct {
 type PackfileReader struct {
 	reader           io.Reader
 	remainingObjects uint32
+	algo             crypto.Hash
 
 	// State that shouldn't be set when constructed.
 	trailerRead bool
@@ -258,7 +280,7 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
-	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
+	entry.Object.Type = object.Type((buf[0] >> 4) & 0b111)
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
@@ -272,25 +294,25 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 
 	var err error
 	switch entry.Object.Type {
-	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
+	case object.TypeBlob, object.TypeCommit, object.TypeTag, object.TypeTree:
 		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
 			return entry, eofIsUnexpected(err)
 		}
-		if entry.Object.Type == ObjectTypeTree {
-			if err := entry.Object.parseTree(); err != nil {
+		if entry.Object.Type == object.TypeTree {
+			if err := entry.Object.parseTree(p.algo); err != nil {
 				return entry, err
 			}
 		}
-		if entry.Object.Type == ObjectTypeCommit {
-			if err := entry.Object.parseCommit(); err != nil {
+		if entry.Object.Type == object.TypeCommit {
+			if err := entry.Object.parseCommit(p.algo); err != nil {
 				return entry, err
 			}
 		}
 
-	case ObjectTypeRefDelta:
-		var ref [20]byte
-		if _, err := p.reader.Read(ref[:]); err != nil {
+	case object.TypeRefDelta:
+		ref := make([]byte, p.algo.Size())
+		if _, err := p.reader.Read(ref); err != nil {
 			return entry, err
 		}
 		entry.Object.Data, err = p.readAndInflate(size)
@@ -301,13 +323,13 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 			return entry, err
 		}
 
-	case ObjectTypeOfsDelta:
+	case object.TypeOfsDelta:
 		// TODO(mariell): we need to handle a ref delta, at least.
 		//   Maybe OFS too? I don't think we need them as that's a
 		//   capability to negotiate.
 		fallthrough
 
-	case ObjectTypeInvalid, ObjectTypeReserved:
+	case object.TypeInvalid, object.TypeReserved:
 		// TODO(mem): do we need to do something about these? No
 		// special handling for them yet.
 		fallthrough
@@ -345,43 +367,6 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-type ObjectType uint8
-
-// The object types. Type 5 is reserved. 0 is invalid.
-const (
-	ObjectTypeInvalid  ObjectType = 0 // 0b000
-	ObjectTypeCommit   ObjectType = 1 // 0b001
-	ObjectTypeTree     ObjectType = 2 // 0b010
-	ObjectTypeBlob     ObjectType = 3 // 0b011
-	ObjectTypeTag      ObjectType = 4 // 0b100
-	ObjectTypeReserved ObjectType = 5 // 0b101
-	ObjectTypeOfsDelta ObjectType = 6 // 0b110
-	ObjectTypeRefDelta ObjectType = 7 // 0b111
-)
-
-func (t ObjectType) String() string {
-	switch t {
-	case ObjectTypeInvalid:
-		return "OBJ_INVALID"
-	case ObjectTypeCommit:
-		return "OBJ_COMMIT"
-	case ObjectTypeTree:
-		return "OBJ_TREE"
-	case ObjectTypeBlob:
-		return "OBJ_BLOB"
-	case ObjectTypeTag:
-		return "OBJ_TAG"
-	case ObjectTypeReserved:
-		return "OBJ_RESERVED"
-	case ObjectTypeOfsDelta:
-		return "OBJ_OFS_DELTA"
-	case ObjectTypeRefDelta:
-		return "OBJ_REF_DELTA"
-	default:
-		return fmt.Sprintf("ObjectType(%d)", uint8(t))
-	}
-}
-
 func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	// TODO: Accept an io.Reader to the function.
 	if len(payload) < 4 || !slices.Equal(payload[:4], []byte("PACK")) {
@@ -402,5 +387,9 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	// Let's pass it off to a caller to read the rest of what's in here.
 	// Eventually, we can even accept an io.Reader directly here, such that we don't need to
 	//   keep the whole original payload in memory, either.
-	return &PackfileReader{reader: bytes.NewReader(payload), remainingObjects: countObjects}, nil
+	return &PackfileReader{
+		reader:           bytes.NewReader(payload),
+		remainingObjects: countObjects,
+		algo:             crypto.SHA1, // TODO: Support SHA256
+	}, nil
 }
