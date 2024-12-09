@@ -52,13 +52,7 @@ type PackfileObject struct {
 	Commit *PackfileCommit
 }
 
-func (e *PackfileObject) parseTree(algo crypto.Hash) error {
-	var err error
-	e.Hash, err = hash.Object(algo, e.Type, e.Data)
-	if err != nil {
-		return err
-	}
-
+func (e *PackfileObject) parseTree() error {
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
 
 	for {
@@ -97,13 +91,7 @@ func (e *PackfileObject) parseTree(algo crypto.Hash) error {
 	return nil
 }
 
-func (e *PackfileObject) parseCommit(algo crypto.Hash) error {
-	var err error
-	e.Hash, err = hash.Object(algo, e.Type, e.Data)
-	if err != nil {
-		return err
-	}
-
+func (e *PackfileObject) parseCommit() error {
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
 
 	e.Commit = &PackfileCommit{}
@@ -299,13 +287,19 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 		if err != nil {
 			return entry, eofIsUnexpected(err)
 		}
+
+		entry.Object.Hash, err = hash.Object(p.algo, entry.Object.Type, entry.Object.Data)
+		if err != nil {
+			return entry, eofIsUnexpected(err)
+		}
+
 		if entry.Object.Type == object.TypeTree {
-			if err := entry.Object.parseTree(p.algo); err != nil {
+			if err := entry.Object.parseTree(); err != nil {
 				return entry, err
 			}
 		}
 		if entry.Object.Type == object.TypeCommit {
-			if err := entry.Object.parseCommit(p.algo); err != nil {
+			if err := entry.Object.parseCommit(); err != nil {
 				return entry, err
 			}
 		}
