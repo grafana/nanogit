@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/grafana/hackathon-2024-12-nanogit/client"
 	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
+	"github.com/grafana/hackathon-2024-12-nanogit/protocol/hash"
 	"github.com/lmittmann/tint"
 )
 
@@ -81,6 +83,8 @@ func run() error {
 
 	slog.Info("and here's the remainder", "remainder", remainder)
 
+	// The value here is a commit: https://github.com/grafana/git-ui-sync-demo/commit/6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a
+	const wantedCommit = "6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a"
 	pkt, err = protocol.FormatPackets(
 		// https://git-scm.com/docs/protocol-v2#_fetch
 		protocol.PacketLine("command=fetch\n"),
@@ -118,9 +122,7 @@ func run() error {
 		// Indicates to the server an object which the client wants to
 		// retrieve.  Wants can be anything and are not limited to
 		// advertised objects.
-		//
-		// The value here is a commit: https://github.com/grafana/git-ui-sync-demo/commit/6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a
-		protocol.PacketLine("want 6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a\n"),
+		protocol.PacketLine(fmt.Sprintf("want %s\n", wantedCommit)),
 		// done
 		// Indicates to the server that negotiation should terminate (or
 		// not even begin if performing a clone) and that the server should
@@ -178,6 +180,7 @@ func run() error {
 
 	slog.Info("fetch response", "parsed", response)
 
+	var objects []protocol.PackfileObject
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if errors.Is(err, io.EOF) {
@@ -187,10 +190,11 @@ func run() error {
 			return err
 		}
 		if obj.Object != nil {
+			objects = append(objects, *obj.Object)
 			if obj.Object.Commit != nil {
 				slog.Info("commit was read", "commit", *obj.Object.Commit)
 			} else if obj.Object.Tree != nil {
-				slog.Info("tree was read", "tree", obj.Object.Tree)
+				slog.Info("tree was read", "tree", obj.Object.Tree, "hash", obj.Object.Hash)
 			} else if obj.Object.Delta != nil {
 				slog.Info("delta was read", "delta", *obj.Object.Delta)
 			} else {
@@ -200,6 +204,24 @@ func run() error {
 			}
 		} else {
 			slog.Info("trailer was read")
+			break
+		}
+	}
+
+	wantedTree := hash.Zero
+	for _, obj := range objects {
+		if obj.Hash.String() == wantedCommit {
+			slog.Info("found commit we wanted", "commit", obj.Commit)
+			wantedTree = obj.Commit.Tree
+			break
+		}
+	}
+	for _, obj := range objects {
+		if !obj.Hash.Is(hash.Zero) && obj.Hash.Is(wantedTree) {
+			slog.Info("found tree of wanted commit",
+				"wantedCommit", wantedCommit,
+				"treeHash", obj.Hash,
+				"tree", obj.Tree)
 			break
 		}
 	}
