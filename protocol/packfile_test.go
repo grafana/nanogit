@@ -6,9 +6,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol/object"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/object"
 )
 
 func TestParsePackfile(t *testing.T) {

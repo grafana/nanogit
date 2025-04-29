@@ -3,7 +3,7 @@ package client
 import (
 	"time"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
+	"github.com/grafana/nanogit/protocol"
 )
 
 // A Commit entails a set of data and an object.

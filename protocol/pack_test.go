@@ -4,8 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/nanogit/protocol"
 )
 
 func TestFormatPackets(t *testing.T) {

@@ -53,6 +53,8 @@ func (t Type) Bytes() []byte {
 		return []byte("ofs-delta")
 	case TypeRefDelta:
 		return []byte("ref-delta")
+	case TypeInvalid, TypeReserved:
+		fallthrough
 	default:
 		return []byte("unknown")
 	}

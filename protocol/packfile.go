@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol/hash"
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol/object"
+	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/protocol/object"
 )
 
 const (

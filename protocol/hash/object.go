@@ -7,10 +7,13 @@ import (
 
 	// Linking the algorithms Git supports into the binary.
 	// Their init functions register the hash in the `crypto` package.
+
+	// Git still uses sha1 for the most part: https://git-scm.com/docs/hash-function-transition
+	//nolint:gosec
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol/object"
+	"github.com/grafana/nanogit/protocol/object"
 )
 
 var ErrUnlinkedAlgorithm = errors.New("the algorithm is not linked into the binary")

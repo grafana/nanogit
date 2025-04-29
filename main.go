@@ -9,10 +9,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/client"
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol/hash"
 	"github.com/lmittmann/tint"
+
+	"github.com/grafana/nanogit/client"
+	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 func main() {

@@ -6,8 +6,9 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/grafana/hackathon-2024-12-nanogit/protocol"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/nanogit/protocol"
 )
 
 func TestParseRefName(t *testing.T) {
