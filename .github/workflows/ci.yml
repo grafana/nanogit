@@ -46,8 +46,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install build dependencies
-      run: apk add --no-cache git make
+      run: |
+        apk add --no-cache git make gcc musl-dev
     - name: Run tests
+      env:
+        CGO_ENABLED: 1
       run: make test
 
   security:
