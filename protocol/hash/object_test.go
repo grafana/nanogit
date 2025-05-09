@@ -89,7 +89,7 @@ func TestObject(t *testing.T) {
 			got, err := Object(tt.algo, tt.objType, tt.data)
 			if tt.wantErr {
 				require.Error(t, err)
-				require.Equal(t, ErrUnlinkedAlgorithm, err)
+				require.ErrorIs(t, err, ErrUnlinkedAlgorithm)
 				require.Nil(t, got)
 			} else {
 				require.NoError(t, err)
