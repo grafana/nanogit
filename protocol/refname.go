@@ -123,10 +123,6 @@ func ParseRefName(in string) (RefName, error) {
 			return rn, errors.New("ref components cannot be empty")
 		}
 
-		if component == "@" {
-			return rn, errors.New("ref components cannot be the single character `@`")
-		}
-
 		if strings.HasPrefix(component, ".") {
 			return rn, errors.New("ref components cannot begin with a dot `.` or end with the sequence .lock")
 		}
