@@ -80,10 +80,10 @@ func NewHasher(algo crypto.Hash, t object.Type, size int64) (Hasher, error) {
 	h := Hasher{Hash: algo.New()}
 
 	chunks := [][]byte{
-		t.Bytes(),
-		[]byte(" "),
-		[]byte(strconv.FormatInt(size, 10)),
-		{0},
+		t.Bytes(),                           // object type
+		[]byte(" "),                         // space
+		[]byte(strconv.FormatInt(size, 10)), // size
+		{0},                                 // null byte
 	}
 
 	for _, chunk := range chunks {
