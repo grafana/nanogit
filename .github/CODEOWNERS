@@ -1,0 +1,5 @@
+# This file defines the team responsible for reviewing and maintaining this repository
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners for more details
+
+# These owners will be the default owners for everything in the repo
+* @grafana/grafana-git-ui-sync-team 
