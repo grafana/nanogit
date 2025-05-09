@@ -9,6 +9,18 @@ var (
 	ErrInvalidDelta = errors.New("the payload given is not a valid delta")
 )
 
+// Delta represents a delta, which is a way to describe the changes to a file between two commits.
+//
+// A delta is a sequence of instructions that describe how to modify a source file to produce a target file.
+// The source file is usually the parent commit, and the target file is the current commit.
+//
+// Git uses deltas in pack files to efficiently store objects. Instead of storing complete copies
+// of files, Git stores the differences between versions. This is particularly useful for large
+// files that change little between commits.
+//
+// For more details about Git's delta format, see:
+// https://git-scm.com/docs/pack-format#_deltified_representation
+// https://git-scm.com/book/en/v2/Git-Internals-Packfiles#_deltified_storage
 type Delta struct {
 	Parent               string
 	ExpectedSourceLength uint64
@@ -20,6 +32,11 @@ type Delta struct {
 	Changes []DeltaChange
 }
 
+// DeltaChange represents a single change to a file.
+//
+// When iterating, this must be done sequentially, in order.
+// No modifications of the source data is necessary.
+// The presence of some fields determines how to act; see the documentation of the struct.
 type DeltaChange struct {
 	// If we should add data from the delta, DeltaData contains the data to add. In this case, ignore the Length & SourceOffset fields.
 	DeltaData []byte
@@ -29,6 +46,18 @@ type DeltaChange struct {
 	SourceOffset uint64
 }
 
+// parseDelta parses a delta payload into a Delta struct.
+//
+// The delta format consists of:
+// 1. A header containing the source and target sizes
+// 2. A sequence of instructions, each starting with a command byte
+//
+// The command byte determines the type of instruction:
+// - If the high bit is 0: Add new data from the delta
+// - If the high bit is 1: Copy data from the source
+//
+// For more details about the delta format, see:
+// https://git-scm.com/docs/pack-format#_deltified_representation
 func parseDelta(parent string, payload []byte) (*Delta, error) {
 	delta := &Delta{Parent: parent}
 
@@ -133,6 +162,14 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 	return delta, nil
 }
 
+// deltaHeaderSize parses the header of a delta.
+// It returns the size of the delta and the remaining payload.
+//
+// The header is a sequence of 7-bit integers, terminated by a byte with the most significant bit set.
+// The first byte has the least significant 7 bits set.
+//
+// For more details about the delta header format, see:
+// https://git-scm.com/docs/pack-format#_deltified_representation
 func deltaHeaderSize(b []byte) (uint64, []byte) {
 	var size, j uint64
 	var cmd byte
