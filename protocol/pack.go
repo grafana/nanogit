@@ -47,24 +47,24 @@ var (
 	ErrDataTooLarge = errors.New("the data field is too large")
 )
 
-// Packet is the interface that wraps the Marshal method.
+// Pack is the interface that wraps the Marshal method.
 // All packet types must implement this interface to be used with FormatPackets.
-type Packet interface {
+type Pack interface {
 	// Marshal converts the packet into its wire format.
 	// The returned byte slice should be ready to be sent over the wire.
 	Marshal() ([]byte, error)
 }
 
-// PacketLine represents a regular packet line in Git's protocol.
+// PackLine represents a regular packet line in Git's protocol.
 // It contains arbitrary data that will be prefixed with a length field.
-type PacketLine []byte
+type PackLine []byte
 
-var _ Packet = PacketLine{}
+var _ Pack = PackLine{}
 
-// Marshal implements the Packet interface for PacketLine.
+// Marshal implements the Pack interface for PackLine.
 // It prepends a 4-byte hex length field to the data.
 // Returns ErrDataTooLarge if the data exceeds MaxPktLineDataSize.
-func (p PacketLine) Marshal() ([]byte, error) {
+func (p PackLine) Marshal() ([]byte, error) {
 	if len(p) > MaxPktLineDataSize {
 		return nil, ErrDataTooLarge
 	}
@@ -74,15 +74,15 @@ func (p PacketLine) Marshal() ([]byte, error) {
 	return out, nil
 }
 
-// SpecialPacket represents a special packet type in Git's protocol.
+// SpecialPack represents a special packet type in Git's protocol.
 // These packets have predefined formats and don't need length calculation.
-type SpecialPacket string
+type SpecialPack string
 
-var _ Packet = SpecialPacket("")
+var _ Pack = SpecialPack("")
 
-// Marshal implements the Packet interface for SpecialPacket.
+// Marshal implements the Pack interface for SpecialPack.
 // Special packets are pre-defined and known to be valid, so no validation is needed.
-func (p SpecialPacket) Marshal() ([]byte, error) {
+func (p SpecialPack) Marshal() ([]byte, error) {
 	// We don't need to do anything special here. The special packets are pre-defined, and known to be valid.
 	return []byte(p), nil
 }
@@ -93,65 +93,65 @@ const (
 	// Defined in:
 	//   - https://git-scm.com/docs/gitprotocol-common
 	//   - https://git-scm.com/docs/protocol-v2
-	FlushPacket = SpecialPacket("0000")
+	FlushPacket = SpecialPack("0000")
 
 	// DelimeterPacket is a packet of length '0001'. It is a special-case packet used in
 	// protocol v2 to separate sections of a message.
 	// Defined in:
 	//   - https://git-scm.com/docs/protocol-v2
-	DelimeterPacket = SpecialPacket("0001")
+	DelimeterPacket = SpecialPack("0001")
 
 	// ResponseEndPacket is a packet of length '0002'. It is a special-case packet used in
 	// protocol v2 to indicate the end of a response.
 	// Defined in:
 	//   - https://git-scm.com/docs/protocol-v2
-	ResponseEndPacket = SpecialPacket("0002")
+	ResponseEndPacket = SpecialPack("0002")
 )
 
-// PacketParseError represents an error that occurred while parsing a packet.
+// PackParseError represents an error that occurred while parsing a packet.
 // It includes the problematic line and the underlying error.
-type PacketParseError struct {
+type PackParseError struct {
 	Line []byte
 	Err  error
 }
 
 // Error implements the error interface for ParseError.
-func (e *PacketParseError) Error() string {
+func (e *PackParseError) Error() string {
 	return fmt.Sprintf("error parsing line %q: %s", e.Line, e.Err.Error())
 }
 
 // Unwrap returns the underlying error.
-func (e *PacketParseError) Unwrap() error {
+func (e *PackParseError) Unwrap() error {
 	return e.Err
 }
 
 // NewPacketParseError creates a new PacketParseError with the given line and error.
-func NewPacketParseError(line []byte, err error) *PacketParseError {
-	return &PacketParseError{
+func NewPackParseError(line []byte, err error) *PackParseError {
+	return &PackParseError{
 		Line: line,
 		Err:  err,
 	}
 }
 
-// IsPacketParseError checks if an error is a PacketParseError.
-func IsPacketParseError(err error) bool {
-	return errors.As(err, new(*PacketParseError))
+// IsPackParseError checks if an error is a PackParseError.
+func IsPackParseError(err error) bool {
+	return errors.As(err, new(*PackParseError))
 }
 
-// FormatPackets converts a sequence of packets into their wire format.
+// FormatPacks converts a sequence of packets into their wire format.
 // It automatically appends a FlushPacket if none is present in the sequence.
 // Returns an error if any packet fails to marshal.
-func FormatPackets(packets ...Packet) ([]byte, error) {
+func FormatPacks(packs ...Pack) ([]byte, error) {
 	var out bytes.Buffer
 	flushed := false
-	for _, pl := range packets {
+	for _, pl := range packs {
 		marshalled, err := pl.Marshal()
 		if err != nil {
 			return nil, err
 		}
 		out.Write(marshalled)
 
-		if sp, ok := pl.(SpecialPacket); ok && sp == FlushPacket {
+		if sp, ok := pl.(SpecialPack); ok && sp == FlushPacket {
 			flushed = true
 		}
 	}
@@ -161,7 +161,7 @@ func FormatPackets(packets ...Packet) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// ParsePacket parses a sequence of packets from a byte slice.
+// ParsePack parses a sequence of packets from a byte slice.
 // It returns:
 //   - lines: The parsed packet lines
 //   - remainder: Any remaining bytes that couldn't be parsed
@@ -174,14 +174,14 @@ func FormatPackets(packets ...Packet) ([]byte, error) {
 //   - Empty packets
 //
 // TODO: Accept an io.Reader to the function, and return a new kind of reader.
-func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
+func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 	// There should be at least 4 bytes in the packet.
 	for len(b) >= 4 {
 		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
 
 		switch {
 		case err != nil:
-			return nil, b, NewPacketParseError(b, fmt.Errorf("parsing line length: %w", err))
+			return nil, b, NewPackParseError(b, fmt.Errorf("parsing line length: %w", err))
 
 		case length < 4:
 			// This is a special-case packet.
@@ -199,7 +199,7 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 			continue
 
 		case uint64(len(b)) < length:
-			return lines, b, NewPacketParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
+			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
 
 		case bytes.HasPrefix(b[4:], []byte("ERR ")):
 			// This is an error packet.
@@ -216,7 +216,7 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 			// transfer process defined in this protocol is
 			// terminated.
 
-			return lines, b[length:], fmt.Errorf("error packet: %s", b[8:length])
+			return lines, b[length:], fmt.Errorf("error pack: %s", b[8:length])
 		}
 
 		// The length includes the first 4 bytes as well, so we should be good with this.

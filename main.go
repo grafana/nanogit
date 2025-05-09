@@ -49,7 +49,7 @@ func run() error {
 			return err
 		}
 
-		lines, _, err := protocol.ParsePacket(reply)
+		lines, _, err := protocol.ParsePack(reply)
 		if err != nil {
 			return err
 		}
@@ -61,9 +61,9 @@ func run() error {
 		// TODO(mem): parse the response and adjust the following requests accordingly.
 	}
 
-	pkt, err := protocol.FormatPackets(
-		protocol.PacketLine("command=ls-refs\n"),
-		protocol.PacketLine("object-format=sha1\n"))
+	pkt, err := protocol.FormatPacks(
+		protocol.PackLine("command=ls-refs\n"),
+		protocol.PackLine("object-format=sha1\n"))
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func run() error {
 		return err
 	}
 
-	lines, remainder, err := protocol.ParsePacket(refsData)
+	lines, remainder, err := protocol.ParsePack(refsData)
 	if err != nil {
 		return err
 	}
@@ -86,10 +86,10 @@ func run() error {
 
 	// The value here is a commit: https://github.com/grafana/git-ui-sync-demo/commit/6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a
 	const wantedCommit = "6c86a0cdfd220c2fe3518cfaa4a4babf030d9a7a"
-	pkt, err = protocol.FormatPackets(
+	pkt, err = protocol.FormatPacks(
 		// https://git-scm.com/docs/protocol-v2#_fetch
-		protocol.PacketLine("command=fetch\n"),
-		protocol.PacketLine("object-format=sha1\n"), // https://git-scm.com/docs/protocol-v2#_object_format
+		protocol.PackLine("command=fetch\n"),
+		protocol.PackLine("object-format=sha1\n"), // https://git-scm.com/docs/protocol-v2#_object_format
 		protocol.DelimeterPacket,
 		// thin-pack
 		// Request that a thin pack be sent, which is a pack with deltas
@@ -106,7 +106,7 @@ func run() error {
 		// responses.
 		// TODO: What is a side-band channel in git's protocol??
 		//   Relevant on side-bands: https://git-scm.com/docs/gitprotocol-pack#_packfile_data
-		protocol.PacketLine("no-progress\n"),
+		protocol.PackLine("no-progress\n"),
 		// filter <filter-spec>
 		// Request that various objects from the packfile be omitted
 		// using one of several filtering techniques. These are intended
@@ -118,18 +118,18 @@ func run() error {
 		// newly-invented scaling suffixes. However, receivers SHOULD
 		// accept the following suffixes: 'k', 'm', and 'g' for 1024,
 		// 1048576, and 1073741824, respectively.
-		protocol.PacketLine("filter blob:none\n"),
+		protocol.PackLine("filter blob:none\n"),
 		// want <oid>
 		// Indicates to the server an object which the client wants to
 		// retrieve.  Wants can be anything and are not limited to
 		// advertised objects.
-		protocol.PacketLine(fmt.Sprintf("want %s\n", wantedCommit)),
+		protocol.PackLine(fmt.Sprintf("want %s\n", wantedCommit)),
 		// done
 		// Indicates to the server that negotiation should terminate (or
 		// not even begin if performing a clone) and that the server should
 		// use the information supplied in the request to construct the
 		// packfile.
-		protocol.PacketLine("done\n"),
+		protocol.PackLine("done\n"),
 	)
 	if err != nil {
 		return err
@@ -141,7 +141,7 @@ func run() error {
 	}
 
 	// TODO(mem): do something with the remaing data.
-	lines, _, err = protocol.ParsePacket(out)
+	lines, _, err = protocol.ParsePack(out)
 	if err != nil {
 		return err
 	}
