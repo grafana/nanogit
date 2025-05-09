@@ -12,6 +12,10 @@ type Hash []byte
 var Zero Hash
 
 func FromHex(hs string) (Hash, error) {
+	if len(hs) == 0 {
+		return Zero, nil
+	}
+
 	b, err := hex.DecodeString(hs)
 	if err != nil {
 		return Zero, err
