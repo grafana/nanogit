@@ -2,11 +2,15 @@ package protocol
 
 import (
 	"errors"
-	"fmt"
 )
 
 var (
-	ErrInvalidDelta = errors.New("the payload given is not a valid delta")
+	ErrPayloadTooShort   = errors.New("payload too short")
+	ErrMissingCmd        = errors.New("missing cmd byte")
+	ErrMissingOffsetByte = errors.New("missing offset byte")
+	ErrMissingSizeByte   = errors.New("missing size byte")
+	ErrMissingDataBytes  = errors.New("missing data bytes")
+	ErrReservedCmd       = errors.New("payload included a cmd 0x0 (reserved) instruction")
 )
 
 // Delta represents a delta, which is a way to describe the changes to a file between two commits.
@@ -63,7 +67,7 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 
 	const minDeltaSize = 4
 	if len(payload) < minDeltaSize {
-		return nil, ErrInvalidDelta
+		return nil, ErrPayloadTooShort
 	}
 	delta.ExpectedSourceLength, payload = deltaHeaderSize(payload)
 	deltaSize, payload := deltaHeaderSize(payload)
@@ -94,37 +98,61 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 		// If offset bits that aren't next to each other are set (e.g. offset1 and offset3 are set), they are still treated as their appropriate positions. I.e. offset1 would represent bits 0-7, and offset3 bits 16-23.
 		//
 		// If the entire cmd is 0x0, it is reserved and MUST return an error.
-		// FIXME: We need to safely check if a byte exists, and return err if not. This is to avoid panics.
+		if len(payload) == 0 {
+			return nil, ErrMissingCmd
+		}
+
 		cmd := payload[0]
 		payload = payload[1:]
 		if cmd&0x80 != 0 { // Copy data instruction
 			var offset, size uint64
 			if (cmd & 0b1) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingOffsetByte
+				}
 				offset |= uint64(payload[0])
 				payload = payload[1:]
 			}
 			if (cmd & 0b10) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingOffsetByte
+				}
 				offset |= uint64(payload[0]) << 8
 				payload = payload[1:]
 			}
 			if (cmd & 0b100) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingOffsetByte
+				}
 				offset |= uint64(payload[0]) << 16
 				payload = payload[1:]
 			}
 			if (cmd & 0b1000) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingOffsetByte
+				}
 				offset |= uint64(payload[0]) << 24
 				payload = payload[1:]
 			}
 
 			if (cmd & 0b10000) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingSizeByte
+				}
 				size |= uint64(payload[0])
 				payload = payload[1:]
 			}
 			if (cmd & 0b100000) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingSizeByte
+				}
 				size |= uint64(payload[0]) << 8
 				payload = payload[1:]
 			}
 			if (cmd & 0b1000000) != 0 {
+				if len(payload) == 0 {
+					return nil, ErrMissingSizeByte
+				}
 				size |= uint64(payload[0]) << 16
 				payload = payload[1:]
 			}
@@ -147,6 +175,9 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 			if uint64(cmd) > originalDeltaSize {
 				break
 			}
+			if len(payload) < int(cmd) {
+				return nil, ErrMissingDataBytes
+			}
 
 			delta.Changes = append(delta.Changes, DeltaChange{
 				// We don't have to do anything about cmd's top bit here. It is 0; we only need the 7 others which act as a 7-bit integer size.
@@ -155,7 +186,7 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 			deltaSize -= uint64(cmd)
 			payload = payload[cmd:]
 		} else { // Cmd == 0; reserved.
-			return nil, fmt.Errorf("%w: payload included a cmd 0x0 (reserved) instruction", ErrInvalidDelta)
+			return nil, ErrReservedCmd
 		}
 	}
 
