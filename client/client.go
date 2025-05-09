@@ -32,6 +32,7 @@ type clientImpl struct {
 	tokenAuth *string
 }
 
+// addDefaultHeaders adds the default headers to the request.
 func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
 	if c.userAgent == "" {
@@ -46,6 +47,7 @@ func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 	}
 }
 
+// SendCommands sends a POST request to the git-upload-pack endpoint.
 func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
@@ -74,6 +76,7 @@ func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, err
 	return io.ReadAll(res.Body)
 }
 
+// SmartInfoRequest sends a GET request to the info/refs endpoint.
 func (c *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
 	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
@@ -164,6 +167,7 @@ func WithUserAgent(agent string) Option {
 }
 
 // WithHTTPClient overrides the default http.Client.
+// It will return an error if the provided http.Client is nil.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *clientImpl) error {
 		if httpClient == nil {
