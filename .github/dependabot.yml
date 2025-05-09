@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Enable version updates for Go
+  - package-ecosystem: "gomod"
+    # Look for `go.mod` and `go.sum` files in the `root` directory
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # Specify labels for pull requests
+    labels:
+      - "dependencies"
+      - "go"
+    # Set version update strategy
+    versioning-strategy: auto
+    # Limit the number of open pull requests for version updates
+    open-pull-requests-limit: 10
+    # Allow up-to-date branches to be rebased
+    rebase-strategy: auto
+    # Group all updates together
+    groups:
+      dependencies:
+        patterns:
+          - "*" 
