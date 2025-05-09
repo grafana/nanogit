@@ -2,4 +2,4 @@
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners for more details
 
 # These owners will be the default owners for everything in the repo
-* @grafana-git-ui-sync-team 
+* @grafana/grafana-git-ui-sync-team 
