@@ -1,7 +1,7 @@
 ---
 name: Epic
 about: Track a large initiative or feature set
-title: '[EPIC] '
+type: Epic
 labels: epic
 assignees: ''
 ---

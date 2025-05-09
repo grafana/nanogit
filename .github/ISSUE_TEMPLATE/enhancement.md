@@ -1,7 +1,7 @@
 ---
 name: Enhancement
 about: Propose an improvement to existing functionality
-title: '[ENHANCEMENT] '
+type: Enhancement
 labels: enhancement
 assignees: ''
 ---

@@ -1,7 +1,7 @@
 ---
 name: Proposal
 about: Propose a significant change or new feature
-title: '[PROPOSAL] '
+type: Proposal
 labels: proposal
 assignees: ''
 ---
