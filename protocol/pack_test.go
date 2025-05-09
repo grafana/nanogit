@@ -2,6 +2,7 @@ package protocol_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,7 @@ func TestFormatPackets(t *testing.T) {
 	testcases := map[string]struct {
 		input    []protocol.Pack
 		expected []byte
+		wantErr  error
 	}{
 		"empty": {
 			input:    []protocol.Pack{},
@@ -48,12 +50,31 @@ func TestFormatPackets(t *testing.T) {
 			input:    []protocol.Pack{protocol.ResponseEndPacket},
 			expected: []byte("00020000"),
 		},
+		"data too large": {
+			input: []protocol.Pack{
+				protocol.PackLine(make([]byte, protocol.MaxPktLineDataSize+1)),
+			},
+			wantErr: protocol.ErrDataTooLarge,
+		},
+		"exact max size": {
+			input: []protocol.Pack{
+				protocol.PackLine(make([]byte, protocol.MaxPktLineDataSize)),
+			},
+			expected: append(
+				[]byte(fmt.Sprintf("%04x", protocol.MaxPktLineDataSize+4)),
+				append(make([]byte, protocol.MaxPktLineDataSize), []byte("0000")...)...,
+			),
+		},
 	}
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
 			actual, err := protocol.FormatPacks(tc.input...)
-			require.NoError(t, err, "no error expected from FormatPackets")
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr, "expected error from FormatPackets")
+			} else {
+				require.NoError(t, err, "no error expected from FormatPackets")
+			}
 			require.Equal(t, tc.expected, actual, "expected and actual byte slices should be equal")
 		})
 	}
@@ -192,4 +213,94 @@ func TestParsePacket(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPackParseError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		err      *protocol.PackParseError
+		expected string
+	}{
+		{
+			name:     "empty error",
+			err:      &protocol.PackParseError{},
+			expected: "error parsing line \"\"",
+		},
+		{
+			name:     "with line",
+			err:      &protocol.PackParseError{Line: []byte("test")},
+			expected: "error parsing line \"test\"",
+		},
+		{
+			name:     "with error",
+			err:      &protocol.PackParseError{Err: errors.New("test error")},
+			expected: "error parsing line \"\": test error",
+		},
+		{
+			name:     "with line and error",
+			err:      &protocol.PackParseError{Line: []byte("test"), Err: errors.New("test error")},
+			expected: "error parsing line \"test\": test error",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt // capture range variable
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.expected, tt.err.Error())
+		})
+	}
+
+	// Test error wrapping with errors.Is
+	t.Run("errors.Is", func(t *testing.T) {
+		baseErr := errors.New("base error")
+		err := &protocol.PackParseError{Err: baseErr}
+
+		require.ErrorIs(t, err, baseErr, "errors.Is should find the base error")
+		require.NotErrorIs(t, err, errors.New("different error"), "errors.Is should not match different errors")
+	})
+
+	// Test error unwrapping with errors.As
+	t.Run("errors.As", func(t *testing.T) {
+		var parseErr *protocol.PackParseError
+		err := fmt.Errorf("wrapped: %w", &protocol.PackParseError{Line: []byte("test"), Err: errors.New("test error")})
+
+		require.ErrorAs(t, err, &parseErr, "should be able to get PackParseError using ErrorAs")
+		require.Equal(t, []byte("test"), parseErr.Line)
+		require.Equal(t, "test error", parseErr.Err.Error())
+	})
+
+	// Test error unwrapping with Unwrap method
+	t.Run("Unwrap", func(t *testing.T) {
+		baseErr := errors.New("base error")
+		err := &protocol.PackParseError{Err: baseErr}
+
+		unwrapped := errors.Unwrap(err)
+		require.Equal(t, baseErr, unwrapped, "Unwrap should return the base error")
+
+		// Test with nil error
+		nilErr := &protocol.PackParseError{Err: nil}
+		require.NoError(t, errors.Unwrap(nilErr), "Unwrap should return nil for nil error")
+	})
+	// Test IsPackParseError function
+	t.Run("IsPackParseError", func(t *testing.T) {
+		t.Parallel()
+
+		// Test with a PackParseError
+		parseErr := &protocol.PackParseError{Line: []byte("test"), Err: errors.New("test error")}
+		require.True(t, protocol.IsPackParseError(parseErr), "IsPackParseError should return true for PackParseError")
+
+		// Test with a wrapped PackParseError
+		wrappedErr := fmt.Errorf("wrapped: %w", parseErr)
+		require.True(t, protocol.IsPackParseError(wrappedErr), "IsPackParseError should return true for wrapped PackParseError")
+
+		// Test with a different error type
+		otherErr := errors.New("different error")
+		require.False(t, protocol.IsPackParseError(otherErr), "IsPackParseError should return false for non-PackParseError")
+
+		// Test with nil
+		require.False(t, protocol.IsPackParseError(nil), "IsPackParseError should return false for nil")
+	})
 }

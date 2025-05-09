@@ -117,6 +117,10 @@ type PackParseError struct {
 
 // Error implements the error interface for ParseError.
 func (e *PackParseError) Error() string {
+	if e.Err == nil {
+		return fmt.Sprintf("error parsing line %q", e.Line)
+	}
+
 	return fmt.Sprintf("error parsing line %q: %s", e.Line, e.Err.Error())
 }
 
