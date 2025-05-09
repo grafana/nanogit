@@ -20,7 +20,7 @@ jobs:
       run: make fmt
     - name: Verify formatting
       run: |
-        if [ -n "$(git status --porcelain)" ]; then
+        if ! git diff --exit-code; then
           echo "::error::Code formatting issues found. Run 'make fmt' to fix them."
           git diff
           exit 1
@@ -79,7 +79,7 @@ jobs:
     - name: Check for go.mod and go.sum consistency
       run: |
         go mod tidy
-        if [ -n "$(git status --porcelain)" ]; then
+        if ! git diff --exit-code; then
           echo "::error::go.mod and go.sum are out of sync. Run 'go mod tidy' to fix them."
           git diff
           exit 1
