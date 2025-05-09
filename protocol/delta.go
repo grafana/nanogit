@@ -192,7 +192,13 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 //
 // For more details about the delta header format, see:
 // https://git-scm.com/docs/pack-format#_deltified_representation
+// TODO: I don't understand the logic here
 func deltaHeaderSize(b []byte) (uint64, []byte) {
+	// TODO: This is a bit of a hack. We should probably have a better way to handle this.
+	if len(b) == 0 {
+		return 0, b
+	}
+
 	var size, j uint64
 	var cmd byte
 	for {

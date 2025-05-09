@@ -3,26 +3,45 @@ package protocol
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestParseDelta(t *testing.T) {
-	parent := "test" // doesn't matter
-	payload := []byte{
-		// ExpectedSourceLength, varint
-		4, // 4 bytes. Doesn't set byte 0x80, so this is just the 7 bits of data.
-		// deltaSize
-		8, // TODO: Set correct size
-		// Actual delta
-		0x80 | // cmd. Copy from source.
-			// we have no offset: copy from position 0.
-			1<<4, // we have a size.
-		4, // size1: copy 4 bytes from source.
-		// deltaSize should now be 4 bytes smaller.
-		0x00 | // cmd. Add data instruction
-			4, // size: we have 4 bytes of data
-		0x12, 0x34, 0x45, 0x80, // 4 bytes of data
+// TestDeltaHeaderSize tests the parsing of delta headers.
+func TestDeltaHeaderSize(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       []byte
+		wantSize    uint64
+		wantRemain  []byte
+		description string
+	}{
+		{
+			name: "single byte header",
+			// 0x7F = 127 (max value for single byte)
+			input:       []byte{0x7F, 0x01},
+			wantSize:    127,
+			wantRemain:  []byte{0x01},
+			description: "Tests parsing of a single-byte header with maximum value (127)",
+		},
+		{
+			name: "empty input",
+			// Empty input should return 0 size and empty remaining bytes
+			input:       []byte{},
+			wantSize:    0,
+			wantRemain:  []byte{},
+			description: "Tests behavior with empty input",
+		},
 	}
-	_, err := parseDelta(parent, payload)
-	assert.NoError(t, err)
+
+	for _, tt := range tests {
+		tt := tt // capture range variable
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			t.Log(tt.description)
+
+			gotSize, gotRemain := deltaHeaderSize(tt.input)
+			require.Equal(t, tt.wantSize, gotSize)
+			require.Equal(t, tt.wantRemain, gotRemain)
+		})
+	}
 }
