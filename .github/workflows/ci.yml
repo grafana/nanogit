@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Check formatting
+      run: make fmt
+    - name: Verify formatting
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "::error::Code formatting issues found. Run 'make fmt' to fix them."
+          git diff
+          exit 1
+        fi
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Run linter
+      run: make lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Run tests
+      run: make test
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Check for vulnerabilities
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+
+  license:
+    name: License
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Check for license headers
+      run: |
+        go install github.com/google/addlicense@latest
+        addlicense -check -f LICENSE . || (echo "::error::Missing license headers" && exit 1)
+
+  deps:
+    name: Dependencies
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Check for go.mod and go.sum consistency
+      run: |
+        go mod tidy
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "::error::go.mod and go.sum are out of sync. Run 'go mod tidy' to fix them."
+          git diff
+          exit 1
+        fi
+    - name: Check for unused dependencies
+      run: |
+        go install github.com/remyoudompheng/go-misc/deadcode@latest
+        deadcode ./... || true
+
+  staticcheck:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build dependencies
+      run: apk add --no-cache git make
+    - name: Check for staticcheck issues
+      run: |
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        staticcheck ./... 
