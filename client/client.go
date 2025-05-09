@@ -105,11 +105,6 @@ func (ci *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 type Option = func(*clientImpl) error
 
 // New returns a new Client for the given repository.
-//
-// TODO(mem): this is a temporary implementation. It probably needs to have
-// some kind of options parameter so that we can pass authentication
-// information to the client. It's possible that basic auth is not going to be
-// enough for all possible situations.
 func New(repo string, options ...Option) (*clientImpl, error) {
 	u, err := url.Parse(repo)
 	if err != nil {
