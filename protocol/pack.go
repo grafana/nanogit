@@ -108,34 +108,34 @@ const (
 	ResponseEndPacket = SpecialPacket("0002")
 )
 
-// ParseError represents an error that occurred while parsing a packet.
+// PacketParseError represents an error that occurred while parsing a packet.
 // It includes the problematic line and the underlying error.
-type ParseError struct {
+type PacketParseError struct {
 	Line []byte
 	Err  error
 }
 
 // Error implements the error interface for ParseError.
-func (e *ParseError) Error() string {
+func (e *PacketParseError) Error() string {
 	return fmt.Sprintf("error parsing line %q: %s", e.Line, e.Err.Error())
 }
 
 // Unwrap returns the underlying error.
-func (e *ParseError) Unwrap() error {
+func (e *PacketParseError) Unwrap() error {
 	return e.Err
 }
 
-// NewParseError creates a new ParseError with the given line and error.
-func NewParseError(line []byte, err error) *ParseError {
-	return &ParseError{
+// NewPacketParseError creates a new PacketParseError with the given line and error.
+func NewPacketParseError(line []byte, err error) *PacketParseError {
+	return &PacketParseError{
 		Line: line,
 		Err:  err,
 	}
 }
 
-// IsParseError checks if an error is a ParseError.
-func IsParseError(err error) bool {
-	return errors.As(err, new(*ParseError))
+// IsPacketParseError checks if an error is a PacketParseError.
+func IsPacketParseError(err error) bool {
+	return errors.As(err, new(*PacketParseError))
 }
 
 // FormatPackets converts a sequence of packets into their wire format.
@@ -181,7 +181,7 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 
 		switch {
 		case err != nil:
-			return nil, b, NewParseError(b, fmt.Errorf("parsing line length: %w", err))
+			return nil, b, NewPacketParseError(b, fmt.Errorf("parsing line length: %w", err))
 
 		case length < 4:
 			// This is a special-case packet.
@@ -199,7 +199,7 @@ func ParsePacket(b []byte) (lines [][]byte, remainder []byte, err error) {
 			continue
 
 		case uint64(len(b)) < length:
-			return lines, b, NewParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
+			return lines, b, NewPacketParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
 
 		case bytes.HasPrefix(b[4:], []byte("ERR ")):
 			// This is an error packet.

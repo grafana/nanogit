@@ -150,7 +150,7 @@ func TestParsePacket(t *testing.T) {
 			expected: expected{
 				lines:     nil,
 				remainder: []byte("0009hell"),
-				err:       new(protocol.ParseError),
+				err:       new(protocol.PacketParseError),
 			},
 		},
 		"invalid length": {
@@ -158,7 +158,7 @@ func TestParsePacket(t *testing.T) {
 			expected: expected{
 				lines:     nil,
 				remainder: []byte("000Gxxxxxxxxxxxxxxxx"),
-				err:       new(protocol.ParseError),
+				err:       new(protocol.PacketParseError),
 			},
 		},
 		"error packet": {
