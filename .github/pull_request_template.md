@@ -13,5 +13,4 @@
 ## Author Checklist
 - [ ] Tests added/updated.
 - [ ] Documentation updated.
-- [ ] Code follows project style guidelines.
 - [ ] Changes have been tested locally.
