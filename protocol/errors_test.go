@@ -86,7 +86,7 @@ func TestEOFIsUnexpected(t *testing.T) {
 			t.Parallel()
 			got := eofIsUnexpected(tt.input)
 			if tt.expected == nil {
-				require.Nil(t, got)
+				require.NoError(t, got)
 			} else {
 				require.Equal(t, tt.expected.Error(), got.Error())
 			}
