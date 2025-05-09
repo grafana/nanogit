@@ -61,7 +61,7 @@ func TestNew(t *testing.T) {
 			name: "option returns error",
 			repo: "https://github.com/owner/repo",
 			options: []Option{
-				func(ci *clientImpl) error {
+				func(c *clientImpl) error {
 					return errors.New("option application failed")
 				},
 			},
@@ -132,9 +132,57 @@ func TestWithGitHub(t *testing.T) {
 			client, err := New(tt.repo, WithTokenAuth(tt.token), WithGitHub())
 			require.NoError(t, err)
 
-			require.Equal(t, tt.wantPath, client.base.Path)
-			require.NotNil(t, client.tokenAuth)
-			require.Equal(t, tt.wantAuth, *client.tokenAuth)
+			c, ok := client.(*clientImpl)
+			require.True(t, ok, "client should be of type *client")
+
+			require.Equal(t, tt.wantPath, c.base.Path)
+			require.NotNil(t, c.tokenAuth)
+			require.Equal(t, tt.wantAuth, *c.tokenAuth)
+		})
+	}
+}
+
+func TestWithHTTPClient(t *testing.T) {
+	tests := []struct {
+		name       string
+		httpClient *http.Client
+		wantErr    error
+	}{
+		{
+			name: "valid http client",
+			httpClient: &http.Client{
+				Timeout: 5 * time.Second,
+			},
+			wantErr: nil,
+		},
+		{
+			name:       "nil http client",
+			httpClient: nil,
+			wantErr:    errors.New("httpClient is nil"),
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt // capture range variable
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			client, err := New("https://github.com/owner/repo", WithHTTPClient(tt.httpClient))
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr.Error(), err.Error())
+				return
+			}
+
+			require.NoError(t, err)
+
+			c, ok := client.(*clientImpl)
+			require.True(t, ok, "client should be of type *client")
+
+			if tt.httpClient == nil {
+				require.NotNil(t, c.client, "client should not be nil even when nil is provided")
+			} else {
+				require.Equal(t, tt.httpClient, c.client, "http client should match the provided client")
+			}
 		})
 	}
 }
@@ -206,6 +254,7 @@ func TestSendCommands(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var server *httptest.Server
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +294,9 @@ func TestSendCommands(t *testing.T) {
 			client, err := New(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				tt.setupClient(client)
+				c, ok := client.(*clientImpl)
+				require.True(t, ok, "client should be of type *client")
+				tt.setupClient(c)
 			}
 
 			response, err := client.SendCommands(context.Background(), []byte("test data"))
@@ -326,7 +377,9 @@ func TestSmartInfoRequest(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var server *httptest.Server
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -370,7 +423,9 @@ func TestSmartInfoRequest(t *testing.T) {
 			client, err := New(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				tt.setupClient(client)
+				c, ok := client.(*clientImpl)
+				require.True(t, ok, "client should be of type *client")
+				tt.setupClient(c)
 			}
 
 			response, err := client.SmartInfoRequest(context.Background())
@@ -405,7 +460,9 @@ func TestAuthentication(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Check default headers
 				if gitProtocol := r.Header.Get("Git-Protocol"); gitProtocol != "version=2" {

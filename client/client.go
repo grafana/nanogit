@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,10 +20,10 @@ type Client interface {
 }
 
 // Option is a function that configures a Client.
-type Option func(*client) error
+type Option func(*clientImpl) error
 
-// client is the private implementation of the Client interface.
-type client struct {
+// clientImpl is the private implementation of the Client interface.
+type clientImpl struct {
 	base      *url.URL
 	client    *http.Client
 	userAgent string
@@ -31,7 +32,7 @@ type client struct {
 	tokenAuth *string
 }
 
-func (c *client) addDefaultHeaders(req *http.Request) {
+func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
 	if c.userAgent == "" {
 		c.userAgent = "nanogit/0"
@@ -45,7 +46,7 @@ func (c *client) addDefaultHeaders(req *http.Request) {
 	}
 }
 
-func (c *client) SendCommands(ctx context.Context, data []byte) ([]byte, error) {
+func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
@@ -73,7 +74,7 @@ func (c *client) SendCommands(ctx context.Context, data []byte) ([]byte, error) 
 	return io.ReadAll(res.Body)
 }
 
-func (c *client) SmartInfoRequest(ctx context.Context) ([]byte, error) {
+func (c *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
 	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
 	// See: https://git-scm.com/docs/http-protocol#_smart_clients
@@ -108,16 +109,14 @@ func (c *client) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 }
 
 // New returns a new Client for the given repository.
-// FIXME: we should allow the caller to provide a custom http.Client
 func New(repo string, options ...Option) (Client, error) {
 	u, err := url.Parse(repo)
 	if err != nil {
 		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
-	c := &client{
-		base: u,
-		// FIXME: we should allow the caller to provide a custom http.Client
+	c := &clientImpl{
+		base:   u,
 		client: &http.Client{},
 	}
 	for _, option := range options {
@@ -137,7 +136,7 @@ func New(repo string, options ...Option) (Client, error) {
 func WithBasicAuth(username, password string) Option {
 	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *client) error {
+	return func(c *clientImpl) error {
 		c.basicAuth = &struct{ Username, Password string }{username, password}
 		c.tokenAuth = nil
 		return nil
@@ -149,7 +148,7 @@ func WithBasicAuth(username, password string) Option {
 func WithTokenAuth(token string) Option {
 	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *client) error {
+	return func(c *clientImpl) error {
 		c.basicAuth = nil
 		c.tokenAuth = &token
 		return nil
@@ -158,8 +157,20 @@ func WithTokenAuth(token string) Option {
 
 // WithUserAgent overrides the default User-Agent header.
 func WithUserAgent(agent string) Option {
-	return func(c *client) error {
+	return func(c *clientImpl) error {
 		c.userAgent = agent
+		return nil
+	}
+}
+
+// WithHTTPClient overrides the default http.Client.
+func WithHTTPClient(httpClient *http.Client) Option {
+	return func(c *clientImpl) error {
+		if httpClient == nil {
+			return errors.New("httpClient is nil")
+		}
+
+		c.client = httpClient
 		return nil
 	}
 }
@@ -172,7 +183,7 @@ func WithUserAgent(agent string) Option {
 //   - Check that the token auth header has a "token" prefix, if it is used.
 //   - Check that the base URL has no ".git" suffix, or trailing slashes.
 func WithGitHub() Option {
-	return func(c *client) error {
+	return func(c *clientImpl) error {
 		if c.tokenAuth != nil && !strings.HasPrefix(*c.tokenAuth, "token ") {
 			fixed := "token " + *c.tokenAuth
 			c.tokenAuth = &fixed
