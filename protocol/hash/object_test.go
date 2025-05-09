@@ -156,7 +156,7 @@ func TestNewHasher(t *testing.T) {
 			got, err := NewHasher(tt.algo, tt.objType, tt.size)
 			if tt.wantErr {
 				require.Error(t, err)
-				require.Equal(t, ErrUnlinkedAlgorithm, err)
+				require.ErrorIs(t, err, ErrUnlinkedAlgorithm)
 				require.Empty(t, got)
 			} else {
 				require.NoError(t, err)
