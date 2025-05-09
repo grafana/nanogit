@@ -76,7 +76,7 @@ jobs:
     - name: Check for license headers
       run: |
         go install github.com/google/addlicense@latest
-        addlicense -check -f LICENSE . || (echo "::error::Missing license headers" && exit 1)
+        addlicense -check -f LICENSE.md . || (echo "::error::Missing license headers" && exit 1)
 
   deps:
     name: Dependencies
