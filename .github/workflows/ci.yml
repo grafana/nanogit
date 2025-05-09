@@ -67,6 +67,21 @@ jobs:
         go install golang.org/x/vuln/cmd/govulncheck@latest
         govulncheck ./...
 
+  trufflehog:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for scanning git history
+    - name: Run TruffleHog
+      uses: trufflesecurity/trufflehog@v3.60.0
+      with:
+        path: ./
+        base: ${{ github.event.repository.default_branch }}
+        head: HEAD
+        extra_args: --debug --only-verified
+
   deps:
     name: Dependencies
     runs-on: ubuntu-latest
