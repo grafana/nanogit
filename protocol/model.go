@@ -108,6 +108,10 @@ func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
 				}
 			}
 
+			if len(joined) == 0 {
+				return fr, nil
+			}
+
 			var err error
 			fr.Packfile, err = ParsePackfile(joined)
 			if err != nil {
@@ -119,7 +123,7 @@ func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
 		case "shallow-info", "wanted-refs":
 			// Ignore.
 		default:
-			// Log??
+			// TODO: what do we do here? log?
 		}
 	}
 	return fr, nil
