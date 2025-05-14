@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,12 +12,17 @@ import (
 	"strings"
 )
 
+// Client defines the interface for interacting with a Git repository.
 type Client interface {
 	// TODO(mem): this is probably not the right interface.
 	SendCommands(ctx context.Context, data []byte) ([]byte, error)
 	SmartInfoRequest(ctx context.Context) ([]byte, error)
 }
 
+// Option is a function that configures a Client.
+type Option func(*clientImpl) error
+
+// clientImpl is the private implementation of the Client interface.
 type clientImpl struct {
 	base      *url.URL
 	client    *http.Client
@@ -26,35 +32,37 @@ type clientImpl struct {
 	tokenAuth *string
 }
 
-func (ci *clientImpl) addDefaultHeaders(req *http.Request) {
+// addDefaultHeaders adds the default headers to the request.
+func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
-	if ci.userAgent == "" {
-		ci.userAgent = "nanogit/0"
+	if c.userAgent == "" {
+		c.userAgent = "nanogit/0"
 	}
-	req.Header.Add("User-Agent", ci.userAgent)
+	req.Header.Add("User-Agent", c.userAgent)
 
-	if ci.basicAuth != nil {
-		req.SetBasicAuth(ci.basicAuth.Username, ci.basicAuth.Password)
-	} else if ci.tokenAuth != nil {
-		req.Header.Set("Authorization", *ci.tokenAuth)
+	if c.basicAuth != nil {
+		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
+	} else if c.tokenAuth != nil {
+		req.Header.Set("Authorization", *c.tokenAuth)
 	}
 }
 
-func (ci *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, error) {
+// SendCommands sends a POST request to the git-upload-pack endpoint.
+func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
-	u := ci.base.JoinPath("git-upload-pack").String()
+	u := c.base.JoinPath("git-upload-pack").String()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
 	if err != nil {
 		return nil, err
 	}
 
-	ci.addDefaultHeaders(req)
+	c.addDefaultHeaders(req)
 
-	res, err := ci.client.Do(req)
+	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -68,12 +76,13 @@ func (ci *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, er
 	return io.ReadAll(res.Body)
 }
 
-func (ci *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
+// SmartInfoRequest sends a GET request to the info/refs endpoint.
+func (c *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
 	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
 	// See: https://git-scm.com/docs/http-protocol#_smart_clients
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
-	u := ci.base.JoinPath("info/refs")
+	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
 	query.Set("service", "git-upload-pack")
@@ -86,9 +95,9 @@ func (ci *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 
-	ci.addDefaultHeaders(req)
+	c.addDefaultHeaders(req)
 
-	res, err := ci.client.Do(req)
+	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -102,21 +111,14 @@ func (ci *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 	return io.ReadAll(res.Body)
 }
 
-type Option = func(*clientImpl) error
-
 // New returns a new Client for the given repository.
-//
-// TODO(mem): this is a temporary implementation. It probably needs to have
-// some kind of options parameter so that we can pass authentication
-// information to the client. It's possible that basic auth is not going to be
-// enough for all possible situations.
-func New(repo string, options ...Option) (*clientImpl, error) {
+func New(repo string, options ...Option) (Client, error) {
 	u, err := url.Parse(repo)
 	if err != nil {
 		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
-	client := &clientImpl{
+	c := &clientImpl{
 		base:   u,
 		client: &http.Client{},
 	}
@@ -124,12 +126,12 @@ func New(repo string, options ...Option) (*clientImpl, error) {
 		if option == nil { // allow for easy optional options
 			continue
 		}
-		if err := option(client); err != nil {
+		if err := option(c); err != nil {
 			return nil, err
 		}
 	}
 
-	return client, nil
+	return c, nil
 }
 
 // WithBasicAuth sets the HTTP Basic Auth options.
@@ -137,9 +139,9 @@ func New(repo string, options ...Option) (*clientImpl, error) {
 func WithBasicAuth(username, password string) Option {
 	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(ci *clientImpl) error {
-		ci.basicAuth = &struct{ Username, Password string }{username, password}
-		ci.tokenAuth = nil
+	return func(c *clientImpl) error {
+		c.basicAuth = &struct{ Username, Password string }{username, password}
+		c.tokenAuth = nil
 		return nil
 	}
 }
@@ -149,17 +151,30 @@ func WithBasicAuth(username, password string) Option {
 func WithTokenAuth(token string) Option {
 	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(ci *clientImpl) error {
-		ci.basicAuth = nil
-		ci.tokenAuth = &token
+	return func(c *clientImpl) error {
+		c.basicAuth = nil
+		c.tokenAuth = &token
 		return nil
 	}
 }
 
 // WithUserAgent overrides the default User-Agent header.
 func WithUserAgent(agent string) Option {
-	return func(ci *clientImpl) error {
-		ci.userAgent = agent
+	return func(c *clientImpl) error {
+		c.userAgent = agent
+		return nil
+	}
+}
+
+// WithHTTPClient overrides the default http.Client.
+// It will return an error if the provided http.Client is nil.
+func WithHTTPClient(httpClient *http.Client) Option {
+	return func(c *clientImpl) error {
+		if httpClient == nil {
+			return errors.New("httpClient is nil")
+		}
+
+		c.client = httpClient
 		return nil
 	}
 }
@@ -172,13 +187,13 @@ func WithUserAgent(agent string) Option {
 //   - Check that the token auth header has a "token" prefix, if it is used.
 //   - Check that the base URL has no ".git" suffix, or trailing slashes.
 func WithGitHub() Option {
-	return func(ci *clientImpl) error {
-		if ci.tokenAuth != nil && !strings.HasPrefix(*ci.tokenAuth, "token ") {
-			fixed := "token " + *ci.tokenAuth
-			ci.tokenAuth = &fixed
+	return func(c *clientImpl) error {
+		if c.tokenAuth != nil && !strings.HasPrefix(*c.tokenAuth, "token ") {
+			fixed := "token " + *c.tokenAuth
+			c.tokenAuth = &fixed
 		}
-		ci.base.Path = strings.TrimRight(ci.base.Path, "/")
-		ci.base.Path = strings.TrimSuffix(ci.base.Path, ".git")
+		c.base.Path = strings.TrimRight(c.base.Path, "/")
+		c.base.Path = strings.TrimSuffix(c.base.Path, ".git")
 		return nil
 	}
 }

@@ -79,6 +79,7 @@ var (
 
 func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
 	fr := &FetchResponse{}
+outer:
 	for i, line := range lines {
 		if len(line) > 30 {
 			// Too long to be a section header
@@ -118,7 +119,7 @@ func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
 				return nil, err
 			}
 
-			break // there is no more actionable data, so we don't need to iterate more.
+			break outer // break out of the outer loop since we've processed the packfile
 
 		case "shallow-info", "wanted-refs":
 			// Ignore.
