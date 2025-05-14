@@ -18,6 +18,9 @@ import (
 	"github.com/grafana/nanogit/protocol/object"
 )
 
+// FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
+// Review it once we have some more integration testing so that we don't break things unintentionally.
+
 const (
 	ErrNoPackfileSignature        = strError("the given payload has no packfile signature")
 	ErrUnsupportedPackfileVersion = strError("the version of the packfile payload is unsupported")
