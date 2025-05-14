@@ -54,6 +54,8 @@ type DeltaChange struct {
 //
 // For more details about the delta format, see:
 // https://git-scm.com/docs/pack-format#_deltified_representation
+// FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
+// Review it once we have some more integration testing so that we don't break things unintentionally.
 func parseDelta(parent string, payload []byte) (*Delta, error) {
 	delta := &Delta{Parent: parent}
 
@@ -192,7 +194,8 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 //
 // For more details about the delta header format, see:
 // https://git-scm.com/docs/pack-format#_deltified_representation
-// TODO: I don't understand the logic here
+// FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
+// Review it once we have some more integration testing so that we don't break things unintentionally.
 func deltaHeaderSize(b []byte) (uint64, []byte) {
 	// TODO: This is a bit of a hack. We should probably have a better way to handle this.
 	if len(b) == 0 {
