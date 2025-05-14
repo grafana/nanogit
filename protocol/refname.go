@@ -1,0 +1,147 @@
+package protocol
+
+import (
+	"errors"
+	"strings"
+)
+
+// RefName represents a Git reference name, providing structured access to its components.
+// Git references are pointers to specific commits in the repository's history.
+//
+// A reference name can be either:
+//   - HEAD: A special reference that points to the current branch or commit
+//   - A regular reference: Must start with 'refs/' followed by a category and location
+//
+// Examples:
+//   - HEAD
+//   - refs/heads/main
+//   - refs/tags/v1.0.0
+//   - refs/remotes/origin/feature
+//
+// For more details about Git references, see:
+// https://git-scm.com/book/en/v2/Git-Internals-Git-References
+type RefName struct {
+	// FullName is the entire, raw refname, including the 'refs/' prefix (unless it is HEAD).
+	// Examples:
+	//   - "HEAD"
+	//   - "refs/heads/main"
+	//   - "refs/tags/v1.0.0"
+	FullName string
+
+	// Category is the first part of the refname after 'refs/'. E.g. 'heads'. Can be 'HEAD' for HEAD.
+	// Does not include a final slash.
+	// Examples:
+	//   - "heads" for "refs/heads/main"
+	//   - "tags" for "refs/tags/v1.0.0"
+	//   - "remotes" for "refs/remotes/origin/main"
+	Category string
+
+	// Location is the final remainder of the refname, after the category. E.g. 'main', 'feature/test'.
+	// 'HEAD' does not mean this is HEAD; use 'FullName' to check for 'HEAD'.
+	// Examples:
+	//   - "main" for "refs/heads/main"
+	//   - "v1.0.0" for "refs/tags/v1.0.0"
+	//   - "origin/main" for "refs/remotes/origin/main"
+	Location string
+}
+
+// HEAD is a special-case refname that always exists and is always valid.
+// It refers to the current head of the tree, which is typically the latest commit
+// on the currently checked out branch.
+var HEAD RefName = RefName{
+	FullName: "HEAD",
+	Category: "HEAD",
+	Location: "HEAD",
+}
+
+// ParseRefName parses a Git reference name string into a RefName struct.
+// It validates the reference name according to Git's reference format rules.
+//
+// HEAD is always a valid refname. If given, the constant is returned.
+// Otherwise, we require the refname to start with `refs/`, then follow these rules:
+//
+//   - It can include a slash ('/') for hierarchical (directory) grouping. No slash-separated component can start with a dot ('.').
+//   - It must contain one slash. This enforces a need for e.g. 'heads/' or 'tags/', but the actual name there is not necessary to consider.
+//   - No consecutive dots can ('..') exist anywhere.
+//   - They cannot contain: any byte < 40, DEL (177), space, caret ('^'), colon (':'), question mark ('?'), asterisk ('*'), open square bracket ('[').
+//   - It cannot end with a slash or a dot ('/', '.').
+//   - It cannot end with '.lock'.
+//   - It cannot contain '@{'.
+//   - It cannot contain a '\\'.
+//
+// Examples of valid references:
+//   - "HEAD"
+//   - "refs/heads/main"
+//   - "refs/tags/v1.0.0"
+//   - "refs/remotes/origin/feature"
+//
+// Examples of invalid references:
+//   - "refs" (missing category)
+//   - "refs/heads" (missing location)
+//   - "refs/heads/.." (ends with dot)
+//   - "refs/heads/feature..test" (contains consecutive dots)
+//   - "refs/heads/feature.lock" (ends with .lock)
+//
+// See https://git-scm.com/docs/git-check-ref-format for the complete reference format specification.
+func ParseRefName(in string) (RefName, error) {
+	if in == "HEAD" {
+		return HEAD, nil
+	}
+
+	rn := RefName{FullName: in}
+	if !strings.HasPrefix(in, "refs/") {
+		return rn, errors.New("ref name does not include refs/ prefix")
+	}
+	in = in[len("refs/"):]
+
+	sepIdx := strings.IndexRune(in, '/')
+	if sepIdx == -1 {
+		return rn, errors.New("ref name does not include a category")
+	}
+
+	// The performance of this function could be improved, possibly by
+	// implementing a state machine, but we need a reference point first.
+
+	if strings.Contains(in, "..") {
+		return rn, errors.New("ref cannot have two consecutive dots `..` anywhere")
+	}
+
+	if strings.Contains(in, "//") {
+		return rn, errors.New("ref cannot contain multiple consecutive slashes")
+	}
+
+	if strings.Contains(in, "@{") {
+		return rn, errors.New("ref cannot contain a sequence `@{`")
+	}
+
+	if strings.HasSuffix(in, ".") {
+		return rn, errors.New("ref cannot end with a dot `.`")
+	}
+
+	for _, component := range strings.Split(in, "/") {
+		if component == "" {
+			return rn, errors.New("ref components cannot be empty")
+		}
+
+		if strings.HasPrefix(component, ".") {
+			return rn, errors.New("ref components cannot begin with a dot `.` or end with the sequence .lock")
+		}
+
+		if strings.HasSuffix(component, ".lock") {
+			return rn, errors.New("ref components cannot end with the sequence `.lock`")
+		}
+
+		hasInvalidRunes := strings.ContainsFunc(component, func(r rune) bool {
+			return r < 0o040 || r == 0o177 || r == ' ' || r == '~' || r == '^' || r == ':' || r == '?' || r == '*' || r == '[' || r == '\\'
+		})
+
+		if hasInvalidRunes {
+			return rn, errors.New("ref components cannot contain control characters, spaces, `~`, `^`, `:`, `?`, `*`, `[`, `DEL`, or a backslash")
+		}
+	}
+
+	rn.Category = in[:sepIdx]
+	rn.Location = in[sepIdx+1:]
+
+	return rn, nil
+}
