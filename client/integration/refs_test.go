@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/client"
+	"github.com/grafana/nanogit/client/integration/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClient_ListRefs(t *testing.T) {
-	gitServer := NewGitServer(t)
+	gitServer := helpers.NewGitServer(t)
 	defer gitServer.Cleanup(t)
-	localRepo := NewLocalGitRepo(t)
+	localRepo := helpers.NewLocalGitRepo(t)
 	defer localRepo.Cleanup(t)
 
 	gitServer.CreateUser(t, "testuser", "test@example.com", "testpass123")
