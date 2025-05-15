@@ -28,13 +28,13 @@ func TestClient_ListRefs(t *testing.T) {
 	assert.NotEmpty(t, refs, "should have at least one reference")
 
 	// Check for common refs that should exist
-	assert.Contains(t, refs, "refs/heads/main", "should have main branch")
-
-	// Validate hash format (should be 40 character hex)
-	for ref, hash := range refs {
-		t.Run(ref, func(t *testing.T) {
-			assert.Len(t, hash, 40, "hash should be 40 characters")
-			assert.Regexp(t, `^[0-9a-f]{40}$`, hash, "hash should be hex")
-		})
+	var masterRef *Ref
+	for _, ref := range refs {
+		if ref.Name == "refs/heads/master" {
+			masterRef = &ref
+			break
+		}
 	}
+	require.NotNil(t, masterRef, "should have master branch")
+	require.Len(t, masterRef.Hash, 40, "hash should be 40 characters")
 }

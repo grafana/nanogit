@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/grafana/nanogit/protocol"
 )
 
 // Client defines the interface for interacting with a Git repository.
@@ -17,7 +19,7 @@ type Client interface {
 	// TODO(mem): this is probably not the right interface.
 	SendCommands(ctx context.Context, data []byte) ([]byte, error)
 	SmartInfoRequest(ctx context.Context) ([]byte, error)
-	ListRefs(ctx context.Context) (map[string]string, error)
+	ListRefs(ctx context.Context) ([]Ref, error)
 }
 
 // Option is a function that configures a Client.
@@ -79,27 +81,41 @@ func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, err
 
 // ListRefs sends a request to list all references in the repository.
 // It returns a map of reference names to their commit hashes.
-func (c *clientImpl) ListRefs(ctx context.Context) (map[string]string, error) {
-	data, err := c.SmartInfoRequest(ctx)
+func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
+	// First get the initial capability advertisement
+	_, err := c.SmartInfoRequest(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get repository info: %w", err)
 	}
 
-	refs := make(map[string]string)
-	lines := bytes.Split(data, []byte("\n"))
-
-	// Skip the first line which contains service info
-	if len(lines) < 2 {
-		return nil, errors.New("invalid response: empty repository")
+	// Now send the ls-refs command
+	pkt, err := protocol.FormatPacks(
+		protocol.PackLine("command=ls-refs\n"),
+		protocol.PackLine("object-format=sha1\n"),
+		protocol.FlushPacket,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
-	for _, line := range lines[1:] {
+	refsData, err := c.SendCommands(ctx, pkt)
+	if err != nil {
+		return nil, fmt.Errorf("send ls-refs command: %w", err)
+	}
+
+	refs := make([]Ref, 0)
+	lines, _, err := protocol.ParsePack(refsData)
+	if err != nil {
+		return nil, fmt.Errorf("parse refs response: %w", err)
+	}
+
+	for _, line := range lines {
 		ref, hash, err := parseRefLine(line)
 		if err != nil {
 			return nil, fmt.Errorf("parse ref line: %w", err)
 		}
 		if ref != "" {
-			refs[ref] = hash
+			refs = append(refs, Ref{Name: ref, Hash: hash})
 		}
 	}
 
@@ -114,38 +130,35 @@ func parseRefLine(line []byte) (ref, hash string, err error) {
 		return "", "", nil
 	}
 
-	// Skip lines that are too short to contain a valid reference
-	if len(line) <= 4 {
-		return "", "", fmt.Errorf("line too short: %s", line)
-	}
-
-	// Remove pkt-line length prefix (first 4 chars)
-	content := line[4:]
-
 	// Skip capability lines (they start with =)
-	if len(content) > 0 && content[0] == '=' {
+	if len(line) > 0 && line[0] == '=' {
 		return "", "", nil
 	}
 
 	// Split into hash and rest
-	parts := bytes.SplitN(content, []byte(" "), 2)
+	parts := bytes.SplitN(line, []byte(" "), 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid ref format: %s", content)
+		return "", "", fmt.Errorf("invalid ref format: %s", line)
 	}
 
+	// Ensure we have a full 40-character SHA-1 hash
 	hash = string(parts[0])
+	if len(hash) != 40 {
+		return "", "", fmt.Errorf("invalid hash length: got %d, want 40", len(hash))
+	}
+
 	refName := string(parts[1])
 
 	// Handle HEAD reference with capabilities
 	if refName == "HEAD" {
 		// Extract the symref value if present
-		if idx := bytes.Index(content, []byte("symref=HEAD:")); idx > 0 {
+		if idx := bytes.Index(line, []byte("symref=HEAD:")); idx > 0 {
 			// Find the next space or end of line
-			end := bytes.IndexByte(content[idx:], ' ')
+			end := bytes.IndexByte(line[idx:], ' ')
 			if end == -1 {
-				end = len(content[idx:])
+				end = len(line[idx:])
 			}
-			refName = string(content[idx+12 : idx+end])
+			refName = string(line[idx+12 : idx+end])
 		}
 		return refName, hash, nil
 	}
@@ -155,7 +168,7 @@ func parseRefLine(line []byte) (ref, hash string, err error) {
 		refName = string(parts[1][:idx])
 	}
 
-	return refName, hash, nil
+	return strings.TrimSpace(refName), strings.TrimSpace(hash), nil
 }
 
 // SmartInfoRequest sends a GET request to the info/refs endpoint.
