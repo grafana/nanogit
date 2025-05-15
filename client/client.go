@@ -17,6 +17,7 @@ type Client interface {
 	// TODO(mem): this is probably not the right interface.
 	SendCommands(ctx context.Context, data []byte) ([]byte, error)
 	SmartInfoRequest(ctx context.Context) ([]byte, error)
+	ListRefs(ctx context.Context) (map[string]string, error)
 }
 
 // Option is a function that configures a Client.
@@ -74,6 +75,87 @@ func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, err
 	}
 
 	return io.ReadAll(res.Body)
+}
+
+// ListRefs sends a request to list all references in the repository.
+// It returns a map of reference names to their commit hashes.
+func (c *clientImpl) ListRefs(ctx context.Context) (map[string]string, error) {
+	data, err := c.SmartInfoRequest(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get repository info: %w", err)
+	}
+
+	refs := make(map[string]string)
+	lines := bytes.Split(data, []byte("\n"))
+
+	// Skip the first line which contains service info
+	if len(lines) < 2 {
+		return nil, errors.New("invalid response: empty repository")
+	}
+
+	for _, line := range lines[1:] {
+		ref, hash, err := parseRefLine(line)
+		if err != nil {
+			return nil, fmt.Errorf("parse ref line: %w", err)
+		}
+		if ref != "" {
+			refs[ref] = hash
+		}
+	}
+
+	return refs, nil
+}
+
+// parseRefLine parses a single reference line from the git response.
+// Returns the reference name, hash, and any error encountered.
+func parseRefLine(line []byte) (ref, hash string, err error) {
+	// Skip empty lines and pkt-line flush markers
+	if len(line) == 0 || bytes.Equal(line, []byte("0000")) {
+		return "", "", nil
+	}
+
+	// Skip lines that are too short to contain a valid reference
+	if len(line) <= 4 {
+		return "", "", fmt.Errorf("line too short: %s", line)
+	}
+
+	// Remove pkt-line length prefix (first 4 chars)
+	content := line[4:]
+
+	// Skip capability lines (they start with =)
+	if len(content) > 0 && content[0] == '=' {
+		return "", "", nil
+	}
+
+	// Split into hash and rest
+	parts := bytes.SplitN(content, []byte(" "), 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid ref format: %s", content)
+	}
+
+	hash = string(parts[0])
+	refName := string(parts[1])
+
+	// Handle HEAD reference with capabilities
+	if refName == "HEAD" {
+		// Extract the symref value if present
+		if idx := bytes.Index(content, []byte("symref=HEAD:")); idx > 0 {
+			// Find the next space or end of line
+			end := bytes.IndexByte(content[idx:], ' ')
+			if end == -1 {
+				end = len(content[idx:])
+			}
+			refName = string(content[idx+12 : idx+end])
+		}
+		return refName, hash, nil
+	}
+
+	// Remove capability suffix if present
+	if idx := bytes.IndexByte(parts[1], '\x00'); idx > 0 {
+		refName = string(parts[1][:idx])
+	}
+
+	return refName, hash, nil
 }
 
 // SmartInfoRequest sends a GET request to the info/refs endpoint.
