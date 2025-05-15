@@ -12,6 +12,6 @@ test-unit: lint
 
 .PHONY: test-integration
 test-integration: lint
-	go test -tags=integration -cover -race -parallel 4 ./...
+	go test -tags=integration -cover -race -parallel 4 ./client/integration/...
 
 test: test-unit test-integration

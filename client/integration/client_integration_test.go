@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -150,21 +151,21 @@ func TestClient_ListRefs(t *testing.T) {
 	repoURL, cleanup := setupGiteaServer(t)
 	defer cleanup()
 
-	client, err := New(repoURL, WithBasicAuth("testuser", "testpass123"))
+	gitClient, err := client.New(repoURL, client.WithBasicAuth("testuser", "testpass123"))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	refs, err := client.ListRefs(ctx)
+	refs, err := gitClient.ListRefs(ctx)
 	require.NoError(t, err, "ListRefs failed: %v", err)
 
 	assert.NotEmpty(t, refs, "should have at least one reference")
 
 	var (
-		masterRef     *Ref
-		testBranchRef *Ref
-		tagRef        *Ref
+		masterRef     *client.Ref
+		testBranchRef *client.Ref
+		tagRef        *client.Ref
 	)
 
 	for _, ref := range refs {
@@ -182,7 +183,7 @@ func TestClient_ListRefs(t *testing.T) {
 	require.NotNil(t, testBranchRef, "should have test-branch")
 	require.NotNil(t, tagRef, "should have v1.0.0 tag")
 
-	for _, ref := range []*Ref{masterRef, testBranchRef, tagRef} {
+	for _, ref := range []*client.Ref{masterRef, testBranchRef, tagRef} {
 		require.Len(t, ref.Hash, 40, "hash should be 40 characters")
 	}
 }
