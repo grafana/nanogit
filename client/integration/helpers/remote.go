@@ -1,3 +1,6 @@
+// Package helpers provides utility functions and types for testing Git operations
+// in both local and remote environments. This file specifically handles remote
+// Git server operations using Gitea as a test server.
 package helpers
 
 import (
@@ -15,12 +18,23 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// GitServer represents a Gitea server instance running in a container.
+// It provides methods to manage users, repositories, and server operations
+// for testing purposes.
 type GitServer struct {
-	Host      string
-	Port      string
-	container testcontainers.Container
+	Host      string                   // Host address of the Gitea server
+	Port      string                   // Port number the server is running on
+	container testcontainers.Container // The container running the Gitea server
 }
 
+// NewGitServer creates and initializes a new Gitea server instance in a container.
+// It configures the server with default settings and waits for it to be ready.
+// The server is configured with:
+// - SQLite database
+// - Disabled registration
+// - Pre-configured admin user
+// - Disabled SSH and mailer
+// Returns a GitServer instance ready for testing.
 func NewGitServer(t *testing.T) *GitServer {
 	ctx := context.Background()
 
@@ -72,6 +86,8 @@ func NewGitServer(t *testing.T) *GitServer {
 	}
 }
 
+// CreateUser creates a new user in the Gitea server with the specified credentials.
+// The user is created with admin privileges and password change requirement disabled.
 func (s *GitServer) CreateUser(t *testing.T, username, email, password string) {
 	t.Log("Creating test user...")
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
@@ -85,6 +101,9 @@ func (s *GitServer) CreateUser(t *testing.T, username, email, password string) {
 	require.Equal(t, 0, execResult)
 }
 
+// CreateRepo creates a new repository in the Gitea server for the specified user.
+// It returns both the public repository URL and an authenticated repository URL
+// that includes the user's credentials.
 func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password string) (repoURL string, authRepoURL string) {
 	// FIXME: can I create one with CLI instead?
 	t.Log("Creating repository...")
@@ -104,6 +123,8 @@ func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password
 		fmt.Sprintf("http://%s:%s@%s:%s/%s/%s.git", username, password, s.Host, s.Port, username, repoName)
 }
 
+// Cleanup terminates the Gitea server container and cleans up associated resources.
+// This should be called when the server is no longer needed.
 func (s *GitServer) Cleanup(t *testing.T) {
 	if s.container != nil {
 		err := s.container.Terminate(context.Background())
