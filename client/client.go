@@ -150,16 +150,12 @@ func parseRefLine(line []byte) (ref, hash string, err error) {
 	refName := string(parts[1])
 
 	// Handle HEAD reference with capabilities
-	if refName == "HEAD" {
-		// Extract the symref value if present
-		if idx := bytes.Index(line, []byte("symref=HEAD:")); idx > 0 {
-			// Find the next space or end of line
-			end := bytes.IndexByte(line[idx:], ' ')
-			if end == -1 {
-				end = len(line[idx:])
-			}
-			refName = string(line[idx+12 : idx+end])
+	if strings.HasPrefix(refName, "HEAD") {
+		symref := extractSymref(refName)
+		if symref != "" {
+			return symref, hash, nil
 		}
+
 		return refName, hash, nil
 	}
 
@@ -169,6 +165,30 @@ func parseRefLine(line []byte) (ref, hash string, err error) {
 	}
 
 	return strings.TrimSpace(refName), strings.TrimSpace(hash), nil
+}
+
+// extractSymref extracts the symref value from a line.
+// It returns the symref value if present, and an error if it is not present.
+// Example:
+// 00437fd1a60b01f91b314f59955a4e4d4e80d8edf11d HEAD symref=HEAD:refs/heads/master
+// The symref value is "refs/heads/master".
+func extractSymref(line string) string {
+	// Check for symref in the reference line
+	parts := strings.Split(line, " ")
+	if len(parts) == 1 {
+		return ""
+	}
+
+	if idx := strings.Index(line, "symref="); idx > 0 {
+		symref := line[idx+7:]
+		if colonIdx := strings.Index(symref, ":"); colonIdx > 0 {
+			return strings.TrimSpace(symref[colonIdx+1:])
+		}
+
+		return strings.TrimSpace(symref)
+	}
+
+	return ""
 }
 
 // SmartInfoRequest sends a GET request to the info/refs endpoint.
