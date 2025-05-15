@@ -604,11 +604,17 @@ func TestListRefs(t *testing.T) {
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if strings.HasPrefix(r.URL.Path, "/info/refs") {
-						w.Write([]byte(tt.infoRefsResp))
+						if _, err := w.Write([]byte(tt.infoRefsResp)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+							return
+						}
 						return
 					}
 					if r.URL.Path == "/git-upload-pack" {
-						w.Write([]byte(tt.lsRefsResp))
+						if _, err := w.Write([]byte(tt.lsRefsResp)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+							return
+						}
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
