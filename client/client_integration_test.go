@@ -44,25 +44,34 @@ func setupGiteaServer(t *testing.T) (repoURL string, cleanup func()) {
 		},
 		WaitingFor: wait.ForHTTP("/api/v1/version").WithPort("3000").WithStartupTimeout(30 * time.Second),
 	}
+
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
 	require.NoError(t, err)
 
+	// Start following logs
+	logs, err := container.Logs(ctx)
+	require.NoError(t, err)
+	go func() {
+		io.Copy(os.Stdout, logs)
+	}()
+
 	host, err := container.Host(ctx)
 	require.NoError(t, err)
 	port, err := container.MappedPort(ctx, "3000")
 	require.NoError(t, err)
 
-	fmt.Println("Creating test user")
 	// Create test user using Gitea CLI
+	t.Log("Creating test user...")
 	execResult, reader, err := container.Exec(ctx, []string{
 		"su", "git", "-c", "gitea admin user create --username testuser --email test@example.com --password testpass123 --must-change-password=false --admin",
 	})
 	require.NoError(t, err)
-	_, err = io.ReadAll(reader)
+	execOutput, err := io.ReadAll(reader)
 	require.NoError(t, err)
+	t.Logf("User creation output: %s", string(execOutput))
 	require.Equal(t, 0, execResult)
 
 	// Create a repository without authentication
@@ -71,6 +80,7 @@ func setupGiteaServer(t *testing.T) (repoURL string, cleanup func()) {
 	authRepoURL := fmt.Sprintf("http://testuser:testpass123@%s:%s/%s/%s.git", host, port.Port(), "testuser", repoName)
 
 	// Create the repository using the Gitea API
+	t.Log("Creating repository...")
 	httpClient := http.Client{}
 	createRepoURL := fmt.Sprintf("http://%s:%s/api/v1/user/repos", host, port.Port())
 	jsonData := []byte(fmt.Sprintf(`{"name":"%s"}`, repoName))
@@ -86,6 +96,7 @@ func setupGiteaServer(t *testing.T) (repoURL string, cleanup func()) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
+	t.Log("Initializing git repository...")
 	runGitCmd(t, tmpDir, "init")
 	runGitCmd(t, tmpDir, "config", "user.name", "testuser")
 	runGitCmd(t, tmpDir, "config", "user.email", "test@example.com")
@@ -97,13 +108,14 @@ func setupGiteaServer(t *testing.T) (repoURL string, cleanup func()) {
 	runGitCmd(t, tmpDir, "tag", "v1.0.0")
 
 	// Push the repository to Gitea
+	t.Log("Pushing to Gitea...")
 	runGitCmd(t, tmpDir, "remote", "add", "origin", authRepoURL)
 	runGitCmd(t, tmpDir, "push", "-u", "origin", "main", "--force")
 	runGitCmd(t, tmpDir, "push", "origin", "test-branch", "--force")
 	runGitCmd(t, tmpDir, "push", "origin", "v1.0.0", "--force")
 
 	cleanup = func() {
-		err := container.Terminate(ctx)
+		err = container.Terminate(ctx)
 		require.NoError(t, err)
 	}
 

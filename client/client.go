@@ -48,6 +48,8 @@ func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 	} else if c.tokenAuth != nil {
 		req.Header.Set("Authorization", *c.tokenAuth)
 	}
+
+	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 }
 
 // SendCommands sends a POST request to the git-upload-pack endpoint.
