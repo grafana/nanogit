@@ -72,13 +72,69 @@ If you have a suggestion for a new feature or enhancement, please include as muc
 
 ### Testing
 
-We use Go's built-in testing framework. To run the tests:
+We use Go's built-in testing framework with [testify](https://github.com/stretchr/testify) for assertions. To run the tests:
 
 ```bash
 make test # run all tests
 make test-unit # run only unit tests
 make test-integration # run only integration tests
 ```
+
+#### Unit Tests
+
+Unit tests are located alongside the code they test (e.g., `client_test.go` in the same directory as `client.go`). We use testify's `assert` and `require` packages for assertions:
+
+```go
+import (
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+func TestSomething(t *testing.T) {
+    // Use require for setup/teardown that must succeed
+    require.NoError(t, err)
+    
+    // Use assert for test conditions
+    assert.Equal(t, expected, actual)
+}
+```
+
+#### Integration Tests
+
+Integration tests are located in the `integration` directory and use [testcontainers-go](https://golang.testcontainers.org/) to manage test dependencies. We use Gitea as our test Git server, running in a Docker container.
+
+Key features:
+- Tests run in isolated containers
+- Automatic container lifecycle management
+- Real Git server for testing using [Gitea](https://gitea.io/) in a Docker container
+- Parallel test execution support
+
+Example structure:
+client/
+├── integration/
+│   └── refs_test.go    # integration tests for refs
+```
+
+To run integration tests:
+```bash
+make test-integration
+```
+
+Note: Integration tests require Docker to be running on your machine.
+
+#### Writing Tests
+
+1. Unit tests should be fast and not require external dependencies
+2. Integration tests should be in the `integration` directory
+3. Use testify's `assert` and `require` packages. We prefer the use of `require`.
+4. Follow Go's testing best practices
+5. Add appropriate test coverage
+
+For more information:
+- [Go Testing Documentation](https://pkg.go.dev/testing)
+- [Testify Documentation](https://pkg.go.dev/github.com/stretchr/testify)
+- [Testcontainers-go Documentation](https://golang.testcontainers.org/)
+- [Gitea Documentation](https://docs.gitea.io/)
 
 ### Code Style
 
