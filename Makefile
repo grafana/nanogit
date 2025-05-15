@@ -6,6 +6,12 @@ fmt:
 lint:
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run
 
-.PHONY: test
-test: lint
+.PHONY: test-unit
+test-unit: lint
 	go test -cover -race -parallel 4 ./...
+
+.PHONY: test-integration
+test-integration: lint
+	go test -tags=integration -cover -race -parallel 4 ./...
+
+test: test-unit test-integration

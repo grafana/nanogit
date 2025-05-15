@@ -75,7 +75,9 @@ If you have a suggestion for a new feature or enhancement, please include as muc
 We use Go's built-in testing framework. To run the tests:
 
 ```bash
-make test
+make test # run all tests
+make test-unit # run only unit tests
+make test-integration # run only integration tests
 ```
 
 ### Code Style

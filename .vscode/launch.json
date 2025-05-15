@@ -10,6 +10,25 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}"
+    },
+    {
+      "name": "Debug Integration Tests",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${fileDirname}",
+      "buildFlags": "-tags=integration",
+      "args": []
+    },
+    {
+      "name": "Debug Unit Tests",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}",
+      "args": [
+        "-test.v"
+      ]
     }
   ]
 }
