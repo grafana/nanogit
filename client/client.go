@@ -25,7 +25,10 @@ type Client interface {
 
 	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)
-	GetRef(ctx context.Context, ref string) (Ref, error)
+	// TODO: is this a good signature?
+	GetRef(ctx context.Context, refName string) (Ref, error)
+	CreateRef(ctx context.Context, ref Ref) error
+	DeleteRef(ctx context.Context, refName string) error
 }
 
 // Option is a function that configures a Client.

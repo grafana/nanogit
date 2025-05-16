@@ -65,19 +65,77 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 // GetRef sends a request to get a single reference in the repository.
 // It returns the reference name, hash, and any error encountered.
 // FIXME: In protocol v1, you cannot filter the refs you want to get.
-func (c *clientImpl) GetRef(ctx context.Context, ref string) (Ref, error) {
+func (c *clientImpl) GetRef(ctx context.Context, refName string) (Ref, error) {
 	refs, err := c.ListRefs(ctx)
 	if err != nil {
 		return Ref{}, fmt.Errorf("list refs: %w", err)
 	}
 
 	for _, r := range refs {
-		if r.Name == ref {
+		if r.Name == refName {
 			return r, nil
 		}
 	}
 
 	return Ref{}, ErrRefNotFound
+}
+
+// CreateRef creates a new reference in the repository.
+// It returns any error encountered.
+func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
+	ref, err := c.GetRef(ctx, ref.Name)
+	switch {
+	case err != nil && !errors.Is(err, ErrRefNotFound):
+		return fmt.Errorf("get ref: %w", err)
+	case err == nil:
+		return fmt.Errorf("ref %s already exists", ref.Name)
+	}
+
+	// Create the ref using receive-pack
+	pkt, err := protocol.FormatPacks(
+		protocol.PackLine(fmt.Sprintf("%s %s\n", ref.Hash, ref.Name)),
+		protocol.FlushPacket,
+	)
+	if err != nil {
+		return fmt.Errorf("format create ref command: %w", err)
+	}
+
+	_, err = c.ReceivePack(ctx, pkt)
+	if err != nil {
+		return fmt.Errorf("create ref: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteRef deletes a reference from the repository.
+// It returns any error encountered.
+func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
+	// First check if the ref exists
+	_, err := c.GetRef(ctx, refName)
+	if err != nil {
+		if errors.Is(err, ErrRefNotFound) {
+			return fmt.Errorf("ref %s does not exist", refName)
+		}
+		return fmt.Errorf("get ref: %w", err)
+	}
+
+	// Delete the ref using receive-pack
+	// The zero hash (40 zeros) indicates deletion
+	pkt, err := protocol.FormatPacks(
+		protocol.PackLine(fmt.Sprintf("%s %s\n", strings.Repeat("0", 40), refName)),
+		protocol.FlushPacket,
+	)
+	if err != nil {
+		return fmt.Errorf("format delete ref command: %w", err)
+	}
+
+	_, err = c.ReceivePack(ctx, pkt)
+	if err != nil {
+		return fmt.Errorf("delete ref: %w", err)
+	}
+
+	return nil
 }
 
 // parseRefLine parses a single reference line from the git response.
