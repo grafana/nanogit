@@ -108,6 +108,7 @@ func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, erro
 
 	c.addDefaultHeaders(req)
 	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
+	req.Header.Add("Accept", "application/x-git-receive-pack-result")
 
 	res, err := c.client.Do(req)
 	if err != nil {
@@ -120,7 +121,14 @@ func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, erro
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	return io.ReadAll(res.Body)
+	responseBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
+
+	return responseBody, nil
 }
 
 // SmartInfo sends a GET request to the info/refs endpoint.
@@ -150,12 +158,18 @@ func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, err
 	}
 
 	defer res.Body.Close()
-
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	return io.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
+
+	return body, nil
 }
 
 // New returns a new Client for the given repository.

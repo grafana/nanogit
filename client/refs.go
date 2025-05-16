@@ -3,6 +3,9 @@ package client
 import (
 	"bytes"
 	"context"
+
+	//nolint:gosec // git uses sha1 for the pack file
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"strings"
@@ -90,22 +93,41 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 	case err == nil:
 		return fmt.Errorf("ref %s already exists", ref.Name)
 	}
-
+	// TODO: See how to make this work in a easier way and / or move things into the protocol package
 	// Create the ref using receive-pack
-	// Format: <old-value> <new-value> <ref-name>\n
+	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
 	// Old value is the zero hash for new refs
-	refLine := fmt.Sprintf("%s %s %s\n", strings.Repeat("0", 40), ref.Hash, strings.TrimSpace(ref.Name))
-	pkt, err := protocol.FormatPacks(
-		protocol.PackLine(refLine),
-		protocol.FlushPacket,
-	)
+	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", strings.Repeat("0", 40), ref.Hash, strings.TrimSpace(ref.Name))
+
+	// Calculate the correct length (including the 4 bytes of the length field)
+	lineLen := len(refLine) + 4
+	pkt := []byte(fmt.Sprintf("%04x%s0000", lineLen, refLine))
+
+	// Add empty pack file
+	// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
+	emptyPack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x00")
+
+	// Calculate SHA1 of the pack file
+	//nolint:gosec // git uses sha1 for the pack file
+	h := sha1.New()
+	h.Write(emptyPack)
+	packSha1 := h.Sum(nil)
+	emptyPack = append(emptyPack, packSha1...)
+
+	// Send pack file as raw data (not as a pkt-line)
+	pkt = append(pkt, emptyPack...)
+
+	// Add final flush packet
+	pkt = append(pkt, []byte("0000")...)
+	_, err = c.SmartInfo(ctx, "git-receive-pack")
 	if err != nil {
-		return fmt.Errorf("format create ref command: %w", err)
+		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
 
+	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
-		return fmt.Errorf("create ref: %w", err)
+		return fmt.Errorf("send ref update: %w", err)
 	}
 
 	return nil

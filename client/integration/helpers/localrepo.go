@@ -49,7 +49,7 @@ func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
 func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Path
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_TRACE_PACKET=1")
 
 	// Format the command for display
 	cmdStr := strings.Join(args, " ")
