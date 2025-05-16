@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -8,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -70,9 +70,13 @@ func NewGitServer(t *testing.T) *GitServer {
 	logs, err := container.Logs(ctx)
 	require.NoError(t, err)
 	go func() {
-		_, err := io.Copy(os.Stdout, logs)
-		if err != nil {
-			t.Errorf("Error copying logs: %v", err)
+		scanner := bufio.NewScanner(logs)
+		for scanner.Scan() {
+			t.Log(scanner.Text())
+		}
+
+		if err := scanner.Err(); err != nil {
+			t.Errorf("Error reading logs: %v", err)
 		}
 	}()
 
