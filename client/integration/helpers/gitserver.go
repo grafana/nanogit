@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -17,6 +16,29 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+type containerLogger struct {
+	t *testing.T
+}
+
+func NewContainerLogger(t *testing.T) *containerLogger {
+	return &containerLogger{t: t}
+}
+
+func (l *containerLogger) Accept(log testcontainers.Log) {
+	content := string(log.Content)
+	// Add emojis based on log level/content
+	switch {
+	case strings.Contains(strings.ToLower(content), "error"):
+		l.t.Logf("❌ %s", content)
+	case strings.Contains(strings.ToLower(content), "warn"):
+		l.t.Logf("⚠️ %s", content)
+	case strings.Contains(strings.ToLower(content), "info"):
+		l.t.Logf("ℹ️ %s", content)
+	default:
+		l.t.Logf("📝 %s", content)
+	}
+}
 
 // GitServer represents a Gitea server instance running in a container.
 // It provides methods to manage users, repositories, and server operations
@@ -40,6 +62,8 @@ func NewGitServer(t *testing.T) *GitServer {
 
 	t.Log("🚀 Starting Gitea server container...")
 
+	logConsumer := NewContainerLogger(t)
+
 	// Start Gitea container
 	req := testcontainers.ContainerRequest{
 		Image:        "gitea/gitea:latest",
@@ -58,6 +82,10 @@ func NewGitServer(t *testing.T) *GitServer {
 			"GITEA__mailer__ENABLED":                  "false",
 		},
 		WaitingFor: wait.ForHTTP("/api/v1/version").WithPort("3000").WithStartupTimeout(30 * time.Second),
+		LogConsumerCfg: &testcontainers.LogConsumerConfig{
+			Opts:      []testcontainers.LogProductionOption{testcontainers.WithLogProductionTimeout(10 * time.Second)},
+			Consumers: []testcontainers.LogConsumer{logConsumer},
+		},
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -69,31 +97,6 @@ func NewGitServer(t *testing.T) *GitServer {
 		t.Log("🧹 Cleaning up Gitea server container...")
 		require.NoError(t, container.Terminate(ctx))
 	})
-
-	// Start following logs
-	logs, err := container.Logs(ctx)
-	require.NoError(t, err)
-	go func() {
-		scanner := bufio.NewScanner(logs)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// Add emojis based on log level/content
-			switch {
-			case strings.Contains(strings.ToLower(line), "error"):
-				t.Logf("❌ %s", line)
-			case strings.Contains(strings.ToLower(line), "warn"):
-				t.Logf("⚠️ %s", line)
-			case strings.Contains(strings.ToLower(line), "info"):
-				t.Logf("ℹ️ %s", line)
-			default:
-				t.Logf("📝 %s", line)
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			t.Errorf("❌ Error reading logs: %v", err)
-		}
-	}()
 
 	host, err := container.Host(ctx)
 	require.NoError(t, err)
