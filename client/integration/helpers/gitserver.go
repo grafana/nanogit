@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,8 @@ type GitServer struct {
 func NewGitServer(t *testing.T) *GitServer {
 	ctx := context.Background()
 
+	t.Log("🚀 Starting Gitea server container...")
+
 	// Start Gitea container
 	req := testcontainers.ContainerRequest{
 		Image:        "gitea/gitea:latest",
@@ -63,6 +66,7 @@ func NewGitServer(t *testing.T) *GitServer {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
+		t.Log("🧹 Cleaning up Gitea server container...")
 		require.NoError(t, container.Terminate(ctx))
 	})
 
@@ -72,11 +76,22 @@ func NewGitServer(t *testing.T) *GitServer {
 	go func() {
 		scanner := bufio.NewScanner(logs)
 		for scanner.Scan() {
-			t.Log(scanner.Text())
+			line := scanner.Text()
+			// Add emojis based on log level/content
+			switch {
+			case strings.Contains(strings.ToLower(line), "error"):
+				t.Logf("❌ %s", line)
+			case strings.Contains(strings.ToLower(line), "warn"):
+				t.Logf("⚠️ %s", line)
+			case strings.Contains(strings.ToLower(line), "info"):
+				t.Logf("ℹ️ %s", line)
+			default:
+				t.Logf("📝 %s", line)
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
-			t.Errorf("Error reading logs: %v", err)
+			t.Errorf("❌ Error reading logs: %v", err)
 		}
 	}()
 
@@ -84,6 +99,8 @@ func NewGitServer(t *testing.T) *GitServer {
 	require.NoError(t, err)
 	port, err := container.MappedPort(ctx, "3000")
 	require.NoError(t, err)
+
+	t.Logf("✅ Gitea server ready at http://%s:%s", host, port.Port())
 
 	return &GitServer{
 		Host:      host,
@@ -105,7 +122,7 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 		Email:    fmt.Sprintf("test-%d@example.com", suffix),
 		Password: fmt.Sprintf("testpass-%d", suffix),
 	}
-	t.Log("Creating test user...")
+	t.Logf("👤 Creating test user '%s'...", user.Username)
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
 		"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
 	})
@@ -113,9 +130,10 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 	require.NoError(t, err)
 	execOutput, err := io.ReadAll(reader)
 	require.NoError(t, err)
-	t.Logf("User creation output: %s", string(execOutput))
+	t.Logf("📋 User creation output: %s", string(execOutput))
 	require.Equal(t, 0, execResult)
 
+	t.Logf("✅ Test user '%s' created successfully", user.Username)
 	return user
 }
 
@@ -124,7 +142,7 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 // that includes the user's credentials.
 func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password string) *RemoteRepo {
 	// FIXME: can I create one with CLI instead?
-	t.Log("Creating repository...")
+	t.Logf("📦 Creating repository '%s' for user '%s'...", repoName, username)
 	httpClient := http.Client{}
 	createRepoURL := fmt.Sprintf("http://%s:%s/api/v1/user/repos", s.Host, s.Port)
 	jsonData := []byte(fmt.Sprintf(`{"name":"%s"}`, repoName))
@@ -137,5 +155,6 @@ func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password
 	require.NoError(t, reqErr)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
+	t.Logf("✅ Repository '%s' created successfully", repoName)
 	return NewRemoteRepo(t, repoName, username, password, s.Host, s.Port)
 }
