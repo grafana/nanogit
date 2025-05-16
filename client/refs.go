@@ -3,6 +3,9 @@ package client
 import (
 	"bytes"
 	"context"
+
+	//nolint:gosec // git uses sha1 for the pack file
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,7 +26,7 @@ type Ref struct {
 // It returns a map of reference names to their commit hashes.
 func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	// First get the initial capability advertisement
-	_, err := c.SmartInfoRequest(ctx)
+	_, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		return nil, fmt.Errorf("get repository info: %w", err)
 	}
@@ -38,7 +41,7 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
-	refsData, err := c.SendCommands(ctx, pkt)
+	refsData, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
@@ -60,6 +63,104 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	}
 
 	return refs, nil
+}
+
+// GetRef sends a request to get a single reference in the repository.
+// It returns the reference name, hash, and any error encountered.
+// FIXME: In protocol v1, you cannot filter the refs you want to get.
+func (c *clientImpl) GetRef(ctx context.Context, refName string) (Ref, error) {
+	refs, err := c.ListRefs(ctx)
+	if err != nil {
+		return Ref{}, fmt.Errorf("list refs: %w", err)
+	}
+
+	for _, r := range refs {
+		if r.Name == refName {
+			return r, nil
+		}
+	}
+
+	return Ref{}, ErrRefNotFound
+}
+
+// CreateRef creates a new reference in the repository.
+// It returns any error encountered.
+func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
+	_, err := c.GetRef(ctx, ref.Name)
+	switch {
+	case err != nil && !errors.Is(err, ErrRefNotFound):
+		return fmt.Errorf("get ref: %w", err)
+	case err == nil:
+		return fmt.Errorf("ref %s already exists", ref.Name)
+	}
+	// TODO: See how to make this work in a easier way and / or move things into the protocol package
+	// Create the ref using receive-pack
+	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
+	// Old value is the zero hash for new refs
+	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", strings.Repeat("0", 40), ref.Hash, strings.TrimSpace(ref.Name))
+
+	// Calculate the correct length (including the 4 bytes of the length field)
+	lineLen := len(refLine) + 4
+	pkt := []byte(fmt.Sprintf("%04x%s0000", lineLen, refLine))
+
+	// Add empty pack file
+	// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
+	emptyPack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x00")
+
+	// Calculate SHA1 of the pack file
+	//nolint:gosec // git uses sha1 for the pack file
+	h := sha1.New()
+	h.Write(emptyPack)
+	packSha1 := h.Sum(nil)
+	emptyPack = append(emptyPack, packSha1...)
+
+	// Send pack file as raw data (not as a pkt-line)
+	pkt = append(pkt, emptyPack...)
+
+	// Add final flush packet
+	pkt = append(pkt, []byte("0000")...)
+	_, err = c.SmartInfo(ctx, "git-receive-pack")
+	if err != nil {
+		return fmt.Errorf("get receive-pack capability: %w", err)
+	}
+
+	// Send the ref update
+	_, err = c.ReceivePack(ctx, pkt)
+	if err != nil {
+		return fmt.Errorf("send ref update: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteRef deletes a reference from the repository.
+// It returns any error encountered.
+func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
+	// First check if the ref exists
+	_, err := c.GetRef(ctx, refName)
+	if err != nil {
+		if errors.Is(err, ErrRefNotFound) {
+			return fmt.Errorf("ref %s does not exist", refName)
+		}
+		return fmt.Errorf("get ref: %w", err)
+	}
+
+	// Delete the ref using receive-pack
+	// The zero hash (40 zeros) indicates deletion
+	pkt, err := protocol.FormatPacks(
+		protocol.PackLine(fmt.Sprintf("%s %s\n", strings.Repeat("0", 40), refName)),
+		protocol.FlushPacket,
+	)
+	if err != nil {
+		return fmt.Errorf("format delete ref command: %w", err)
+	}
+
+	_, err = c.ReceivePack(ctx, pkt)
+	if err != nil {
+		return fmt.Errorf("delete ref: %w", err)
+	}
+
+	return nil
 }
 
 // parseRefLine parses a single reference line from the git response.
