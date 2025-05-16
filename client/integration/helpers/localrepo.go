@@ -23,24 +23,24 @@ type LocalGitRepo struct {
 func NewLocalGitRepo(t *testing.T) *LocalGitRepo {
 	p := t.TempDir()
 	t.Cleanup(func() {
-		t.Logf("🧹 Cleaning up local repository at %s", p)
+		t.Logf("%s📦 [LOCAL] 🧹 Cleaning up local repository at %s%s", ColorYellow, p, ColorReset)
 		require.NoError(t, os.RemoveAll(p))
 	})
 
-	t.Logf("📁 Creating new local repository at %s", p)
+	t.Logf("%s📦 [LOCAL] 📁 Creating new local repository at %s%s", ColorBlue, p, ColorReset)
 	r := &LocalGitRepo{Path: p}
 	r.Git(t, "init")
-	t.Logf("✅ Local repository initialized successfully")
+	t.Logf("%s📦 [LOCAL] ✅ Local repository initialized successfully%s", ColorGreen, ColorReset)
 	return r
 }
 
 // CreateFile creates a new file in the repository with the specified filename
 // and content. The file is created with read/write permissions for the owner only.
 func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
-	t.Logf("📝 Creating file '%s' in repository", filename)
+	t.Logf("%s📦 [LOCAL] 📝 Creating file '%s' in repository%s", ColorBlue, filename, ColorReset)
 	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
 	require.NoError(t, err)
-	t.Logf("✅ File '%s' created successfully", filename)
+	t.Logf("%s📦 [LOCAL] ✅ File '%s' created successfully%s", ColorGreen, filename, ColorReset)
 }
 
 // Git executes a Git command in the repository directory.
@@ -52,17 +52,17 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
 	// Log the git command being executed
-	t.Logf("🔧 Running git command: git %s in directory: %s", strings.Join(args, " "), r.Path)
+	t.Logf("%s📦 [LOCAL] 🔧 Running git command: git %s in directory: %s%s", ColorBlue, strings.Join(args, " "), r.Path, ColorReset)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Logf("❌ Git command failed:\n%s", string(output))
+		t.Logf("%s📦 [LOCAL] ❌ Git command failed:\n%s%s", ColorRed, string(output), ColorReset)
 		require.NoError(t, err, "git command failed %s: %s", args, output)
 	}
 
 	// Log successful command output
 	if len(output) > 0 {
-		t.Logf("📋 Git command output:\n%s", string(output))
+		t.Logf("%s📦 [LOCAL] 📋 Git command output:\n%s%s", ColorCyan, string(output), ColorReset)
 	}
 	return strings.TrimSpace(string(output))
 }

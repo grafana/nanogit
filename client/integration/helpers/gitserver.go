@@ -27,16 +27,16 @@ func NewContainerLogger(t *testing.T) *containerLogger {
 
 func (l *containerLogger) Accept(log testcontainers.Log) {
 	content := string(log.Content)
-	// Add emojis based on log level/content
+	// Add emojis and colors based on log level/content
 	switch {
 	case strings.Contains(strings.ToLower(content), "error"):
-		l.t.Logf("❌ %s", content)
+		l.t.Logf("%s🖥️  [SERVER] ❌ %s%s", ColorRed, content, ColorReset)
 	case strings.Contains(strings.ToLower(content), "warn"):
-		l.t.Logf("⚠️ %s", content)
+		l.t.Logf("%s🖥️  [SERVER] ⚠️ %s%s", ColorYellow, content, ColorReset)
 	case strings.Contains(strings.ToLower(content), "info"):
-		l.t.Logf("ℹ️ %s", content)
+		l.t.Logf("%s🖥️  [SERVER] ℹ️ %s%s", ColorBlue, content, ColorReset)
 	default:
-		l.t.Logf("📝 %s", content)
+		l.t.Logf("%s🖥️  [SERVER] 📝 %s%s", ColorCyan, content, ColorReset)
 	}
 }
 
@@ -60,7 +60,7 @@ type GitServer struct {
 func NewGitServer(t *testing.T) *GitServer {
 	ctx := context.Background()
 
-	t.Log("🚀 Starting Gitea server container...")
+	t.Logf("%s🚀 Starting Gitea server container...%s", ColorGreen, ColorReset)
 
 	logConsumer := NewContainerLogger(t)
 
@@ -94,7 +94,7 @@ func NewGitServer(t *testing.T) *GitServer {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		t.Log("🧹 Cleaning up Gitea server container...")
+		t.Logf("%s🧹 Cleaning up Gitea server container...%s", ColorYellow, ColorReset)
 		require.NoError(t, container.Terminate(ctx))
 	})
 
@@ -103,7 +103,7 @@ func NewGitServer(t *testing.T) *GitServer {
 	port, err := container.MappedPort(ctx, "3000")
 	require.NoError(t, err)
 
-	t.Logf("✅ Gitea server ready at http://%s:%s", host, port.Port())
+	t.Logf("%s✅ Gitea server ready at http://%s:%s%s", ColorGreen, host, port.Port(), ColorReset)
 
 	return &GitServer{
 		Host:      host,
@@ -125,7 +125,7 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 		Email:    fmt.Sprintf("test-%d@example.com", suffix),
 		Password: fmt.Sprintf("testpass-%d", suffix),
 	}
-	t.Logf("👤 Creating test user '%s'...", user.Username)
+	t.Logf("%s👤 Creating test user '%s'...%s", ColorBlue, user.Username, ColorReset)
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
 		"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
 	})
@@ -133,10 +133,10 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 	require.NoError(t, err)
 	execOutput, err := io.ReadAll(reader)
 	require.NoError(t, err)
-	t.Logf("📋 User creation output: %s", string(execOutput))
+	t.Logf("%s📋 User creation output: %s%s", ColorCyan, string(execOutput), ColorReset)
 	require.Equal(t, 0, execResult)
 
-	t.Logf("✅ Test user '%s' created successfully", user.Username)
+	t.Logf("%s✅ Test user '%s' created successfully%s", ColorGreen, user.Username, ColorReset)
 	return user
 }
 
@@ -145,7 +145,7 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 // that includes the user's credentials.
 func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password string) *RemoteRepo {
 	// FIXME: can I create one with CLI instead?
-	t.Logf("📦 Creating repository '%s' for user '%s'...", repoName, username)
+	t.Logf("%s📦 Creating repository '%s' for user '%s'...%s", ColorBlue, repoName, username, ColorReset)
 	httpClient := http.Client{}
 	createRepoURL := fmt.Sprintf("http://%s:%s/api/v1/user/repos", s.Host, s.Port)
 	jsonData := []byte(fmt.Sprintf(`{"name":"%s"}`, repoName))
@@ -158,6 +158,6 @@ func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password
 	require.NoError(t, reqErr)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	t.Logf("✅ Repository '%s' created successfully", repoName)
+	t.Logf("%s✅ Repository '%s' created successfully%s", ColorGreen, repoName, ColorReset)
 	return NewRemoteRepo(t, repoName, username, password, s.Host, s.Port)
 }
