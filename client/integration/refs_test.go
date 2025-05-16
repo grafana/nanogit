@@ -76,18 +76,6 @@ func TestClient_Refs(t *testing.T) {
 	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
 	require.Equal(t, err, client.ErrRefNotFound)
 
-	// // Create and push a branch with packet tracing enabled in a single command
-	// local.Git(t, "push", "origin", hash+":refs/heads/sync-branch", "--force")
-
-	// // Verify the branch was created
-	// ref, err := gitClient.GetRef(ctx, "refs/heads/sync-branch")
-	// require.NoError(t, err)
-	// assert.Equal(t, hash, ref.Hash)
-
-	// // Clean up the branch
-	// err = gitClient.DeleteRef(ctx, "refs/heads/sync-branch")
-	// require.NoError(t, err)
-
 	// create-ref
 	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/heads/new-branch", Hash: hash})
 	require.NoError(t, err)
@@ -105,14 +93,14 @@ func TestClient_Refs(t *testing.T) {
 	// _, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
 	// require.Equal(t, err, client.ErrRefNotFound)
 
-	// // create-tag
-	// err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
-	// require.NoError(t, err)
+	// create-tag
+	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
+	require.NoError(t, err)
 
-	// // get-ref with new tag
-	// ref, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
-	// require.NoError(t, err)
-	// assert.Equal(t, hash, ref.Hash)
+	// get-ref with new tag
+	ref, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
+	require.NoError(t, err)
+	assert.Equal(t, hash, ref.Hash)
 
 	// // delete-tag
 	// err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")
