@@ -6,6 +6,14 @@ Thank you for your interest in contributing to NanoGit! This document provides g
 
 Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our community approachable and respectable.
 
+## Prerequisites
+
+Before you begin contributing, ensure you have the following installed:
+
+* [Docker](https://docs.docker.com/get-docker/) - Required for running integration tests
+* Go 1.24 or later
+* Git
+
 ## How to Contribute
 
 ### Reporting Bugs
