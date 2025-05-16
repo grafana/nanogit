@@ -15,7 +15,6 @@ import (
 )
 
 func TestClient_ListRefs(t *testing.T) {
-
 	// set up remote repo
 	gitServer := helpers.NewGitServer(t)
 	user := gitServer.CreateUser(t)
@@ -28,11 +27,11 @@ func TestClient_ListRefs(t *testing.T) {
 	// Easy way to add remote with username and password without modifying the host configuration
 	local.Git(t, "remote", "add", "origin", remote.AuthURL())
 
-	// test commit
+	// commit something
 	local.CreateFile(t, "test.txt", "test content")
 	local.Git(t, "add", "test.txt")
-	// TODO: Get the commit hash and use it in the message
 	local.Git(t, "commit", "-m", "Initial commit")
+	hash := local.Git(t, "rev-parse", "HEAD")
 
 	// main branch
 	local.Git(t, "branch", "-M", "main")
@@ -56,18 +55,12 @@ func TestClient_ListRefs(t *testing.T) {
 	require.NoError(t, err, "ListRefs failed: %v", err)
 	require.Len(t, refs, 4, "should have 4 references")
 
-	onlyRefNames := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		onlyRefNames = append(onlyRefNames, ref.Name)
-		require.Len(t, ref.Hash, 40, "hash should be 40 characters")
+	wantRefs := []client.Ref{
+		{Name: "HEAD", Hash: hash},
+		{Name: "refs/heads/main", Hash: hash},
+		{Name: "refs/heads/test-branch", Hash: hash},
+		{Name: "refs/tags/v1.0.0", Hash: hash},
 	}
 
-	wantRefs := []string{
-		"HEAD",
-		"refs/heads/main",
-		"refs/heads/test-branch",
-		"refs/tags/v1.0.0",
-	}
-
-	assert.ElementsMatch(t, wantRefs, onlyRefNames)
+	assert.ElementsMatch(t, wantRefs, refs)
 }

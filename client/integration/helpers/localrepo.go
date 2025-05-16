@@ -41,7 +41,7 @@ func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
 // Git executes a Git command in the repository directory.
 // It logs the command being executed and its output for debugging purposes.
 // The command is executed with GIT_TERMINAL_PROMPT=0 to prevent interactive prompts.
-func (r *LocalGitRepo) Git(t *testing.T, args ...string) {
+func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Path
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
@@ -57,4 +57,5 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) {
 
 	// Log successful command output
 	t.Logf("Git command output:\n%s", string(output))
+	return strings.TrimSpace(string(output))
 }
