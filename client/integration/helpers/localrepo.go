@@ -51,18 +51,44 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 	cmd.Dir = r.Path
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
-	// Log the git command being executed
-	t.Logf("%s📦 [LOCAL] 🔧 Running git command: git %s in directory: %s%s", ColorBlue, strings.Join(args, " "), r.Path, ColorReset)
+	// Format the command for display
+	cmdStr := strings.Join(args, " ")
+
+	// Log the git command being executed with a special format
+	t.Logf("%s📦 [LOCAL] %s┌─────────────────────────────────────────────┐%s", ColorBlue, ColorPurple, ColorReset)
+	t.Logf("%s📦 [LOCAL] %s│ %sGit Command%s%s", ColorBlue, ColorPurple, ColorCyan, ColorPurple, ColorReset)
+	t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorBlue, ColorPurple, ColorReset)
+	t.Logf("%s📦 [LOCAL] %s│ %s$ git %s%s", ColorBlue, ColorPurple, ColorCyan, cmdStr, ColorReset)
+	t.Logf("%s📦 [LOCAL] %s│ %sPath: %s%s", ColorBlue, ColorPurple, ColorCyan, r.Path, ColorReset)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Logf("%s📦 [LOCAL] ❌ Git command failed:\n%s%s", ColorRed, string(output), ColorReset)
-		require.NoError(t, err, "git command failed %s: %s", args, output)
-	}
-
-	// Log successful command output
-	if len(output) > 0 {
-		t.Logf("%s📦 [LOCAL] 📋 Git command output:\n%s%s", ColorCyan, string(output), ColorReset)
+		// Add error information to the same box
+		t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorRed, ColorPurple, ColorReset)
+		t.Logf("%s📦 [LOCAL] %s│ %sError: %s%s", ColorRed, ColorPurple, ColorRed, err.Error(), ColorReset)
+		if len(output) > 0 {
+			t.Logf("%s📦 [LOCAL] %s│ %sOutput:%s", ColorRed, ColorPurple, ColorRed, ColorReset)
+			for _, line := range strings.Split(string(output), "\n") {
+				if line != "" {
+					t.Logf("%s📦 [LOCAL] %s│ %s  %s%s", ColorRed, ColorPurple, ColorRed, line, ColorReset)
+				}
+			}
+		}
+		t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorRed, ColorPurple, ColorReset)
+		require.NoError(t, err, "git command failed: %s\nOutput: %s", cmdStr, output)
+	} else if len(output) > 0 {
+		// Add output to the same box
+		t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorCyan, ColorPurple, ColorReset)
+		t.Logf("%s📦 [LOCAL] %s│ %sOutput:%s", ColorCyan, ColorPurple, ColorCyan, ColorReset)
+		for _, line := range strings.Split(string(output), "\n") {
+			if line != "" {
+				t.Logf("%s📦 [LOCAL] %s│ %s%s%s", ColorCyan, ColorPurple, ColorCyan, line, ColorReset)
+			}
+		}
+		t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorCyan, ColorPurple, ColorReset)
+	} else {
+		// Close the box if there's no output
+		t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorBlue, ColorPurple, ColorReset)
 	}
 	return strings.TrimSpace(string(output))
 }
