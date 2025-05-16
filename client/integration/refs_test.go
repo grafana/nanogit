@@ -18,27 +18,34 @@ func TestClient_ListRefs(t *testing.T) {
 	gitServer := helpers.NewGitServer(t)
 	localRepo := helpers.NewLocalGitRepo(t)
 
+	// TODO: Simplify This
 	gitServer.CreateUser(t, "testuser", "test@example.com", "testpass123")
-	repoURL, authRepoURL := gitServer.CreateRepo(t, "testrepo", "testuser", "testpass123")
-	// TODO: Simplify this
-	localRepo.Git(t, "init")
+	remoteRepo := gitServer.CreateRepo(t, "testrepo", "testuser", "testpass123")
+
+	// set up local repo
 	localRepo.Git(t, "config", "user.name", "testuser")
 	localRepo.Git(t, "config", "user.email", "test@example.com")
+	// FIXME: Gitea doesn't seem to work if the remote URL doesn't contain username and password like this
+	localRepo.Git(t, "remote", "add", "origin", remoteRepo.AuthURL())
+
+	// test commit
 	localRepo.CreateFile(t, "test.txt", "test content")
 	localRepo.Git(t, "add", "test.txt")
 	localRepo.Git(t, "commit", "-m", "Initial commit")
-	localRepo.Git(t, "branch", "-M", "main")
-	localRepo.Git(t, "branch", "test-branch")
-	localRepo.Git(t, "tag", "v1.0.0")
 
-	// Push the repository to Gitea
-	t.Log("Pushing to Gitea...")
-	localRepo.Git(t, "remote", "add", "origin", authRepoURL)
+	// main branch
+	localRepo.Git(t, "branch", "-M", "main")
 	localRepo.Git(t, "push", "-u", "origin", "main", "--force")
+
+	// test-branch
+	localRepo.Git(t, "branch", "test-branch")
 	localRepo.Git(t, "push", "origin", "test-branch", "--force")
+
+	// v1.0.0 tag
+	localRepo.Git(t, "tag", "v1.0.0")
 	localRepo.Git(t, "push", "origin", "v1.0.0", "--force")
 
-	gitClient, err := client.New(repoURL, client.WithBasicAuth("testuser", "testpass123"))
+	gitClient, err := client.New(remoteRepo.URL(), client.WithBasicAuth("testuser", "testpass123"))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

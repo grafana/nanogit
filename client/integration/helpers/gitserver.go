@@ -104,7 +104,7 @@ func (s *GitServer) CreateUser(t *testing.T, username, email, password string) {
 // CreateRepo creates a new repository in the Gitea server for the specified user.
 // It returns both the public repository URL and an authenticated repository URL
 // that includes the user's credentials.
-func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password string) (repoURL string, authRepoURL string) {
+func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password string) *RemoteRepo {
 	// FIXME: can I create one with CLI instead?
 	t.Log("Creating repository...")
 	httpClient := http.Client{}
@@ -119,6 +119,5 @@ func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password
 	require.NoError(t, reqErr)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	return fmt.Sprintf("http://%s:%s/%s/%s.git", s.Host, s.Port, username, repoName),
-		fmt.Sprintf("http://%s:%s@%s:%s/%s/%s.git", username, password, s.Host, s.Port, username, repoName)
+	return NewRemoteRepo(t, repoName, username, password, s.Host, s.Port)
 }

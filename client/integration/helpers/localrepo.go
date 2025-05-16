@@ -26,7 +26,9 @@ func NewLocalGitRepo(t *testing.T) *LocalGitRepo {
 		require.NoError(t, os.RemoveAll(p))
 	})
 
-	return &LocalGitRepo{Path: p}
+	r := &LocalGitRepo{Path: p}
+	r.Git(t, "init")
+	return r
 }
 
 // CreateFile creates a new file in the repository with the specified filename
