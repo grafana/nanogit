@@ -29,12 +29,6 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 	content := string(log.Content)
 	// Add emojis and colors based on log level/content
 	switch {
-	case strings.Contains(strings.ToLower(content), "error"):
-		l.t.Logf("%s🖥️  [SERVER] ❌ %s%s", ColorRed, content, ColorReset)
-	case strings.Contains(strings.ToLower(content), "warn"):
-		l.t.Logf("%s🖥️  [SERVER] ⚠️ %s%s", ColorYellow, content, ColorReset)
-	case strings.Contains(strings.ToLower(content), "info"):
-		l.t.Logf("%s🖥️  [SERVER] ℹ️ %s%s", ColorBlue, content, ColorReset)
 	case strings.Contains(content, "401 Unauthorized"):
 		l.t.Logf("%s🖥️  [SERVER] 🔒 %s%s", ColorRed, content, ColorReset)
 	case strings.Contains(content, "403 Forbidden"):
@@ -49,6 +43,12 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 		l.t.Logf("%s🖥️  [SERVER] ✨ %s%s", ColorGreen, content, ColorReset)
 	case strings.Contains(content, "204 No Content"):
 		l.t.Logf("%s🖥️  [SERVER] ✨ %s%s", ColorGreen, content, ColorReset)
+	case strings.Contains(strings.ToLower(content), "error"):
+		l.t.Logf("%s🖥️  [SERVER] ❌ %s%s", ColorRed, content, ColorReset)
+	case strings.Contains(strings.ToLower(content), "warn"):
+		l.t.Logf("%s🖥️  [SERVER] ⚠️ %s%s", ColorYellow, content, ColorReset)
+	case strings.Contains(strings.ToLower(content), "info"):
+		l.t.Logf("%s🖥️  [SERVER] ℹ️ %s%s", ColorBlue, content, ColorReset)
 	default:
 		l.t.Logf("%s🖥️  [SERVER] 📝 %s%s", ColorCyan, content, ColorReset)
 	}
