@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClient_ListRefs(t *testing.T) {
+func TestClient_Refs(t *testing.T) {
 	// set up remote repo
 	gitServer := helpers.NewGitServer(t)
 	user := gitServer.CreateUser(t)
@@ -63,4 +63,16 @@ func TestClient_ListRefs(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t, wantRefs, refs)
+
+	// Get refs one by one
+	for _, ref := range wantRefs {
+		ref, err := gitClient.GetRef(ctx, ref.Name)
+		require.NoError(t, err, "GetRef failed: %v", err)
+		assert.Equal(t, ref.Name, ref.Name)
+		assert.Equal(t, hash, ref.Hash)
+	}
+
+	// get-ref with non-existent ref
+	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
+	require.Equal(t, err, client.ErrRefNotFound)
 }

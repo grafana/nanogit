@@ -18,6 +18,7 @@ type Client interface {
 	SendCommands(ctx context.Context, data []byte) ([]byte, error)
 	SmartInfoRequest(ctx context.Context) ([]byte, error)
 	ListRefs(ctx context.Context) ([]Ref, error)
+	GetRef(ctx context.Context, ref string) (Ref, error)
 }
 
 // Option is a function that configures a Client.

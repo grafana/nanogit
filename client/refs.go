@@ -62,6 +62,24 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	return refs, nil
 }
 
+// GetRef sends a request to get a single reference in the repository.
+// It returns the reference name, hash, and any error encountered.
+// FIXME: In protocol v1, you cannot filter the refs you want to get.
+func (c *clientImpl) GetRef(ctx context.Context, ref string) (Ref, error) {
+	refs, err := c.ListRefs(ctx)
+	if err != nil {
+		return Ref{}, fmt.Errorf("list refs: %w", err)
+	}
+
+	for _, r := range refs {
+		if r.Name == ref {
+			return r, nil
+		}
+	}
+
+	return Ref{}, ErrRefNotFound
+}
+
 // parseRefLine parses a single reference line from the git response.
 // Returns the reference name, hash, and any error encountered.
 func parseRefLine(line []byte) (ref, hash string, err error) {
