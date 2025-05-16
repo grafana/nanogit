@@ -35,6 +35,20 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 		l.t.Logf("%s🖥️  [SERVER] ⚠️ %s%s", ColorYellow, content, ColorReset)
 	case strings.Contains(strings.ToLower(content), "info"):
 		l.t.Logf("%s🖥️  [SERVER] ℹ️ %s%s", ColorBlue, content, ColorReset)
+	case strings.Contains(content, "401 Unauthorized"):
+		l.t.Logf("%s🖥️  [SERVER] 🔒 %s%s", ColorRed, content, ColorReset)
+	case strings.Contains(content, "403 Forbidden"):
+		l.t.Logf("%s🖥️  [SERVER] 🚫 %s%s", ColorRed, content, ColorReset)
+	case strings.Contains(content, "404 Not Found"):
+		l.t.Logf("%s🖥️  [SERVER] 🔍 %s%s", ColorYellow, content, ColorReset)
+	case strings.Contains(content, "500 Internal Server Error"):
+		l.t.Logf("%s🖥️  [SERVER] 💥 %s%s", ColorRed, content, ColorReset)
+	case strings.Contains(content, "200 OK"):
+		l.t.Logf("%s🖥️  [SERVER] ✅ %s%s", ColorGreen, content, ColorReset)
+	case strings.Contains(content, "201 Created"):
+		l.t.Logf("%s🖥️  [SERVER] ✨ %s%s", ColorGreen, content, ColorReset)
+	case strings.Contains(content, "204 No Content"):
+		l.t.Logf("%s🖥️  [SERVER] ✨ %s%s", ColorGreen, content, ColorReset)
 	default:
 		l.t.Logf("%s🖥️  [SERVER] 📝 %s%s", ColorCyan, content, ColorReset)
 	}
