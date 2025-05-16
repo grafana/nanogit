@@ -15,37 +15,38 @@ import (
 )
 
 func TestClient_ListRefs(t *testing.T) {
-	gitServer := helpers.NewGitServer(t)
-	localRepo := helpers.NewLocalGitRepo(t)
 
-	// TODO: Simplify This
-	gitServer.CreateUser(t, "testuser", "test@example.com", "testpass123")
-	remoteRepo := gitServer.CreateRepo(t, "testrepo", "testuser", "testpass123")
+	// set up remote repo
+	gitServer := helpers.NewGitServer(t)
+	user := gitServer.CreateUser(t)
+	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
 	// set up local repo
-	localRepo.Git(t, "config", "user.name", "testuser")
-	localRepo.Git(t, "config", "user.email", "test@example.com")
-	// FIXME: Gitea doesn't seem to work if the remote URL doesn't contain username and password like this
-	localRepo.Git(t, "remote", "add", "origin", remoteRepo.AuthURL())
+	local := helpers.NewLocalGitRepo(t)
+	local.Git(t, "config", "user.name", user.Username)
+	local.Git(t, "config", "user.email", user.Email)
+	// Easy way to add remote with username and password without modifying the host configuration
+	local.Git(t, "remote", "add", "origin", remote.AuthURL())
 
 	// test commit
-	localRepo.CreateFile(t, "test.txt", "test content")
-	localRepo.Git(t, "add", "test.txt")
-	localRepo.Git(t, "commit", "-m", "Initial commit")
+	local.CreateFile(t, "test.txt", "test content")
+	local.Git(t, "add", "test.txt")
+	// TODO: Get the commit hash and use it in the message
+	local.Git(t, "commit", "-m", "Initial commit")
 
 	// main branch
-	localRepo.Git(t, "branch", "-M", "main")
-	localRepo.Git(t, "push", "-u", "origin", "main", "--force")
+	local.Git(t, "branch", "-M", "main")
+	local.Git(t, "push", "-u", "origin", "main", "--force")
 
 	// test-branch
-	localRepo.Git(t, "branch", "test-branch")
-	localRepo.Git(t, "push", "origin", "test-branch", "--force")
+	local.Git(t, "branch", "test-branch")
+	local.Git(t, "push", "origin", "test-branch", "--force")
 
 	// v1.0.0 tag
-	localRepo.Git(t, "tag", "v1.0.0")
-	localRepo.Git(t, "push", "origin", "v1.0.0", "--force")
+	local.Git(t, "tag", "v1.0.0")
+	local.Git(t, "push", "origin", "v1.0.0", "--force")
 
-	gitClient, err := client.New(remoteRepo.URL(), client.WithBasicAuth("testuser", "testpass123"))
+	gitClient, err := client.New(remote.URL(), client.WithBasicAuth(user.Username, user.Password))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -53,31 +54,20 @@ func TestClient_ListRefs(t *testing.T) {
 
 	refs, err := gitClient.ListRefs(ctx)
 	require.NoError(t, err, "ListRefs failed: %v", err)
+	require.Len(t, refs, 4, "should have 4 references")
 
-	assert.NotEmpty(t, refs, "should have at least one reference")
-
-	var (
-		masterRef     *client.Ref
-		testBranchRef *client.Ref
-		tagRef        *client.Ref
-	)
-
+	onlyRefNames := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		switch ref.Name {
-		case "refs/heads/main":
-			masterRef = &ref
-		case "refs/heads/test-branch":
-			testBranchRef = &ref
-		case "refs/tags/v1.0.0":
-			tagRef = &ref
-		}
-	}
-
-	require.NotNil(t, masterRef, "should have main branch")
-	require.NotNil(t, testBranchRef, "should have test-branch")
-	require.NotNil(t, tagRef, "should have v1.0.0 tag")
-
-	for _, ref := range []*client.Ref{masterRef, testBranchRef, tagRef} {
+		onlyRefNames = append(onlyRefNames, ref.Name)
 		require.Len(t, ref.Hash, 40, "hash should be 40 characters")
 	}
+
+	wantRefs := []string{
+		"HEAD",
+		"refs/heads/main",
+		"refs/heads/test-branch",
+		"refs/tags/v1.0.0",
+	}
+
+	assert.ElementsMatch(t, wantRefs, onlyRefNames)
 }

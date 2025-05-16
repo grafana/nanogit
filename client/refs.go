@@ -87,7 +87,7 @@ func parseRefLine(line []byte) (ref, hash string, err error) {
 		return "", "", fmt.Errorf("invalid hash length: got %d, want 40", len(hash))
 	}
 
-	refName := string(parts[1])
+	refName := strings.TrimSpace(string(parts[1]))
 
 	// Handle HEAD reference with capabilities
 	if strings.HasPrefix(refName, "HEAD") {

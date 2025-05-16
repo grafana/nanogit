@@ -3,6 +3,8 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,10 +90,20 @@ func NewGitServer(t *testing.T) *GitServer {
 
 // CreateUser creates a new user in the Gitea server with the specified credentials.
 // The user is created with admin privileges and password change requirement disabled.
-func (s *GitServer) CreateUser(t *testing.T, username, email, password string) {
+func (s *GitServer) CreateUser(t *testing.T) *User {
+	var suffix uint32
+	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
+	require.NoError(t, err)
+	suffix = suffix % 10000
+
+	user := &User{
+		Username: fmt.Sprintf("testuser-%d", suffix),
+		Email:    fmt.Sprintf("test-%d@example.com", suffix),
+		Password: fmt.Sprintf("testpass-%d", suffix),
+	}
 	t.Log("Creating test user...")
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
-		"su", "git", "-c", "gitea admin user create --username testuser --email test@example.com --password testpass123 --must-change-password=false --admin",
+		"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
 	})
 
 	require.NoError(t, err)
@@ -99,6 +111,8 @@ func (s *GitServer) CreateUser(t *testing.T, username, email, password string) {
 	require.NoError(t, err)
 	t.Logf("User creation output: %s", string(execOutput))
 	require.Equal(t, 0, execResult)
+
+	return user
 }
 
 // CreateRepo creates a new repository in the Gitea server for the specified user.
