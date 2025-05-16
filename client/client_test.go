@@ -479,6 +479,12 @@ func TestAuthentication(t *testing.T) {
 					t.Errorf("expected Authorization header %s, got %s", tt.expectedHeader, auth)
 					return
 				}
+
+				if contentType := r.Header.Get("Content-Type"); contentType != "application/x-git-upload-pack-request" {
+					t.Errorf("expected Content-Type header 'application/x-git-upload-pack-request', got %s", contentType)
+					return
+				}
+
 				if _, err := w.Write([]byte("ok")); err != nil {
 					t.Errorf("failed to write response: %v", err)
 					return
