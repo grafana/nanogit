@@ -109,7 +109,7 @@ func TestSomething(t *testing.T) {
 
 #### Integration Tests
 
-Integration tests are located in the `integration` directory and use [testcontainers-go](https://golang.testcontainers.org/) to manage test dependencies. We use Gitea as our test Git server, running in a Docker container.
+Integration tests are located in the `integration` directory and use [testcontainers-go](https://golang.testcontainers.org/) to manage test dependencies. We use Gitea as our test Git server, running in a Docker container. 
 
 Key features:
 - Tests run in isolated containers
@@ -117,12 +117,15 @@ Key features:
 - Real Git server for testing using [Gitea](https://gitea.io/) in a Docker container
 - Parallel test execution support
 
+Integration tests use the Git CLI to set up test repositories and perform Git operations. This ensures we test against real Git behavior and verify our protocol implementation matches the official specification.
 Example structure:
+```bash
+$
 client/
 ├── integration/
+│   ├── helpers/        # test utilities for integration tests
 │   └── refs_test.go    # integration tests for refs
 ```
-
 To run integration tests:
 ```bash
 make test-integration
