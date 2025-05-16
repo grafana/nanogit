@@ -16,9 +16,7 @@ import (
 
 func TestClient_ListRefs(t *testing.T) {
 	gitServer := helpers.NewGitServer(t)
-	defer gitServer.Cleanup(t)
 	localRepo := helpers.NewLocalGitRepo(t)
-	defer localRepo.Cleanup(t)
 
 	gitServer.CreateUser(t, "testuser", "test@example.com", "testpass123")
 	repoURL, authRepoURL := gitServer.CreateRepo(t, "testrepo", "testuser", "testpass123")

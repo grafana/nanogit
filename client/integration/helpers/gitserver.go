@@ -1,6 +1,3 @@
-// Package helpers provides utility functions and types for testing Git operations
-// in both local and remote environments. This file specifically handles remote
-// Git server operations using Gitea as a test server.
 package helpers
 
 import (
@@ -63,6 +60,9 @@ func NewGitServer(t *testing.T) *GitServer {
 		Started:          true,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, container.Terminate(ctx))
+	})
 
 	// Start following logs
 	logs, err := container.Logs(ctx)
@@ -121,13 +121,4 @@ func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password
 
 	return fmt.Sprintf("http://%s:%s/%s/%s.git", s.Host, s.Port, username, repoName),
 		fmt.Sprintf("http://%s:%s@%s:%s/%s/%s.git", username, password, s.Host, s.Port, username, repoName)
-}
-
-// Cleanup terminates the Gitea server container and cleans up associated resources.
-// This should be called when the server is no longer needed.
-func (s *GitServer) Cleanup(t *testing.T) {
-	if s.container != nil {
-		err := s.container.Terminate(context.Background())
-		require.NoError(t, err)
-	}
 }

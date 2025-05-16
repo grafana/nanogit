@@ -1,6 +1,3 @@
-// Package helpers provides utility functions and types for testing Git operations
-// in a local environment. It includes functionality for creating and managing
-// temporary Git repositories for testing purposes.
 package helpers
 
 import (
@@ -24,7 +21,12 @@ type LocalGitRepo struct {
 // as its path. The temporary directory is automatically cleaned up when the test
 // completes.
 func NewLocalGitRepo(t *testing.T) *LocalGitRepo {
-	return &LocalGitRepo{Path: t.TempDir()}
+	p := t.TempDir()
+	t.Cleanup(func() {
+		require.NoError(t, os.RemoveAll(p))
+	})
+
+	return &LocalGitRepo{Path: p}
 }
 
 // CreateFile creates a new file in the repository with the specified filename
@@ -32,14 +34,6 @@ func NewLocalGitRepo(t *testing.T) *LocalGitRepo {
 func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
 	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
 	require.NoError(t, err)
-}
-
-// Cleanup removes the repository directory and all its contents.
-// This should be called when the repository is no longer needed.
-func (r *LocalGitRepo) Cleanup(t *testing.T) {
-	if r.Path != "" {
-		require.NoError(t, os.RemoveAll(r.Path))
-	}
 }
 
 // Run executes a Git command in the repository directory.
