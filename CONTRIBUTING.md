@@ -10,9 +10,9 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our com
 
 Before you begin contributing, ensure you have the following installed:
 
-* [Docker](https://docs.docker.com/get-docker/) - Required for running integration tests
-* Go 1.24 or later
-* Git
+- [Docker](https://docs.docker.com/get-docker/) - Required for running integration tests
+- Go 1.24 or later
+- Git
 
 ## How to Contribute
 
@@ -20,23 +20,23 @@ Before you begin contributing, ensure you have the following installed:
 
 Before creating bug reports, please check the issue list as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
 
-* Use a clear and descriptive title
-* Describe the exact steps to reproduce the problem
-* Provide specific examples to demonstrate the steps
-* Describe the behavior you observed after following the steps
-* Explain which behavior you expected to see instead and why
-* Include screenshots if possible
-* Include the output of any error messages
+- Use a clear and descriptive title
+- Describe the exact steps to reproduce the problem
+- Provide specific examples to demonstrate the steps
+- Describe the behavior you observed after following the steps
+- Explain which behavior you expected to see instead and why
+- Include screenshots if possible
+- Include the output of any error messages
 
 ### Suggesting Enhancements
 
 If you have a suggestion for a new feature or enhancement, please include as much detail as possible:
 
-* Use a clear and descriptive title
-* Provide a step-by-step description of the suggested enhancement
-* Provide specific examples to demonstrate the steps
-* Describe the current behavior and explain which behavior you expected to see instead
-* Explain why this enhancement would be useful to most users
+- Use a clear and descriptive title
+- Provide a step-by-step description of the suggested enhancement
+- Provide specific examples to demonstrate the steps
+- Describe the current behavior and explain which behavior you expected to see instead
+- Explain why this enhancement would be useful to most users
 
 ### Pull Requests
 
@@ -50,28 +50,33 @@ If you have a suggestion for a new feature or enhancement, please include as muc
 ### Development Process
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/yourusername/nanogit.git
    cd nanogit
    ```
 
 2. Install dependencies:
+
    ```bash
    go mod download
    ```
 
 3. Create a new branch for your changes:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
 4. Make your changes and commit them:
+
    ```bash
    git add .
    git commit -m "Description of your changes"
    ```
 
 5. Push your changes:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -101,7 +106,7 @@ import (
 func TestSomething(t *testing.T) {
     // Use require for setup/teardown that must succeed
     require.NoError(t, err)
-    
+
     // Use assert for test conditions
     assert.Equal(t, expected, actual)
 }
@@ -109,16 +114,18 @@ func TestSomething(t *testing.T) {
 
 #### Integration Tests
 
-Integration tests are located in the `integration` directory and use [testcontainers-go](https://golang.testcontainers.org/) to manage test dependencies. We use Gitea as our test Git server, running in a Docker container. 
+Integration tests are located in the `integration` directory and use [testcontainers-go](https://golang.testcontainers.org/) to manage test dependencies. We use Gitea as our test Git server, running in a Docker container.
 
 Key features:
+
 - Tests run in isolated containers
 - Automatic container lifecycle management
-- Real Git server for testing using [Gitea](https://gitea.io/) in a Docker container
+- Real Git server for testing using [Forgejo](https://forgejo.org/) in a Docker container
 - Parallel test execution support
 
 Integration tests use the Git CLI to set up test repositories and perform Git operations. This ensures we test against real Git behavior and verify our protocol implementation matches the official specification.
 Example structure:
+
 ```bash
 $
 client/
@@ -126,7 +133,9 @@ client/
 │   ├── helpers/        # test utilities for integration tests
 │   └── refs_test.go    # integration tests for refs
 ```
+
 To run integration tests:
+
 ```bash
 make test-integration
 ```
@@ -142,30 +151,31 @@ Note: Integration tests require Docker to be running on your machine.
 5. Add appropriate test coverage
 
 For more information:
+
 - [Go Testing Documentation](https://pkg.go.dev/testing)
 - [Testify Documentation](https://pkg.go.dev/github.com/stretchr/testify)
 - [Testcontainers-go Documentation](https://golang.testcontainers.org/)
-- [Gitea Documentation](https://docs.gitea.io/)
+- [Forgejo Documentation](https://forgejo.org/docs/latest/)
 
 ### Code Style
 
-* Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-* Use `make fmt` to format your code.
-* Run `make lint` to check for style issues.
+- Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+- Use `make fmt` to format your code.
+- Run `make lint` to check for style issues.
 
 ### Documentation
 
-* Update documentation for any new features or changes.
-* Follow the existing documentation style.
-* Include examples where appropriate.
+- Update documentation for any new features or changes.
+- Follow the existing documentation style.
+- Include examples where appropriate.
 
 ## Getting Help
 
 If you need help, you can:
 
-* Open an issue
-* Check the existing documentation
+- Open an issue
+- Check the existing documentation
 
 ## License
 
-By contributing to NanoGit, you agree that your contributions will be licensed under the project's [Apache License 2.0](LICENSE.md). 
+By contributing to NanoGit, you agree that your contributions will be licensed under the project's [Apache License 2.0](LICENSE.md).

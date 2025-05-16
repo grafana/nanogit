@@ -39,7 +39,7 @@ func NewGitServer(t *testing.T) *GitServer {
 
 	// Start Gitea container
 	req := testcontainers.ContainerRequest{
-		Image:        "gitea/gitea:latest",
+		Image:        "codeberg.org/forgejo/forgejo:11",
 		ExposedPorts: []string{"3000/tcp"},
 		Env: map[string]string{
 			"GITEA__database__DB_TYPE":                "sqlite3",
