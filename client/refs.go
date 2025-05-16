@@ -23,7 +23,7 @@ type Ref struct {
 // It returns a map of reference names to their commit hashes.
 func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	// First get the initial capability advertisement
-	_, err := c.SmartInfoRequest(ctx)
+	_, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		return nil, fmt.Errorf("get repository info: %w", err)
 	}
@@ -38,7 +38,7 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
-	refsData, err := c.SendCommands(ctx, pkt)
+	refsData, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
