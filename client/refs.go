@@ -83,7 +83,7 @@ func (c *clientImpl) GetRef(ctx context.Context, refName string) (Ref, error) {
 // CreateRef creates a new reference in the repository.
 // It returns any error encountered.
 func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
-	ref, err := c.GetRef(ctx, ref.Name)
+	_, err := c.GetRef(ctx, ref.Name)
 	switch {
 	case err != nil && !errors.Is(err, ErrRefNotFound):
 		return fmt.Errorf("get ref: %w", err)
@@ -92,8 +92,11 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Create the ref using receive-pack
+	// Format: <old-value> <new-value> <ref-name>\n
+	// Old value is the zero hash for new refs
+	refLine := fmt.Sprintf("%s %s %s\n", strings.Repeat("0", 40), ref.Hash, strings.TrimSpace(ref.Name))
 	pkt, err := protocol.FormatPacks(
-		protocol.PackLine(fmt.Sprintf("%s %s\n", ref.Hash, ref.Name)),
+		protocol.PackLine(refLine),
 		protocol.FlushPacket,
 	)
 	if err != nil {
