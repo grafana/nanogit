@@ -203,7 +203,7 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			continue
 
 		case uint64(len(b)) < length:
-			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are avaiable", length, len(b)))
+			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(b)))
 
 		case bytes.HasPrefix(b[4:], []byte("ERR ")):
 			// This is an error packet.

@@ -17,6 +17,7 @@ type Client interface {
 	// TODO(mem): this is probably not the right interface.
 	SendCommands(ctx context.Context, data []byte) ([]byte, error)
 	SmartInfoRequest(ctx context.Context) ([]byte, error)
+	ListRefs(ctx context.Context) ([]Ref, error)
 }
 
 // Option is a function that configures a Client.
@@ -45,6 +46,8 @@ func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 	} else if c.tokenAuth != nil {
 		req.Header.Set("Authorization", *c.tokenAuth)
 	}
+
+	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 }
 
 // SendCommands sends a POST request to the git-upload-pack endpoint.
