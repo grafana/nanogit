@@ -5,6 +5,7 @@ A limited, cloud-ready Git implementation for use in Grafana.
 [![License](https://img.shields.io/github/license/grafana/nanogit)](LICENSE.md)
 [![Go Report Card](https://goreportcard.com/badge/github.com/grafana/nanogit)](https://goreportcard.com/report/github.com/grafana/nanogit)
 [![GoDoc](https://godoc.org/github.com/grafana/nanogit?status.svg)](https://godoc.org/github.com/grafana/nanogit)
+[![codecov](https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg)](https://codecov.io/gh/grafana/nanogit)
 
 ## Overview
 
