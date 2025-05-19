@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 
-	//nolint:gosec // git uses sha1 for the pack file
-
 	"errors"
 	"fmt"
 	"strings"
