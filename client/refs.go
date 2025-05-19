@@ -100,7 +100,11 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
 
-	pkt, err := protocol.NewRefUpdateRequest(protocol.ZeroHash, ref.Hash, ref.Name).Format()
+	pkt, err := protocol.RefUpdateRequest{
+		OldRef:  protocol.ZeroHash,
+		NewRef:  ref.Hash,
+		RefName: ref.Name,
+	}.Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
 	}
@@ -133,7 +137,11 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Create the ref update request
-	pkt, err := protocol.NewRefUpdateRequest(oldRef.Hash, ref.Hash, ref.Name).Format()
+	pkt, err := protocol.RefUpdateRequest{
+		OldRef:  oldRef.Hash,
+		NewRef:  ref.Hash,
+		RefName: ref.Name,
+	}.Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
 	}
@@ -148,7 +156,8 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 }
 
 // DeleteRef deletes a reference from the repository.
-// It returns any error encountered.
+// It returns ErrRefNotFound if the reference does not exist,
+// or any other error encountered during the deletion process.
 func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, refName)
@@ -166,7 +175,11 @@ func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	}
 
 	// Create the ref update request
-	pkt, err := protocol.NewRefUpdateRequest(oldRef.Hash, protocol.ZeroHash, refName).Format()
+	pkt, err := protocol.RefUpdateRequest{
+		OldRef:  oldRef.Hash,
+		NewRef:  protocol.ZeroHash,
+		RefName: refName,
+	}.Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
 	}

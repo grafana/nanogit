@@ -13,14 +13,6 @@ type RefUpdateRequest struct {
 	RefName string
 }
 
-func NewRefUpdateRequest(oldRef, newRef, refName string) RefUpdateRequest {
-	return RefUpdateRequest{
-		OldRef:  oldRef,
-		NewRef:  newRef,
-		RefName: refName,
-	}
-}
-
 // Format formats the ref update request into a byte slice that can be sent over the wire.
 // The format follows Git's receive-pack protocol:
 //   - A pkt-line containing the ref update command
@@ -51,6 +43,14 @@ func NewRefUpdateRequest(oldRef, newRef, refName string) RefUpdateRequest {
 //	Delete refs/heads/main:
 //	"1234... 0000... refs/heads/main\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n"
 func (r RefUpdateRequest) Format() ([]byte, error) {
+	// Validate hash lengths
+	if len(r.OldRef) != 40 && r.OldRef != ZeroHash {
+		return nil, fmt.Errorf("invalid old ref hash length: got %d, want 40", len(r.OldRef))
+	}
+	if len(r.NewRef) != 40 && r.NewRef != ZeroHash {
+		return nil, fmt.Errorf("invalid new ref hash length: got %d, want 40", len(r.NewRef))
+	}
+
 	// Create the ref using receive-pack
 	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
 	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", r.OldRef, r.NewRef, r.RefName)
@@ -63,6 +63,7 @@ func (r RefUpdateRequest) Format() ([]byte, error) {
 	// Send pack file as raw data (not as a pkt-line)
 	// It seems we need to send the empty pack even if it's not needed.
 	pkt = append(pkt, EmptyPack...)
+
 	// Add final flush packet
 	pkt = append(pkt, FlushPacket...)
 
