@@ -53,8 +53,9 @@ jobs:
           CGO_ENABLED: 1
         run: make test
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.4.3
         with:
+          files: ./coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
 
   security:
