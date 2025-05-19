@@ -8,7 +8,7 @@ lint:
 
 .PHONY: test-unit
 test-unit: lint
-	go test -cover -race -parallel 4 ./...
+	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 4 ./...
 
 .PHONY: test-integration
 test-integration: lint

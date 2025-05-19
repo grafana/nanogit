@@ -47,11 +47,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
-          apk add --no-cache git make gcc musl-dev
+          apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Run tests
         env:
           CGO_ENABLED: 1
         run: make test
+      - name: Upload coverage
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        with:
+          fail_ci_if_error: true
+          files: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   security:
     name: Security
