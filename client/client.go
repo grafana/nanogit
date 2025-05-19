@@ -146,6 +146,7 @@ func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, err
 	query.Set("service", service)
 	u.RawQuery = query.Encode()
 
+	// TODO: Add option to configure logger
 	slog.Info("SmartInfo", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -170,6 +171,7 @@ func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, err
 		return nil, err
 	}
 
+	// TODO: Add option to configure logger
 	slog.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
 
 	return body, nil
