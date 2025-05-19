@@ -86,12 +86,12 @@ func TestClient_Refs(t *testing.T) {
 	assert.Equal(t, hash, ref.Hash)
 
 	// delete-ref
-	// err = gitClient.DeleteRef(ctx, "refs/heads/new-branch")
-	// require.NoError(t, err)
+	err = gitClient.DeleteRef(ctx, "refs/heads/new-branch")
+	require.NoError(t, err)
 
-	// // get-ref with new-branch should fail
-	// _, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
-	// require.Equal(t, err, client.ErrRefNotFound)
+	// get-ref with new-branch should fail
+	_, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
+	require.Equal(t, err, client.ErrRefNotFound)
 
 	// create-tag
 	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
@@ -102,11 +102,11 @@ func TestClient_Refs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, hash, ref.Hash)
 
-	// // delete-tag
-	// err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")
-	// require.NoError(t, err)
+	// delete-tag
+	err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")
+	require.NoError(t, err)
 
-	// // get-ref with new tag should fail
-	// _, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
-	// require.Equal(t, err, client.ErrRefNotFound)
+	// get-ref with new tag should fail
+	_, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
+	require.Equal(t, err, client.ErrRefNotFound)
 }
