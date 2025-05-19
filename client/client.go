@@ -35,6 +35,8 @@ type Client interface {
 // Option is a function that configures a Client.
 type Option func(*clientImpl) error
 
+// TODO: Add option to configure logger
+
 // clientImpl is the private implementation of the Client interface.
 type clientImpl struct {
 	base      *url.URL
