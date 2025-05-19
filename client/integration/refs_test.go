@@ -85,6 +85,20 @@ func TestClient_Refs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, hash, ref.Hash)
 
+	// Create a new commit
+	local.Git(t, "commit", "--allow-empty", "-m", "new commit")
+	newHash := local.Git(t, "rev-parse", "HEAD")
+	local.Git(t, "push", "origin", "main", "--force")
+
+	// Update ref to point to new commit
+	err = gitClient.UpdateRef(ctx, client.Ref{Name: "refs/heads/new-branch", Hash: newHash})
+	require.NoError(t, err)
+
+	// Get ref and verify it points to new commit
+	ref, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
+	require.NoError(t, err)
+	assert.Equal(t, newHash, ref.Hash)
+
 	// delete-ref
 	err = gitClient.DeleteRef(ctx, "refs/heads/new-branch")
 	require.NoError(t, err)

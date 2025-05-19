@@ -139,6 +139,58 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 	return nil
 }
 
+// UpdateRef updates an existing reference in the repository.
+// It returns any error encountered.
+func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
+	// First check if the ref exists
+	oldRef, err := c.GetRef(ctx, ref.Name)
+	if err != nil {
+		if errors.Is(err, ErrRefNotFound) {
+			return fmt.Errorf("ref %s does not exist", ref.Name)
+		}
+		return fmt.Errorf("get ref: %w", err)
+	}
+
+	// First get the initial capability advertisement
+	_, err = c.SmartInfo(ctx, "git-receive-pack")
+	if err != nil {
+		return fmt.Errorf("get receive-pack capability: %w", err)
+	}
+
+	// Update the ref using receive-pack
+	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
+	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", oldRef.Hash, ref.Hash, strings.TrimSpace(ref.Name))
+
+	// Calculate the correct length (including the 4 bytes of the length field)
+	lineLen := len(refLine) + 4
+	pkt := []byte(fmt.Sprintf("%04x%s0000", lineLen, refLine))
+
+	// Add empty pack file
+	// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
+	emptyPack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x00")
+
+	// Calculate SHA1 of the pack file
+	//nolint:gosec // git uses sha1 for the pack file
+	h := sha1.New()
+	h.Write(emptyPack)
+	packSha1 := h.Sum(nil)
+	emptyPack = append(emptyPack, packSha1...)
+
+	// Send pack file as raw data (not as a pkt-line)
+	pkt = append(pkt, emptyPack...)
+
+	// Add final flush packet
+	pkt = append(pkt, []byte("0000")...)
+
+	// Send the ref update
+	_, err = c.ReceivePack(ctx, pkt)
+	if err != nil {
+		return fmt.Errorf("update ref: %w", err)
+	}
+
+	return nil
+}
+
 // DeleteRef deletes a reference from the repository.
 // It returns any error encountered.
 func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {

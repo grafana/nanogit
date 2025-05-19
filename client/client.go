@@ -23,11 +23,12 @@ type Client interface {
 	// SmartInfo sends a GET request to the info/refs endpoint.
 	SmartInfo(ctx context.Context, service string) ([]byte, error)
 
+	// TODO: is this a good signature?
 	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)
-	// TODO: is this a good signature?
 	GetRef(ctx context.Context, refName string) (Ref, error)
 	CreateRef(ctx context.Context, ref Ref) error
+	UpdateRef(ctx context.Context, ref Ref) error
 	DeleteRef(ctx context.Context, refName string) error
 }
 
