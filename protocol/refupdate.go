@@ -13,6 +13,30 @@ type RefUpdateRequest struct {
 	RefName string
 }
 
+func NewCreateRefRequest(refName, newRef string) RefUpdateRequest {
+	return RefUpdateRequest{
+		OldRef:  ZeroHash,
+		NewRef:  newRef,
+		RefName: refName,
+	}
+}
+
+func NewUpdateRefRequest(oldRef, newRef, refName string) RefUpdateRequest {
+	return RefUpdateRequest{
+		OldRef:  oldRef,
+		NewRef:  newRef,
+		RefName: refName,
+	}
+}
+
+func NewDeleteRefRequest(oldRef, refName string) RefUpdateRequest {
+	return RefUpdateRequest{
+		OldRef:  oldRef,
+		NewRef:  ZeroHash,
+		RefName: refName,
+	}
+}
+
 // Format formats the ref update request into a byte slice that can be sent over the wire.
 // The format follows Git's receive-pack protocol:
 //   - A pkt-line containing the ref update command

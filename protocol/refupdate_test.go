@@ -88,3 +88,117 @@ func TestRefUpdateRequest_Format(t *testing.T) {
 		})
 	}
 }
+
+func TestNewCreateRefRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		newRef  string
+		refName string
+		want    protocol.RefUpdateRequest
+	}{
+		{
+			name:    "create main branch",
+			newRef:  "1234567890123456789012345678901234567890",
+			refName: "refs/heads/main",
+			want: protocol.RefUpdateRequest{
+				OldRef:  protocol.ZeroHash,
+				NewRef:  "1234567890123456789012345678901234567890",
+				RefName: "refs/heads/main",
+			},
+		},
+		{
+			name:    "create feature branch",
+			newRef:  "0987654321098765432109876543210987654321",
+			refName: "refs/heads/feature",
+			want: protocol.RefUpdateRequest{
+				OldRef:  protocol.ZeroHash,
+				NewRef:  "0987654321098765432109876543210987654321",
+				RefName: "refs/heads/feature",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := protocol.NewCreateRefRequest(tt.refName, tt.newRef)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestNewUpdateRefRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		oldRef  string
+		newRef  string
+		refName string
+		want    protocol.RefUpdateRequest
+	}{
+		{
+			name:    "update main branch",
+			oldRef:  "1234567890123456789012345678901234567890",
+			newRef:  "0987654321098765432109876543210987654321",
+			refName: "refs/heads/main",
+			want: protocol.RefUpdateRequest{
+				OldRef:  "1234567890123456789012345678901234567890",
+				NewRef:  "0987654321098765432109876543210987654321",
+				RefName: "refs/heads/main",
+			},
+		},
+		{
+			name:    "update feature branch",
+			oldRef:  "1111111111111111111111111111111111111111",
+			newRef:  "2222222222222222222222222222222222222222",
+			refName: "refs/heads/feature",
+			want: protocol.RefUpdateRequest{
+				OldRef:  "1111111111111111111111111111111111111111",
+				NewRef:  "2222222222222222222222222222222222222222",
+				RefName: "refs/heads/feature",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := protocol.NewUpdateRefRequest(tt.oldRef, tt.newRef, tt.refName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestNewDeleteRefRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		oldRef  string
+		refName string
+		want    protocol.RefUpdateRequest
+	}{
+		{
+			name:    "delete main branch",
+			oldRef:  "1234567890123456789012345678901234567890",
+			refName: "refs/heads/main",
+			want: protocol.RefUpdateRequest{
+				OldRef:  "1234567890123456789012345678901234567890",
+				NewRef:  protocol.ZeroHash,
+				RefName: "refs/heads/main",
+			},
+		},
+		{
+			name:    "delete feature branch",
+			oldRef:  "0987654321098765432109876543210987654321",
+			refName: "refs/heads/feature",
+			want: protocol.RefUpdateRequest{
+				OldRef:  "0987654321098765432109876543210987654321",
+				NewRef:  protocol.ZeroHash,
+				RefName: "refs/heads/feature",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := protocol.NewDeleteRefRequest(tt.oldRef, tt.refName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

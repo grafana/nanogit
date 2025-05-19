@@ -100,11 +100,7 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
 
-	pkt, err := protocol.RefUpdateRequest{
-		OldRef:  protocol.ZeroHash,
-		NewRef:  ref.Hash,
-		RefName: ref.Name,
-	}.Format()
+	pkt, err := protocol.NewCreateRefRequest(ref.Name, ref.Hash).Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
 	}
@@ -137,11 +133,7 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Create the ref update request
-	pkt, err := protocol.RefUpdateRequest{
-		OldRef:  oldRef.Hash,
-		NewRef:  ref.Hash,
-		RefName: ref.Name,
-	}.Format()
+	pkt, err := protocol.NewUpdateRefRequest(oldRef.Hash, ref.Hash, ref.Name).Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
 	}
@@ -175,11 +167,7 @@ func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	}
 
 	// Create the ref update request
-	pkt, err := protocol.RefUpdateRequest{
-		OldRef:  oldRef.Hash,
-		NewRef:  protocol.ZeroHash,
-		RefName: refName,
-	}.Format()
+	pkt, err := protocol.NewDeleteRefRequest(oldRef.Hash, refName).Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
 	}
