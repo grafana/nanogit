@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   format:
@@ -13,18 +13,18 @@ jobs:
     container:
       image: golang:1.24-alpine
     steps:
-    - uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: apk add --no-cache git make
-    - name: Check formatting
-      run: make fmt
-    - name: Verify formatting
-      run: |
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "::error::Code formatting issues found. Run 'make fmt' to fix them."
-          git diff
-          exit 1
-        fi
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Check formatting
+        run: make fmt
+      - name: Verify formatting
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Code formatting issues found. Run 'make fmt' to fix them."
+            git diff
+            exit 1
+          fi
 
   lint:
     name: Lint
@@ -32,11 +32,11 @@ jobs:
     container:
       image: golang:1.24-alpine
     steps:
-    - uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: apk add --no-cache git make
-    - name: Run linter
-      run: make lint
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Run linter
+        run: make lint
 
   test:
     name: Test
@@ -44,14 +44,20 @@ jobs:
     container:
       image: golang:1.24-alpine
     steps:
-    - uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: |
-        apk add --no-cache git make gcc musl-dev
-    - name: Run tests
-      env:
-        CGO_ENABLED: 1
-      run: make test
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
+      - name: Run tests
+        env:
+          CGO_ENABLED: 1
+        run: make test
+      - name: Upload coverage
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        with:
+          fail_ci_if_error: true
+          files: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   security:
     name: Security
@@ -59,28 +65,25 @@ jobs:
     container:
       image: golang:1.24-alpine
     steps:
-    - uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: apk add --no-cache git make
-    - name: Check for vulnerabilities
-      run: |
-        go install golang.org/x/vuln/cmd/govulncheck@latest
-        govulncheck ./...
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Check for vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
   trufflehog:
     name: Secrets Scan
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Required for scanning git history
-    - name: Run TruffleHog
-      uses: trufflesecurity/trufflehog@90190deac64289cb10bb694894be8db9ead8790b # v3.88.29
-      with:
-        path: ./
-        base: ${{ github.event.repository.default_branch }}
-        head: HEAD
-        extra_args: --debug --only-verified
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for scanning git history
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@90190deac64289cb10bb694894be8db9ead8790b
+        with:
+          extra_args: --results=verified,unknown
 
   deps:
     name: Dependencies
@@ -88,21 +91,21 @@ jobs:
     container:
       image: golang:1.24-alpine
     steps:
-    - uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: apk add --no-cache git make
-    - name: Check for go.mod and go.sum consistency
-      run: |
-        go mod tidy
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "::error::go.mod and go.sum are out of sync. Run 'go mod tidy' to fix them."
-          git diff
-          exit 1
-        fi
-    - name: Check for unused dependencies
-      run: |
-        go install github.com/remyoudompheng/go-misc/deadcode@latest
-        deadcode ./... || true
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Check for go.mod and go.sum consistency
+        run: |
+          go mod tidy
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::go.mod and go.sum are out of sync. Run 'go mod tidy' to fix them."
+            git diff
+            exit 1
+          fi
+      - name: Check for unused dependencies
+        run: |
+          go install github.com/remyoudompheng/go-misc/deadcode@latest
+          deadcode ./... || true
 
   staticcheck:
     name: Static Analysis
@@ -110,10 +113,10 @@ jobs:
     container:
       image: golang:1.24-alpine
     steps:
-    - uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: apk add --no-cache git make
-    - name: Check for staticcheck issues
-      run: |
-        go install honnef.co/go/tools/cmd/staticcheck@latest
-        staticcheck ./... 
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Check for staticcheck issues
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
