@@ -65,7 +65,7 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 
 // GetRef sends a request to get a single reference in the repository.
 // It returns the reference name, hash, and any error encountered.
-// FIXME: In protocol v1, you cannot filter the refs you want to get.
+// FIXME: Fetch only the requested ref, not all refs.
 func (c *clientImpl) GetRef(ctx context.Context, refName string) (Ref, error) {
 	refs, err := c.ListRefs(ctx)
 	if err != nil {
