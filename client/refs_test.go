@@ -211,7 +211,7 @@ func TestGetRef(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var server *httptest.Server
@@ -238,7 +238,10 @@ func TestGetRef(t *testing.T) {
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
-						w.Write([]byte(refsResp))
+						if _, err := w.Write([]byte(refsResp)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+							return
+						}
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -379,13 +382,19 @@ func TestCreateRef(t *testing.T) {
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
-						w.Write([]byte(refsResp))
+						if _, err := w.Write([]byte(refsResp)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+							return
+						}
 						return
 					}
 					if r.URL.Path == "/git-receive-pack" {
 						if tt.expectedError == "send ref update: got status code 500" {
 							w.WriteHeader(http.StatusInternalServerError)
-							w.Write([]byte("error: refs/heads/main already exists"))
+							if _, err := w.Write([]byte("error: refs/heads/main already exists")); err != nil {
+								t.Errorf("failed to write response: %v", err)
+								return
+							}
 							return
 						}
 						if shouldCheckBody {
@@ -561,13 +570,19 @@ func TestUpdateRef(t *testing.T) {
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
-						w.Write([]byte(refsResp))
+						if _, err := w.Write([]byte(refsResp)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+							return
+						}
 						return
 					}
 					if r.URL.Path == "/git-receive-pack" {
 						if tt.expectedError == "ref refs/heads/non-existent does not exist" {
 							w.WriteHeader(http.StatusInternalServerError)
-							w.Write([]byte("error: ref refs/heads/non-existent does not exist"))
+							if _, err := w.Write([]byte("error: ref refs/heads/non-existent does not exist")); err != nil {
+								t.Errorf("failed to write response: %v", err)
+								return
+							}
 							return
 						}
 						if shouldCheckBody {
@@ -719,13 +734,19 @@ func TestDeleteRef(t *testing.T) {
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
-						w.Write([]byte(refsResp))
+						if _, err := w.Write([]byte(refsResp)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+							return
+						}
 						return
 					}
 					if r.URL.Path == "/git-receive-pack" {
 						if tt.expectedError == "ref refs/heads/non-existent does not exist" {
 							w.WriteHeader(http.StatusInternalServerError)
-							w.Write([]byte("error: ref refs/heads/non-existent does not exist"))
+							if _, err := w.Write([]byte("error: ref refs/heads/non-existent does not exist")); err != nil {
+								t.Errorf("failed to write response: %v", err)
+								return
+							}
 							return
 						}
 						if shouldCheckBody {
