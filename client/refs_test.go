@@ -230,7 +230,10 @@ func TestGetRef(t *testing.T) {
 						switch tt.name {
 						case "successful get of existing ref":
 							// Ref exists
-							refsResp = "0000"
+							pkt, _ := protocol.FormatPacks(
+								protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/master\n"),
+							)
+							refsResp = string(pkt)
 						case "get non-existent ref":
 							// Ref does not exist
 							refsResp = "0000"
