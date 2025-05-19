@@ -5,7 +5,7 @@ import (
 	"context"
 
 	//nolint:gosec // git uses sha1 for the pack file
-	"crypto/sha1"
+
 	"errors"
 	"fmt"
 	"strings"
@@ -100,34 +100,9 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
 
-	// Create the ref using receive-pack
-	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
-	// Old value is the zero hash for new refs
-	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", strings.Repeat("0", 40), ref.Hash, strings.TrimSpace(ref.Name))
-
-	// Calculate the correct length (including the 4 bytes of the length field)
-	lineLen := len(refLine) + 4
-	pkt := []byte(fmt.Sprintf("%04x%s0000", lineLen, refLine))
-
-	// Add empty pack file
-	// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
-	emptyPack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x00")
-
-	// Calculate SHA1 of the pack file
-	//nolint:gosec // git uses sha1 for the pack file
-	h := sha1.New()
-	h.Write(emptyPack)
-	packSha1 := h.Sum(nil)
-	emptyPack = append(emptyPack, packSha1...)
-
-	// Send pack file as raw data (not as a pkt-line)
-	pkt = append(pkt, emptyPack...)
-
-	// Add final flush packet
-	pkt = append(pkt, []byte("0000")...)
-	_, err = c.SmartInfo(ctx, "git-receive-pack")
+	pkt, err := protocol.NewRefUpdateRequest(protocol.ZeroHash, ref.Hash, ref.Name).Format()
 	if err != nil {
-		return fmt.Errorf("get receive-pack capability: %w", err)
+		return fmt.Errorf("format ref update request: %w", err)
 	}
 
 	// Send the ref update
@@ -157,30 +132,11 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
 
-	// Update the ref using receive-pack
-	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
-	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", oldRef.Hash, ref.Hash, strings.TrimSpace(ref.Name))
-
-	// Calculate the correct length (including the 4 bytes of the length field)
-	lineLen := len(refLine) + 4
-	pkt := []byte(fmt.Sprintf("%04x%s0000", lineLen, refLine))
-
-	// Add empty pack file
-	// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
-	emptyPack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x00")
-
-	// Calculate SHA1 of the pack file
-	//nolint:gosec // git uses sha1 for the pack file
-	h := sha1.New()
-	h.Write(emptyPack)
-	packSha1 := h.Sum(nil)
-	emptyPack = append(emptyPack, packSha1...)
-
-	// Send pack file as raw data (not as a pkt-line)
-	pkt = append(pkt, emptyPack...)
-
-	// Add final flush packet
-	pkt = append(pkt, []byte("0000")...)
+	// Create the ref update request
+	pkt, err := protocol.NewRefUpdateRequest(oldRef.Hash, ref.Hash, ref.Name).Format()
+	if err != nil {
+		return fmt.Errorf("format ref update request: %w", err)
+	}
 
 	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
@@ -195,7 +151,7 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 // It returns any error encountered.
 func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	// First check if the ref exists
-	_, err := c.GetRef(ctx, refName)
+	oldRef, err := c.GetRef(ctx, refName)
 	if err != nil {
 		if errors.Is(err, ErrRefNotFound) {
 			return fmt.Errorf("ref %s does not exist", refName)
@@ -209,31 +165,11 @@ func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
 
-	// Delete the ref using receive-pack
-	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
-	// For deletion, new-value is the zero hash (40 zeros)
-	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", strings.Repeat("0", 40), strings.Repeat("0", 40), strings.TrimSpace(refName))
-
-	// Calculate the correct length (including the 4 bytes of the length field)
-	lineLen := len(refLine) + 4
-	pkt := []byte(fmt.Sprintf("%04x%s0000", lineLen, refLine))
-
-	// Add empty pack file
-	// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
-	emptyPack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x00")
-
-	// Calculate SHA1 of the pack file
-	//nolint:gosec // git uses sha1 for the pack file
-	h := sha1.New()
-	h.Write(emptyPack)
-	packSha1 := h.Sum(nil)
-	emptyPack = append(emptyPack, packSha1...)
-
-	// Send pack file as raw data (not as a pkt-line)
-	pkt = append(pkt, emptyPack...)
-
-	// Add final flush packet
-	pkt = append(pkt, []byte("0000")...)
+	// Create the ref update request
+	pkt, err := protocol.NewRefUpdateRequest(oldRef.Hash, protocol.ZeroHash, refName).Format()
+	if err != nil {
+		return fmt.Errorf("format ref update request: %w", err)
+	}
 
 	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
