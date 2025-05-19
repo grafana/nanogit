@@ -30,6 +30,10 @@ type Client interface {
 	CreateRef(ctx context.Context, ref Ref) error
 	UpdateRef(ctx context.Context, ref Ref) error
 	DeleteRef(ctx context.Context, refName string) error
+
+	// Blob operations
+	// TODO: should I use "protocol.Hash" instead of string?
+	GetBlob(ctx context.Context, hash string) ([]byte, error)
 }
 
 // Option is a function that configures a Client.
