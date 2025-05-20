@@ -52,7 +52,7 @@ func TestGetBlob(t *testing.T) {
 				return response.Bytes()
 			},
 			expectedData:  nil,
-			expectedError: "blob not found",
+			expectedError: "not our ref",
 			statusCode:    http.StatusOK,
 		},
 		{
