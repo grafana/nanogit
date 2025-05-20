@@ -38,8 +38,8 @@ jobs:
       - name: Run linter
         run: make lint
 
-  test:
-    name: Test
+  test-unit:
+    name: Unit Tests
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
@@ -48,16 +48,55 @@ jobs:
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
-      - name: Run tests
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go mod vendor
+      - name: Run unit tests
         env:
           CGO_ENABLED: 1
-        run: make test
+          GOFLAGS: -mod=vendor
+        run: make test-unit
       - name: Upload coverage
         uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go mod vendor
+      - name: Run integration tests
+        env:
+          CGO_ENABLED: 1
+          GOFLAGS: -mod=vendor
+        run: make test-integration
 
   security:
     name: Security

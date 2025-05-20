@@ -7,11 +7,11 @@ lint:
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run
 
 .PHONY: test-unit
-test-unit: lint
-	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 4 ./...
+test-unit:
+	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 6 ./...
 
 .PHONY: test-integration
-test-integration: lint
-	go test -tags=integration -cover -race -parallel 4 ./client/integration/...
+test-integration:
+	go test -tags=integration -cover -race -parallel 6 ./client/integration/...
 
 test: test-unit test-integration
