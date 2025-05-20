@@ -11,7 +11,7 @@ import (
 
 	"github.com/lmittmann/tint"
 
-	"github.com/grafana/nanogit/client"
+	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -29,16 +29,16 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var authOption client.Option
+	var authOption nanogit.Option
 	if username, password := os.Getenv("GH_USER"), os.Getenv("GH_PASS"); username != "" && password != "" {
-		authOption = client.WithBasicAuth(username, password)
+		authOption = nanogit.WithBasicAuth(username, password)
 	} else if token := os.Getenv("GH_TOKEN"); token != "" {
-		authOption = client.WithTokenAuth(token)
+		authOption = nanogit.WithTokenAuth(token)
 	}
 
-	c, err := client.New("https://github.com/grafana/git-ui-sync-demo",
+	c, err := nanogit.NewClient("https://github.com/grafana/git-ui-sync-demo",
 		authOption,
-		client.WithGitHub())
+		nanogit.WithGitHub())
 	if err != nil {
 		return err
 	}

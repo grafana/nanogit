@@ -1,4 +1,4 @@
-package client
+package nanogit
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func TestNew(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := New(tt.repo, tt.options...)
+			got, err := NewClient(tt.repo, tt.options...)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -129,7 +129,7 @@ func TestWithGitHub(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := New(tt.repo, WithTokenAuth(tt.token), WithGitHub())
+			client, err := NewClient(tt.repo, WithTokenAuth(tt.token), WithGitHub())
 			require.NoError(t, err)
 
 			c, ok := client.(*clientImpl)
@@ -166,7 +166,7 @@ func TestWithHTTPClient(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := New("https://github.com/owner/repo", WithHTTPClient(tt.httpClient))
+			client, err := NewClient("https://github.com/owner/repo", WithHTTPClient(tt.httpClient))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -291,7 +291,7 @@ func TestUploadPack(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -416,7 +416,7 @@ func TestReceivePack(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -545,7 +545,7 @@ func TestSmartInfo(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -617,7 +617,7 @@ func TestAuthentication(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := New(server.URL, tt.authOption)
+			client, err := NewClient(server.URL, tt.authOption)
 			require.NoError(t, err)
 
 			_, err = client.UploadPack(context.Background(), []byte("test"))

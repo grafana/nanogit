@@ -1,4 +1,4 @@
-package client
+package nanogit
 
 import (
 	"bytes"
@@ -148,7 +148,7 @@ func TestListRefs(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -257,7 +257,7 @@ func TestGetRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -438,7 +438,7 @@ func TestCreateRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -626,7 +626,7 @@ func TestUpdateRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)
@@ -790,7 +790,7 @@ func TestDeleteRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := New(url)
+			client, err := NewClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
 				c, ok := client.(*clientImpl)

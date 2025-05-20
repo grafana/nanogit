@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/nanogit/client"
+	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/test/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +44,7 @@ func TestClient_Refs(t *testing.T) {
 	local.Git(t, "tag", "v1.0.0")
 	local.Git(t, "push", "origin", "v1.0.0", "--force")
 
-	gitClient, err := client.New(remote.URL(), client.WithBasicAuth(user.Username, user.Password))
+	gitClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -54,7 +54,7 @@ func TestClient_Refs(t *testing.T) {
 	require.NoError(t, err, "ListRefs failed: %v", err)
 	require.Len(t, refs, 4, "should have 4 references")
 
-	wantRefs := []client.Ref{
+	wantRefs := []nanogit.Ref{
 		{Name: "HEAD", Hash: hash},
 		{Name: "refs/heads/main", Hash: hash},
 		{Name: "refs/heads/test-branch", Hash: hash},
@@ -73,10 +73,10 @@ func TestClient_Refs(t *testing.T) {
 
 	// get-ref with non-existent ref
 	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
-	require.Equal(t, err, client.ErrRefNotFound)
+	require.Equal(t, err, nanogit.ErrRefNotFound)
 
 	// create-ref
-	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/heads/new-branch", Hash: hash})
+	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: hash})
 	require.NoError(t, err)
 
 	// get-ref with new-branch
@@ -90,7 +90,7 @@ func TestClient_Refs(t *testing.T) {
 	local.Git(t, "push", "origin", "main", "--force")
 
 	// Update ref to point to new commit
-	err = gitClient.UpdateRef(ctx, client.Ref{Name: "refs/heads/new-branch", Hash: newHash})
+	err = gitClient.UpdateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: newHash})
 	require.NoError(t, err)
 
 	// Get ref and verify it points to new commit
@@ -104,10 +104,10 @@ func TestClient_Refs(t *testing.T) {
 
 	// get-ref with new-branch should fail
 	_, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
-	require.Equal(t, err, client.ErrRefNotFound)
+	require.Equal(t, err, nanogit.ErrRefNotFound)
 
 	// create-tag
-	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
+	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
 	require.NoError(t, err)
 
 	// get-ref with new tag
@@ -121,5 +121,5 @@ func TestClient_Refs(t *testing.T) {
 
 	// get-ref with new tag should fail
 	_, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
-	require.Equal(t, err, client.ErrRefNotFound)
+	require.Equal(t, err, nanogit.ErrRefNotFound)
 }
