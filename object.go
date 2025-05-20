@@ -7,16 +7,9 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/object"
 )
 
-type Object struct {
-	Hash hash.Hash
-	Type object.Type
-	Data []byte
-}
-
-func (c *clientImpl) GetObject(ctx context.Context, hash hash.Hash) (*Object, error) {
+func (c *clientImpl) GetObject(ctx context.Context, hash hash.Hash) (*protocol.PackfileObject, error) {
 	pkt, err := protocol.FormatPacks(
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -55,7 +48,7 @@ func (c *clientImpl) GetObject(ctx context.Context, hash hash.Hash) (*Object, er
 		}
 
 		if obj.Object.Hash.Is(hash) {
-			return &Object{Hash: obj.Object.Hash, Type: obj.Object.Type, Data: obj.Object.Data}, nil
+			return obj.Object, nil
 		}
 	}
 

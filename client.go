@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -23,6 +24,8 @@ type Client interface {
 	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
 	// SmartInfo sends a GET request to the info/refs endpoint.
 	SmartInfo(ctx context.Context, service string) ([]byte, error)
+	// GetObject sends a GET request to the object endpoint.
+	GetObject(ctx context.Context, hash hash.Hash) (*protocol.PackfileObject, error)
 
 	// TODO: is this a good signature?
 	// Ref operations
