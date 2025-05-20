@@ -3,7 +3,6 @@ package nanogit
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/object"
@@ -12,10 +11,6 @@ import (
 func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) ([]byte, error) {
 	obj, err := c.GetObject(ctx, blobID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, fmt.Errorf("blob not found: %s", blobID)
-		}
-
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
 
