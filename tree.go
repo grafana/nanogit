@@ -26,107 +26,28 @@ type Tree struct {
 
 // GetTree retrieves a tree for a given commit hash
 func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, error) {
-	// Format the fetch request
-	pkt, err := protocol.FormatPacks(
-		protocol.PackLine("command=fetch\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.SpecialPack(protocol.DelimeterPacket),
-		protocol.PackLine("no-progress\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", commitHash.String())),
-		protocol.PackLine("done\n"),
-	)
+	obj, err := c.GetObject(ctx, commitHash)
 	if err != nil {
-		return nil, fmt.Errorf("formatting packets: %w", err)
+		return nil, fmt.Errorf("getting object: %w", err)
 	}
 
-	// Send the request
-	out, err := c.UploadPack(ctx, pkt)
-	if err != nil {
-		return nil, fmt.Errorf("sending commands: %w", err)
-	}
-
-	// Parse the response
-	lines, _, err := protocol.ParsePack(out)
-	if err != nil {
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
-	// Find the commit and tree in the packfile
 	var tree *protocol.PackfileObject
-	// TODO: should we make it work for commit object type?
-	var commit *protocol.PackfileObject
-	for {
-		obj, err := response.Packfile.ReadObject()
+	if obj.Type == object.TypeCommit && obj.Hash.Is(commitHash) {
+		// Find the commit and tree in the packfile
+		// TODO: should we make it work for commit object type?
+		treeHash, err := hash.FromHex(obj.Commit.Tree.String())
 		if err != nil {
-			return nil, fmt.Errorf("reading object: %w", err)
-		}
-		if obj.Object == nil {
-			break
+			return nil, fmt.Errorf("parsing tree hash: %w", err)
 		}
 
-		// If we find a commit with our hash, store it
-		if obj.Object.Type == object.TypeCommit && obj.Object.Hash.Is(commitHash) {
-			commit = obj.Object
-			// Request the tree from the commit
-			treePkt, err := protocol.FormatPacks(
-				protocol.PackLine("command=fetch\n"),
-				protocol.PackLine("object-format=sha1\n"),
-				protocol.SpecialPack(protocol.DelimeterPacket),
-				protocol.PackLine("no-progress\n"),
-				protocol.PackLine("filter blob:none\n"),
-				protocol.PackLine(fmt.Sprintf("want %s\n", commit.Commit.Tree.String())),
-				protocol.PackLine("done\n"),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("formatting tree request: %w", err)
-			}
-
-			// Send the tree request
-			treeOut, err := c.UploadPack(ctx, treePkt)
-			if err != nil {
-				return nil, fmt.Errorf("sending tree request: %w", err)
-			}
-
-			// Parse the tree response
-			treeLines, _, err := protocol.ParsePack(treeOut)
-			if err != nil {
-				return nil, fmt.Errorf("parsing tree response: %w", err)
-			}
-
-			treeResponse, err := protocol.ParseFetchResponse(treeLines)
-			if err != nil {
-				return nil, fmt.Errorf("parsing tree fetch response: %w", err)
-			}
-
-			// Find the tree in the response
-			for {
-				treeObj, err := treeResponse.Packfile.ReadObject()
-				if err != nil {
-					return nil, fmt.Errorf("reading tree object: %w", err)
-				}
-				if treeObj.Object == nil {
-					break
-				}
-
-				if treeObj.Object.Type == object.TypeTree && treeObj.Object.Hash.Is(commit.Commit.Tree) {
-					tree = treeObj.Object
-					break
-				}
-			}
+		treeObj, err := c.GetObject(ctx, treeHash)
+		if err != nil {
+			return nil, fmt.Errorf("getting tree: %w", err)
 		}
-
-		// If we find a tree with our hash, store it
-		if obj.Object.Type == object.TypeTree && obj.Object.Hash.Is(commitHash) {
-			tree = obj.Object
-		}
-	}
-
-	if tree == nil {
+		tree = treeObj
+	} else if obj.Type == object.TypeTree && obj.Hash.Is(commitHash) {
+		tree = obj
+	} else {
 		return nil, errors.New("not found")
 	}
 
