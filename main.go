@@ -44,7 +44,7 @@ func run() error {
 	}
 
 	{
-		reply, err := c.SmartInfoRequest(ctx)
+		reply, err := c.SmartInfo(ctx, "git-upload-pack")
 		if err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ func run() error {
 		return err
 	}
 
-	refsData, err := c.SendCommands(ctx, pkt)
+	refsData, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func run() error {
 		return err
 	}
 
-	out, err := c.SendCommands(ctx, pkt)
+	out, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return err
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClient_ListRefs(t *testing.T) {
+func TestClient_Refs(t *testing.T) {
 	// set up remote repo
 	gitServer := helpers.NewGitServer(t)
 	user := gitServer.CreateUser(t)
@@ -63,4 +63,64 @@ func TestClient_ListRefs(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t, wantRefs, refs)
+
+	// Get refs one by one
+	for _, ref := range wantRefs {
+		ref, err := gitClient.GetRef(ctx, ref.Name)
+		require.NoError(t, err, "GetRef failed: %v", err)
+		assert.Equal(t, ref.Name, ref.Name)
+		assert.Equal(t, hash, ref.Hash)
+	}
+
+	// get-ref with non-existent ref
+	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
+	require.Equal(t, err, client.ErrRefNotFound)
+
+	// create-ref
+	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/heads/new-branch", Hash: hash})
+	require.NoError(t, err)
+
+	// get-ref with new-branch
+	ref, err := gitClient.GetRef(ctx, "refs/heads/new-branch")
+	require.NoError(t, err)
+	assert.Equal(t, hash, ref.Hash)
+
+	// Create a new commit
+	local.Git(t, "commit", "--allow-empty", "-m", "new commit")
+	newHash := local.Git(t, "rev-parse", "HEAD")
+	local.Git(t, "push", "origin", "main", "--force")
+
+	// Update ref to point to new commit
+	err = gitClient.UpdateRef(ctx, client.Ref{Name: "refs/heads/new-branch", Hash: newHash})
+	require.NoError(t, err)
+
+	// Get ref and verify it points to new commit
+	ref, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
+	require.NoError(t, err)
+	assert.Equal(t, newHash, ref.Hash)
+
+	// delete-ref
+	err = gitClient.DeleteRef(ctx, "refs/heads/new-branch")
+	require.NoError(t, err)
+
+	// get-ref with new-branch should fail
+	_, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
+	require.Equal(t, err, client.ErrRefNotFound)
+
+	// create-tag
+	err = gitClient.CreateRef(ctx, client.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
+	require.NoError(t, err)
+
+	// get-ref with new tag
+	ref, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
+	require.NoError(t, err)
+	assert.Equal(t, hash, ref.Hash)
+
+	// delete-tag
+	err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")
+	require.NoError(t, err)
+
+	// get-ref with new tag should fail
+	_, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
+	require.Equal(t, err, client.ErrRefNotFound)
 }

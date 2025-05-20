@@ -14,14 +14,28 @@ import (
 
 // Client defines the interface for interacting with a Git repository.
 type Client interface {
-	// TODO(mem): this is probably not the right interface.
-	SendCommands(ctx context.Context, data []byte) ([]byte, error)
-	SmartInfoRequest(ctx context.Context) ([]byte, error)
+	// TODO: this is probably not the right interface, we may have to separate the client
+	// Raw protocol requests
+	// UploadPack sends a POST request to the git-upload-pack endpoint.
+	UploadPack(ctx context.Context, data []byte) ([]byte, error)
+	// ReceivePack sends a POST request to the git-receive-pack endpoint.
+	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
+	// SmartInfo sends a GET request to the info/refs endpoint.
+	SmartInfo(ctx context.Context, service string) ([]byte, error)
+
+	// TODO: is this a good signature?
+	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)
+	GetRef(ctx context.Context, refName string) (Ref, error)
+	CreateRef(ctx context.Context, ref Ref) error
+	UpdateRef(ctx context.Context, ref Ref) error
+	DeleteRef(ctx context.Context, refName string) error
 }
 
 // Option is a function that configures a Client.
 type Option func(*clientImpl) error
+
+// TODO: Add option to configure logger
 
 // clientImpl is the private implementation of the Client interface.
 type clientImpl struct {
@@ -47,11 +61,11 @@ func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 		req.Header.Set("Authorization", *c.tokenAuth)
 	}
 
-	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 }
 
-// SendCommands sends a POST request to the git-upload-pack endpoint.
-func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, error) {
+// UploadPack sends a POST request to the git-upload-pack endpoint.
+// This endpoint is used to fetch objects and refs from the remote repository.
+func (c *clientImpl) UploadPack(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
@@ -63,6 +77,7 @@ func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, err
 		return nil, err
 	}
 
+	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
 	res, err := c.client.Do(req)
@@ -79,8 +94,48 @@ func (c *clientImpl) SendCommands(ctx context.Context, data []byte) ([]byte, err
 	return io.ReadAll(res.Body)
 }
 
-// SmartInfoRequest sends a GET request to the info/refs endpoint.
-func (c *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
+// ReceivePack sends a POST request to the git-receive-pack endpoint.
+// This endpoint is used to send objects to the remote repository.
+func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, error) {
+	body := bytes.NewReader(data)
+
+	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
+	// See: https://git-scm.com/docs/protocol-v2#_http_transport
+	u := c.base.JoinPath("git-receive-pack")
+	slog.Info("GitReceivePack", "url", u.String())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	c.addDefaultHeaders(req)
+	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
+	req.Header.Add("Accept", "application/x-git-receive-pack-result")
+
+	res, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+	}
+
+	responseBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
+
+	return responseBody, nil
+}
+
+// SmartInfo sends a GET request to the info/refs endpoint.
+func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
 	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
 	// See: https://git-scm.com/docs/http-protocol#_smart_clients
@@ -88,10 +143,11 @@ func (c *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
-	query.Set("service", "git-upload-pack")
+	query.Set("service", service)
 	u.RawQuery = query.Encode()
 
-	slog.Info("SmartInfoRequest", "url", u.String())
+	// TODO: Add option to configure logger
+	slog.Info("SmartInfo", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -106,12 +162,19 @@ func (c *clientImpl) SmartInfoRequest(ctx context.Context) ([]byte, error) {
 	}
 
 	defer res.Body.Close()
-
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	return io.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Add option to configure logger
+	slog.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
+
+	return body, nil
 }
 
 // New returns a new Client for the given repository.

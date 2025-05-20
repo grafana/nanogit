@@ -42,6 +42,15 @@ const (
 	MaxPktLineSize = MaxPktLineDataSize + PktLineLengthSize
 )
 
+// EmptyPack is the empty pack file used in Git to represent a non-existent object
+// Pack file format: PACK + version(4) + object count(4) + SHA1(20)
+var EmptyPack = []byte{
+	'P', 'A', 'C', 'K', // PACK signature
+	0x00, 0x00, 0x00, 0x02, // version 2
+	0x00, 0x00, 0x00, 0x00, // object count 0
+	0x2, 0x9d, 0x8, 0x82, 0x3b, 0xd8, 0xa8, 0xea, 0xb5, 0x10, 0xad, 0x6a, 0xc7, 0x5c, 0x82, 0x3c, 0xfd, 0x3e, 0xd3, 0x1e, // SHA1
+}
+
 var (
 	// ErrDataTooLarge is returned when attempting to create a packet with data larger than MaxPktLineDataSize.
 	ErrDataTooLarge = errors.New("the data field is too large")
