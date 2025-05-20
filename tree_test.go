@@ -1,10 +1,9 @@
 package nanogit
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/grafana/nanogit/protocol"
@@ -14,82 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockClient struct {
-	uploadPackResponse []byte
-	uploadPackError    error
-}
-
-func (m *mockClient) UploadPack(ctx context.Context, data []byte) ([]byte, error) {
-	return m.uploadPackResponse, m.uploadPackError
-}
-
-func (m *mockClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error) {
-	return nil, nil
-}
-
-func (m *mockClient) SmartInfo(ctx context.Context, service string) ([]byte, error) {
-	return nil, nil
-}
-
-func (m *mockClient) ListRefs(ctx context.Context) ([]Ref, error) {
-	return nil, nil
-}
-
-func (m *mockClient) GetRef(ctx context.Context, refName string) (Ref, error) {
-	return Ref{}, nil
-}
-
-func (m *mockClient) CreateRef(ctx context.Context, ref Ref) error {
-	return nil
-}
-
-func (m *mockClient) UpdateRef(ctx context.Context, ref Ref) error {
-	return nil
-}
-
-func (m *mockClient) DeleteRef(ctx context.Context, refName string) error {
-	return nil
-}
-
-func (m *mockClient) GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error) {
-	return nil, nil
-}
-
-func (m *mockClient) GetTree(ctx context.Context, hash hash.Hash) (*Tree, error) {
-	if m.uploadPackError != nil {
-		return nil, fmt.Errorf("sending commands: %w", m.uploadPackError)
-	}
-	if m.uploadPackResponse == nil {
-		return nil, errors.New("tree not found")
-	}
-	if len(m.uploadPackResponse) > 0 && !bytes.Contains(m.uploadPackResponse, []byte("tree")) {
-		return nil, errors.New("tree not found")
-	}
-	return &Tree{
-		Entries: []TreeEntry{
-			{
-				Name: "file1.txt",
-				Path: "file1.txt",
-				Mode: 33188, // 100644 in octal
-				Type: object.TypeBlob,
-			},
-			{
-				Name: "dir1",
-				Path: "dir1",
-				Mode: 16384, // 040000 in octal
-				Type: object.TypeTree,
-			},
-		},
-		Hash: hash,
-	}, nil
-}
-
 func TestGetTree(t *testing.T) {
 	tests := []struct {
 		name          string
 		commitHash    string
 		mockResponse  []byte
-		mockError     error
+		statusCode    int
 		expectedTree  *Tree
 		expectedError string
 	}{
@@ -106,6 +35,7 @@ func TestGetTree(t *testing.T) {
 				)
 				return pkt
 			}(),
+			statusCode: http.StatusOK,
 			expectedTree: &Tree{
 				Entries: []TreeEntry{
 					{
@@ -126,8 +56,9 @@ func TestGetTree(t *testing.T) {
 		{
 			name:          "upload pack error",
 			commitHash:    "1234567890abcdef1234567890abcdef12345678",
-			mockError:     assert.AnError,
-			expectedError: "sending commands: assert.AnError general error for testing",
+			statusCode:    http.StatusInternalServerError,
+			mockResponse:  []byte("Internal Server Error"),
+			expectedError: "got status code 500",
 		},
 		{
 			name:       "tree not found",
@@ -136,19 +67,36 @@ func TestGetTree(t *testing.T) {
 				pkt, _ := protocol.FormatPacks(protocol.PackLine("ACK 1234567890abcdef1234567890abcdef12345678\n"))
 				return pkt
 			}(),
+			statusCode:    http.StatusOK,
 			expectedError: "tree not found",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hash, err := hash.FromHex(tt.commitHash)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/git-upload-pack" {
+					t.Errorf("expected path /git-upload-pack, got %s", r.URL.Path)
+					return
+				}
+				if r.Method != http.MethodPost {
+					t.Errorf("expected method POST, got %s", r.Method)
+					return
+				}
+
+				w.WriteHeader(tt.statusCode)
+				if _, err := w.Write(tt.mockResponse); err != nil {
+					t.Errorf("failed to write response: %v", err)
+					return
+				}
+			}))
+			defer server.Close()
+
+			client, err := NewClient(server.URL)
 			require.NoError(t, err)
 
-			client := &mockClient{
-				uploadPackResponse: tt.mockResponse,
-				uploadPackError:    tt.mockError,
-			}
+			hash, err := hash.FromHex(tt.commitHash)
+			require.NoError(t, err)
 
 			tree, err := client.GetTree(context.Background(), hash)
 
