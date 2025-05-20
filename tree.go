@@ -78,6 +78,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 				protocol.PackLine("object-format=sha1\n"),
 				protocol.SpecialPack(protocol.DelimeterPacket),
 				protocol.PackLine("no-progress\n"),
+				protocol.PackLine("filter blob:none\n"),
 				protocol.PackLine(fmt.Sprintf("want %s\n", commit.Commit.Tree.String())),
 				protocol.PackLine("done\n"),
 			)
