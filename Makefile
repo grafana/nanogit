@@ -12,6 +12,6 @@ test-unit:
 
 .PHONY: test-integration
 test-integration:
-	go test -tags=integration -cover -race -parallel 6 ./client/integration/...
+	go test -tags=integration -cover -race -parallel 6 ./test/...
 
 test: test-unit test-integration

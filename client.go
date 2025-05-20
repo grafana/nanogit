@@ -1,4 +1,4 @@
-package client
+package nanogit
 
 import (
 	"bytes"
@@ -181,8 +181,8 @@ func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, err
 	return body, nil
 }
 
-// New returns a new Client for the given repository.
-func New(repo string, options ...Option) (Client, error) {
+// NewClient returns a new Client for the given repository.
+func NewClient(repo string, options ...Option) (Client, error) {
 	u, err := url.Parse(repo)
 	if err != nil {
 		return nil, fmt.Errorf("parsing url: %w", err)

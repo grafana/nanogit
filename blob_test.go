@@ -1,4 +1,4 @@
-package client
+package nanogit
 
 import (
 	"bytes"
@@ -92,7 +92,7 @@ func TestGetBlob(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := New(server.URL)
+			client, err := NewClient(server.URL)
 			require.NoError(t, err)
 
 			h, err := hash.FromHex(tt.blobID)
