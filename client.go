@@ -33,6 +33,8 @@ type Client interface {
 	DeleteRef(ctx context.Context, refName string) error
 	// Blob operations
 	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
+	// Tree operations
+	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
 }
 
 // Option is a function that configures a Client.

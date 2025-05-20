@@ -34,6 +34,15 @@ func NewLocalGitRepo(t *testing.T) *LocalGitRepo {
 	return r
 }
 
+// CreateDirPath creates a directory path in the repository.
+// It creates all necessary parent directories if they don't exist.
+func (r *LocalGitRepo) CreateDirPath(t *testing.T, dirpath string) {
+	t.Logf("%s📦 [LOCAL] 📁 Creating directory path '%s' in repository%s", ColorBlue, dirpath, ColorReset)
+	err := os.MkdirAll(filepath.Join(r.Path, dirpath), 0755)
+	require.NoError(t, err)
+	t.Logf("%s📦 [LOCAL] ✅ Directory path '%s' created successfully%s", ColorGreen, dirpath, ColorReset)
+}
+
 // CreateFile creates a new file in the repository with the specified filename
 // and content. The file is created with read/write permissions for the owner only.
 func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
