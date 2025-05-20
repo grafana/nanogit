@@ -57,6 +57,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go mod vendor
       - name: Run unit tests
         env:
           CGO_ENABLED: 1
@@ -88,6 +90,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go mod vendor
       - name: Run integration tests
         env:
           CGO_ENABLED: 1
