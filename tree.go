@@ -102,8 +102,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 	}
 
 	// Process all entries recursively
-	result := make([]TreeEntry, 0)
-	err = c.processTreeEntries(ctx, entries, "", &result)
+	result, err := c.processTreeEntries(ctx, entries, "")
 	if err != nil {
 		return nil, fmt.Errorf("processing tree entries: %w", err)
 	}
@@ -119,7 +118,8 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 }
 
 // processTreeEntries recursively processes tree entries and builds a flat list
-func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry, basePath string, result *[]TreeEntry) error {
+func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry, basePath string) ([]TreeEntry, error) {
+	result := make([]TreeEntry, 0, len(entries))
 	for _, entry := range entries {
 		// Build the full path for the entry
 		entryPath := entry.Name
@@ -131,23 +131,24 @@ func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry
 		entry.Path = entryPath
 
 		// Always add the entry itself
-		*result = append(*result, entry)
+		result = append(result, entry)
 
 		// If this is a tree, recursively process its entries
 		if entry.Type == object.TypeTree {
 			// Fetch the nested tree
 			nestedTree, err := c.GetTree(ctx, entry.Hash)
 			if err != nil {
-				return fmt.Errorf("fetching nested tree %s: %w", entry.Hash, err)
+				return nil, fmt.Errorf("fetching nested tree %s: %w", entry.Hash, err)
 			}
 
 			// Process nested entries with the updated base path
-			err = c.processTreeEntries(ctx, nestedTree.Entries, entryPath, result)
+			nestedEntries, err := c.processTreeEntries(ctx, nestedTree.Entries, entryPath)
 			if err != nil {
-				return fmt.Errorf("processing nested tree entries: %w", err)
+				return nil, fmt.Errorf("processing nested tree entries: %w", err)
 			}
+			result = append(result, nestedEntries...)
 		}
 	}
 
-	return nil
+	return result, nil
 }
