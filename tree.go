@@ -56,8 +56,9 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
-	// Find the tree in the packfile
+	// Find the commit and tree in the packfile
 	var tree *protocol.PackfileObject
+	var commit *protocol.PackfileObject
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
@@ -67,15 +68,64 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 			break
 		}
 
-		// root should be a tree
+		// If we find a commit with our hash, store it
+		if obj.Object.Type == object.TypeCommit && obj.Object.Hash.Is(commitHash) {
+			commit = obj.Object
+			// Request the tree from the commit
+			treePkt, err := protocol.FormatPacks(
+				protocol.PackLine("command=fetch\n"),
+				protocol.PackLine("object-format=sha1\n"),
+				protocol.SpecialPack(protocol.DelimeterPacket),
+				protocol.PackLine("no-progress\n"),
+				protocol.PackLine(fmt.Sprintf("want %s\n", commit.Commit.Tree.String())),
+				protocol.PackLine("done\n"),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("formatting tree request: %w", err)
+			}
+
+			// Send the tree request
+			treeOut, err := c.UploadPack(ctx, treePkt)
+			if err != nil {
+				return nil, fmt.Errorf("sending tree request: %w", err)
+			}
+
+			// Parse the tree response
+			treeLines, _, err := protocol.ParsePack(treeOut)
+			if err != nil {
+				return nil, fmt.Errorf("parsing tree response: %w", err)
+			}
+
+			treeResponse, err := protocol.ParseFetchResponse(treeLines)
+			if err != nil {
+				return nil, fmt.Errorf("parsing tree fetch response: %w", err)
+			}
+
+			// Find the tree in the response
+			for {
+				treeObj, err := treeResponse.Packfile.ReadObject()
+				if err != nil {
+					return nil, fmt.Errorf("reading tree object: %w", err)
+				}
+				if treeObj.Object == nil {
+					break
+				}
+
+				if treeObj.Object.Type == object.TypeTree && treeObj.Object.Hash.Is(commit.Commit.Tree) {
+					tree = treeObj.Object
+					break
+				}
+			}
+		}
+
+		// If we find a tree with our hash, store it
 		if obj.Object.Type == object.TypeTree && obj.Object.Hash.Is(commitHash) {
 			tree = obj.Object
-			break
 		}
 	}
 
 	if tree == nil {
-		return nil, errors.New("tree not found")
+		return nil, errors.New("not found")
 	}
 
 	// Convert PackfileTreeEntry to TreeEntry
@@ -95,7 +145,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 		entries[i] = TreeEntry{
 			Name: entry.FileName,
 			Path: entry.FileName,
-			Mode: entry.FileMode,
+			Mode: uint32(entry.FileMode),
 			Hash: hash,
 			Type: entryType,
 		}
