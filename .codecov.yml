@@ -10,4 +10,4 @@ coverage:
         threshold: 1%
 
 ignore:
-  - "client/integration/helpers/*" 
+  - "test/helpers/*" 

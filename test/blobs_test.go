@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/client"
-	"github.com/grafana/nanogit/client/integration/helpers"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/test/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
