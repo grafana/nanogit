@@ -58,6 +58,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 
 	// Find the commit and tree in the packfile
 	var tree *protocol.PackfileObject
+	// TODO: should we make it work for commit object type?
 	var commit *protocol.PackfileObject
 	for {
 		obj, err := response.Packfile.ReadObject()
