@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -49,10 +48,6 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 	// Parse the response
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, errors.New("tree not found")
-		}
-
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 

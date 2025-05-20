@@ -100,7 +100,7 @@ func TestGetTree(t *testing.T) {
 				return []byte("0049ERR upload-pack: not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 			}(),
 			statusCode:    http.StatusOK,
-			expectedError: "tree not found",
+			expectedError: "not our ref",
 		},
 	}
 
