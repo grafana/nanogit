@@ -13,6 +13,7 @@ import (
 type TreeEntry struct {
 	Name string
 	Path string
+	// Mode is in octal
 	Mode uint32
 	Hash hash.Hash
 	Type object.Type
