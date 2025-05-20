@@ -136,6 +136,7 @@ func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry
 		// If this is a tree, recursively process its entries
 		if entry.Type == object.TypeTree {
 			// Fetch the nested tree
+			// TODO: is there a way to avoid fetching the tree again?
 			nestedTree, err := c.GetTree(ctx, entry.Hash)
 			if err != nil {
 				return nil, fmt.Errorf("fetching nested tree %s: %w", entry.Hash, err)
