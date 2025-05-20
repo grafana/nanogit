@@ -1,5 +1,4 @@
 //go:build integration
-// +build integration
 
 package integration_test
 
@@ -32,6 +31,9 @@ func TestClient_Blobs(t *testing.T) {
 	local.CreateFile(t, "test.txt", string(testContent))
 	local.Git(t, "add", "test.txt")
 	local.Git(t, "commit", "-m", "Initial commit")
+
+	// Create and switch to main branch
+	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
 	// Get the blob hash
