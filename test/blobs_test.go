@@ -40,7 +40,8 @@ func TestClient_Blobs(t *testing.T) {
 	blobHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password))
+	logger := helpers.NewTestLogger(t)
+	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

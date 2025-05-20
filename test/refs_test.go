@@ -44,7 +44,8 @@ func TestClient_Refs(t *testing.T) {
 	local.Git(t, "tag", "v1.0.0")
 	local.Git(t, "push", "origin", "v1.0.0", "--force")
 
-	gitClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password))
+	logger := helpers.NewTestLogger(t)
+	gitClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,13 +38,12 @@ type Client interface {
 // Option is a function that configures a Client.
 type Option func(*clientImpl) error
 
-// TODO: Add option to configure logger
-
 // clientImpl is the private implementation of the Client interface.
 type clientImpl struct {
 	base      *url.URL
 	client    *http.Client
 	userAgent string
+	logger    Logger
 
 	basicAuth *struct{ Username, Password string }
 	tokenAuth *string
@@ -106,7 +104,7 @@ func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, erro
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
-	slog.Info("GitReceivePack", "url", u.String())
+	c.logger.Info("GitReceivePack", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
 	if err != nil {
@@ -133,7 +131,7 @@ func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, erro
 		return nil, err
 	}
 
-	slog.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
+	c.logger.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
 
 	return responseBody, nil
 }
@@ -150,8 +148,7 @@ func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, err
 	query.Set("service", service)
 	u.RawQuery = query.Encode()
 
-	// TODO: Add option to configure logger
-	slog.Info("SmartInfo", "url", u.String())
+	c.logger.Info("SmartInfo", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -175,10 +172,21 @@ func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, err
 		return nil, err
 	}
 
-	// TODO: Add option to configure logger
-	slog.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
+	c.logger.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
 
 	return body, nil
+}
+
+// WithLogger sets a custom logger for the client.
+// If not provided, the default slog logger will be used.
+func WithLogger(logger Logger) Option {
+	return func(c *clientImpl) error {
+		if logger == nil {
+			return errors.New("logger cannot be nil")
+		}
+		c.logger = logger
+		return nil
+	}
 }
 
 // NewClient returns a new Client for the given repository.
@@ -191,6 +199,7 @@ func NewClient(repo string, options ...Option) (Client, error) {
 	c := &clientImpl{
 		base:   u,
 		client: &http.Client{},
+		logger: &noopLogger{}, // No-op logger by default
 	}
 	for _, option := range options {
 		if option == nil { // allow for easy optional options

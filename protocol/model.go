@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"errors"
-	"log/slog"
 	"strings"
 )
 
@@ -90,7 +89,6 @@ outer:
 		switch strings.TrimSpace(string(line)) {
 		case "acknowledgements":
 			// TODO: Parse!
-			slog.Info("next part", "part", lines[i+1])
 		case "packfile":
 			// These are the final pktlines. That means they're all parts of the packfile.
 			// Because of this, we can just join them! We already know we don't multiplex, so they're all just streamed in multiple lines (due to the pktline size limit).
