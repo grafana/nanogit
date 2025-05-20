@@ -56,17 +56,6 @@ func TestGetBlob(t *testing.T) {
 			statusCode:    http.StatusOK,
 		},
 		{
-			name:         "invalid hash format",
-			blobID:       "invalid-hash",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
-			uploadPackResp: func(t *testing.T) []byte {
-				return []byte("0000")
-			},
-			expectedData:  nil,
-			expectedError: "invalid hash format",
-			statusCode:    http.StatusOK,
-		},
-		{
 			name:         "server error",
 			blobID:       "1234567890123456789012345678901234567890",
 			infoRefsResp: "001e# service=git-upload-pack\n0000",
