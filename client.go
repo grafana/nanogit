@@ -35,6 +35,8 @@ type Client interface {
 	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
 	// Tree operations
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
+	// File operations
+	GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error)
 }
 
 // Option is a function that configures a Client.
