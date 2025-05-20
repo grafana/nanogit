@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/nanogit/client"
 	"github.com/grafana/nanogit/client/integration/helpers"
+	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,8 @@ func TestClient_Blobs(t *testing.T) {
 	local.Git(t, "push", "origin", "main", "--force")
 
 	// Get the blob hash
-	blobHash := local.Git(t, "rev-parse", "HEAD:test.txt")
+	blobHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
+	require.NoError(t, err)
 
 	gitClient, err := client.New(remote.URL(), client.WithBasicAuth(user.Username, user.Password))
 	require.NoError(t, err)
@@ -48,7 +50,9 @@ func TestClient_Blobs(t *testing.T) {
 	assert.Equal(t, testContent, content)
 
 	// Test GetBlob with non-existent hash
-	_, err = gitClient.GetBlob(ctx, "b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+	nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+	require.NoError(t, err)
+	_, err = gitClient.GetBlob(ctx, nonExistentHash)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 }

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 // Client defines the interface for interacting with a Git repository.
@@ -31,8 +33,7 @@ type Client interface {
 	UpdateRef(ctx context.Context, ref Ref) error
 	DeleteRef(ctx context.Context, refName string) error
 	// Blob operations
-	// TODO: should I use "protocol.Hash" instead of string?
-	GetBlob(ctx context.Context, hash string) ([]byte, error)
+	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
 }
 
 // Option is a function that configures a Client.

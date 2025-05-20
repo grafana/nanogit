@@ -10,14 +10,14 @@ import (
 	"github.com/grafana/nanogit/protocol/object"
 )
 
-func (c *clientImpl) GetBlob(ctx context.Context, blobID string) ([]byte, error) {
+func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) ([]byte, error) {
 	// Format the fetch request
 	pkt, err := protocol.FormatPacks(
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
 		protocol.DelimeterPacket,
 		protocol.PackLine("no-progress\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", blobID)),
+		protocol.PackLine(fmt.Sprintf("want %s\n", blobID.String())),
 		protocol.PackLine("done\n"),
 	)
 	if err != nil {
@@ -33,7 +33,7 @@ func (c *clientImpl) GetBlob(ctx context.Context, blobID string) ([]byte, error)
 	// Parse the response
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		if strings.Contains(err.Error(), "not our ref "+blobID) {
+		if strings.Contains(err.Error(), "not our ref "+blobID.String()) {
 			return nil, fmt.Errorf("blob not found: %w", err)
 		}
 
@@ -45,12 +45,6 @@ func (c *clientImpl) GetBlob(ctx context.Context, blobID string) ([]byte, error)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
-	// Convert string hash to hash.Hash
-	hashBytes, err := hash.FromHex(blobID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid hash format: %w", err)
-	}
-
 	// Find the blob in the packfile
 	for {
 		obj, err := response.Packfile.ReadObject()
@@ -60,7 +54,7 @@ func (c *clientImpl) GetBlob(ctx context.Context, blobID string) ([]byte, error)
 		if obj.Object == nil {
 			break
 		}
-		if obj.Object.Type == object.TypeBlob && obj.Object.Hash.Is(hashBytes) {
+		if obj.Object.Type == object.TypeBlob && obj.Object.Hash.Is(blobID) {
 			return obj.Object.Data, nil
 		}
 	}

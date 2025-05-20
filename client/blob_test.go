@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,7 +106,10 @@ func TestGetBlob(t *testing.T) {
 			client, err := New(server.URL)
 			require.NoError(t, err)
 
-			data, err := client.GetBlob(context.Background(), tt.blobID)
+			h, err := hash.FromHex(tt.blobID)
+			require.NoError(t, err)
+
+			data, err := client.GetBlob(context.Background(), h)
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
