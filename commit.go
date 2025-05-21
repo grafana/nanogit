@@ -52,6 +52,13 @@ type Commit struct {
 	Message string
 }
 
+// Time returns the time when the commit was created.
+// This is the same as the committer's time, as the committer is the person
+// who actually created the commit object in the repository.
+func (c *Commit) Time() time.Time {
+	return c.Committer.Time
+}
+
 // CommitFile represents a file change between two commits.
 // It contains information about how a file was modified, including its path,
 // mode, hash, and the type of change (added, modified, deleted, etc.).

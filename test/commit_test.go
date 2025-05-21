@@ -72,6 +72,11 @@ func TestClient_GetCommit(t *testing.T) {
 	require.NotZero(t, commit.Committer.Time)
 	require.Equal(t, "Initial commit", commit.Message)
 
+	// Check that commit times are recent (within 5 seconds)
+	now := time.Now()
+	require.InDelta(t, now.Unix(), commit.Committer.Time.Unix(), 5)
+	require.InDelta(t, now.Unix(), commit.Author.Time.Unix(), 5)
+
 	commit, err = client.GetCommit(context.Background(), secondCommitHash)
 	require.NoError(t, err)
 
@@ -85,6 +90,10 @@ func TestClient_GetCommit(t *testing.T) {
 	require.NotZero(t, commit.Committer.Time)
 	require.Equal(t, "Modify file", commit.Message)
 
+	// Check that commit times are recent (within 5 seconds)
+	require.InDelta(t, now.Unix(), commit.Committer.Time.Unix(), 5)
+	require.InDelta(t, now.Unix(), commit.Author.Time.Unix(), 5)
+
 	commit, err = client.GetCommit(context.Background(), thirdCommitHash)
 	require.NoError(t, err)
 
@@ -97,6 +106,10 @@ func TestClient_GetCommit(t *testing.T) {
 	require.Equal(t, user.Email, commit.Committer.Email)
 	require.NotZero(t, commit.Committer.Time)
 	require.Equal(t, "Rename and add files", commit.Message)
+
+	// Check that commit times are recent (within 5 seconds)
+	require.InDelta(t, now.Unix(), commit.Committer.Time.Unix(), 5)
+	require.InDelta(t, now.Unix(), commit.Author.Time.Unix(), 5)
 }
 
 func TestClient_CompareCommits(t *testing.T) {
