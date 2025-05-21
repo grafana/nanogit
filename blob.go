@@ -9,7 +9,7 @@ import (
 )
 
 func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) ([]byte, error) {
-	obj, err := c.GetObject(ctx, blobID)
+	obj, err := c.getObject(ctx, blobID)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}

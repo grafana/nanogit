@@ -123,11 +123,19 @@ func (e *PackfileObject) parseCommit() error {
 		command, data, _ := bytes.Cut(line, []byte(" "))
 		switch string(command) {
 		case "committer":
-			e.Commit.Committer = string(data)
+			identity, err := object.ParseIdentity(string(data))
+			if err != nil {
+				return fmt.Errorf("parsing committer: %w", err)
+			}
+			e.Commit.Committer = identity
 		case "tree":
 			e.Commit.Tree, err = hash.FromHex(string(data))
 		case "author":
-			e.Commit.Author = string(data)
+			identity, err := object.ParseIdentity(string(data))
+			if err != nil {
+				return fmt.Errorf("parsing author: %w", err)
+			}
+			e.Commit.Author = identity
 		case "parent":
 			e.Commit.Parent, err = hash.FromHex(string(data))
 		default:
@@ -177,8 +185,8 @@ type PackfileTreeEntry struct {
 // Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/commit.go#L185-L275
 type PackfileCommit struct {
 	Tree      hash.Hash
-	Author    string // TODO: Test for
-	Committer string
+	Author    *object.Identity
+	Committer *object.Identity
 	Parent    hash.Hash
 	Message   string
 	// Fields contains any fields beyond the fields that are statically defined.

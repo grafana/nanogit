@@ -5,11 +5,59 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/object"
 )
+
+// Author represents the person who created the changes in the commit.
+// It includes their name, email, and the timestamp of when they made the changes.
+type Author struct {
+	Name  string
+	Email string
+	Time  time.Time
+}
+
+// Committer represents the person who created the commit object.
+// This is often the same as the author, but can be different in cases
+// where someone else commits changes on behalf of the author.
+type Committer struct {
+	Name  string
+	Email string
+	Time  time.Time
+}
+
+// Commit represents a Git commit object.
+// It contains metadata about the commit, including the author, committer,
+// commit message, and references to the parent commits and tree.
+type Commit struct {
+	// Tree is the hash of the root tree object that represents the state
+	// of the repository at the time of the commit.
+	Tree hash.Hash
+
+	// Parent is a list of hashes of parent commits.
+	// TODO: Merge commits can have multiple parents.
+	Parent hash.Hash
+
+	// Author is the person who created the changes in the commit.
+	Author Author
+
+	// Committer is the person who created the commit object.
+	Committer Committer
+
+	// Message is the commit message that describes the changes made in this commit.
+	Message string
+}
+
+// Time returns the time when the commit was created.
+// This is the same as the committer's time, as the committer is the person
+// who actually created the commit object in the repository.
+func (c *Commit) Time() time.Time {
+	return c.Committer.Time
+}
 
 // CommitFile represents a file change between two commits.
 // It contains information about how a file was modified, including its path,
@@ -33,7 +81,7 @@ type CommitFile struct {
 // The returned changes are sorted by file path for consistent ordering.
 func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	// Get both commits
-	base, err := c.GetObject(ctx, baseCommit)
+	base, err := c.getObject(ctx, baseCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting base commit: %w", err)
 	}
@@ -42,7 +90,7 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, errors.New("base commit is not a commit")
 	}
 
-	head, err := c.GetObject(ctx, headCommit)
+	head, err := c.getObject(ctx, headCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting head commit: %w", err)
 	}
@@ -135,4 +183,42 @@ func (c *clientImpl) compareTrees(base, head *Tree) ([]CommitFile, error) {
 	})
 
 	return changes, nil
+}
+
+// GetCommit returns a commit object from the repository.
+func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
+	commit, err := c.getObject(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("getting commit: %w", err)
+	}
+
+	if commit.Type != object.TypeCommit {
+		return nil, errors.New("commit is not a commit")
+	}
+
+	authorTime, err := commit.Commit.Author.Time()
+	if err != nil {
+		return nil, fmt.Errorf("parsing author time: %w", err)
+	}
+
+	committerTime, err := commit.Commit.Committer.Time()
+	if err != nil {
+		return nil, fmt.Errorf("parsing committer time: %w", err)
+	}
+
+	return &Commit{
+		Tree:   commit.Commit.Tree,
+		Parent: commit.Commit.Parent,
+		Author: Author{
+			Name:  commit.Commit.Author.Name,
+			Email: commit.Commit.Author.Email,
+			Time:  authorTime,
+		},
+		Committer: Committer{
+			Name:  commit.Commit.Committer.Name,
+			Email: commit.Commit.Committer.Email,
+			Time:  committerTime,
+		},
+		Message: strings.TrimSpace(commit.Commit.Message),
+	}, nil
 }
