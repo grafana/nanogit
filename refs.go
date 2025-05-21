@@ -1,12 +1,10 @@
 package nanogit
 
 import (
-	"bytes"
 	"context"
 
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 )
@@ -51,7 +49,7 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	}
 
 	for _, line := range lines {
-		ref, hash, err := parseRefLine(line)
+		ref, hash, err := protocol.ParseRefLine(line)
 		if err != nil {
 			return nil, fmt.Errorf("parse ref line: %w", err)
 		}
@@ -177,73 +175,4 @@ func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	}
 
 	return nil
-}
-
-// parseRefLine parses a single reference line from the git response.
-// Returns the reference name, hash, and any error encountered.
-func parseRefLine(line []byte) (ref, hash string, err error) {
-	// Skip empty lines and pkt-line flush markers
-	if len(line) == 0 || bytes.Equal(line, []byte("0000")) {
-		return "", "", nil
-	}
-
-	// Skip capability lines (they start with =)
-	if len(line) > 0 && line[0] == '=' {
-		return "", "", nil
-	}
-
-	// Split into hash and rest
-	parts := bytes.SplitN(line, []byte(" "), 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid ref format: %s", line)
-	}
-
-	// Ensure we have a full 40-character SHA-1 hash
-	hash = string(parts[0])
-	if len(hash) != 40 {
-		return "", "", fmt.Errorf("invalid hash length: got %d, want 40", len(hash))
-	}
-
-	refName := strings.TrimSpace(string(parts[1]))
-
-	// Handle HEAD reference with capabilities
-	if strings.HasPrefix(refName, "HEAD") {
-		symref := extractSymref(refName)
-		if symref != "" {
-			return symref, hash, nil
-		}
-
-		return refName, hash, nil
-	}
-
-	// Remove capability suffix if present
-	if idx := bytes.IndexByte(parts[1], '\x00'); idx > 0 {
-		refName = string(parts[1][:idx])
-	}
-
-	return strings.TrimSpace(refName), strings.TrimSpace(hash), nil
-}
-
-// extractSymref extracts the symref value from a line.
-// It returns the symref value if present, and an error if it is not present.
-// Example:
-// 00437fd1a60b01f91b314f59955a4e4d4e80d8edf11d HEAD symref=HEAD:refs/heads/master
-// The symref value is "refs/heads/master".
-func extractSymref(line string) string {
-	// Check for symref in the reference line
-	parts := strings.Split(line, " ")
-	if len(parts) == 1 {
-		return ""
-	}
-
-	if idx := strings.Index(line, "symref="); idx > 0 {
-		symref := line[idx+7:]
-		if colonIdx := strings.Index(symref, ":"); colonIdx > 0 {
-			return strings.TrimSpace(symref[colonIdx+1:])
-		}
-
-		return strings.TrimSpace(symref)
-	}
-
-	return ""
 }

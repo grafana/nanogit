@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/protocol"
-	"github.com/grafana/nanogit/protocol/object"
 )
 
 func TestParsePackfile(t *testing.T) {
@@ -69,12 +68,12 @@ func TestParsePackfile(t *testing.T) {
 
 func TestGolden(t *testing.T) {
 	testcases := map[string]struct {
-		expectedObjects []object.Type
+		expectedObjects []protocol.ObjectType
 	}{
 		"simple.dat": {
-			expectedObjects: []object.Type{
-				object.TypeTree,
-				object.TypeCommit,
+			expectedObjects: []protocol.ObjectType{
+				protocol.ObjectTypeTree,
+				protocol.ObjectTypeCommit,
 			},
 		},
 	}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/object"
 )
 
 type TreeEntry struct {
@@ -16,7 +15,7 @@ type TreeEntry struct {
 	// Mode is in octal
 	Mode uint32
 	Hash hash.Hash
-	Type object.Type
+	Type protocol.ObjectType
 }
 
 type Tree struct {
@@ -32,7 +31,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 	}
 
 	var tree *protocol.PackfileObject
-	if obj.Type == object.TypeCommit && obj.Hash.Is(commitHash) {
+	if obj.Type == protocol.ObjectTypeCommit && obj.Hash.Is(commitHash) {
 		// Find the commit and tree in the packfile
 		// TODO: should we make it work for commit object type?
 		treeHash, err := hash.FromHex(obj.Commit.Tree.String())
@@ -45,7 +44,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 			return nil, fmt.Errorf("getting tree: %w", err)
 		}
 		tree = treeObj
-	} else if obj.Type == object.TypeTree && obj.Hash.Is(commitHash) {
+	} else if obj.Type == protocol.ObjectTypeTree && obj.Hash.Is(commitHash) {
 		tree = obj
 	} else {
 		return nil, errors.New("not found")
@@ -60,9 +59,9 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 		}
 
 		// Determine the type based on the mode
-		entryType := object.TypeBlob
+		entryType := protocol.ObjectTypeBlob
 		if entry.FileMode&0o40000 != 0 {
-			entryType = object.TypeTree
+			entryType = protocol.ObjectTypeTree
 		}
 
 		entries[i] = TreeEntry{
@@ -107,7 +106,7 @@ func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry
 		result = append(result, entry)
 
 		// If this is a tree, recursively process its entries
-		if entry.Type == object.TypeTree {
+		if entry.Type == protocol.ObjectTypeTree {
 			// Fetch the nested tree
 			// TODO: is there a way to avoid fetching the tree again?
 			nestedTree, err := c.GetTree(ctx, entry.Hash)

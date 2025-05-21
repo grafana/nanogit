@@ -10,7 +10,6 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/object"
 )
 
 // Author represents the person who created the changes in the commit.
@@ -86,7 +85,7 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, fmt.Errorf("getting base commit: %w", err)
 	}
 
-	if base.Type != object.TypeCommit {
+	if base.Type != protocol.ObjectTypeCommit {
 		return nil, errors.New("base commit is not a commit")
 	}
 
@@ -95,7 +94,7 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, fmt.Errorf("getting head commit: %w", err)
 	}
 
-	if head.Type != object.TypeCommit {
+	if head.Type != protocol.ObjectTypeCommit {
 		return nil, errors.New("head commit is not a commit")
 	}
 
@@ -151,7 +150,7 @@ func (c *clientImpl) compareTrees(base, head *Tree) ([]CommitFile, error) {
 				Mode:   entry.Mode,
 				Hash:   entry.Hash,
 			})
-		} else if !inBase[entry.Path].Hash.Is(entry.Hash) && entry.Type != object.TypeTree {
+		} else if !inBase[entry.Path].Hash.Is(entry.Hash) && entry.Type != protocol.ObjectTypeTree {
 			// File exists in both but has different content - it was modified
 			changes = append(changes, CommitFile{
 				Path:    entry.Path,
@@ -192,7 +191,7 @@ func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, er
 		return nil, fmt.Errorf("getting commit: %w", err)
 	}
 
-	if commit.Type != object.TypeCommit {
+	if commit.Type != protocol.ObjectTypeCommit {
 		return nil, errors.New("commit is not a commit")
 	}
 

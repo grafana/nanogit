@@ -1,7 +1,9 @@
 package protocol
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -144,4 +146,163 @@ func ParseRefName(in string) (RefName, error) {
 	rn.Location = in[sepIdx+1:]
 
 	return rn, nil
+}
+
+// ZeroHash represents the all-zeros SHA-1 hash used in Git to represent a non-existent object
+const ZeroHash = "0000000000000000000000000000000000000000"
+
+type RefUpdateRequest struct {
+	OldRef  string
+	NewRef  string
+	RefName string
+}
+
+func NewCreateRefRequest(refName, newRef string) RefUpdateRequest {
+	return RefUpdateRequest{
+		OldRef:  ZeroHash,
+		NewRef:  newRef,
+		RefName: refName,
+	}
+}
+
+func NewUpdateRefRequest(oldRef, newRef, refName string) RefUpdateRequest {
+	return RefUpdateRequest{
+		OldRef:  oldRef,
+		NewRef:  newRef,
+		RefName: refName,
+	}
+}
+
+func NewDeleteRefRequest(oldRef, refName string) RefUpdateRequest {
+	return RefUpdateRequest{
+		OldRef:  oldRef,
+		NewRef:  ZeroHash,
+		RefName: refName,
+	}
+}
+
+// Format formats the ref update request into a byte slice that can be sent over the wire.
+// The format follows Git's receive-pack protocol:
+//   - A pkt-line containing the ref update command
+//   - An empty pack file (required by the protocol)
+//   - A flush packet to indicate the end of the request
+//
+// The ref update command format is:
+//
+//	<old-value> <new-value> <ref-name>\000<capabilities>\n
+//
+// The old-value and new-value fields have specific meanings depending on the operation:
+//   - Create: old-value is ZeroHash, new-value is the target hash
+//   - Update: old-value is the current hash, new-value is the target hash
+//   - Delete: old-value is the current hash, new-value is ZeroHash
+//
+// Returns:
+//   - A byte slice containing the formatted request
+//   - Any error that occurred during formatting
+//
+// Examples:
+//
+//	Create refs/heads/main pointing to 1234...:
+//	"0000... 1234... refs/heads/main\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n"
+//
+//	Update refs/heads/main from 1234... to 5678...:
+//	"1234... 5678... refs/heads/main\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n"
+//
+//	Delete refs/heads/main:
+//	"1234... 0000... refs/heads/main\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n"
+func (r RefUpdateRequest) Format() ([]byte, error) {
+	// Validate hash lengths
+	if len(r.OldRef) != 40 && r.OldRef != ZeroHash {
+		return nil, fmt.Errorf("invalid old ref hash length: got %d, want 40", len(r.OldRef))
+	}
+	if len(r.NewRef) != 40 && r.NewRef != ZeroHash {
+		return nil, fmt.Errorf("invalid new ref hash length: got %d, want 40", len(r.NewRef))
+	}
+
+	// Create the ref using receive-pack
+	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
+	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", r.OldRef, r.NewRef, r.RefName)
+
+	// Calculate the correct length (including the 4 bytes of the length field)
+	lineLen := len(refLine) + 4
+	pkt := make([]byte, 0, lineLen+4)
+	pkt = fmt.Appendf(pkt, "%04x%s0000", lineLen, refLine)
+
+	// Send pack file as raw data (not as a pkt-line)
+	// It seems we need to send the empty pack even if it's not needed.
+	pkt = append(pkt, EmptyPack...)
+
+	// Add final flush packet
+	pkt = append(pkt, FlushPacket...)
+
+	return pkt, nil
+}
+
+// ParseRefLine parses a single reference line from the git response.
+// Returns the reference name, hash, and any error encountered.
+func ParseRefLine(line []byte) (ref, hash string, err error) {
+	// Skip empty lines and pkt-line flush markers
+	if len(line) == 0 || bytes.Equal(line, []byte("0000")) {
+		return "", "", nil
+	}
+
+	// Skip capability lines (they start with =)
+	if len(line) > 0 && line[0] == '=' {
+		return "", "", nil
+	}
+
+	// Split into hash and rest
+	parts := bytes.SplitN(line, []byte(" "), 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid ref format: %s", line)
+	}
+
+	// Ensure we have a full 40-character SHA-1 hash
+	hash = string(parts[0])
+	if len(hash) != 40 {
+		return "", "", fmt.Errorf("invalid hash length: got %d, want 40", len(hash))
+	}
+
+	refName := strings.TrimSpace(string(parts[1]))
+
+	// Handle HEAD reference with capabilities
+	if strings.HasPrefix(refName, "HEAD") {
+		symref := extractSymref(refName)
+		if symref != "" {
+			return symref, hash, nil
+		}
+
+		return refName, hash, nil
+	}
+
+	// Remove capability suffix if present
+	if idx := bytes.IndexByte(parts[1], '\x00'); idx > 0 {
+		refName = string(parts[1][:idx])
+	}
+
+	return strings.TrimSpace(refName), strings.TrimSpace(hash), nil
+}
+
+// extractSymref extracts the symref value from a line.
+// It returns the symref value if present, and an error if it is not present.
+// Example:
+// 00437fd1a60b01f91b314f59955a4e4d4e80d8edf11d HEAD symref=HEAD:refs/heads/master
+// The symref value is "refs/heads/master".
+func extractSymref(line string) string {
+	// Check for symref in the reference line
+	parts := strings.Split(line, " ")
+	if len(parts) == 1 {
+		return ""
+	}
+
+	if idx := strings.Index(line, "symref="); idx > 0 {
+		symref := line[idx+7:]
+		if colonIdx := strings.Index(symref, ":"); colonIdx > 0 {
+			return strings.TrimSpace(symref[colonIdx+1:])
+		}
+
+		return strings.TrimSpace(symref)
+	}
+
+	return ""
 }
