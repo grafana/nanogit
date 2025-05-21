@@ -2,6 +2,7 @@ package nanogit
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -35,7 +36,7 @@ func (c *clientImpl) GetObject(ctx context.Context, hash hash.Hash) (*protocol.P
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "object", hash.String(), "response", fmt.Sprintf("%x", out))
+	c.logger.Debug("Raw server response", "object", hash.String(), "response", hex.EncodeToString(out))
 
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
