@@ -16,7 +16,6 @@ import (
 // mode, hash, and the type of change (added, modified, deleted, etc.).
 type CommitFile struct {
 	Path    string              // Path of the file in the head commit
-	OldPath string              // Original path in the base commit (for renamed/copied files)
 	Mode    uint32              // File mode in the head commit (e.g., 100644 for regular files)
 	OldMode uint32              // Original mode in the base commit (for modified files)
 	Hash    hash.Hash           // File hash in the head commit
