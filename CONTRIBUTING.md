@@ -153,6 +153,103 @@ For more information:
 * Use `make fmt` to format your code.
 * Run `make lint` to check for style issues.
 
+### Editor Settings
+
+#### Cursor
+
+We provide rules for cursor in `.cursor` directory that defines our coding standards and best practices. The rules cover:
+
+* Code style and formatting
+* Testing requirements
+* Error handling patterns
+* Documentation standards
+* Security considerations
+* Performance guidelines
+* Git protocol compliance
+* Code organization
+* Versioning practices
+* CI/CD requirements
+* Code review guidelines
+* Maintenance standards
+* Accessibility requirements
+* Extensibility guidelines
+
+To use these rules in Cursor:
+1. Open the project in Cursor
+2. The rules will be automatically loaded
+3. Cursor will provide inline suggestions based on these rules
+
+
+### Contributing to Cursor Rules
+
+We welcome contributions to improve our Cursor rules! The rules are designed to help maintain code quality and consistency, but they're not set in stone. If you have suggestions for improvements or find areas that could be enhanced, please feel free to contribute.
+
+#### How to Contribute to Rules
+
+1. **Identify Areas for Improvement**
+   - Look for patterns that could be better enforced
+   - Identify missing best practices
+   - Suggest clearer guidelines for existing rules
+
+2. **Propose Changes**
+   - Open an issue to discuss proposed changes
+   - Explain the rationale behind your suggestions
+   - Provide examples of how the changes would improve the codebase
+
+3. **Submit Pull Requests**
+   - Update the relevant rule files in the `.cursor` directory
+   - Include clear documentation for any new rules
+   - Add examples where appropriate
+
+4. **Review Process**
+   - All rule changes will be reviewed by maintainers
+   - Changes should align with the project's goals
+   - Consider the impact on existing code
+
+#### Rule Categories
+
+Feel free to contribute to any of these categories:
+
+* **Code Style**: Suggest improvements to formatting and style guidelines
+* **Testing**: Propose new testing requirements or best practices
+* **Error Handling**: Enhance error handling patterns
+* **Documentation**: Improve documentation standards
+* **Security**: Add new security considerations
+* **Performance**: Suggest performance optimizations
+* **Git Protocol**: Enhance Git protocol compliance rules
+* **Code Organization**: Propose better code structure guidelines
+* **Versioning**: Improve versioning practices
+* **CI/CD**: Add new CI/CD requirements
+* **Code Review**: Enhance code review guidelines
+* **Maintenance**: Suggest maintenance standards
+* **Accessibility**: Add accessibility requirements
+* **Extensibility**: Propose extensibility guidelines
+
+#### Best Practices for Rule Contributions
+
+1. **Keep Rules Clear and Concise**
+   - Rules should be easy to understand
+   - Avoid overly complex requirements
+   - Provide clear examples
+
+2. **Consider Impact**
+   - Evaluate the impact on existing code
+   - Consider the learning curve for new contributors
+   - Balance strictness with practicality
+
+3. **Documentation**
+   - Include clear explanations for new rules
+   - Provide examples of correct and incorrect usage
+   - Link to relevant documentation or resources
+
+4. **Testing**
+   - Test rules against existing code
+   - Ensure rules don't conflict with each other
+   - Verify rules work as expected in Cursor
+
+Remember, the goal is to make the development experience better for everyone. Your contributions can help shape the future of this project's development standards.
+
+
 ### Documentation
 
 * Update documentation for any new features or changes.
