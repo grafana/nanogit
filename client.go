@@ -178,24 +178,23 @@ func (c *clientImpl) smartInfo(ctx context.Context, service string) ([]byte, err
 	return body, nil
 }
 
-// WithLogger sets a custom logger for the client.
-// If not provided, the default slog logger will be used.
-func WithLogger(logger Logger) Option {
-	return func(c *clientImpl) error {
-		if logger == nil {
-			return errors.New("logger cannot be nil")
-		}
-		c.logger = logger
-		return nil
-	}
-}
-
 // NewClient returns a new Client for the given repository.
 func NewClient(repo string, options ...Option) (Client, error) {
+	if repo == "" {
+		return nil, errors.New("repository URL cannot be empty")
+	}
+
 	u, err := url.Parse(repo)
 	if err != nil {
 		return nil, fmt.Errorf("parsing url: %w", err)
 	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, errors.New("only HTTP and HTTPS URLs are supported")
+	}
+
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.Path = strings.TrimSuffix(u.Path, ".git")
 
 	c := &clientImpl{
 		base:   u,
@@ -212,30 +211,6 @@ func NewClient(repo string, options ...Option) (Client, error) {
 	}
 
 	return c, nil
-}
-
-// WithBasicAuth sets the HTTP Basic Auth options.
-// This is not a particularly secure method of authentication, so you probably want to recommend or require WithTokenAuth instead.
-func WithBasicAuth(username, password string) Option {
-	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
-	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *clientImpl) error {
-		c.basicAuth = &struct{ Username, Password string }{username, password}
-		c.tokenAuth = nil
-		return nil
-	}
-}
-
-// WithTokenAuth sets the Authorization header to the given token.
-// We will not modify it for you. As such, if it needs a "Bearer" or "token" prefix, you must add that yourself.
-func WithTokenAuth(token string) Option {
-	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
-	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *clientImpl) error {
-		c.basicAuth = nil
-		c.tokenAuth = &token
-		return nil
-	}
 }
 
 // WithUserAgent overrides the default User-Agent header.
@@ -255,25 +230,6 @@ func WithHTTPClient(httpClient *http.Client) Option {
 		}
 
 		c.client = httpClient
-		return nil
-	}
-}
-
-// WithGitHub verifies the other options are valid, and modifies those that aren't.
-// This must be the final option, if you wish to apply it.
-// WithGitHub is valid with both GitHub.com and a GitHub Enterprise Server.
-//
-// What does that entail?:
-//   - Check that the token auth header has a "token" prefix, if it is used.
-//   - Check that the base URL has no ".git" suffix, or trailing slashes.
-func WithGitHub() Option {
-	return func(c *clientImpl) error {
-		if c.tokenAuth != nil && !strings.HasPrefix(*c.tokenAuth, "token ") {
-			fixed := "token " + *c.tokenAuth
-			c.tokenAuth = &fixed
-		}
-		c.base.Path = strings.TrimRight(c.base.Path, "/")
-		c.base.Path = strings.TrimSuffix(c.base.Path, ".git")
 		return nil
 	}
 }

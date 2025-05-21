@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNew(t *testing.T) {
+func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name    string
 		repo    string
@@ -22,8 +22,14 @@ func TestNew(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "valid repo without options",
+			name:    "valid HTTPS repo without options",
 			repo:    "https://github.com/owner/repo",
+			options: nil,
+			wantErr: nil,
+		},
+		{
+			name:    "valid HTTP repo without options",
+			repo:    "http://github.com/owner/repo",
 			options: nil,
 			wantErr: nil,
 		},
@@ -76,6 +82,49 @@ func TestNew(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name:    "empty repo URL",
+			repo:    "",
+			options: nil,
+			wantErr: errors.New("repository URL cannot be empty"),
+		},
+		{
+			name:    "git protocol URL",
+			repo:    "git://github.com/owner/repo",
+			options: nil,
+			wantErr: errors.New("only HTTP and HTTPS URLs are supported"),
+		},
+		{
+			name:    "ssh protocol URL",
+			repo:    "ssh://git@github.com/owner/repo",
+			options: nil,
+			wantErr: errors.New("only HTTP and HTTPS URLs are supported"),
+		},
+		{
+			name: "multiple auth options",
+			repo: "https://github.com/owner/repo",
+			options: []Option{
+				WithBasicAuth("user", "pass"),
+				WithTokenAuth("token123"),
+			},
+			wantErr: errors.New("cannot use both basic auth and token auth"),
+		},
+		{
+			name: "invalid basic auth",
+			repo: "https://github.com/owner/repo",
+			options: []Option{
+				WithBasicAuth("", "pass"),
+			},
+			wantErr: errors.New("username cannot be empty"),
+		},
+		{
+			name: "invalid token auth",
+			repo: "https://github.com/owner/repo",
+			options: []Option{
+				WithTokenAuth(""),
+			},
+			wantErr: errors.New("token cannot be empty"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -90,54 +139,6 @@ func TestNew(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NotNil(t, got)
-		})
-	}
-}
-
-func TestWithGitHub(t *testing.T) {
-	tests := []struct {
-		name     string
-		repo     string
-		token    string
-		wantPath string
-		wantAuth string
-	}{
-		{
-			name:     "clean URL",
-			repo:     "https://github.com/owner/repo",
-			token:    "token123",
-			wantPath: "/owner/repo",
-			wantAuth: "token token123",
-		},
-		{
-			name:     "URL with .git suffix",
-			repo:     "https://github.com/owner/repo.git",
-			token:    "token123",
-			wantPath: "/owner/repo",
-			wantAuth: "token token123",
-		},
-		{
-			name:     "URL with trailing slash",
-			repo:     "https://github.com/owner/repo/",
-			token:    "token123",
-			wantPath: "/owner/repo",
-			wantAuth: "token token123",
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			client, err := NewClient(tt.repo, WithTokenAuth(tt.token), WithGitHub())
-			require.NoError(t, err)
-
-			c, ok := client.(*clientImpl)
-			require.True(t, ok, "client should be of type *client")
-
-			require.Equal(t, tt.wantPath, c.base.Path)
-			require.NotNil(t, c.tokenAuth)
-			require.Equal(t, tt.wantAuth, *c.tokenAuth)
 		})
 	}
 }
@@ -208,32 +209,6 @@ func (l *testLogger) Warn(msg string, keysAndValues ...any) {
 }
 func (l *testLogger) Error(msg string, keysAndValues ...any) {
 	l.entries = append(l.entries, logEntry{"Error", msg, keysAndValues})
-}
-
-func TestWithLogger(t *testing.T) {
-	t.Run("sets custom logger", func(t *testing.T) {
-		logger := &testLogger{}
-		client, err := NewClient("https://github.com/owner/repo", WithLogger(logger))
-		require.NoError(t, err)
-
-		c, ok := client.(*clientImpl)
-		require.True(t, ok, "client should be of type *clientImpl")
-		require.Equal(t, logger, c.logger, "logger should be set to the provided logger")
-
-		// Trigger a log event
-		c.logger.Info("test message", "key", "value")
-		require.Len(t, logger.entries, 1)
-		require.Equal(t, "Info", logger.entries[0].level)
-		require.Equal(t, "test message", logger.entries[0].msg)
-		require.Equal(t, []any{"key", "value"}, logger.entries[0].args)
-	})
-
-	t.Run("returns error if logger is nil", func(t *testing.T) {
-		client, err := NewClient("https://github.com/owner/repo", WithLogger(nil))
-		require.Error(t, err)
-		require.Nil(t, client)
-		require.Equal(t, "logger cannot be nil", err.Error())
-	})
 }
 
 func TestUploadPack(t *testing.T) {
@@ -611,69 +586,6 @@ func TestSmartInfo(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResult, string(response))
 			}
-		})
-	}
-}
-
-func TestAuthentication(t *testing.T) {
-	tests := []struct {
-		name           string
-		authOption     Option
-		expectedHeader string
-	}{
-		{
-			name:           "basic auth",
-			authOption:     WithBasicAuth("user", "pass"),
-			expectedHeader: "Basic dXNlcjpwYXNz",
-		},
-		{
-			name:           "token auth",
-			authOption:     WithTokenAuth("token123"),
-			expectedHeader: "token123",
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Check default headers
-				if gitProtocol := r.Header.Get("Git-Protocol"); gitProtocol != "version=2" {
-					t.Errorf("expected Git-Protocol header 'version=2', got %s", gitProtocol)
-					return
-				}
-				if userAgent := r.Header.Get("User-Agent"); userAgent != "nanogit/0" {
-					t.Errorf("expected User-Agent header 'nanogit/0', got %s", userAgent)
-					return
-				}
-
-				auth := r.Header.Get("Authorization")
-				if auth != tt.expectedHeader {
-					t.Errorf("expected Authorization header %s, got %s", tt.expectedHeader, auth)
-					return
-				}
-
-				if contentType := r.Header.Get("Content-Type"); contentType != "application/x-git-upload-pack-request" {
-					t.Errorf("expected Content-Type header 'application/x-git-upload-pack-request', got %s", contentType)
-					return
-				}
-
-				if _, err := w.Write([]byte("ok")); err != nil {
-					t.Errorf("failed to write response: %v", err)
-					return
-				}
-			}))
-			defer server.Close()
-
-			client, err := NewClient(server.URL, tt.authOption)
-			require.NoError(t, err)
-
-			c, ok := client.(*clientImpl)
-			require.True(t, ok, "client should be of type *client")
-
-			_, err = c.uploadPack(context.Background(), []byte("test"))
-			require.NoError(t, err)
 		})
 	}
 }

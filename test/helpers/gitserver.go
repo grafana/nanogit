@@ -154,6 +154,35 @@ func (s *GitServer) CreateUser(t *testing.T) *User {
 	return user
 }
 
+// GenerateUserToken creates a new access token for the specified user in the Gitea server.
+// The token is created with all permissions enabled.
+func (s *GitServer) GenerateUserToken(t *testing.T, username, password string) string {
+	t.Logf("%s🔑 Generating access token for user '%s'...%s", ColorBlue, username, ColorReset)
+	execResult, reader, err := s.container.Exec(context.Background(), []string{
+		"su", "git", "-c", fmt.Sprintf("gitea admin user generate-access-token --username %s --scopes all", username),
+	})
+	require.NoError(t, err)
+	execOutput, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	t.Logf("%s📋 Token generation output: %s%s", ColorCyan, string(execOutput), ColorReset)
+	require.Equal(t, 0, execResult)
+
+	// Extract token from output - it's the last line
+	lines := strings.Split(strings.TrimSpace(string(execOutput)), "\n")
+	require.NotEmpty(t, lines, "expected token output")
+	tokenLine := strings.TrimSpace(lines[len(lines)-1])
+	require.NotEmpty(t, tokenLine, "expected non-empty token")
+
+	chunks := strings.Split(tokenLine, " ")
+	require.NotEmpty(t, chunks, "expected chunks")
+	token := chunks[len(chunks)-1]
+	require.NotEmpty(t, token, "expected non-empty token")
+	token = "token " + token
+
+	t.Logf("%s✅ Access token generated successfully for user '%s'%s (%s)", ColorGreen, username, ColorReset, token)
+	return token
+}
+
 // CreateRepo creates a new repository in the Gitea server for the specified user.
 // It returns both the public repository URL and an authenticated repository URL
 // that includes the user's credentials.
