@@ -13,15 +13,16 @@ nanogit is a lightweight Git implementation designed for cloud environments, wit
 
 ## Features
 
-* Read Git files over HTTPS
-* Read Git trees over HTTPS
-* Write new Git objects over HTTPS
-* Write Git object deltas over HTTPS
-* Support for SHA-1 hashing in repositories
+* Support any HTTPS Git service that supports the Git Smart HTTP Protocol (version 2).
+* Secure HTTPS-based operations for Git objects (blobs, commits, trees, deltas)
+* Remote Git reference management via HTTPS
+* File system operations over HTTPS
+* Commit comparison and diffing capabilities
+* Authentication support (Basic Auth and API tokens)
+* SHA-1 repository compatibility
 
 ## Future Goals
 
-* Support any HTTPS Git service that supports `git-upload-pack` on `Git-Protocol: version=2`
 * Support SHA-256 repositories on top of SHA-1 repositories
 
 ## Non-Goals
@@ -32,13 +33,10 @@ The following features are explicitly not supported:
 * File protocol (local Git operations)
 * Commit signing and signature verification
 * Full Git clones
-* Tag creation (reading is supported)
 * Git hooks
 * Git configuration management
 * Direct .git directory access
-* Git deltas (`git diff`) in outputs or API
 * "Dumb" servers
-* Branch renames
 * Complex permissions (all objects use mode 0644)
 
 ## Getting Started
