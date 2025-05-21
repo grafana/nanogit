@@ -9,19 +9,20 @@ A limited, cloud-ready Git implementation for use in Grafana.
 
 ## Overview
 
-nanogit is a lightweight Git implementation designed for cloud environments, with a focus on HTTPS-based operations. It provides a subset of Git functionality optimized for reading and writing Git objects over HTTPS, particularly targeting GitHub.com integration.
+nanogit is a lightweight Git implementation designed for cloud environments, with a focus on HTTPS-based operations. It provides a subset of Git functionality optimized for reading and writing Git objects over HTTPS.
 
 ## Features
 
-* Read Git files over HTTPS on github.com
-* Read Git trees over HTTPS on github.com
-* Write new Git objects over HTTPS on github.com
-* Write Git object deltas over HTTPS on github.com
-* Support for SHA-1 hashing in repositories
+* Support any HTTPS Git service that supports the Git Smart HTTP Protocol (version 2).
+* Secure HTTPS-based operations for Git objects (blobs, commits, trees, deltas)
+* Remote Git reference management via HTTPS
+* File system operations over HTTPS
+* Commit comparison and diffing capabilities
+* Authentication support (Basic Auth and API tokens)
+* SHA-1 repository compatibility
 
 ## Future Goals
 
-* Support any HTTPS Git service that supports `git-upload-pack` on `Git-Protocol: version=2` (e.g., GitLab)
 * Support SHA-256 repositories on top of SHA-1 repositories
 
 ## Non-Goals
@@ -32,13 +33,10 @@ The following features are explicitly not supported:
 * File protocol (local Git operations)
 * Commit signing and signature verification
 * Full Git clones
-* Tag creation (reading is supported)
 * Git hooks
 * Git configuration management
 * Direct .git directory access
-* Git deltas (`git diff`) in outputs or API
 * "Dumb" servers
-* Branch renames
 * Complex permissions (all objects use mode 0644)
 
 ## Getting Started
@@ -59,7 +57,30 @@ go get github.com/grafana/nanogit
 ```go
 import "github.com/grafana/nanogit"
 
-// Example usage will be added as the project matures
+// Create a new client
+client, err := nanogit.NewClient("https://github.com/grafana/nanogit.git")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Check if repository exists
+exists, err := client.RepoExists(context.Background())
+if err != nil {
+    log.Fatal(err)
+}
+if !exists {
+    log.Fatal("Repository does not exist")
+}
+
+// Get a file from the repository
+file, err := client.GetFile(context.Background(), "main", "README.md")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Print the file contents
+fmt.Printf("File contents: %s\n", string(file.Content))
+
 ```
 
 ## Contributing
@@ -111,3 +132,37 @@ If you find a security vulnerability, please report it to security@grafana.com. 
 
 * The Grafana team for their support and guidance
 * The open source community for their valuable feedback and contributions
+
+## Why nanogit?
+
+While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, we created nanogit for cloud-native, multitenant environments where a minimal, stateless approach is essential:
+
+### Key Differences from go-git
+
+1. **Cloud-Native Design**
+   - HTTPS-only
+   - No local disk operations or full clones
+   - Stateless by design for multitenant environments
+   - Minimal memory and network footprint per operation
+
+2. **Focused Scope**
+   - Essential Git operations only
+   - No hooks, signing, or configuration management
+   - Clear boundaries on supported features
+   - Smaller security surface area
+
+### When to Use nanogit
+
+Choose nanogit when you need:
+- A lightweight Git client for cloud services
+- Stateless, multitenant Git operations
+- Integration with any Git server supporting HTTP protocol
+- Minimal resource usage
+
+### When to Use go-git
+
+Consider using go-git when you need:
+- Full Git functionality
+- Local disk operations
+- All Git protocols (git://, ssh://, file://)
+- Advanced Git features
