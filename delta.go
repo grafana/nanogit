@@ -2,6 +2,7 @@ package nanogit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -37,9 +38,18 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 	if err != nil {
 		return nil, fmt.Errorf("getting base commit: %w", err)
 	}
+
+	if base.Type != object.TypeCommit {
+		return nil, errors.New("base commit is not a commit")
+	}
+
 	head, err := c.GetObject(ctx, headCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting head commit: %w", err)
+	}
+
+	if head.Type != object.TypeCommit {
+		return nil, errors.New("head commit is not a commit")
 	}
 
 	// Get both trees
@@ -94,7 +104,7 @@ func (c *clientImpl) compareTrees(base, head *Tree) ([]CommitFile, error) {
 				Mode:   entry.Mode,
 				Hash:   entry.Hash,
 			})
-		} else if inBase[entry.Path].Hash.String() != entry.Hash.String() && entry.Type != object.TypeTree {
+		} else if !inBase[entry.Path].Hash.Is(entry.Hash) && entry.Type != object.TypeTree {
 			// File exists in both but has different content - it was modified
 			changes = append(changes, CommitFile{
 				Path:    entry.Path,
