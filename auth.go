@@ -2,6 +2,7 @@ package nanogit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -12,8 +13,13 @@ func WithBasicAuth(username, password string) Option {
 	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
 	return func(c *clientImpl) error {
+		if username == "" {
+			return errors.New("username cannot be empty")
+		}
+		if c.tokenAuth != nil {
+			return errors.New("cannot use both basic auth and token auth")
+		}
 		c.basicAuth = &struct{ Username, Password string }{username, password}
-		c.tokenAuth = nil
 		return nil
 	}
 }
@@ -24,7 +30,12 @@ func WithTokenAuth(token string) Option {
 	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
 	return func(c *clientImpl) error {
-		c.basicAuth = nil
+		if token == "" {
+			return errors.New("token cannot be empty")
+		}
+		if c.basicAuth != nil {
+			return errors.New("cannot use both basic auth and token auth")
+		}
 		c.tokenAuth = &token
 		return nil
 	}

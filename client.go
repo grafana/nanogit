@@ -192,10 +192,21 @@ func WithLogger(logger Logger) Option {
 
 // NewClient returns a new Client for the given repository.
 func NewClient(repo string, options ...Option) (Client, error) {
+	if repo == "" {
+		return nil, errors.New("repository URL cannot be empty")
+	}
+
 	u, err := url.Parse(repo)
 	if err != nil {
 		return nil, fmt.Errorf("parsing url: %w", err)
 	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, errors.New("only HTTP and HTTPS URLs are supported")
+	}
+
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.Path = strings.TrimSuffix(u.Path, ".git")
 
 	c := &clientImpl{
 		base:   u,
@@ -231,25 +242,6 @@ func WithHTTPClient(httpClient *http.Client) Option {
 		}
 
 		c.client = httpClient
-		return nil
-	}
-}
-
-// WithGitHub verifies the other options are valid, and modifies those that aren't.
-// This must be the final option, if you wish to apply it.
-// WithGitHub is valid with both GitHub.com and a GitHub Enterprise Server.
-//
-// What does that entail?:
-//   - Check that the token auth header has a "token" prefix, if it is used.
-//   - Check that the base URL has no ".git" suffix, or trailing slashes.
-func WithGitHub() Option {
-	return func(c *clientImpl) error {
-		if c.tokenAuth != nil && !strings.HasPrefix(*c.tokenAuth, "token ") {
-			fixed := "token " + *c.tokenAuth
-			c.tokenAuth = &fixed
-		}
-		c.base.Path = strings.TrimRight(c.base.Path, "/")
-		c.base.Path = strings.TrimSuffix(c.base.Path, ".git")
 		return nil
 	}
 }

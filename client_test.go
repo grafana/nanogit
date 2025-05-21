@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNew(t *testing.T) {
+func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name    string
 		repo    string
@@ -22,8 +22,14 @@ func TestNew(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "valid repo without options",
+			name:    "valid HTTPS repo without options",
 			repo:    "https://github.com/owner/repo",
+			options: nil,
+			wantErr: nil,
+		},
+		{
+			name:    "valid HTTP repo without options",
+			repo:    "http://github.com/owner/repo",
 			options: nil,
 			wantErr: nil,
 		},
@@ -76,6 +82,49 @@ func TestNew(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name:    "empty repo URL",
+			repo:    "",
+			options: nil,
+			wantErr: errors.New("repository URL cannot be empty"),
+		},
+		{
+			name:    "git protocol URL",
+			repo:    "git://github.com/owner/repo",
+			options: nil,
+			wantErr: errors.New("only HTTP and HTTPS URLs are supported"),
+		},
+		{
+			name:    "ssh protocol URL",
+			repo:    "ssh://git@github.com/owner/repo",
+			options: nil,
+			wantErr: errors.New("only HTTP and HTTPS URLs are supported"),
+		},
+		{
+			name: "multiple auth options",
+			repo: "https://github.com/owner/repo",
+			options: []Option{
+				WithBasicAuth("user", "pass"),
+				WithTokenAuth("token123"),
+			},
+			wantErr: errors.New("cannot use both basic auth and token auth"),
+		},
+		{
+			name: "invalid basic auth",
+			repo: "https://github.com/owner/repo",
+			options: []Option{
+				WithBasicAuth("", "pass"),
+			},
+			wantErr: errors.New("username cannot be empty"),
+		},
+		{
+			name: "invalid token auth",
+			repo: "https://github.com/owner/repo",
+			options: []Option{
+				WithTokenAuth(""),
+			},
+			wantErr: errors.New("token cannot be empty"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -90,54 +139,6 @@ func TestNew(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NotNil(t, got)
-		})
-	}
-}
-
-func TestWithGitHub(t *testing.T) {
-	tests := []struct {
-		name     string
-		repo     string
-		token    string
-		wantPath string
-		wantAuth string
-	}{
-		{
-			name:     "clean URL",
-			repo:     "https://github.com/owner/repo",
-			token:    "token123",
-			wantPath: "/owner/repo",
-			wantAuth: "token token123",
-		},
-		{
-			name:     "URL with .git suffix",
-			repo:     "https://github.com/owner/repo.git",
-			token:    "token123",
-			wantPath: "/owner/repo",
-			wantAuth: "token token123",
-		},
-		{
-			name:     "URL with trailing slash",
-			repo:     "https://github.com/owner/repo/",
-			token:    "token123",
-			wantPath: "/owner/repo",
-			wantAuth: "token token123",
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			client, err := NewClient(tt.repo, WithTokenAuth(tt.token), WithGitHub())
-			require.NoError(t, err)
-
-			c, ok := client.(*clientImpl)
-			require.True(t, ok, "client should be of type *client")
-
-			require.Equal(t, tt.wantPath, c.base.Path)
-			require.NotNil(t, c.tokenAuth)
-			require.Equal(t, tt.wantAuth, *c.tokenAuth)
 		})
 	}
 }
