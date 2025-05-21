@@ -28,6 +28,8 @@ type Client interface {
 	GetObject(ctx context.Context, hash hash.Hash) (*protocol.PackfileObject, error)
 	// IsAuthorized checks if the client can successfully communicate with the Git server.
 	IsAuthorized(ctx context.Context) (bool, error)
+	// RepoExists checks if the repository exists on the server.
+	RepoExists(ctx context.Context) (bool, error)
 
 	// TODO: is this a good signature?
 	// Ref operations
