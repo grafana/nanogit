@@ -21,10 +21,6 @@ nanogit is a lightweight Git implementation designed for cloud environments, wit
 * Authentication support (Basic Auth and API tokens)
 * SHA-1 repository compatibility
 
-## Future Goals
-
-* Support SHA-256 repositories on top of SHA-1 repositories
-
 ## Non-Goals
 
 The following features are explicitly not supported:
@@ -38,6 +34,20 @@ The following features are explicitly not supported:
 * Direct .git directory access
 * "Dumb" servers
 * Complex permissions (all objects use mode 0644)
+
+## Why nanogit?
+
+While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, nanogit is designed for cloud-native, multitenant environments requiring minimal, stateless operations.
+
+| Feature | nanogit | go-git |
+|---------|---------|--------|
+| Protocol | HTTPS-only | All protocols |
+| Storage | Stateless, no local disk | Local disk operations |
+| Scope | Essential operations only | Full Git functionality |
+| Use Case | Cloud services, multitenant | General purpose |
+| Resource Usage | Minimal footprint | Full Git features |
+
+Choose nanogit for lightweight cloud services requiring stateless operations and minimal resources. Use go-git when you need full Git functionality, local operations, or advanced features.
 
 ## Getting Started
 
@@ -99,12 +109,6 @@ This project is licensed under the [Apache License 2.0](LICENSE.md) - see the LI
 
 This project is currently in active development. While it's open source, it's important to note that it was initially created as part of a hackathon. We're working to make it production-ready, but please use it with appropriate caution.
 
-## Documentation
-
-* [API Documentation](https://godoc.org/github.com/grafana/nanogit)
-* [Contributing Guide](CONTRIBUTING.md)
-* [Code of Conduct](CODE_OF_CONDUCT.md)
-
 ## Resources
 
 Want to learn how Git works? The following resources are useful:
@@ -132,37 +136,3 @@ If you find a security vulnerability, please report it to security@grafana.com. 
 
 * The Grafana team for their support and guidance
 * The open source community for their valuable feedback and contributions
-
-## Why nanogit?
-
-While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, we created nanogit for cloud-native, multitenant environments where a minimal, stateless approach is essential:
-
-### Key Differences from go-git
-
-1. **Cloud-Native Design**
-   - HTTPS-only
-   - No local disk operations or full clones
-   - Stateless by design for multitenant environments
-   - Minimal memory and network footprint per operation
-
-2. **Focused Scope**
-   - Essential Git operations only
-   - No hooks, signing, or configuration management
-   - Clear boundaries on supported features
-   - Smaller security surface area
-
-### When to Use nanogit
-
-Choose nanogit when you need:
-- A lightweight Git client for cloud services
-- Stateless, multitenant Git operations
-- Integration with any Git server supporting HTTP protocol
-- Minimal resource usage
-
-### When to Use go-git
-
-Consider using go-git when you need:
-- Full Git functionality
-- Local disk operations
-- All Git protocols (git://, ssh://, file://)
-- Advanced Git features
