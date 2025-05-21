@@ -6,7 +6,13 @@ package protocol
 // https://git-scm.com/docs/git-diff#_combined_diff_format
 type FileStatus string
 
-// Includes only file statuses we have implemented
+// Includes only file statuses we have implemented:
+// - "M" (Modified): A file was modified.
+// - "A" (Added): A file was added.
+// - "D" (Deleted): A file was deleted.
+// - "T" (Type Changed): A file's type changed (e.g., from regular file to symlink).
+// 
+// Other Git status codes, such as "R" (Renamed) and "C" (Copied), are not currently supported.
 const (
 	// FileStatusModified indicates a file was modified
 	FileStatusModified FileStatus = "M"
