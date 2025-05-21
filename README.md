@@ -21,10 +21,6 @@ nanogit is a lightweight Git implementation designed for cloud environments, wit
 * Authentication support (Basic Auth and API tokens)
 * SHA-1 repository compatibility
 
-## Future Goals
-
-* Support SHA-256 repositories on top of SHA-1 repositories
-
 ## Non-Goals
 
 The following features are explicitly not supported:
@@ -112,7 +108,6 @@ This project is licensed under the [Apache License 2.0](LICENSE.md) - see the LI
 ## Project Status
 
 This project is currently in active development. While it's open source, it's important to note that it was initially created as part of a hackathon. We're working to make it production-ready, but please use it with appropriate caution.
-
 
 ## Resources
 
