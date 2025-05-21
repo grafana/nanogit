@@ -35,22 +35,40 @@ func TestClient_IsAuthorized(t *testing.T) {
 	local.Git(t, "push", "origin", "main", "--force")
 
 	logger := helpers.NewTestLogger(t)
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Test successful authorization
-	auth, err := client.IsAuthorized(ctx)
-	require.NoError(t, err)
-	assert.True(t, auth)
+	t.Run("successful authorization", func(t *testing.T) {
+		client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+		require.NoError(t, err)
+		auth, err := client.IsAuthorized(ctx)
+		require.NoError(t, err)
+		assert.True(t, auth)
+	})
 
-	// Test unauthorized access with wrong credentials
-	unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
-	require.NoError(t, err)
+	t.Run("unauthorized access with wrong credentials", func(t *testing.T) {
+		unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
+		require.NoError(t, err)
+		auth, err := unauthorizedClient.IsAuthorized(ctx)
+		require.NoError(t, err)
+		require.False(t, auth)
+	})
 
-	auth, err = unauthorizedClient.IsAuthorized(ctx)
-	require.NoError(t, err)
-	assert.False(t, auth)
+	t.Run("successful authorization with access token", func(t *testing.T) {
+		token := gitServer.GenerateUserToken(t, user.Username, user.Password)
+		client, err := nanogit.NewClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(logger))
+		require.NoError(t, err)
+		auth, err := client.IsAuthorized(ctx)
+		require.NoError(t, err)
+		require.True(t, auth)
+	})
+
+	t.Run("unauthorized access with invalid token", func(t *testing.T) {
+		invalidToken := "token invalid-token"
+		client, err := nanogit.NewClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(logger))
+		require.NoError(t, err)
+		auth, err := client.IsAuthorized(ctx)
+		require.NoError(t, err)
+		require.False(t, auth)
+	})
 }

@@ -3,7 +3,6 @@ module github.com/grafana/nanogit
 go 1.24.2
 
 require (
-	github.com/lmittmann/tint v1.0.7
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
 )
