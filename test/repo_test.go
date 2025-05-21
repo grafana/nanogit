@@ -35,31 +35,34 @@ func TestClient_RepoExists(t *testing.T) {
 	local.Git(t, "push", "origin", "main", "--force")
 
 	logger := helpers.NewTestLogger(t)
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Test existing repository
-	exists, err := client.RepoExists(ctx)
-	require.NoError(t, err)
-	assert.True(t, exists)
+	t.Run("existing repository", func(t *testing.T) {
+		client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+		require.NoError(t, err)
 
-	// Test non-existent repository
-	nonExistentClient, err := nanogit.NewClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(user.Username, user.Password))
-	require.NoError(t, err)
+		exists, err := client.RepoExists(ctx)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
 
-	exists, err = nonExistentClient.RepoExists(ctx)
-	require.NoError(t, err)
-	assert.False(t, exists)
+	t.Run("non-existent repository", func(t *testing.T) {
+		nonExistentClient, err := nanogit.NewClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(user.Username, user.Password))
+		require.NoError(t, err)
 
-	// Test unauthorized access
-	unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
-	require.NoError(t, err)
+		exists, err := nonExistentClient.RepoExists(ctx)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
 
-	exists, err = unauthorizedClient.RepoExists(ctx)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "401 Unauthorized")
-	assert.False(t, exists)
+	t.Run("unauthorized access", func(t *testing.T) {
+		unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
+		require.NoError(t, err)
+
+		exists, err := unauthorizedClient.RepoExists(ctx)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "401 Unauthorized")
+		assert.False(t, exists)
+	})
 }
