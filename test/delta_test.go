@@ -49,13 +49,6 @@ func TestClient_CompareCommits(t *testing.T) {
 	renamedCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 
-	// Create fourth commit that deletes a file
-	local.Git(t, "rm", "-f", "new.txt")
-	local.Git(t, "add", ".")
-	local.Git(t, "commit", "-m", "Delete new.txt")
-	deletedCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
-
 	// Create and switch to main branch
 	local.Git(t, "branch", "-M", "main")
 
@@ -67,7 +60,6 @@ func TestClient_CompareCommits(t *testing.T) {
 	t.Logf("Initial commit hash: %s", initialCommitHash)
 	t.Logf("Modified commit hash: %s", modifiedCommitHash)
 	t.Logf("Renamed commit hash: %s", renamedCommitHash)
-	t.Logf("Deleted commit hash: %s", deletedCommitHash)
 
 	// Manually check if the commit exists on the remote
 	t.Log("Running git ls-remote to verify the commit")
@@ -111,11 +103,28 @@ func TestClient_CompareCommits(t *testing.T) {
 	assert.Equal(t, "test.txt", changes[2].Path)
 	assert.Equal(t, protocol.FileStatusDeleted, changes[2].Status)
 
-	// Test comparing renamed and deleted commits
-	changes, err = client.CompareCommits(ctx, renamedCommitHash, deletedCommitHash)
+	// Test comparing renamed and modified commits (inverted direction)
+	changes, err = client.CompareCommits(ctx, renamedCommitHash, modifiedCommitHash)
 	require.NoError(t, err)
-	require.Len(t, changes, 1)
+	require.Len(t, changes, 3)
 
 	assert.Equal(t, "new.txt", changes[0].Path)
 	assert.Equal(t, protocol.FileStatusDeleted, changes[0].Status)
+
+	assert.Equal(t, "renamed.txt", changes[1].Path)
+	assert.Equal(t, protocol.FileStatusDeleted, changes[1].Status)
+
+	assert.Equal(t, "test.txt", changes[2].Path)
+	assert.Equal(t, protocol.FileStatusAdded, changes[2].Status)
+
+	// Test comparing modified and initial commits (inverted direction)
+	changes, err = client.CompareCommits(ctx, modifiedCommitHash, initialCommitHash)
+	require.NoError(t, err)
+	require.Len(t, changes, 1)
+	assert.Equal(t, "test.txt", changes[0].Path)
+	assert.Equal(t, protocol.FileStatusModified, changes[0].Status)
+
+	// Get the file hashes for verification
+	assert.Equal(t, modifiedFileHash, changes[0].OldHash)
+	assert.Equal(t, initialFileHash, changes[0].Hash)
 }
