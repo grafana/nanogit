@@ -74,7 +74,7 @@ type CommitFile struct {
 // The returned changes are sorted by file path for consistent ordering.
 func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	// Get both commits
-	base, err := c.GetObject(ctx, baseCommit)
+	base, err := c.getObject(ctx, baseCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting base commit: %w", err)
 	}
@@ -83,7 +83,7 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, errors.New("base commit is not a commit")
 	}
 
-	head, err := c.GetObject(ctx, headCommit)
+	head, err := c.getObject(ctx, headCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting head commit: %w", err)
 	}
@@ -180,7 +180,7 @@ func (c *clientImpl) compareTrees(base, head *Tree) ([]CommitFile, error) {
 
 // GetCommit returns a commit object from the repository.
 func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	commit, err := c.GetObject(ctx, hash)
+	commit, err := c.getObject(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
 	}

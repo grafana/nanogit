@@ -26,7 +26,7 @@ type Tree struct {
 
 // GetTree retrieves a tree for a given commit hash
 func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, error) {
-	obj, err := c.GetObject(ctx, commitHash)
+	obj, err := c.getObject(ctx, commitHash)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
@@ -40,7 +40,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 			return nil, fmt.Errorf("parsing tree hash: %w", err)
 		}
 
-		treeObj, err := c.GetObject(ctx, treeHash)
+		treeObj, err := c.getObject(ctx, treeHash)
 		if err != nil {
 			return nil, fmt.Errorf("getting tree: %w", err)
 		}
