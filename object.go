@@ -27,7 +27,7 @@ func (c *clientImpl) GetObject(ctx context.Context, hash hash.Hash) (*protocol.P
 
 	c.logger.Debug("Fetch request", "object", hash.String(), "request", string(pkt))
 
-	out, err := c.UploadPack(ctx, pkt)
+	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
 		c.logger.Debug("UploadPack error", "object", hash.String(), "error", err)
 		if strings.Contains(err.Error(), "not our ref") {

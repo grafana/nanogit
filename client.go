@@ -10,28 +10,15 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
 // Client defines the interface for interacting with a Git repository.
 type Client interface {
-	// TODO: this is probably not the right interface, we may have to separate the client
-	// Raw protocol requests
-	// UploadPack sends a POST request to the git-upload-pack endpoint.
-	UploadPack(ctx context.Context, data []byte) ([]byte, error)
-	// ReceivePack sends a POST request to the git-receive-pack endpoint.
-	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
-	// SmartInfo sends a GET request to the info/refs endpoint.
-	SmartInfo(ctx context.Context, service string) ([]byte, error)
-	// GetObject sends a GET request to the object endpoint.
-	GetObject(ctx context.Context, hash hash.Hash) (*protocol.PackfileObject, error)
 	// IsAuthorized checks if the client can successfully communicate with the Git server.
 	IsAuthorized(ctx context.Context) (bool, error)
 	// RepoExists checks if the repository exists on the server.
 	RepoExists(ctx context.Context) (bool, error)
-
-	// TODO: is this a good signature?
 	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)
 	GetRef(ctx context.Context, refName string) (Ref, error)
@@ -78,9 +65,9 @@ func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 
 }
 
-// UploadPack sends a POST request to the git-upload-pack endpoint.
+// uploadPack sends a POST request to the git-upload-pack endpoint.
 // This endpoint is used to fetch objects and refs from the remote repository.
-func (c *clientImpl) UploadPack(ctx context.Context, data []byte) ([]byte, error) {
+func (c *clientImpl) uploadPack(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
@@ -109,9 +96,9 @@ func (c *clientImpl) UploadPack(ctx context.Context, data []byte) ([]byte, error
 	return io.ReadAll(res.Body)
 }
 
-// ReceivePack sends a POST request to the git-receive-pack endpoint.
+// receivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, error) {
+func (c *clientImpl) receivePack(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
@@ -149,8 +136,8 @@ func (c *clientImpl) ReceivePack(ctx context.Context, data []byte) ([]byte, erro
 	return responseBody, nil
 }
 
-// SmartInfo sends a GET request to the info/refs endpoint.
-func (c *clientImpl) SmartInfo(ctx context.Context, service string) ([]byte, error) {
+// smartInfo sends a GET request to the info/refs endpoint.
+func (c *clientImpl) smartInfo(ctx context.Context, service string) ([]byte, error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
 	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
 	// See: https://git-scm.com/docs/http-protocol#_smart_clients

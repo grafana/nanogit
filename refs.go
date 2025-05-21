@@ -24,7 +24,7 @@ type Ref struct {
 // It returns a map of reference names to their commit hashes.
 func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	// First get the initial capability advertisement
-	_, err := c.SmartInfo(ctx, "git-upload-pack")
+	_, err := c.smartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		return nil, fmt.Errorf("get repository info: %w", err)
 	}
@@ -39,7 +39,7 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
-	refsData, err := c.UploadPack(ctx, pkt)
+	refsData, err := c.uploadPack(ctx, pkt)
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
@@ -93,7 +93,7 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// First get the initial capability advertisement
-	_, err = c.SmartInfo(ctx, "git-receive-pack")
+	_, err = c.smartInfo(ctx, "git-receive-pack")
 	if err != nil {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
@@ -104,7 +104,7 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Send the ref update
-	_, err = c.ReceivePack(ctx, pkt)
+	_, err = c.receivePack(ctx, pkt)
 	if err != nil {
 		return fmt.Errorf("send ref update: %w", err)
 	}
@@ -125,7 +125,7 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// First get the initial capability advertisement
-	_, err = c.SmartInfo(ctx, "git-receive-pack")
+	_, err = c.smartInfo(ctx, "git-receive-pack")
 	if err != nil {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
@@ -137,7 +137,7 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Send the ref update
-	_, err = c.ReceivePack(ctx, pkt)
+	_, err = c.receivePack(ctx, pkt)
 	if err != nil {
 		return fmt.Errorf("update ref: %w", err)
 	}
@@ -159,7 +159,7 @@ func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	}
 
 	// First get the initial capability advertisement
-	_, err = c.SmartInfo(ctx, "git-receive-pack")
+	_, err = c.smartInfo(ctx, "git-receive-pack")
 	if err != nil {
 		return fmt.Errorf("get receive-pack capability: %w", err)
 	}
@@ -171,7 +171,7 @@ func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
 	}
 
 	// Send the ref update
-	_, err = c.ReceivePack(ctx, pkt)
+	_, err = c.receivePack(ctx, pkt)
 	if err != nil {
 		return fmt.Errorf("delete ref: %w", err)
 	}
