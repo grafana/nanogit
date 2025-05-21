@@ -93,10 +93,16 @@ func (i *Identity) Time() (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("invalid hours: %w", err)
 	}
+	if hours > 23 {
+		return time.Time{}, fmt.Errorf("hours out of range (0-23): %d", hours)
+	}
 
 	minutes, err := strconv.Atoi(i.Timezone[3:5])
 	if err != nil {
 		return time.Time{}, fmt.Errorf("invalid minutes: %w", err)
+	}
+	if minutes > 59 {
+		return time.Time{}, fmt.Errorf("minutes out of range (0-59): %d", minutes)
 	}
 
 	// Convert to seconds
