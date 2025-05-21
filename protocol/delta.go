@@ -1,5 +1,23 @@
 package protocol
 
+// FileStatus represents the status of a file in a commit
+// Git file status codes are documented in the Git documentation:
+// https://git-scm.com/docs/git-status#_short_format
+// https://git-scm.com/docs/git-diff#_combined_diff_format
+type FileStatus string
+
+// Includes only file statuses we have implemented
+const (
+	// FileStatusModified indicates a file was modified
+	FileStatusModified FileStatus = "M"
+	// FileStatusAdded indicates a file was added
+	FileStatusAdded FileStatus = "A"
+	// FileStatusDeleted indicates a file was deleted
+	FileStatusDeleted FileStatus = "D"
+	// FileStatusTypeChanged indicates a file's type changed (e.g., from regular file to symlink)
+	FileStatusTypeChanged FileStatus = "T"
+)
+
 var (
 	errMissingOffsetByte = strError("missing offset byte")
 	errMissingSizeByte   = strError("missing size byte")
