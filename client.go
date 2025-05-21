@@ -31,7 +31,8 @@ type Client interface {
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
 	// File operations
 	GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error)
-	// Diff operations
+	// Commit operations
+	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
 }
 

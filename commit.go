@@ -5,11 +5,37 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/object"
 )
+
+// Commit represents a Git commit object.
+// It contains metadata about the commit, including the author, committer,
+// commit message, and references to the parent commits and tree.
+type Commit struct {
+	// Tree is the hash of the root tree object that represents the state
+	// of the repository at the time of the commit.
+	Tree hash.Hash
+
+	// Parent is a list of hashes of parent commits.
+	// TODO: Merge commits can have multiple parents.
+	Parent hash.Hash
+
+	// Author is the person who created the changes in the commit.
+	// It includes their name, email, and the timestamp of when they made the changes.
+	Author string
+
+	// Committer is the person who created the commit object.
+	// This is often the same as the author, but can be different in cases
+	// where someone else commits changes on behalf of the author.
+	Committer string
+
+	// Message is the commit message that describes the changes made in this commit.
+	Message string
+}
 
 // CommitFile represents a file change between two commits.
 // It contains information about how a file was modified, including its path,
@@ -135,4 +161,24 @@ func (c *clientImpl) compareTrees(base, head *Tree) ([]CommitFile, error) {
 	})
 
 	return changes, nil
+}
+
+// GetCommit returns a commit object from the repository.
+func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
+	commit, err := c.GetObject(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("getting commit: %w", err)
+	}
+
+	if commit.Type != object.TypeCommit {
+		return nil, errors.New("commit is not a commit")
+	}
+
+	return &Commit{
+		Tree:      commit.Commit.Tree,
+		Parent:    commit.Commit.Parent,
+		Author:    commit.Commit.Author,
+		Committer: commit.Commit.Committer,
+		Message:   strings.TrimSpace(commit.Commit.Message),
+	}, nil
 }
