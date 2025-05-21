@@ -9,19 +9,19 @@ A limited, cloud-ready Git implementation for use in Grafana.
 
 ## Overview
 
-nanogit is a lightweight Git implementation designed for cloud environments, with a focus on HTTPS-based operations. It provides a subset of Git functionality optimized for reading and writing Git objects over HTTPS, particularly targeting GitHub.com integration.
+nanogit is a lightweight Git implementation designed for cloud environments, with a focus on HTTPS-based operations. It provides a subset of Git functionality optimized for reading and writing Git objects over HTTPS.
 
 ## Features
 
-* Read Git files over HTTPS on github.com
-* Read Git trees over HTTPS on github.com
-* Write new Git objects over HTTPS on github.com
-* Write Git object deltas over HTTPS on github.com
+* Read Git files over HTTPS
+* Read Git trees over HTTPS
+* Write new Git objects over HTTPS
+* Write Git object deltas over HTTPS
 * Support for SHA-1 hashing in repositories
 
 ## Future Goals
 
-* Support any HTTPS Git service that supports `git-upload-pack` on `Git-Protocol: version=2` (e.g., GitLab)
+* Support any HTTPS Git service that supports `git-upload-pack` on `Git-Protocol: version=2`
 * Support SHA-256 repositories on top of SHA-1 repositories
 
 ## Non-Goals
@@ -59,7 +59,30 @@ go get github.com/grafana/nanogit
 ```go
 import "github.com/grafana/nanogit"
 
-// Example usage will be added as the project matures
+// Create a new client
+client, err := nanogit.NewClient("https://github.com/grafana/nanogit.git")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Check if repository exists
+exists, err := client.RepoExists(context.Background())
+if err != nil {
+    log.Fatal(err)
+}
+if !exists {
+    log.Fatal("Repository does not exist")
+}
+
+// Get a file from the repository
+file, err := client.GetFile(context.Background(), "main", "README.md")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Print the file contents
+fmt.Printf("File contents: %s\n", string(file.Content))
+
 ```
 
 ## Contributing
@@ -135,6 +158,7 @@ While [go-git](https://github.com/go-git/go-git) is a mature Git implementation,
 Choose nanogit when you need:
 - A lightweight Git client for cloud services
 - Stateless, multitenant Git operations
+- Integration with any Git server supporting HTTP protocol
 - Minimal resource usage
 
 ### When to Use go-git
