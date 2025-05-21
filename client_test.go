@@ -342,13 +342,13 @@ func TestUploadPack(t *testing.T) {
 
 			client, err := NewClient(url)
 			require.NoError(t, err)
+			c, ok := client.(*clientImpl)
+			require.True(t, ok, "client should be of type *client")
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
-				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
 
-			response, err := client.UploadPack(context.Background(), []byte("test data"))
+			response, err := c.uploadPack(context.Background(), []byte("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -467,13 +467,13 @@ func TestReceivePack(t *testing.T) {
 
 			client, err := NewClient(url)
 			require.NoError(t, err)
+			c, ok := client.(*clientImpl)
+			require.True(t, ok, "client should be of type *client")
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
-				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
 
-			response, err := client.ReceivePack(context.Background(), []byte("test data"))
+			response, err := c.receivePack(context.Background(), []byte("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -596,13 +596,13 @@ func TestSmartInfo(t *testing.T) {
 
 			client, err := NewClient(url)
 			require.NoError(t, err)
+			c, ok := client.(*clientImpl)
+			require.True(t, ok, "client should be of type *client")
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
-				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
 
-			response, err := client.SmartInfo(context.Background(), "custom-service")
+			response, err := c.smartInfo(context.Background(), "custom-service")
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -669,7 +669,10 @@ func TestAuthentication(t *testing.T) {
 			client, err := NewClient(server.URL, tt.authOption)
 			require.NoError(t, err)
 
-			_, err = client.UploadPack(context.Background(), []byte("test"))
+			c, ok := client.(*clientImpl)
+			require.True(t, ok, "client should be of type *client")
+
+			_, err = c.uploadPack(context.Background(), []byte("test"))
 			require.NoError(t, err)
 		})
 	}

@@ -16,7 +16,7 @@ import (
 //   - error if there are any other connection or protocol issues
 func (c *clientImpl) IsAuthorized(ctx context.Context) (bool, error) {
 	// First get the initial capability advertisement
-	_, err := c.SmartInfo(ctx, "git-upload-pack")
+	_, err := c.smartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		if strings.Contains(err.Error(), "401 Unauthorized") {
 			return false, nil
