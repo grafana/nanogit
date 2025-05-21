@@ -47,11 +47,33 @@ func ParseIdentity(identity string) (*Identity, error) {
 		return nil, fmt.Errorf("invalid timestamp: %w", err)
 	}
 
+	// Validate timezone format
+	timezone := parts[1]
+	if len(timezone) != 5 {
+		return nil, fmt.Errorf("invalid timezone format: %s", timezone)
+	}
+
+	sign := timezone[0]
+	if sign != '+' && sign != '-' {
+		return nil, fmt.Errorf("invalid timezone sign: %c", sign)
+	}
+
+	// Validate hours and minutes
+	hours, err := strconv.Atoi(timezone[1:3])
+	if err != nil || hours > 23 {
+		return nil, fmt.Errorf("invalid hours in timezone: %s", timezone)
+	}
+
+	minutes, err := strconv.Atoi(timezone[3:5])
+	if err != nil || minutes > 59 {
+		return nil, fmt.Errorf("invalid minutes in timezone: %s", timezone)
+	}
+
 	return &Identity{
 		Name:      name,
 		Email:     email,
 		Timestamp: timestamp,
-		Timezone:  parts[1],
+		Timezone:  timezone,
 	}, nil
 }
 
