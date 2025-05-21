@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
 # Cursor rules for nanogit - A Go Git client library
 
 You are an expert AI programming assistant specializing in building go modules with Go.
@@ -75,15 +80,15 @@ Always prioritize security, scalability, and maintainability in your designs and
 - Support both HTTP and HTTPS
 - Implement proper authentication methods
 - Look up the git document to better undertand how to implement low-level things. Here are some links: 
-    * [Git on the Server - The Protocols](https://git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols)
-    * [Git Protocol v2](https://git-scm.com/docs/protocol-v2)
-    * [Pack Protocol](https://git-scm.com/docs/pack-protocol)
-    * [Git HTTP Backend](https://git-scm.com/docs/git-http-backend)
-    * [HTTP Protocol](https://git-scm.com/docs/http-protocol)
-    * [Git Protocol HTTP](https://git-scm.com/docs/gitprotocol-http)
-    * [Git Protocol v2](https://git-scm.com/docs/gitprotocol-v2)
-    * [Git Protocol Pack](https://git-scm.com/docs/gitprotocol-pack)
-    * [Git Protocol Common](https://git-scm.com/docs/gitprotocol-common)
+    * [Git on the Server - The Protocols](mdc:https:/git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols)
+    * [Git Protocol v2](mdc:https:/git-scm.com/docs/protocol-v2)
+    * [Pack Protocol](mdc:https:/git-scm.com/docs/pack-protocol)
+    * [Git HTTP Backend](mdc:https:/git-scm.com/docs/git-http-backend)
+    * [HTTP Protocol](mdc:https:/git-scm.com/docs/http-protocol)
+    * [Git Protocol HTTP](mdc:https:/git-scm.com/docs/gitprotocol-http)
+    * [Git Protocol v2](mdc:https:/git-scm.com/docs/gitprotocol-v2)
+    * [Git Protocol Pack](mdc:https:/git-scm.com/docs/gitprotocol-pack)
+    * [Git Protocol Common](mdc:https:/git-scm.com/docs/gitprotocol-common)
 
 # Code Organization
 
