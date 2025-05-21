@@ -12,7 +12,6 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,42 +44,42 @@ func TestGetTree(t *testing.T) {
 						Name: "root.txt",
 						Path: "root.txt",
 						Mode: 33188, // 100644 in octal
-						Type: object.TypeBlob,
+						Type: protocol.ObjectTypeBlob,
 						Hash: mustFromHex("6eec10ba6e8a5379cae2c49d01d214fd41fb713f"),
 					},
 					{
 						Name: "dir1",
 						Path: "dir1",
 						Mode: 16384, // 040000 in octal
-						Type: object.TypeTree,
+						Type: protocol.ObjectTypeTree,
 						Hash: mustFromHex("1ae8c212049c2661d606c787235163365d440dcc"),
 					},
 					{
 						Name: "file1.txt",
 						Path: "dir1/file1.txt",
 						Mode: 33188, // 100644 in octal
-						Type: object.TypeBlob,
+						Type: protocol.ObjectTypeBlob,
 						Hash: mustFromHex("dd954e7a4e1a62ff90c5a0709dce5928716535c1"),
 					},
 					{
 						Name: "file2.txt",
 						Path: "dir1/file2.txt",
 						Mode: 33188, // 100644 in octal
-						Type: object.TypeBlob,
+						Type: protocol.ObjectTypeBlob,
 						Hash: mustFromHex("db00fd65b218578127ea51f3dffac701f12f486a"),
 					},
 					{
 						Name: "dir2",
 						Path: "dir2",
 						Mode: 16384, // 040000 in octal
-						Type: object.TypeTree,
+						Type: protocol.ObjectTypeTree,
 						Hash: mustFromHex("fb90cfcb8044471fec2bb75a67cca6b16e7de4bc"),
 					},
 					{
 						Name: "file3.txt",
 						Path: "dir2/file3.txt",
 						Mode: 33188, // 100644 in octal
-						Type: object.TypeBlob,
+						Type: protocol.ObjectTypeBlob,
 						Hash: mustFromHex("a2b32293aab475bf50798c7642f0fe0593c167f6"),
 					},
 				},
@@ -211,7 +210,7 @@ func TestProcessTreeEntries(t *testing.T) {
 					Name: "file.txt",
 					Path: "file.txt",
 					Mode: 33188,
-					Type: object.TypeBlob,
+					Type: protocol.ObjectTypeBlob,
 				},
 			},
 			basePath: "",
@@ -220,7 +219,7 @@ func TestProcessTreeEntries(t *testing.T) {
 					Name: "file.txt",
 					Path: "file.txt",
 					Mode: 33188,
-					Type: object.TypeBlob,
+					Type: protocol.ObjectTypeBlob,
 				},
 			},
 		},
@@ -231,7 +230,7 @@ func TestProcessTreeEntries(t *testing.T) {
 					Name: "file.txt",
 					Path: "file.txt",
 					Mode: 33188,
-					Type: object.TypeBlob,
+					Type: protocol.ObjectTypeBlob,
 				},
 			},
 			basePath: "dir",
@@ -240,7 +239,7 @@ func TestProcessTreeEntries(t *testing.T) {
 					Name: "file.txt",
 					Path: "dir/file.txt",
 					Mode: 33188,
-					Type: object.TypeBlob,
+					Type: protocol.ObjectTypeBlob,
 				},
 			},
 		},

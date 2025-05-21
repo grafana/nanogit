@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/object"
 	"github.com/grafana/nanogit/test/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,42 +74,42 @@ func TestClient_Tree(t *testing.T) {
 			Path: "root.txt",
 			Mode: 33188, // 100644 in octal
 			Hash: getHash("root.txt"),
-			Type: object.TypeBlob,
+			Type: protocol.ObjectTypeBlob,
 		},
 		{
 			Name: "dir1",
 			Path: "dir1",
 			Mode: 16384, // 040000 in octal
 			Hash: getHash("dir1"),
-			Type: object.TypeTree,
+			Type: protocol.ObjectTypeTree,
 		},
 		{
 			Name: "file1.txt",
 			Path: "dir1/file1.txt",
 			Mode: 33188, // 100644 in octal
 			Hash: getHash("dir1/file1.txt"),
-			Type: object.TypeBlob,
+			Type: protocol.ObjectTypeBlob,
 		},
 		{
 			Name: "file2.txt",
 			Path: "dir1/file2.txt",
 			Mode: 33188, // 100644 in octal
 			Hash: getHash("dir1/file2.txt"),
-			Type: object.TypeBlob,
+			Type: protocol.ObjectTypeBlob,
 		},
 		{
 			Name: "dir2",
 			Path: "dir2",
 			Mode: 16384, // 040000 in octal
 			Hash: getHash("dir2"),
-			Type: object.TypeTree,
+			Type: protocol.ObjectTypeTree,
 		},
 		{
 			Name: "file3.txt",
 			Path: "dir2/file3.txt",
 			Mode: 33188, // 100644 in octal
 			Hash: getHash("dir2/file3.txt"),
-			Type: object.TypeBlob,
+			Type: protocol.ObjectTypeBlob,
 		},
 	}
 

@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/object"
 )
 
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
@@ -38,7 +37,7 @@ type PackfileEntry struct {
 
 type PackfileObject struct {
 	// The type of the object. 3-bit field.
-	Type object.Type
+	Type ObjectType
 	// The data, uncompressed.
 	// If Type is one of ObjectTypeRefDelta and ObjectTypeOfsDelta, this is a delta.
 	Data []byte
@@ -123,7 +122,7 @@ func (e *PackfileObject) parseCommit() error {
 		command, data, _ := bytes.Cut(line, []byte(" "))
 		switch string(command) {
 		case "committer":
-			identity, err := object.ParseIdentity(string(data))
+			identity, err := ParseIdentity(string(data))
 			if err != nil {
 				return fmt.Errorf("parsing committer: %w", err)
 			}
@@ -131,7 +130,7 @@ func (e *PackfileObject) parseCommit() error {
 		case "tree":
 			e.Commit.Tree, err = hash.FromHex(string(data))
 		case "author":
-			identity, err := object.ParseIdentity(string(data))
+			identity, err := ParseIdentity(string(data))
 			if err != nil {
 				return fmt.Errorf("parsing author: %w", err)
 			}
@@ -185,8 +184,8 @@ type PackfileTreeEntry struct {
 // Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/commit.go#L185-L275
 type PackfileCommit struct {
 	Tree      hash.Hash
-	Author    *object.Identity
-	Committer *object.Identity
+	Author    *Identity
+	Committer *Identity
 	Parent    hash.Hash
 	Message   string
 	// Fields contains any fields beyond the fields that are statically defined.
@@ -279,7 +278,7 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
-	entry.Object.Type = object.Type((buf[0] >> 4) & 0b111)
+	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
@@ -293,29 +292,29 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 
 	var err error
 	switch entry.Object.Type {
-	case object.TypeBlob, object.TypeCommit, object.TypeTag, object.TypeTree:
+	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
 		entry.Object.Data, err = p.readAndInflate(size)
 		if err != nil {
 			return entry, eofIsUnexpected(err)
 		}
 
-		entry.Object.Hash, err = hash.Object(p.algo, entry.Object.Type, entry.Object.Data)
+		entry.Object.Hash, err = Object(p.algo, entry.Object.Type, entry.Object.Data)
 		if err != nil {
 			return entry, eofIsUnexpected(err)
 		}
 
-		if entry.Object.Type == object.TypeTree {
+		if entry.Object.Type == ObjectTypeTree {
 			if err := entry.Object.parseTree(); err != nil {
 				return entry, err
 			}
 		}
-		if entry.Object.Type == object.TypeCommit {
+		if entry.Object.Type == ObjectTypeCommit {
 			if err := entry.Object.parseCommit(); err != nil {
 				return entry, err
 			}
 		}
 
-	case object.TypeRefDelta:
+	case ObjectTypeRefDelta:
 		ref := make([]byte, p.algo.Size())
 		if _, err := p.reader.Read(ref); err != nil {
 			return entry, err
@@ -328,13 +327,13 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 			return entry, err
 		}
 
-	case object.TypeOfsDelta:
+	case ObjectTypeOfsDelta:
 		// TODO(mariell): we need to handle a ref delta, at least.
 		//   Maybe OFS too? I don't think we need them as that's a
 		//   capability to negotiate.
 		fallthrough
 
-	case object.TypeInvalid, object.TypeReserved:
+	case ObjectTypeInvalid, ObjectTypeReserved:
 		// TODO(mem): do we need to do something about these? No
 		// special handling for them yet.
 		fallthrough
