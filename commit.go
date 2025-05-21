@@ -6,11 +6,29 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/object"
 )
+
+// Author represents the person who created the changes in the commit.
+// It includes their name, email, and the timestamp of when they made the changes.
+type Author struct {
+	Name  string
+	Email string
+	Time  time.Time
+}
+
+// Committer represents the person who created the commit object.
+// This is often the same as the author, but can be different in cases
+// where someone else commits changes on behalf of the author.
+type Committer struct {
+	Name  string
+	Email string
+	Time  time.Time
+}
 
 // Commit represents a Git commit object.
 // It contains metadata about the commit, including the author, committer,
@@ -25,13 +43,10 @@ type Commit struct {
 	Parent hash.Hash
 
 	// Author is the person who created the changes in the commit.
-	// It includes their name, email, and the timestamp of when they made the changes.
-	Author string
+	Author Author
 
 	// Committer is the person who created the commit object.
-	// This is often the same as the author, but can be different in cases
-	// where someone else commits changes on behalf of the author.
-	Committer string
+	Committer Committer
 
 	// Message is the commit message that describes the changes made in this commit.
 	Message string
@@ -174,11 +189,29 @@ func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, er
 		return nil, errors.New("commit is not a commit")
 	}
 
+	authorTime, err := commit.Commit.Author.Time()
+	if err != nil {
+		return nil, fmt.Errorf("parsing author time: %w", err)
+	}
+
+	committerTime, err := commit.Commit.Committer.Time()
+	if err != nil {
+		return nil, fmt.Errorf("parsing committer time: %w", err)
+	}
+
 	return &Commit{
-		Tree:      commit.Commit.Tree,
-		Parent:    commit.Commit.Parent,
-		Author:    commit.Commit.Author,
-		Committer: commit.Commit.Committer,
-		Message:   strings.TrimSpace(commit.Commit.Message),
+		Tree:   commit.Commit.Tree,
+		Parent: commit.Commit.Parent,
+		Author: Author{
+			Name:  commit.Commit.Author.Name,
+			Email: commit.Commit.Author.Email,
+			Time:  authorTime,
+		},
+		Committer: Committer{
+			Name:  commit.Commit.Committer.Name,
+			Email: commit.Commit.Committer.Email,
+			Time:  committerTime,
+		},
+		Message: strings.TrimSpace(commit.Commit.Message),
 	}, nil
 }

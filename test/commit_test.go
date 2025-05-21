@@ -40,6 +40,7 @@ func TestClient_GetCommit(t *testing.T) {
 	local.Git(t, "commit", "-m", "Modify file")
 	secondCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
+
 	// Create third commit that renames the file
 	local.Git(t, "mv", "test.txt", "renamed.txt")
 	local.CreateFile(t, "new.txt", "modified content")
@@ -63,11 +64,12 @@ func TestClient_GetCommit(t *testing.T) {
 
 	// Verify commit details
 	require.Equal(t, hash.Zero, commit.Parent) // First commit has no parent
-	// TODO: fix this in the parsing
-	require.Contains(t, commit.Author, user.Username)
-	require.Contains(t, commit.Author, user.Email)
-	require.Contains(t, commit.Committer, user.Username)
-	require.Contains(t, commit.Committer, user.Email)
+	require.Equal(t, user.Username, commit.Author.Name)
+	require.Equal(t, user.Email, commit.Author.Email)
+	require.NotZero(t, commit.Author.Time)
+	require.Equal(t, user.Username, commit.Committer.Name)
+	require.Equal(t, user.Email, commit.Committer.Email)
+	require.NotZero(t, commit.Committer.Time)
 	require.Equal(t, "Initial commit", commit.Message)
 
 	commit, err = client.GetCommit(context.Background(), secondCommitHash)
@@ -75,11 +77,12 @@ func TestClient_GetCommit(t *testing.T) {
 
 	// Verify commit details
 	require.Equal(t, initialCommitHash, commit.Parent)
-	// TODO: fix this in the parsing
-	require.Contains(t, commit.Author, user.Username)
-	require.Contains(t, commit.Author, user.Email)
-	require.Contains(t, commit.Committer, user.Username)
-	require.Contains(t, commit.Committer, user.Email)
+	require.Equal(t, user.Username, commit.Author.Name)
+	require.Equal(t, user.Email, commit.Author.Email)
+	require.NotZero(t, commit.Author.Time)
+	require.Equal(t, user.Username, commit.Committer.Name)
+	require.Equal(t, user.Email, commit.Committer.Email)
+	require.NotZero(t, commit.Committer.Time)
 	require.Equal(t, "Modify file", commit.Message)
 
 	commit, err = client.GetCommit(context.Background(), thirdCommitHash)
@@ -87,11 +90,12 @@ func TestClient_GetCommit(t *testing.T) {
 
 	// Verify commit details
 	require.Equal(t, secondCommitHash, commit.Parent)
-	// TODO: fix this in the parsing
-	require.Contains(t, commit.Author, user.Username)
-	require.Contains(t, commit.Author, user.Email)
-	require.Contains(t, commit.Committer, user.Username)
-	require.Contains(t, commit.Committer, user.Email)
+	require.Equal(t, user.Username, commit.Author.Name)
+	require.Equal(t, user.Email, commit.Author.Email)
+	require.NotZero(t, commit.Author.Time)
+	require.Equal(t, user.Username, commit.Committer.Name)
+	require.Equal(t, user.Email, commit.Committer.Email)
+	require.NotZero(t, commit.Committer.Time)
 	require.Equal(t, "Rename and add files", commit.Message)
 }
 
