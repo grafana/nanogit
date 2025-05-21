@@ -214,30 +214,6 @@ func NewClient(repo string, options ...Option) (Client, error) {
 	return c, nil
 }
 
-// WithBasicAuth sets the HTTP Basic Auth options.
-// This is not a particularly secure method of authentication, so you probably want to recommend or require WithTokenAuth instead.
-func WithBasicAuth(username, password string) Option {
-	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
-	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *clientImpl) error {
-		c.basicAuth = &struct{ Username, Password string }{username, password}
-		c.tokenAuth = nil
-		return nil
-	}
-}
-
-// WithTokenAuth sets the Authorization header to the given token.
-// We will not modify it for you. As such, if it needs a "Bearer" or "token" prefix, you must add that yourself.
-func WithTokenAuth(token string) Option {
-	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
-	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *clientImpl) error {
-		c.basicAuth = nil
-		c.tokenAuth = &token
-		return nil
-	}
-}
-
 // WithUserAgent overrides the default User-Agent header.
 func WithUserAgent(agent string) Option {
 	return func(c *clientImpl) error {
