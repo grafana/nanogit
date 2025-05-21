@@ -50,6 +50,9 @@ func TestClient_CompareCommits(t *testing.T) {
 	renamedCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 
+	// Create and switch to main branch
+	local.Git(t, "branch", "-M", "main")
+
 	// Push all commits
 	local.Git(t, "push", "origin", "main", "--force")
 
@@ -80,7 +83,7 @@ func TestClient_CompareCommits(t *testing.T) {
 	// Test comparing modified and renamed commits
 	changes, err = client.CompareCommits(ctx, modifiedCommitHash, renamedCommitHash)
 	require.NoError(t, err)
-	require.Len(t, changes, 2)
+	require.Len(t, changes, 3)
 
 	// Sort changes by path for consistent testing
 	sort.Slice(changes, func(i, j int) bool {
@@ -90,6 +93,9 @@ func TestClient_CompareCommits(t *testing.T) {
 	assert.Equal(t, "new.txt", changes[0].Path)
 	assert.Equal(t, protocol.FileStatusAdded, changes[0].Status)
 
-	assert.Equal(t, "test.txt", changes[1].Path)
-	assert.Equal(t, protocol.FileStatusDeleted, changes[1].Status)
+	assert.Equal(t, "renamed.txt", changes[1].Path)
+	assert.Equal(t, protocol.FileStatusAdded, changes[1].Status)
+
+	assert.Equal(t, "test.txt", changes[2].Path)
+	assert.Equal(t, protocol.FileStatusDeleted, changes[2].Status)
 }
