@@ -26,6 +26,8 @@ type Client interface {
 	SmartInfo(ctx context.Context, service string) ([]byte, error)
 	// GetObject sends a GET request to the object endpoint.
 	GetObject(ctx context.Context, hash hash.Hash) (*protocol.PackfileObject, error)
+	// IsAuthorized checks if the client can successfully communicate with the Git server.
+	IsAuthorized(ctx context.Context) (bool, error)
 
 	// TODO: is this a good signature?
 	// Ref operations
