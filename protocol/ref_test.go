@@ -364,3 +364,93 @@ func TestNewDeleteRefRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRefLine(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		wantRef  string
+		wantHash string
+		wantErr  bool
+	}{
+		{
+			name:     "empty line",
+			input:    []byte(""),
+			wantRef:  "",
+			wantHash: "",
+			wantErr:  false,
+		},
+		{
+			name:     "flush packet",
+			input:    []byte("0000"),
+			wantRef:  "",
+			wantHash: "",
+			wantErr:  false,
+		},
+		{
+			name:     "capability line",
+			input:    []byte("=capability"),
+			wantRef:  "",
+			wantHash: "",
+			wantErr:  false,
+		},
+		{
+			name:     "valid ref line",
+			input:    []byte("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/main"),
+			wantRef:  "refs/heads/main",
+			wantHash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d",
+			wantErr:  false,
+		},
+		{
+			name:     "valid ref line with capabilities",
+			input:    []byte("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/main\000report-status-v2"),
+			wantRef:  "refs/heads/main",
+			wantHash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d",
+			wantErr:  false,
+		},
+		{
+			name:     "HEAD with symref",
+			input:    []byte("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d HEAD symref=HEAD:refs/heads/main"),
+			wantRef:  "refs/heads/main",
+			wantHash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d",
+			wantErr:  false,
+		},
+		{
+			name:     "invalid hash length",
+			input:    []byte("123 refs/heads/main"),
+			wantRef:  "",
+			wantHash: "",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid format - missing space",
+			input:    []byte("7fd1a60b01f91b314f59955a4e4d4e80d8edf11drefs/heads/main"),
+			wantRef:  "",
+			wantHash: "",
+			wantErr:  true,
+		},
+		{
+			name:     "valid ref line with extra spaces",
+			input:    []byte("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d  refs/heads/main  "),
+			wantRef:  "refs/heads/main",
+			wantHash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRef, gotHash, err := protocol.ParseRefLine(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseRefLine() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotRef != tt.wantRef {
+				t.Errorf("ParseRefLine() gotRef = %v, want %v", gotRef, tt.wantRef)
+			}
+			if gotHash != tt.wantHash {
+				t.Errorf("ParseRefLine() gotHash = %v, want %v", gotHash, tt.wantHash)
+			}
+		})
+	}
+}
