@@ -178,18 +178,6 @@ func (c *clientImpl) smartInfo(ctx context.Context, service string) ([]byte, err
 	return body, nil
 }
 
-// WithLogger sets a custom logger for the client.
-// If not provided, the default slog logger will be used.
-func WithLogger(logger Logger) Option {
-	return func(c *clientImpl) error {
-		if logger == nil {
-			return errors.New("logger cannot be nil")
-		}
-		c.logger = logger
-		return nil
-	}
-}
-
 // NewClient returns a new Client for the given repository.
 func NewClient(repo string, options ...Option) (Client, error) {
 	if repo == "" {
