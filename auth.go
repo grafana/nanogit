@@ -21,7 +21,6 @@ func (c *clientImpl) IsAuthorized(ctx context.Context) (bool, error) {
 		if strings.Contains(err.Error(), "401 Unauthorized") {
 			return false, nil
 		}
-
 		return false, fmt.Errorf("get repository info: %w", err)
 	}
 
