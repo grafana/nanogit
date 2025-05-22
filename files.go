@@ -49,23 +49,23 @@ func (c *clientImpl) GetFile(ctx context.Context, hash hash.Hash, path string) (
 
 // CreateFile creates a new file in the specified branch.
 // It creates a new commit with the file content and updates the branch reference.
-func (c *clientImpl) CreateFile(ctx context.Context, ref Ref, path string, content []byte, author Author, committer Committer, message string) error {
+func (c *clientImpl) CreateFile(ctx context.Context, ref Ref, path string, content []byte, author Author, committer Committer, message string) (*Commit, error) {
 	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
 
 	// Create the blob for the file content
 	blobHash, err := writer.AddBlob(content)
 	if err != nil {
-		return fmt.Errorf("creating blob: %w", err)
+		return nil, fmt.Errorf("creating blob: %w", err)
 	}
 
 	parentHash, err := hash.FromHex(ref.Hash)
 	if err != nil {
-		return fmt.Errorf("parsing parent hash: %w", err)
+		return nil, fmt.Errorf("parsing parent hash: %w", err)
 	}
 	currentTree, err := c.GetTree(ctx, parentHash)
 	if err != nil {
-		return fmt.Errorf("getting current tree: %w", err)
+		return nil, fmt.Errorf("getting current tree: %w", err)
 	}
 
 	// get the tree entries and not blobs
@@ -79,13 +79,13 @@ func (c *clientImpl) CreateFile(ctx context.Context, ref Ref, path string, conte
 	}
 
 	if entries[path] != nil {
-		return errors.New("file already exists")
+		return nil, errors.New("file already exists")
 	}
 
 	// Create the root tree
 	rootTreeHash, err := c.addMissingOrStaleTreeEntries(ctx, path, currentTree.Hash, blobHash, entries, writer)
 	if err != nil {
-		return fmt.Errorf("creating root tree: %w", err)
+		return nil, fmt.Errorf("creating root tree: %w", err)
 	}
 
 	// Create the commit
@@ -103,24 +103,31 @@ func (c *clientImpl) CreateFile(ctx context.Context, ref Ref, path string, conte
 		Timezone:  committer.Time.Format("-0700"),
 	}
 
-	_, err = writer.AddCommit(rootTreeHash, parentHash, &authorIdentity, &committerIdentity, message)
+	commitHash, err := writer.AddCommit(rootTreeHash, parentHash, &authorIdentity, &committerIdentity, message)
 	if err != nil {
-		return fmt.Errorf("creating commit: %w", err)
+		return nil, fmt.Errorf("creating commit: %w", err)
 	}
 
 	// Write the packfile
 	packfile, err := writer.WritePackfile()
 	if err != nil {
-		return fmt.Errorf("writing packfile: %w", err)
+		return nil, fmt.Errorf("writing packfile: %w", err)
 	}
 
 	// Send the packfile to the server
 	_, err = c.receivePack(ctx, packfile)
 	if err != nil {
-		return fmt.Errorf("sending packfile: %w", err)
+		return nil, fmt.Errorf("sending packfile: %w", err)
 	}
 
-	return nil
+	return &Commit{
+		Hash:      commitHash,
+		Tree:      rootTreeHash,
+		Parent:    parentHash,
+		Author:    author,
+		Committer: committer,
+		Message:   message,
+	}, nil
 }
 
 // updateTree updates the tree for the given path.

@@ -33,6 +33,8 @@ type Committer struct {
 // It contains metadata about the commit, including the author, committer,
 // commit message, and references to the parent commits and tree.
 type Commit struct {
+	// Hash is the hash of the commit object.
+	Hash hash.Hash
 	// Tree is the hash of the root tree object that represents the state
 	// of the repository at the time of the commit.
 	Tree hash.Hash
@@ -206,6 +208,7 @@ func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, er
 	}
 
 	return &Commit{
+		Hash:   commit.Hash,
 		Tree:   commit.Commit.Tree,
 		Parent: commit.Commit.Parent,
 		Author: Author{

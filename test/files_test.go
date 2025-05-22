@@ -103,11 +103,16 @@ func TestClient_Files(t *testing.T) {
 			Hash: currentHash.String(),
 		}
 
-		err = client.CreateFile(ctx, ref, "new.txt", newContent, author, committer, "Add new file")
+		commit, err := client.CreateFile(ctx, ref, "new.txt", newContent, author, committer, "Add new file")
 		require.NoError(t, err)
+		require.NotNil(t, commit)
 
 		// Verify using Git CLI
 		local.Git(t, "pull", "origin", "main")
+		// verify commit hash
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+
+		// verify file content
 		content, err := os.ReadFile(filepath.Join(local.Path, "new.txt"))
 		require.NoError(t, err)
 		assert.Equal(t, newContent, content)
@@ -160,11 +165,15 @@ func TestClient_Files(t *testing.T) {
 			Hash: currentHash.String(),
 		}
 
-		err = client.CreateFile(ctx, ref, "dir/subdir/file.txt", nestedContent, author, committer, "Add nested file")
+		commit, err := client.CreateFile(ctx, ref, "dir/subdir/file.txt", nestedContent, author, committer, "Add nested file")
 		require.NoError(t, err)
+		require.NotNil(t, commit)
 
 		// Verify using Git CLI
 		local.Git(t, "pull", "origin", "main")
+
+		// verify commit hash
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
 		// Verify directory structure
 		dirInfo, err := os.Stat(filepath.Join(local.Path, "dir"))
@@ -210,7 +219,7 @@ func TestClient_Files(t *testing.T) {
 			Time:  time.Now(),
 		}
 
-		err := client.CreateFile(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"}, "test.txt", content, author, committer, "Add file")
+		_, err := client.CreateFile(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"}, "test.txt", content, author, committer, "Add file")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "object not found")
 	})
