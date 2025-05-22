@@ -105,7 +105,7 @@ func TestClient_Files(t *testing.T) {
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
 
-		_, err = writer.CreateFile(ctx, "new.txt", newContent)
+		_, err = writer.CreateBlob(ctx, "new.txt", newContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add new file", author, committer)
 		require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestClient_Files(t *testing.T) {
 
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
-		_, err = writer.CreateFile(ctx, "dir/subdir/file.txt", nestedContent)
+		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
 		require.NoError(t, err)

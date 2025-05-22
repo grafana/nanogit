@@ -22,6 +22,29 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 		return nil, fmt.Errorf("getting root tree: %w", err)
 	}
 
+	treeObj, err := c.getObject(ctx, commit.Tree)
+	if err != nil {
+		return nil, fmt.Errorf("getting tree object: %w", err)
+	}
+
+	if treeObj.Type != protocol.ObjectTypeTree {
+		return nil, errors.New("root is not a tree")
+	}
+
+	cache := make(map[string]*protocol.PackfileObject)
+	cache[treeObj.Hash.String()] = treeObj
+
+	// TODO: pass function to cache
+	currentTree, err := c.processTree(ctx, commit.Tree, treeObj)
+	if err != nil {
+		return nil, fmt.Errorf("getting current tree: %w", err)
+	}
+
+	entries := make(map[string]*TreeEntry, len(currentTree.Entries))
+	for _, entry := range currentTree.Entries {
+		entries[entry.Path] = &entry
+	}
+
 	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
 	return &refWriter{
@@ -39,11 +62,11 @@ type refWriter struct {
 	writer       *protocol.PackfileWriter
 	lastCommit   *Commit
 	lastTreeHash hash.Hash
+	treeCache    map[string]*protocol.PackfileObject
 }
 
-// CreateFile creates a new file in the specified branch.
-// It creates a new commit with the file content and updates the branch reference.
-func (w *refWriter) CreateFile(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+// CreateBlob creates a new blob in the specified path.
+func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	// Create the blob for the file content
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
@@ -79,11 +102,11 @@ func (w *refWriter) CreateFile(ctx context.Context, path string, content []byte)
 	return blobHash, nil
 }
 
-func (w *refWriter) UpdateFile(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	return nil, nil
 }
 
-func (w *refWriter) DeleteFile(ctx context.Context, path string) (hash.Hash, error) {
+func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
 	return nil, nil
 }
 
@@ -192,9 +215,13 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			}
 		} else {
 			// If tree exists, add our entries to it
-			existingTree, err := w.getObject(ctx, existingEntry.Hash)
-			if err != nil {
-				return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
+			existingTree, ok := w.treeCache[existingEntry.Hash.String()]
+			if !ok {
+				existingTree, err = w.getObject(ctx, existingEntry.Hash)
+				if err != nil {
+					return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
+				}
+				w.treeCache[existingEntry.Hash.String()] = existingTree
 			}
 
 			treeHash, err := w.updateTreeEntry(existingTree, current)
@@ -211,33 +238,41 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 		}
 	}
 
-	// TODO: we have already fetched this once for building the tree
-	// TODO: we cannot fetch from remote. We need to store the tree in memory.
-	originalRoot, err := w.getObject(ctx, w.lastTreeHash)
-	if err != nil {
-		return fmt.Errorf("getting root tree: %w", err)
+	// TODO: no need to have separate hash. We can keep the entry
+	lastTree, ok := w.treeCache[w.lastTreeHash.String()]
+	if !ok {
+		return errors.New("root tree not found in cache")
 	}
 
-	if originalRoot.Type != protocol.ObjectTypeTree {
-		return errors.New("root is not a tree")
-	}
-
-	if len(originalRoot.Tree) == 0 {
+	if len(lastTree.Tree) == 0 {
 		rootHash, err := w.writer.AddTree([]protocol.PackfileTreeEntry{current})
 		if err != nil {
 			return fmt.Errorf("adding root tree: %w", err)
 		}
 
 		w.lastTreeHash = rootHash
+		w.treeCache[rootHash.String()] = &protocol.PackfileObject{
+			Hash: rootHash,
+			Type: protocol.ObjectTypeTree,
+			Tree: []protocol.PackfileTreeEntry{current},
+		}
+
 		return nil
 	}
 
-	newRootHash, err := w.updateTreeEntry(originalRoot, current)
+	newRootHash, err := w.updateTreeEntry(lastTree, current)
 	if err != nil {
 		return fmt.Errorf("updating root tree: %w", err)
 	}
 
+	w.treeCache[newRootHash.String()] = &protocol.PackfileObject{
+		Hash: newRootHash,
+		Type: protocol.ObjectTypeTree,
+		Tree: []protocol.PackfileTreeEntry{current},
+	}
+
 	w.lastTreeHash = newRootHash
+
 	return nil
 }
 

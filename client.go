@@ -18,17 +18,17 @@ import (
 // Changes are staged in memory and only sent to the server when Push() is called.
 // This can be used to write to any Git object: commits, tags, branches, or other references.
 type RefWriter interface {
-	// CreateFile stages a new file to be written at the given path.
+	// CreateBlob stages a new file to be written at the given path.
 	// Returns the hash of the created blob.
-	CreateFile(ctx context.Context, path string, content []byte) (hash.Hash, error)
+	CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error)
 
-	// UpdateFile stages an update to an existing file at the given path.
+	// UpdateBlob stages an update to an existing file at the given path.
 	// Returns the hash of the updated blob.
-	UpdateFile(ctx context.Context, path string, content []byte) (hash.Hash, error)
+	UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error)
 
-	// DeleteFile stages the deletion of a file at the given path.
+	// DeleteBlob stages the deletion of a file at the given path.
 	// Returns the hash of the tree after deletion.
-	DeleteFile(ctx context.Context, path string) (hash.Hash, error)
+	DeleteBlob(ctx context.Context, path string) (hash.Hash, error)
 
 	// Commit creates a new commit with all staged changes.
 	// Returns the hash of the created commit.
