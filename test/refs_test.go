@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,8 @@ func TestClient_Refs(t *testing.T) {
 	local.CreateFile(t, "test.txt", "test content")
 	local.Git(t, "add", "test.txt")
 	local.Git(t, "commit", "-m", "Initial commit")
-	hash := local.Git(t, "rev-parse", "HEAD")
+	firstCommit, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
+	require.NoError(t, err)
 
 	// main branch
 	local.Git(t, "branch", "-M", "main")
@@ -56,10 +58,10 @@ func TestClient_Refs(t *testing.T) {
 	require.Len(t, refs, 4, "should have 4 references")
 
 	wantRefs := []nanogit.Ref{
-		{Name: "HEAD", Hash: hash},
-		{Name: "refs/heads/main", Hash: hash},
-		{Name: "refs/heads/test-branch", Hash: hash},
-		{Name: "refs/tags/v1.0.0", Hash: hash},
+		{Name: "HEAD", Hash: firstCommit},
+		{Name: "refs/heads/main", Hash: firstCommit},
+		{Name: "refs/heads/test-branch", Hash: firstCommit},
+		{Name: "refs/tags/v1.0.0", Hash: firstCommit},
 	}
 
 	assert.ElementsMatch(t, wantRefs, refs)
@@ -69,7 +71,7 @@ func TestClient_Refs(t *testing.T) {
 		ref, err := gitClient.GetRef(ctx, ref.Name)
 		require.NoError(t, err, "GetRef failed: %v", err)
 		assert.Equal(t, ref.Name, ref.Name)
-		assert.Equal(t, hash, ref.Hash)
+		assert.Equal(t, firstCommit, ref.Hash)
 	}
 
 	// get-ref with non-existent ref
@@ -77,17 +79,18 @@ func TestClient_Refs(t *testing.T) {
 	require.Equal(t, err, nanogit.ErrRefNotFound)
 
 	// create-ref
-	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: hash})
+	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
 	require.NoError(t, err)
 
 	// get-ref with new-branch
 	ref, err := gitClient.GetRef(ctx, "refs/heads/new-branch")
 	require.NoError(t, err)
-	assert.Equal(t, hash, ref.Hash)
+	assert.Equal(t, firstCommit, ref.Hash)
 
 	// Create a new commit
 	local.Git(t, "commit", "--allow-empty", "-m", "new commit")
-	newHash := local.Git(t, "rev-parse", "HEAD")
+	newHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
+	require.NoError(t, err)
 	local.Git(t, "push", "origin", "main", "--force")
 
 	// Update ref to point to new commit
@@ -108,13 +111,13 @@ func TestClient_Refs(t *testing.T) {
 	require.Equal(t, err, nanogit.ErrRefNotFound)
 
 	// create-tag
-	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: hash})
+	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
 	require.NoError(t, err)
 
 	// get-ref with new tag
 	ref, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
 	require.NoError(t, err)
-	assert.Equal(t, hash, ref.Hash)
+	assert.Equal(t, firstCommit, ref.Hash)
 
 	// delete-tag
 	err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")

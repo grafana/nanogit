@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 func TestParseRefName(t *testing.T) {
@@ -282,7 +283,9 @@ func TestNewCreateRefRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := protocol.NewCreateRefRequest(tt.refName, tt.newRef)
+			newRef, err := hash.FromHex(tt.newRef)
+			require.NoError(t, err)
+			got := protocol.NewCreateRefRequest(tt.refName, newRef)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -322,7 +325,11 @@ func TestNewUpdateRefRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := protocol.NewUpdateRefRequest(tt.oldRef, tt.newRef, tt.refName)
+			oldRef, err := hash.FromHex(tt.oldRef)
+			require.NoError(t, err)
+			newRef, err := hash.FromHex(tt.newRef)
+			require.NoError(t, err)
+			got := protocol.NewUpdateRefRequest(oldRef, newRef, tt.refName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -359,7 +366,9 @@ func TestNewDeleteRefRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := protocol.NewDeleteRefRequest(tt.oldRef, tt.refName)
+			oldRef, err := hash.FromHex(tt.oldRef)
+			require.NoError(t, err)
+			got := protocol.NewDeleteRefRequest(oldRef, tt.refName)
 			assert.Equal(t, tt.want, got)
 		})
 	}

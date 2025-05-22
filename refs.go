@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 var (
@@ -15,7 +16,7 @@ var (
 
 type Ref struct {
 	Name string
-	Hash string
+	Hash hash.Hash
 }
 
 // ListRefs sends a request to list all references in the repository.
@@ -49,12 +50,18 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 	}
 
 	for _, line := range lines {
-		ref, hash, err := protocol.ParseRefLine(line)
+		ref, h, err := protocol.ParseRefLine(line)
 		if err != nil {
 			return nil, fmt.Errorf("parse ref line: %w", err)
 		}
+
+		parsedHash, err := hash.FromHex(h)
+		if err != nil {
+			return nil, fmt.Errorf("parse ref hash: %w", err)
+		}
+
 		if ref != "" {
-			refs = append(refs, Ref{Name: ref, Hash: hash})
+			refs = append(refs, Ref{Name: ref, Hash: parsedHash})
 		}
 	}
 

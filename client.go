@@ -13,6 +13,33 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// RefWriter provides a transactional interface for writing changes to Git objects.
+// It allows staging multiple changes (file writes, updates, deletes) before committing them together.
+// Changes are staged in memory and only sent to the server when Push() is called.
+// This can be used to write to any Git object: commits, tags, branches, or other references.
+type RefWriter interface {
+	// CreateBlob stages a new file to be written at the given path.
+	// Returns the hash of the created blob.
+	CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error)
+
+	// UpdateBlob stages an update to an existing file at the given path.
+	// Returns the hash of the updated blob.
+	UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error)
+
+	// DeleteBlob stages the deletion of a file at the given path.
+	// Returns the hash of the tree after deletion.
+	DeleteBlob(ctx context.Context, path string) (hash.Hash, error)
+
+	// Commit creates a new commit with all staged changes.
+	// Returns the hash of the created commit.
+	Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error)
+
+	// Push sends all committed changes to the remote repository.
+	// This is the final step that makes changes visible to others.
+	// It will update the reference to point to the last commit.
+	Push(ctx context.Context) error
+}
+
 // Client defines the interface for interacting with a Git repository.
 type Client interface {
 	// IsAuthorized checks if the client can successfully communicate with the Git server.
@@ -25,16 +52,13 @@ type Client interface {
 	CreateRef(ctx context.Context, ref Ref) error
 	UpdateRef(ctx context.Context, ref Ref) error
 	DeleteRef(ctx context.Context, refName string) error
+	NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error)
 	// Blob operations
 	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
 	// Tree operations
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
 	// File operations
 	GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error)
-	// CreateFile creates a new file in the specified branch.
-	// It creates a new commit with the file content and updates the reference.
-	// Returns the created commit object.
-	CreateFile(ctx context.Context, ref Ref, path string, content []byte, author Author, committer Committer, message string) (*Commit, error)
 	// Commit operations
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
