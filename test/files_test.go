@@ -81,6 +81,9 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("CreateBlob with new file", func(t *testing.T) {
+		// Pull latest changes before starting the test
+		local.Git(t, "pull", "origin", "main")
+
 		newContent := []byte("new content")
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -150,6 +153,9 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("CreateBlob with nested path", func(t *testing.T) {
+		// Pull latest changes before starting the test
+		local.Git(t, "pull", "origin", "main")
+
 		nestedContent := []byte("nested content")
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -226,10 +232,12 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
+		// Pull latest changes before starting the test
+		local.Git(t, "pull", "origin", "main")
+
 		// Create a new file to be updated
 		newContent := []byte("New file content")
-		err := os.WriteFile(filepath.Join(local.Path, "tobeupdated.txt"), newContent, 0644)
-		require.NoError(t, err)
+		local.CreateFile(t, "tobeupdated.txt", string(newContent))
 
 		// Add and commit the file to be updated
 		local.Git(t, "add", "tobeupdated.txt")
@@ -296,6 +304,9 @@ func TestClient_Files(t *testing.T) {
 		require.Equal(t, testContent, otherContent)
 	})
 	t.Run("UpdateBlob with nested file", func(t *testing.T) {
+		// Pull latest chVanges before starting the test
+		local.Git(t, "pull", "origin", "main")
+
 		// Create a new file to be updated
 		newContent := []byte("New file content")
 		local.CreateDirPath(t, "dir/subdir")
