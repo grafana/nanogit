@@ -228,12 +228,9 @@ func (c *clientImpl) updateTreeEntry(obj *protocol.PackfileObject, current proto
 		return nil, errors.New("object is not a tree")
 	}
 
-	combinedEntries := make([]protocol.PackfileTreeEntry, len(obj.Tree)+1)
-	for i, entry := range obj.Tree {
-		combinedEntries[i] = entry
-	}
-
-	combinedEntries[len(obj.Tree)] = current
+	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree)+1)
+	combinedEntries = append(combinedEntries, obj.Tree...)
+	combinedEntries = append(combinedEntries, current)
 
 	// Create new tree with combined entries
 	return writer.AddTree(combinedEntries)
