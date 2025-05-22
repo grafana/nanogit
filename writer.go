@@ -53,6 +53,9 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 		writer:       writer,
 		lastCommit:   commit,
 		lastTreeHash: commit.Tree,
+		// TODO: I think we only need one
+		treeCache:   cache,
+		treeEntries: entries,
 	}, nil
 }
 
@@ -63,6 +66,7 @@ type refWriter struct {
 	lastCommit   *Commit
 	lastTreeHash hash.Hash
 	treeCache    map[string]*protocol.PackfileObject
+	treeEntries  map[string]*TreeEntry
 }
 
 // CreateBlob creates a new blob in the specified path.
@@ -73,29 +77,11 @@ func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte)
 		return nil, fmt.Errorf("creating blob: %w", err)
 	}
 	w.logger.Debug("created blob", "hash", blobHash.String())
-
-	// TODO: what should we do with the the in-memory tree?
-	// We may not need the entire tree but only this path.
-	currentTree, err := w.GetTree(ctx, w.lastCommit.Tree)
-	if err != nil {
-		return nil, fmt.Errorf("getting current tree: %w", err)
-	}
-
-	// get the tree entries and not blobs
-	entries := make(map[string]*TreeEntry)
-	if currentTree != nil {
-		for _, entry := range currentTree.Entries {
-			if entry.Type == protocol.ObjectTypeTree {
-				entries[entry.Path] = &entry
-			}
-		}
-	}
-
-	if entries[path] != nil {
+	if w.treeEntries[path] != nil {
 		return nil, errors.New("file already exists")
 	}
 
-	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash, entries); err != nil {
+	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
 		return nil, fmt.Errorf("creating root tree: %w", err)
 	}
 
@@ -163,7 +149,7 @@ func (w *refWriter) Push(ctx context.Context) error {
 
 // updateTree updates the tree for the given path.
 // It returns the new tree hash
-func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash, entries map[string]*TreeEntry) error {
+func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -186,7 +172,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	for i := len(dirParts) - 1; i >= 0; i-- {
 		currentPath := strings.Join(dirParts[:i+1], "/")
 		// Check if we already have this tree
-		existingEntry, exists := entries[currentPath]
+		existingEntry, exists := w.treeEntries[currentPath]
 		// build the tree object to compare
 		newObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 		if err != nil {
@@ -213,6 +199,12 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 				FileName: dirParts[i],
 				Hash:     treeHash.String(),
 			}
+
+			w.treeEntries[currentPath] = &TreeEntry{
+				Path: currentPath,
+				Hash: treeHash,
+				Type: protocol.ObjectTypeTree,
+			}
 		} else {
 			// If tree exists, add our entries to it
 			existingTree, ok := w.treeCache[existingEntry.Hash.String()]
@@ -234,6 +226,12 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 				FileMode: 0o40000, // Directory mode
 				FileName: dirParts[i],
 				Hash:     treeHash.String(),
+			}
+
+			w.treeEntries[currentPath] = &TreeEntry{
+				Path: currentPath,
+				Hash: treeHash,
+				Type: protocol.ObjectTypeTree,
 			}
 		}
 	}
