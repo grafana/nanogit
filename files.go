@@ -177,22 +177,17 @@ func (c *clientImpl) addMissingOrStaleTreeEntries(ctx context.Context, path stri
 			}
 		} else {
 			// Tree exists, add our entries to it
-			// TODO: try with getObject instead
-			existingTree, err := c.GetTree(ctx, existingEntry.Hash)
+			existingTree, err := c.getObject(ctx, existingEntry.Hash)
 			if err != nil {
 				return nil, fmt.Errorf("getting existing tree %s: %w", currentPath, err)
 			}
 
 			// Convert existing entries to PackfileTreeEntry
-			combinedEntries := make([]protocol.PackfileTreeEntry, len(existingTree.Entries)+1)
-			for j, entry := range existingTree.Entries {
-				combinedEntries[j] = protocol.PackfileTreeEntry{
-					FileMode: entry.Mode,
-					FileName: entry.Name,
-					Hash:     entry.Hash.String(),
-				}
+			combinedEntries := make([]protocol.PackfileTreeEntry, len(existingTree.Tree)+1)
+			for j, entry := range existingTree.Tree {
+				combinedEntries[j] = entry
 			}
-			combinedEntries[len(existingTree.Entries)] = current
+			combinedEntries[len(existingTree.Tree)] = current
 
 			// Create new tree with combined entries
 			treeHash, err := writer.AddTree(combinedEntries)
@@ -223,6 +218,7 @@ func (c *clientImpl) addMissingOrStaleTreeEntries(ctx context.Context, path stri
 	if originalRoot.Type != protocol.ObjectTypeTree {
 		return nil, errors.New("root is not a tree")
 	}
+
 	if len(originalRoot.Tree) == 0 {
 		rootHash, err := writer.AddTree([]protocol.PackfileTreeEntry{current})
 		if err != nil {
