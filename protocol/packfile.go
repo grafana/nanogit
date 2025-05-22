@@ -476,16 +476,9 @@ func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObj
 	return obj, nil
 }
 
-// AddTree adds a tree object to the packfile.
-// The tree represents a directory structure with file modes and hashes.
-func (w *PackfileWriter) AddTree(entries []PackfileTreeEntry) (hash.Hash, error) {
-	tree, err := BuildTreeObject(w.algo, entries)
-	if err != nil {
-		return hash.Hash{}, fmt.Errorf("building tree object: %w", err)
-	}
-
-	w.objects = append(w.objects, tree)
-	return tree.Hash, nil
+// AddObject adds an object to the packfile.
+func (w *PackfileWriter) AddObject(obj PackfileObject) {
+	w.objects = append(w.objects, obj)
 }
 
 // AddCommit adds a commit object to the packfile.

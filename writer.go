@@ -48,11 +48,11 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
 	return &refWriter{
-		clientImpl:   c,
-		ref:          ref,
-		writer:       writer,
-		lastCommit:   commit,
-		lastTreeHash: commit.Tree,
+		clientImpl: c,
+		ref:        ref,
+		writer:     writer,
+		lastCommit: commit,
+		lastTree:   treeObj,
 		// TODO: I think we only need one
 		treeCache:   cache,
 		treeEntries: entries,
@@ -61,12 +61,12 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 
 type refWriter struct {
 	*clientImpl
-	ref          Ref
-	writer       *protocol.PackfileWriter
-	lastCommit   *Commit
-	lastTreeHash hash.Hash
-	treeCache    map[string]*protocol.PackfileObject
-	treeEntries  map[string]*TreeEntry
+	ref         Ref
+	writer      *protocol.PackfileWriter
+	lastCommit  *Commit
+	lastTree    *protocol.PackfileObject
+	treeCache   map[string]*protocol.PackfileObject
+	treeEntries map[string]*TreeEntry
 }
 
 // CreateBlob creates a new blob in the specified path.
@@ -111,14 +111,14 @@ func (w *refWriter) Commit(ctx context.Context, message string, author Author, c
 		Timezone:  committer.Time.Format("-0700"),
 	}
 
-	commitHash, err := w.writer.AddCommit(w.lastTreeHash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message)
+	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message)
 	if err != nil {
 		return nil, fmt.Errorf("creating commit: %w", err)
 	}
 
 	w.lastCommit = &Commit{
 		Hash:      commitHash,
-		Tree:      w.lastTreeHash,
+		Tree:      w.lastTree.Hash,
 		Parent:    w.lastCommit.Hash,
 		Author:    author,
 		Committer: committer,
@@ -186,23 +186,25 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 		// Create new tree
 		if !exists {
 			// Create new tree
-			treeHash, err := w.writer.AddTree([]protocol.PackfileTreeEntry{current})
+			treeObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 			if err != nil {
 				return fmt.Errorf("creating tree for %s: %w", currentPath, err)
 			}
 
-			w.logger.Debug("add new tree object", "path", currentPath, "hash", treeHash.String(), "child", current.Hash, "child_path", current.FileName)
+			w.writer.AddObject(treeObj)
+			w.logger.Debug("add new tree object", "path", currentPath, "hash", treeObj.Hash.String(), "child", current.Hash, "child_path", current.FileName)
 
 			// Add this tree to the parent's entries
 			current = protocol.PackfileTreeEntry{
 				FileMode: 0o40000, // Directory mode
 				FileName: dirParts[i],
-				Hash:     treeHash.String(),
+				Hash:     treeObj.Hash.String(),
 			}
 
+			w.treeCache[treeObj.Hash.String()] = &treeObj
 			w.treeEntries[currentPath] = &TreeEntry{
 				Path: currentPath,
-				Hash: treeHash,
+				Hash: treeObj.Hash,
 				Type: protocol.ObjectTypeTree,
 			}
 		} else {
@@ -216,65 +218,51 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 				w.treeCache[existingEntry.Hash.String()] = existingTree
 			}
 
-			treeHash, err := w.updateTreeEntry(existingTree, current)
+			newObj, err := w.updateTreeEntry(existingTree, current)
 			if err != nil {
 				return fmt.Errorf("updating tree for %s: %w", currentPath, err)
 			}
 
-			w.logger.Debug("add updated tree object", "path", currentPath, "hash", treeHash.String(), "children", len(existingTree.Tree)+1)
+			w.logger.Debug("add updated tree object", "path", currentPath, "hash", newObj.Hash.String(), "children", len(existingTree.Tree)+1)
 			current = protocol.PackfileTreeEntry{
 				FileMode: 0o40000, // Directory mode
 				FileName: dirParts[i],
-				Hash:     treeHash.String(),
+				Hash:     newObj.Hash.String(),
 			}
 
+			w.treeCache[newObj.Hash.String()] = newObj
 			w.treeEntries[currentPath] = &TreeEntry{
 				Path: currentPath,
-				Hash: treeHash,
+				Hash: newObj.Hash,
 				Type: protocol.ObjectTypeTree,
 			}
 		}
 	}
 
-	// TODO: no need to have separate hash. We can keep the entry
-	lastTree, ok := w.treeCache[w.lastTreeHash.String()]
-	if !ok {
-		return errors.New("root tree not found in cache")
-	}
-
-	if len(lastTree.Tree) == 0 {
-		rootHash, err := w.writer.AddTree([]protocol.PackfileTreeEntry{current})
+	if len(w.lastTree.Tree) == 0 {
+		newRoot, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 		if err != nil {
-			return fmt.Errorf("adding root tree: %w", err)
+			return fmt.Errorf("building new root tree: %w", err)
 		}
 
-		w.lastTreeHash = rootHash
-		w.treeCache[rootHash.String()] = &protocol.PackfileObject{
-			Hash: rootHash,
-			Type: protocol.ObjectTypeTree,
-			Tree: []protocol.PackfileTreeEntry{current},
-		}
+		w.writer.AddObject(newRoot)
+		w.lastTree = &newRoot
+		w.treeCache[newRoot.Hash.String()] = &newRoot
 
 		return nil
 	}
 
-	newRootHash, err := w.updateTreeEntry(lastTree, current)
+	newRootObj, err := w.updateTreeEntry(w.lastTree, current)
 	if err != nil {
 		return fmt.Errorf("updating root tree: %w", err)
 	}
-
-	w.treeCache[newRootHash.String()] = &protocol.PackfileObject{
-		Hash: newRootHash,
-		Type: protocol.ObjectTypeTree,
-		Tree: []protocol.PackfileTreeEntry{current},
-	}
-
-	w.lastTreeHash = newRootHash
+	w.treeCache[newRootObj.Hash.String()] = newRootObj
+	w.lastTree = newRootObj
 
 	return nil
 }
 
-func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (hash.Hash, error) {
+func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	if obj.Type != protocol.ObjectTypeTree {
 		return nil, errors.New("object is not a tree")
 	}
@@ -282,7 +270,12 @@ func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protoc
 	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree)+1)
 	combinedEntries = append(combinedEntries, obj.Tree...)
 	combinedEntries = append(combinedEntries, current)
+	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
+	if err != nil {
+		return nil, fmt.Errorf("building tree object: %w", err)
+	}
 
-	// Create new tree with combined entries
-	return w.writer.AddTree(combinedEntries)
+	w.writer.AddObject(newObj)
+
+	return &newObj, nil
 }
