@@ -47,30 +47,33 @@ func TestClient_Files(t *testing.T) {
 	commitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 
-	// Test GetFile
-	file, err := client.GetFile(ctx, commitHash, "test.txt")
-	if err != nil {
-		t.Logf("Failed to get file with hash %s and path %s: %v", commitHash, "test.txt", err)
-	}
-	require.NoError(t, err)
-	assert.Equal(t, testContent, file.Content)
-	assert.Equal(t, uint32(33188), file.Mode)
+	t.Run("GetFile with existing file", func(t *testing.T) {
+		file, err := client.GetFile(ctx, commitHash, "test.txt")
+		if err != nil {
+			t.Logf("Failed to get file with hash %s and path %s: %v", commitHash, "test.txt", err)
+		}
+		require.NoError(t, err)
+		assert.Equal(t, testContent, file.Content)
+		assert.Equal(t, uint32(33188), file.Mode)
 
-	fileHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
-	require.NoError(t, err)
-	assert.Equal(t, fileHash, file.Hash)
-	assert.Equal(t, "test.txt", file.Path)
-	assert.Equal(t, uint32(33188), file.Mode)
+		fileHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, fileHash, file.Hash)
+		assert.Equal(t, "test.txt", file.Path)
+		assert.Equal(t, uint32(33188), file.Mode)
+	})
 
-	// Test GetFile with non-existent file
-	_, err = client.GetFile(ctx, commitHash, "nonexistent.txt")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	t.Run("GetFile with non-existent file", func(t *testing.T) {
+		_, err := client.GetFile(ctx, commitHash, "nonexistent.txt")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
 
-	// Test GetFile with non-existent hash
-	nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-	require.NoError(t, err)
-	_, err = client.GetFile(ctx, nonExistentHash, "test.txt")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not our ref")
+	t.Run("GetFile with non-existent hash", func(t *testing.T) {
+		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+		require.NoError(t, err)
+		_, err = client.GetFile(ctx, nonExistentHash, "test.txt")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not our ref")
+	})
 }
