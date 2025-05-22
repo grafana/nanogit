@@ -77,6 +77,12 @@ func ParseIdentity(identity string) (*Identity, error) {
 	}, nil
 }
 
+// String returns the string representation of the identity in Git format.
+// Format: "Name <email> timestamp timezone"
+func (i *Identity) String() string {
+	return fmt.Sprintf("%s <%s> %d %s", i.Name, i.Email, i.Timestamp, i.Timezone)
+}
+
 // Time returns the time.Time representation of the identity's timestamp and timezone.
 func (i *Identity) Time() (time.Time, error) {
 	// Parse timezone offset

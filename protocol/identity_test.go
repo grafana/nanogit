@@ -3,6 +3,8 @@ package protocol
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseIdentity(t *testing.T) {
@@ -139,6 +141,62 @@ func TestIdentity_Time(t *testing.T) {
 			if !tt.wantErr && !got.Equal(tt.want) {
 				t.Errorf("Identity.Time() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestIdentity_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity Identity
+		want     string
+	}{
+		{
+			name: "basic identity",
+			identity: Identity{
+				Name:      "John Doe",
+				Email:     "john@example.com",
+				Timestamp: 1234567890,
+				Timezone:  "+0000",
+			},
+			want: "John Doe <john@example.com> 1234567890 +0000",
+		},
+		{
+			name: "identity with special characters",
+			identity: Identity{
+				Name:      "José García",
+				Email:     "jose.garcia@example.com",
+				Timestamp: 1234567890,
+				Timezone:  "-0700",
+			},
+			want: "José García <jose.garcia@example.com> 1234567890 -0700",
+		},
+		{
+			name: "identity with empty name",
+			identity: Identity{
+				Name:      "",
+				Email:     "anonymous@example.com",
+				Timestamp: 1234567890,
+				Timezone:  "+0000",
+			},
+			want: " <anonymous@example.com> 1234567890 +0000",
+		},
+		{
+			name: "identity with empty email",
+			identity: Identity{
+				Name:      "John Doe",
+				Email:     "",
+				Timestamp: 1234567890,
+				Timezone:  "+0000",
+			},
+			want: "John Doe <> 1234567890 +0000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.identity.String()
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

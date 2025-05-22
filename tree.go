@@ -24,14 +24,14 @@ type Tree struct {
 }
 
 // GetTree retrieves a tree for a given commit hash
-func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, error) {
-	obj, err := c.getObject(ctx, commitHash)
+func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+	obj, err := c.getObject(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
 
 	var tree *protocol.PackfileObject
-	if obj.Type == protocol.ObjectTypeCommit && obj.Hash.Is(commitHash) {
+	if obj.Type == protocol.ObjectTypeCommit && obj.Hash.Is(h) {
 		// Find the commit and tree in the packfile
 		// TODO: should we make it work for commit object type?
 		treeHash, err := hash.FromHex(obj.Commit.Tree.String())
@@ -44,7 +44,8 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 			return nil, fmt.Errorf("getting tree: %w", err)
 		}
 		tree = treeObj
-	} else if obj.Type == protocol.ObjectTypeTree && obj.Hash.Is(commitHash) {
+		h = treeHash
+	} else if obj.Type == protocol.ObjectTypeTree && obj.Hash.Is(h) {
 		tree = obj
 	} else {
 		return nil, errors.New("not found")
@@ -85,7 +86,7 @@ func (c *clientImpl) GetTree(ctx context.Context, commitHash hash.Hash) (*Tree, 
 
 	return &Tree{
 		Entries: result,
-		Hash:    commitHash,
+		Hash:    h,
 	}, nil
 }
 

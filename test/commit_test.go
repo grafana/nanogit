@@ -63,6 +63,7 @@ func TestClient_GetCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify commit details
+	require.Equal(t, initialCommitHash, commit.Hash)
 	require.Equal(t, hash.Zero, commit.Parent) // First commit has no parent
 	require.Equal(t, user.Username, commit.Author.Name)
 	require.Equal(t, user.Email, commit.Author.Email)
@@ -81,6 +82,7 @@ func TestClient_GetCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify commit details
+	require.Equal(t, secondCommitHash, commit.Hash)
 	require.Equal(t, initialCommitHash, commit.Parent)
 	require.Equal(t, user.Username, commit.Author.Name)
 	require.Equal(t, user.Email, commit.Author.Email)
