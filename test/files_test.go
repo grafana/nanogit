@@ -102,40 +102,47 @@ func TestClient_Files(t *testing.T) {
 			Name: "refs/heads/main",
 			Hash: currentHash.String(),
 		}
+		writer, err := client.GetRefWriter(ctx, ref)
+		require.NoError(t, err)
 
-		commit, err := client.CreateFile(ctx, ref, "new.txt", newContent, author, committer, "Add new file")
+		_, err = writer.CreateFile(ctx, "new.txt", newContent)
+		require.NoError(t, err)
+		commit, err := writer.Commit(ctx, "Add new file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
+		// push the commit
+		err = writer.Push(ctx)
+		require.NoError(t, err)
 
 		// Verify using Git CLI
 		local.Git(t, "pull", "origin", "main")
 		// verify commit hash
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+		require.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
 		// verify file content
 		content, err := os.ReadFile(filepath.Join(local.Path, "new.txt"))
 		require.NoError(t, err)
-		assert.Equal(t, newContent, content)
+		require.Equal(t, newContent, content)
 
 		// Verify commit message
 		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
-		assert.Equal(t, "Add new file", strings.TrimSpace(commitMsg))
+		require.Equal(t, "Add new file", strings.TrimSpace(commitMsg))
 
 		// Verify author
 		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		assert.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
 		// Verify committer
 		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		assert.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
 
 		// Verify the ref was updated
 		hashAfterCommit := local.Git(t, "rev-parse", "refs/heads/main")
-		assert.NotEqual(t, currentHash.String(), hashAfterCommit)
+		require.NotEqual(t, currentHash.String(), hashAfterCommit)
 
 		// Verify file content
 		content, err = os.ReadFile(filepath.Join(local.Path, "new.txt"))
 		require.NoError(t, err)
-		assert.Equal(t, newContent, content)
+		require.Equal(t, newContent, content)
 		// Verify the test file was not removed
 		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
 		require.NoError(t, err)
@@ -165,9 +172,15 @@ func TestClient_Files(t *testing.T) {
 			Hash: currentHash.String(),
 		}
 
-		commit, err := client.CreateFile(ctx, ref, "dir/subdir/file.txt", nestedContent, author, committer, "Add nested file")
+		writer, err := client.GetRefWriter(ctx, ref)
+		require.NoError(t, err)
+		_, err = writer.CreateFile(ctx, "dir/subdir/file.txt", nestedContent)
+		require.NoError(t, err)
+		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
+		err = writer.Push(ctx)
+		require.NoError(t, err)
 
 		// Verify using Git CLI
 		local.Git(t, "pull", "origin", "main")
@@ -207,19 +220,7 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("CreateFile with invalid ref", func(t *testing.T) {
-		content := []byte("test content")
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		_, err := client.CreateFile(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"}, "test.txt", content, author, committer, "Add file")
+		_, err := client.GetRefWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "object not found")
 	})

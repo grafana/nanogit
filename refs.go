@@ -15,6 +15,7 @@ var (
 
 type Ref struct {
 	Name string
+	// TODO: use hash.Hash
 	Hash string
 }
 
