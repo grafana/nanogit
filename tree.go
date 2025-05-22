@@ -51,6 +51,10 @@ func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 		return nil, errors.New("not found")
 	}
 
+	return c.processTree(ctx, h, tree)
+}
+
+func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *protocol.PackfileObject) (*Tree, error) {
 	// Convert PackfileTreeEntry to TreeEntry
 	entries := make([]TreeEntry, len(tree.Tree))
 	for i, entry := range tree.Tree {
@@ -86,7 +90,7 @@ func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 
 	return &Tree{
 		Entries: result,
-		Hash:    h,
+		Hash:    treeHash,
 	}, nil
 }
 

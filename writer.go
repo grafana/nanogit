@@ -72,15 +72,11 @@ func (w *refWriter) CreateFile(ctx context.Context, path string, content []byte)
 		return nil, errors.New("file already exists")
 	}
 
-	// Create the root tree
-	rootTreeHash, err := w.addMissingOrStaleTreeEntries(ctx, path, currentTree.Hash, blobHash, entries)
-	if err != nil {
+	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash, entries); err != nil {
 		return nil, fmt.Errorf("creating root tree: %w", err)
 	}
 
-	w.lastTreeHash = rootTreeHash
-
-	return rootTreeHash, nil
+	return blobHash, nil
 }
 
 func (w *refWriter) UpdateFile(ctx context.Context, path string, content []byte) (hash.Hash, error) {
@@ -124,6 +120,7 @@ func (w *refWriter) Commit(ctx context.Context, message string, author Author, c
 }
 
 func (w *refWriter) Push(ctx context.Context) error {
+	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
 	packfile, err := w.writer.WritePackfile()
 	if err != nil {
@@ -143,11 +140,11 @@ func (w *refWriter) Push(ctx context.Context) error {
 
 // updateTree updates the tree for the given path.
 // It returns the new tree hash
-func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, treeHash hash.Hash, blobHash hash.Hash, entries map[string]*TreeEntry) (hash.Hash, error) {
+func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash, entries map[string]*TreeEntry) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
-		return nil, errors.New("empty path")
+		return errors.New("empty path")
 	}
 
 	// Get the file name and directory parts
@@ -170,11 +167,11 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 		// build the tree object to compare
 		newObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 		if err != nil {
-			return nil, fmt.Errorf("building tree object: %w", err)
+			return fmt.Errorf("building tree object: %w", err)
 		}
 
 		if exists && (existingEntry.Hash.Is(newObj.Hash) || existingEntry.Type != protocol.ObjectTypeTree) {
-			return nil, errors.New("this should not be the case")
+			return errors.New("this should not be the case")
 		}
 
 		// Create new tree
@@ -182,7 +179,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			// Create new tree
 			treeHash, err := w.writer.AddTree([]protocol.PackfileTreeEntry{current})
 			if err != nil {
-				return nil, fmt.Errorf("creating tree for %s: %w", currentPath, err)
+				return fmt.Errorf("creating tree for %s: %w", currentPath, err)
 			}
 
 			w.logger.Debug("add new tree object", "path", currentPath, "hash", treeHash.String(), "child", current.Hash, "child_path", current.FileName)
@@ -197,12 +194,12 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			// If tree exists, add our entries to it
 			existingTree, err := w.getObject(ctx, existingEntry.Hash)
 			if err != nil {
-				return nil, fmt.Errorf("getting existing tree %s: %w", currentPath, err)
+				return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
 			}
 
 			treeHash, err := w.updateTreeEntry(existingTree, current)
 			if err != nil {
-				return nil, fmt.Errorf("updating tree for %s: %w", currentPath, err)
+				return fmt.Errorf("updating tree for %s: %w", currentPath, err)
 			}
 
 			w.logger.Debug("add updated tree object", "path", currentPath, "hash", treeHash.String(), "children", len(existingTree.Tree)+1)
@@ -215,30 +212,33 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	}
 
 	// TODO: we have already fetched this once for building the tree
-	originalRoot, err := w.getObject(ctx, treeHash)
+	// TODO: we cannot fetch from remote. We need to store the tree in memory.
+	originalRoot, err := w.getObject(ctx, w.lastTreeHash)
 	if err != nil {
-		return nil, fmt.Errorf("getting root tree: %w", err)
+		return fmt.Errorf("getting root tree: %w", err)
 	}
 
 	if originalRoot.Type != protocol.ObjectTypeTree {
-		return nil, errors.New("root is not a tree")
+		return errors.New("root is not a tree")
 	}
 
 	if len(originalRoot.Tree) == 0 {
 		rootHash, err := w.writer.AddTree([]protocol.PackfileTreeEntry{current})
 		if err != nil {
-			return nil, fmt.Errorf("adding root tree: %w", err)
+			return fmt.Errorf("adding root tree: %w", err)
 		}
 
-		return rootHash, nil
+		w.lastTreeHash = rootHash
+		return nil
 	}
 
 	newRootHash, err := w.updateTreeEntry(originalRoot, current)
 	if err != nil {
-		return nil, fmt.Errorf("updating root tree: %w", err)
+		return fmt.Errorf("updating root tree: %w", err)
 	}
 
-	return newRootHash, nil
+	w.lastTreeHash = newRootHash
+	return nil
 }
 
 func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (hash.Hash, error) {
