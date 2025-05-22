@@ -66,15 +66,17 @@ type refWriter struct {
 
 // CreateBlob creates a new blob in the specified path.
 func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+	if w.treeEntries[path] != nil {
+		return nil, errors.New("blob at that path already exists")
+	}
+
 	// Create the blob for the file content
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
 		return nil, fmt.Errorf("creating blob: %w", err)
 	}
+
 	w.logger.Debug("created blob", "hash", blobHash.String())
-	if w.treeEntries[path] != nil {
-		return nil, errors.New("file already exists")
-	}
 
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
 		return nil, fmt.Errorf("creating root tree: %w", err)
@@ -84,7 +86,22 @@ func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte)
 }
 
 func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	return nil, nil
+	if w.treeEntries[path] == nil {
+		return nil, errors.New("blob at that path does not exist")
+	}
+
+	// Create the blob for the file content
+	blobHash, err := w.writer.AddBlob(content)
+	if err != nil {
+		return nil, fmt.Errorf("creating blob: %w", err)
+	}
+
+	w.logger.Debug("created blob", "hash", blobHash.String())
+	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
+		return nil, fmt.Errorf("creating root tree: %w", err)
+	}
+
+	return blobHash, nil
 }
 
 func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
@@ -160,6 +177,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 		FileName: fileName,
 		Hash:     blobHash.String(),
 	}
+
 	// Iterate bottom up checking if the existing tree.
 	// if it does not exist or hash is different, create it with the previous tree entry.
 	// if it exists and hash is the same, continue.
@@ -167,14 +185,14 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	for i := len(dirParts) - 1; i >= 0; i-- {
 		currentPath := strings.Join(dirParts[:i+1], "/")
 		// Check if we already have this tree
-		existingEntry, exists := w.treeEntries[currentPath]
+		existingBlob, exists := w.treeEntries[currentPath]
 		// build the tree object to compare
 		newObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 		if err != nil {
 			return fmt.Errorf("building tree object: %w", err)
 		}
 
-		if exists && (existingEntry.Hash.Is(newObj.Hash) || existingEntry.Type != protocol.ObjectTypeTree) {
+		if exists && (existingBlob.Hash.Is(newObj.Hash) || existingBlob.Type != protocol.ObjectTypeTree) {
 			return errors.New("this should not be the case")
 		}
 
@@ -204,16 +222,16 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			}
 		} else {
 			// If tree exists, add our entries to it
-			existingTree, ok := w.treeCache[existingEntry.Hash.String()]
+			existingTree, ok := w.treeCache[existingBlob.Hash.String()]
 			if !ok {
-				existingTree, err = w.getObject(ctx, existingEntry.Hash)
+				existingTree, err = w.getObject(ctx, existingBlob.Hash)
 				if err != nil {
 					return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
 				}
-				w.treeCache[existingEntry.Hash.String()] = existingTree
+				w.treeCache[existingBlob.Hash.String()] = existingTree
 			}
 
-			newObj, err := w.updateTreeEntry(existingTree, current)
+			newObj, err := w.updateTreeEntry(existingTree, existingBlob, current)
 			if err != nil {
 				return fmt.Errorf("updating tree for %s: %w", currentPath, err)
 			}
@@ -247,7 +265,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 		return nil
 	}
 
-	newRootObj, err := w.updateTreeEntry(w.lastTree, current)
+	newRootObj, err := w.updateTreeEntry(w.lastTree, nil, current)
 	if err != nil {
 		return fmt.Errorf("updating root tree: %w", err)
 	}
@@ -257,13 +275,20 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	return nil
 }
 
-func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
+func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, existingEntry *TreeEntry, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	if obj.Type != protocol.ObjectTypeTree {
 		return nil, errors.New("object is not a tree")
 	}
 
 	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree)+1)
-	combinedEntries = append(combinedEntries, obj.Tree...)
+	for _, entry := range obj.Tree {
+		if existingEntry != nil && entry.Hash == existingEntry.Hash.String() {
+			continue
+		}
+
+		combinedEntries = append(combinedEntries, entry)
+	}
+
 	combinedEntries = append(combinedEntries, current)
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {

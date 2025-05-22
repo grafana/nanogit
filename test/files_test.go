@@ -80,7 +80,7 @@ func TestClient_Files(t *testing.T) {
 		assert.Contains(t, err.Error(), "not our ref")
 	})
 
-	t.Run("CreateFile with new file", func(t *testing.T) {
+	t.Run("CreateBlob with new file", func(t *testing.T) {
 		newContent := []byte("new content")
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -149,7 +149,7 @@ func TestClient_Files(t *testing.T) {
 		require.Equal(t, testContent, otherContent)
 	})
 
-	t.Run("CreateFile with nested path", func(t *testing.T) {
+	t.Run("CreateBlob with nested path", func(t *testing.T) {
 		nestedContent := []byte("nested content")
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -219,9 +219,166 @@ func TestClient_Files(t *testing.T) {
 		require.NotEqual(t, currentHash.String(), hashAfterCommit)
 	})
 
-	t.Run("CreateFile with invalid ref", func(t *testing.T) {
+	t.Run("CreateBlob with invalid ref", func(t *testing.T) {
 		_, err := client.NewRefWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "object not found")
+	})
+
+	t.Run("UpdateBlob with existing file", func(t *testing.T) {
+		// Create a new file to be updated
+		newContent := []byte("New file content")
+		err := os.WriteFile(filepath.Join(local.Path, "tobeupdated.txt"), newContent, 0644)
+		require.NoError(t, err)
+
+		// Add and commit the file to be updated
+		local.Git(t, "add", "tobeupdated.txt")
+		local.Git(t, "commit", "-m", "Add file to be updated")
+		local.Git(t, "push", "origin", "main")
+
+		// Verify file content of file to be updated
+		content, err := os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
+		require.NoError(t, err)
+		require.Equal(t, newContent, content)
+
+		// Get current ref
+		ref, err := client.GetRef(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
+		// Create a writer
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		// Update the test file
+		updatedContent := []byte("Updated content")
+		blobHash, err := writer.UpdateBlob(ctx, "tobeupdated.txt", updatedContent)
+		require.NoError(t, err)
+		require.NotNil(t, blobHash)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		// Commit the changes
+		commit, err := writer.Commit(ctx, "Update test file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		// Verify using Git CLI
+		local.Git(t, "pull", "origin", "main")
+
+		// Verify commit hash
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+
+		// Verify file content was updated
+		content, err = os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
+		require.NoError(t, err)
+		require.Equal(t, updatedContent, content)
+
+		// Verify author and committer
+		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
+		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
+		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+
+		// Verify the test file was not removed
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		require.NoError(t, err)
+		require.Equal(t, testContent, otherContent)
+	})
+	t.Run("UpdateBlob with nested file", func(t *testing.T) {
+		// Create a new file to be updated
+		newContent := []byte("New file content")
+		local.CreateDirPath(t, "dir/subdir")
+		local.CreateFile(t, "dir/subdir/tobeupdated.txt", string(newContent))
+
+		// Add and commit the file to be updated
+		local.Git(t, "add", "dir/subdir/tobeupdated.txt")
+		local.Git(t, "commit", "-m", "Add file to be updated")
+		local.Git(t, "push", "origin", "main")
+
+		// Verify file content of nested file to be updated
+		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
+		require.NoError(t, err)
+		require.Equal(t, newContent, content)
+
+		// Get current ref
+		ref, err := client.GetRef(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
+		// Create a writer
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		// Update the nested file
+		updatedContent := []byte("Updated nested content")
+		blobHash, err := writer.UpdateBlob(ctx, "dir/subdir/tobeupdated.txt", updatedContent)
+		require.NoError(t, err)
+		require.NotNil(t, blobHash)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		// Commit the changes
+		commit, err := writer.Commit(ctx, "Update nested file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		// Verify using Git CLI
+		local.Git(t, "pull", "origin", "main")
+
+		// Verify commit hash
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+
+		// Verify file content was updated
+		content, err = os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
+		require.NoError(t, err)
+		require.Equal(t, updatedContent, content)
+
+		// Verify the test file was not removed
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		require.NoError(t, err)
+		require.Equal(t, testContent, otherContent)
+
+		// Verify author
+		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
+		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+		// Verify committer
+		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
+		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+	})
+
+	t.Run("UpdateBlob with nonexistent file", func(t *testing.T) {
+		// Get current ref
+		ref, err := client.GetRef(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
+		// Create a writer
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		// Try to update a nonexistent file
+		_, err = writer.UpdateBlob(ctx, "nonexistent.txt", []byte("content"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "blob at that path does not exist")
 	})
 }
