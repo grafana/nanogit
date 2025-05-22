@@ -14,10 +14,17 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/stretchr/testify/require"
 )
 
 func TestListRefs(t *testing.T) {
+	hashify := func(h string) hash.Hash {
+		parsedHex, err := hash.FromHex(h)
+		require.NoError(t, err)
+		return parsedHex
+	}
+
 	tests := []struct {
 		name          string
 		infoRefsResp  string
@@ -38,9 +45,9 @@ func TestListRefs(t *testing.T) {
 				return string(pkt)
 			}(),
 			expectedRefs: []Ref{
-				{Name: "refs/heads/master", Hash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"},
-				{Name: "refs/heads/develop", Hash: "8fd1a60b01f91b314f59955a4e4d4e80d8edf11e"},
-				{Name: "refs/tags/v1.0.0", Hash: "9fd1a60b01f91b314f59955a4e4d4e80d8edf11f"},
+				{Name: "refs/heads/master", Hash: hashify("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d")},
+				{Name: "refs/heads/develop", Hash: hashify("8fd1a60b01f91b314f59955a4e4d4e80d8edf11e")},
+				{Name: "refs/tags/v1.0.0", Hash: hashify("9fd1a60b01f91b314f59955a4e4d4e80d8edf11f")},
 			},
 			expectedError: "",
 		},
@@ -54,7 +61,7 @@ func TestListRefs(t *testing.T) {
 				return string(pkt)
 			}(),
 			expectedRefs: []Ref{
-				{Name: "refs/heads/master", Hash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"},
+				{Name: "refs/heads/master", Hash: hashify("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d")},
 			},
 			expectedError: "",
 		},
@@ -170,6 +177,12 @@ func TestListRefs(t *testing.T) {
 }
 
 func TestGetRef(t *testing.T) {
+	hashify := func(h string) hash.Hash {
+		parsedHex, err := hash.FromHex(h)
+		require.NoError(t, err)
+		return parsedHex
+	}
+
 	tests := []struct {
 		name          string
 		infoRefsResp  string
@@ -191,7 +204,7 @@ func TestGetRef(t *testing.T) {
 			refToGet: "refs/heads/master",
 			expectedRef: Ref{
 				Name: "refs/heads/master",
-				Hash: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d",
+				Hash: hashify("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"),
 			},
 			expectedError: nil,
 		},
@@ -279,6 +292,12 @@ func TestGetRef(t *testing.T) {
 }
 
 func TestCreateRef(t *testing.T) {
+	hashify := func(h string) hash.Hash {
+		parsedHex, err := hash.FromHex(h)
+		require.NoError(t, err)
+		return parsedHex
+	}
+
 	tests := []struct {
 		name          string
 		infoRefsResp  string
@@ -291,7 +310,7 @@ func TestCreateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "",
 		},
@@ -300,7 +319,7 @@ func TestCreateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "ref refs/heads/main already exists",
 		},
@@ -309,7 +328,7 @@ func TestCreateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234", // too short
+				Hash: hashify("1234"), // too short
 			},
 			expectedError: "format ref update request: invalid new ref hash length",
 		},
@@ -318,7 +337,7 @@ func TestCreateRef(t *testing.T) {
 			infoRefsResp: "",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
 			setupClient: func(c *clientImpl) {
@@ -337,7 +356,7 @@ func TestCreateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
 			setupClient: func(c *clientImpl) {
@@ -458,6 +477,12 @@ func TestCreateRef(t *testing.T) {
 }
 
 func TestUpdateRef(t *testing.T) {
+	hashify := func(h string) hash.Hash {
+		parsedHex, err := hash.FromHex(h)
+		require.NoError(t, err)
+		return parsedHex
+	}
+
 	tests := []struct {
 		name          string
 		infoRefsResp  string
@@ -470,7 +495,7 @@ func TestUpdateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "",
 		},
@@ -479,7 +504,7 @@ func TestUpdateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToUpdate: Ref{
 				Name: "refs/heads/non-existent",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "ref refs/heads/non-existent does not exist",
 		},
@@ -488,7 +513,7 @@ func TestUpdateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToUpdate: Ref{
 				Name: "invalid-ref", // missing refs/ prefix
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "ref invalid-ref does not exist",
 		},
@@ -497,7 +522,7 @@ func TestUpdateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234", // too short
+				Hash: hashify("1234"), // too short
 			},
 			expectedError: "ref refs/heads/main does not exist",
 		},
@@ -506,7 +531,7 @@ func TestUpdateRef(t *testing.T) {
 			infoRefsResp: "",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
 			setupClient: func(c *clientImpl) {
@@ -525,7 +550,7 @@ func TestUpdateRef(t *testing.T) {
 			infoRefsResp: "001e# service=git-receive-pack\n0000",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
-				Hash: "1234567890123456789012345678901234567890",
+				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
 			setupClient: func(c *clientImpl) {

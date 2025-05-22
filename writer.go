@@ -12,12 +12,7 @@ import (
 )
 
 func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error) {
-	hash, err := hash.FromHex(ref.Hash)
-	if err != nil {
-		return nil, fmt.Errorf("parsing ref hash: %w", err)
-	}
-
-	commit, err := c.GetCommit(ctx, hash)
+	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
 	}

@@ -100,7 +100,7 @@ func TestClient_Files(t *testing.T) {
 		// Pass the ref with both Name and Hash
 		ref := nanogit.Ref{
 			Name: "refs/heads/main",
-			Hash: currentHash.String(),
+			Hash: currentHash,
 		}
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestClient_Files(t *testing.T) {
 		// Pass the ref with both Name and Hash
 		ref := nanogit.Ref{
 			Name: "refs/heads/main",
-			Hash: currentHash.String(),
+			Hash: currentHash,
 		}
 
 		writer, err := client.NewRefWriter(ctx, ref)

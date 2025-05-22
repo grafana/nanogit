@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 // RefName represents a Git reference name, providing structured access to its components.
@@ -157,25 +159,25 @@ type RefUpdateRequest struct {
 	RefName string
 }
 
-func NewCreateRefRequest(refName, newRef string) RefUpdateRequest {
+func NewCreateRefRequest(refName string, newRef hash.Hash) RefUpdateRequest {
 	return RefUpdateRequest{
 		OldRef:  ZeroHash,
-		NewRef:  newRef,
+		NewRef:  newRef.String(),
 		RefName: refName,
 	}
 }
 
-func NewUpdateRefRequest(oldRef, newRef, refName string) RefUpdateRequest {
+func NewUpdateRefRequest(oldRef, newRef hash.Hash, refName string) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  oldRef,
-		NewRef:  newRef,
+		OldRef:  oldRef.String(),
+		NewRef:  newRef.String(),
 		RefName: refName,
 	}
 }
 
-func NewDeleteRefRequest(oldRef, refName string) RefUpdateRequest {
+func NewDeleteRefRequest(oldRef hash.Hash, refName string) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  oldRef,
+		OldRef:  oldRef.String(),
 		NewRef:  ZeroHash,
 		RefName: refName,
 	}
