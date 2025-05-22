@@ -102,7 +102,7 @@ func TestClient_Files(t *testing.T) {
 			Name: "refs/heads/main",
 			Hash: currentHash.String(),
 		}
-		writer, err := client.GetRefWriter(ctx, ref)
+		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
 
 		_, err = writer.CreateFile(ctx, "new.txt", newContent)
@@ -172,7 +172,7 @@ func TestClient_Files(t *testing.T) {
 			Hash: currentHash.String(),
 		}
 
-		writer, err := client.GetRefWriter(ctx, ref)
+		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
 		_, err = writer.CreateFile(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("CreateFile with invalid ref", func(t *testing.T) {
-		_, err := client.GetRefWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
+		_, err := client.NewRefWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "object not found")
 	})

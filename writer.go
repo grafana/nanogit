@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *clientImpl) GetRefWriter(ctx context.Context, ref Ref) (Writer, error) {
+func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error) {
 	hash, err := hash.FromHex(ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("parsing ref hash: %w", err)
