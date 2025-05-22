@@ -59,122 +59,36 @@ func (c *clientImpl) CreateFile(ctx context.Context, ref Ref, path string, conte
 		return fmt.Errorf("creating blob: %w", err)
 	}
 
-	// Get the current tree if we have a parent commit
-	var currentTree *Tree
-	if ref.Hash != "" {
-		parentHash, err := hash.FromHex(ref.Hash)
-		if err != nil {
-			return fmt.Errorf("parsing parent hash: %w", err)
-		}
-		currentTree, err = c.GetTree(ctx, parentHash)
-		if err != nil {
-			return fmt.Errorf("getting current tree: %w", err)
-		}
+	parentHash, err := hash.FromHex(ref.Hash)
+	if err != nil {
+		return fmt.Errorf("parsing parent hash: %w", err)
+	}
+	currentTree, err := c.GetTree(ctx, parentHash)
+	if err != nil {
+		return fmt.Errorf("getting current tree: %w", err)
 	}
 
-	// Split the path into parts
-	pathParts := strings.Split(path, "/")
-	if len(pathParts) == 0 {
-		return errors.New("empty path")
-	}
-
-	// Start with the root tree entries
-	var entries []protocol.PackfileTreeEntry
+	// get the tree entries and not blobs
+	entries := make(map[string]*TreeEntry)
 	if currentTree != nil {
-		// Copy existing entries, but don't add them to the packfile
 		for _, entry := range currentTree.Entries {
-			entries = append(entries, protocol.PackfileTreeEntry{
-				FileMode: entry.Mode,
-				FileName: entry.Name,
-				Hash:     entry.Hash.String(),
-			})
+			if entry.Type == protocol.ObjectTypeTree {
+				entries[entry.Path] = &entry
+			}
 		}
 	}
 
-	// Process each part of the path
-	currentPath := ""
-	for i, part := range pathParts {
-		if i == len(pathParts)-1 {
-			// This is the file - add it to the current level
-			entries = append(entries, protocol.PackfileTreeEntry{
-				FileMode: 0o100644, // Regular file
-				FileName: part,
-				Hash:     blobHash.String(),
-			})
-		} else {
-			// This is a directory
-			currentPath += part + "/"
-
-			// Check if this directory already exists in the current level
-			var dirEntry *protocol.PackfileTreeEntry
-			for j, entry := range entries {
-				if entry.FileName == part && entry.FileMode == 0o40000 {
-					dirEntry = &entries[j]
-					break
-				}
-			}
-
-			if dirEntry == nil {
-				// Directory doesn't exist - create a new empty tree
-				emptyTreeHash, err := writer.AddTree(nil)
-				if err != nil {
-					return fmt.Errorf("creating tree for %s: %w", currentPath, err)
-				}
-				entries = append(entries, protocol.PackfileTreeEntry{
-					FileMode: 0o40000, // Directory
-					FileName: part,
-					Hash:     emptyTreeHash.String(),
-				})
-				dirEntry = &entries[len(entries)-1]
-			} else {
-				// Directory exists - get its tree
-				dirHash, err := hash.FromHex(dirEntry.Hash)
-				if err != nil {
-					return fmt.Errorf("parsing directory hash: %w", err)
-				}
-
-				dirTree, err := c.GetTree(ctx, dirHash)
-				if err != nil {
-					return fmt.Errorf("getting tree for %s: %w", currentPath, err)
-				}
-
-				// Create a new tree with the existing entries
-				dirEntries := make([]protocol.PackfileTreeEntry, len(dirTree.Entries))
-				for j, entry := range dirTree.Entries {
-					dirEntries[j] = protocol.PackfileTreeEntry{
-						FileMode: entry.Mode,
-						FileName: entry.Name,
-						Hash:     entry.Hash.String(),
-					}
-				}
-
-				// Add the new tree
-				newTreeHash, err := writer.AddTree(dirEntries)
-				if err != nil {
-					return fmt.Errorf("creating tree for %s: %w", currentPath, err)
-				}
-
-				// Update the directory entry with the new tree hash
-				dirEntry.Hash = newTreeHash.String()
-			}
-		}
+	if entries[path] != nil {
+		return errors.New("file already exists")
 	}
 
 	// Create the root tree
-	rootTreeHash, err := writer.AddTree(entries)
+	rootTreeHash, err := c.addMissingOrStaleTreeEntries(ctx, path, currentTree.Hash, blobHash, entries, writer)
 	if err != nil {
 		return fmt.Errorf("creating root tree: %w", err)
 	}
 
 	// Create the commit
-	var parentHash hash.Hash
-	if ref.Hash != "" {
-		parentHash, err = hash.FromHex(ref.Hash)
-		if err != nil {
-			return fmt.Errorf("parsing parent hash: %w", err)
-		}
-	}
-
 	authorIdentity := protocol.Identity{
 		Name:      author.Name,
 		Email:     author.Email,
@@ -207,4 +121,131 @@ func (c *clientImpl) CreateFile(ctx context.Context, ref Ref, path string, conte
 	}
 
 	return nil
+}
+
+// updateTree updates the tree for the given path.
+// It returns the new tree hash
+func (c *clientImpl) addMissingOrStaleTreeEntries(ctx context.Context, path string, treeHash hash.Hash, blobHash hash.Hash, entries map[string]*TreeEntry, writer *protocol.PackfileWriter) (hash.Hash, error) {
+	// Split the path into parts
+	pathParts := strings.Split(path, "/")
+	if len(pathParts) == 0 {
+		return nil, errors.New("empty path")
+	}
+
+	// Get the file name and directory parts
+	fileName := pathParts[len(pathParts)-1]
+	dirParts := pathParts[:len(pathParts)-1]
+
+	current := protocol.PackfileTreeEntry{
+		FileMode: 0o100644,
+		FileName: fileName,
+		Hash:     blobHash.String(),
+	}
+	// Iterate bottom up checking if the existing tree.
+	// if it does not exist or hash is different, create it with the previous tree entry.
+	// if it exists and hash is the same, continue.
+	// Add the file to the tree
+	for i := len(dirParts) - 1; i >= 0; i-- {
+		currentPath := strings.Join(dirParts[:i+1], "/")
+		// Check if we already have this tree
+		existingEntry, exists := entries[currentPath]
+		// build the tree object to compare
+		newObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
+		if err != nil {
+			return nil, fmt.Errorf("building tree object: %w", err)
+		}
+
+		if exists && (existingEntry.Hash.Is(newObj.Hash) || existingEntry.Type != protocol.ObjectTypeTree) {
+			return nil, errors.New("this should not be the case")
+		}
+
+		// Create new tree
+		if !exists {
+			// Create new tree
+			treeHash, err := writer.AddTree([]protocol.PackfileTreeEntry{current})
+			if err != nil {
+				return nil, fmt.Errorf("creating tree for %s: %w", currentPath, err)
+			}
+
+			c.logger.Debug("add new tree object", "path", currentPath, "hash", treeHash.String(), "child", current.Hash, "child_path", current.FileName)
+
+			// Add this tree to the parent's entries
+			current = protocol.PackfileTreeEntry{
+				FileMode: 0o40000, // Directory mode
+				FileName: dirParts[i],
+				Hash:     treeHash.String(),
+			}
+		} else {
+			// Tree exists, add our entries to it
+			// TODO: try with getObject instead
+			existingTree, err := c.GetTree(ctx, existingEntry.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("getting existing tree %s: %w", currentPath, err)
+			}
+
+			// Convert existing entries to PackfileTreeEntry
+			combinedEntries := make([]protocol.PackfileTreeEntry, len(existingTree.Entries)+1)
+			for j, entry := range existingTree.Entries {
+				combinedEntries[j] = protocol.PackfileTreeEntry{
+					FileMode: entry.Mode,
+					FileName: entry.Name,
+					Hash:     entry.Hash.String(),
+				}
+			}
+			combinedEntries[len(existingTree.Entries)] = current
+
+			// Create new tree with combined entries
+			treeHash, err := writer.AddTree(combinedEntries)
+			if err != nil {
+				return nil, fmt.Errorf("updating tree for %s: %w", currentPath, err)
+			}
+
+			childNames := make([]string, len(combinedEntries))
+			for j, entry := range combinedEntries {
+				childNames[j] = entry.FileName
+			}
+
+			c.logger.Debug("add updated tree object", "path", currentPath, "hash", treeHash.String(), "entries", len(combinedEntries), "child_names", childNames)
+			current = protocol.PackfileTreeEntry{
+				FileMode: 0o40000, // Directory mode
+				FileName: dirParts[i],
+				Hash:     treeHash.String(),
+			}
+		}
+	}
+
+	// TODO: we have already fetched this once for building the tree
+	originalRoot, err := c.getObject(ctx, treeHash)
+	if err != nil {
+		return nil, fmt.Errorf("getting root tree: %w", err)
+	}
+
+	if originalRoot.Type != protocol.ObjectTypeTree {
+		return nil, errors.New("root is not a tree")
+	}
+	if len(originalRoot.Tree) == 0 {
+		rootHash, err := writer.AddTree([]protocol.PackfileTreeEntry{current})
+		if err != nil {
+			return nil, fmt.Errorf("adding root tree: %w", err)
+		}
+
+		return rootHash, nil
+	}
+
+	combinedEntries := make([]protocol.PackfileTreeEntry, len(originalRoot.Tree)+1)
+	for i, entry := range originalRoot.Tree {
+		combinedEntries[i] = protocol.PackfileTreeEntry{
+			FileMode: entry.FileMode,
+			FileName: entry.FileName,
+			Hash:     entry.Hash,
+		}
+	}
+
+	combinedEntries[len(originalRoot.Tree)] = current
+	newRoot, err := writer.AddTree(combinedEntries)
+	if err != nil {
+		return nil, fmt.Errorf("building new root tree: %w", err)
+	}
+
+	return newRoot, nil
 }

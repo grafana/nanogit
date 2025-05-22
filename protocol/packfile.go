@@ -437,9 +437,9 @@ func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
 	return h, nil
 }
 
-// AddTree adds a tree object to the packfile.
+// BuildTreeObject builds a tree object from a list of entries.
 // The tree represents a directory structure with file modes and hashes.
-func (w *PackfileWriter) AddTree(entries []PackfileTreeEntry) (hash.Hash, error) {
+func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObject, error) {
 	// Sort entries by name for consistent hashing
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].FileName < entries[j].FileName
@@ -456,7 +456,7 @@ func (w *PackfileWriter) AddTree(entries []PackfileTreeEntry) (hash.Hash, error)
 		// Write hash
 		hashBytes, err := hex.DecodeString(entry.Hash)
 		if err != nil {
-			return hash.Hash{}, fmt.Errorf("decoding hash for %s: %w", entry.FileName, err)
+			return PackfileObject{}, fmt.Errorf("decoding hash for %s: %w", entry.FileName, err)
 		}
 		data.Write(hashBytes)
 	}
@@ -467,14 +467,25 @@ func (w *PackfileWriter) AddTree(entries []PackfileTreeEntry) (hash.Hash, error)
 		Tree: entries,
 	}
 
-	h, err := Object(w.algo, obj.Type, obj.Data)
+	h, err := Object(algo, obj.Type, obj.Data)
 	if err != nil {
-		return hash.Hash{}, fmt.Errorf("computing tree hash: %w", err)
+		return PackfileObject{}, fmt.Errorf("computing tree hash: %w", err)
 	}
 	obj.Hash = h
 
-	w.objects = append(w.objects, obj)
-	return h, nil
+	return obj, nil
+}
+
+// AddTree adds a tree object to the packfile.
+// The tree represents a directory structure with file modes and hashes.
+func (w *PackfileWriter) AddTree(entries []PackfileTreeEntry) (hash.Hash, error) {
+	tree, err := BuildTreeObject(w.algo, entries)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("building tree object: %w", err)
+	}
+
+	w.objects = append(w.objects, tree)
+	return tree.Hash, nil
 }
 
 // AddCommit adds a commit object to the packfile.

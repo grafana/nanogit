@@ -131,6 +131,10 @@ func TestClient_Files(t *testing.T) {
 		content, err = os.ReadFile(filepath.Join(local.Path, "new.txt"))
 		require.NoError(t, err)
 		assert.Equal(t, newContent, content)
+		// Verify the test file was not removed
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		require.NoError(t, err)
+		require.Equal(t, testContent, otherContent)
 	})
 
 	t.Run("CreateFile with nested path", func(t *testing.T) {
@@ -161,34 +165,36 @@ func TestClient_Files(t *testing.T) {
 
 		// Verify using Git CLI
 		local.Git(t, "pull", "origin", "main")
-		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/file.txt"))
-		require.NoError(t, err)
-		assert.Equal(t, nestedContent, content)
 
 		// Verify directory structure
 		dirInfo, err := os.Stat(filepath.Join(local.Path, "dir"))
 		require.NoError(t, err)
-		assert.True(t, dirInfo.IsDir())
+		require.True(t, dirInfo.IsDir())
 
 		subdirInfo, err := os.Stat(filepath.Join(local.Path, "dir/subdir"))
 		require.NoError(t, err)
-		assert.True(t, subdirInfo.IsDir())
+		require.True(t, subdirInfo.IsDir())
+
+		// Verify file content
+		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/file.txt"))
+		require.NoError(t, err)
+		require.Equal(t, nestedContent, content)
+
+		// Verify the test file was not removed
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		require.NoError(t, err)
+		require.Equal(t, testContent, otherContent)
 
 		// Verify author
 		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		assert.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
 		// Verify committer
 		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		assert.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
 
 		// Verify the ref was updated
 		hashAfterCommit := local.Git(t, "rev-parse", "refs/heads/main")
-		assert.NotEqual(t, currentHash.String(), hashAfterCommit)
-
-		// Verify file content
-		content, err = os.ReadFile(filepath.Join(local.Path, "dir/subdir/file.txt"))
-		require.NoError(t, err)
-		assert.Equal(t, nestedContent, content)
+		require.NotEqual(t, currentHash.String(), hashAfterCommit)
 	})
 
 	t.Run("CreateFile with invalid ref", func(t *testing.T) {
@@ -206,6 +212,6 @@ func TestClient_Files(t *testing.T) {
 
 		err := client.CreateFile(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"}, "test.txt", content, author, committer, "Add file")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "refs/heads/nonexistent does not exist")
+		assert.Contains(t, err.Error(), "object not found")
 	})
 }
