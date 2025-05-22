@@ -31,6 +31,9 @@ type Client interface {
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
 	// File operations
 	GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error)
+	// CreateFile creates a new file in the specified branch.
+	// It creates a new commit with the file content and updates the reference.
+	CreateFile(ctx context.Context, ref Ref, path string, content []byte, author Author, committer Committer, message string) error
 	// Commit operations
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)

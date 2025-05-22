@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -396,4 +398,239 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 		remainingObjects: countObjects,
 		algo:             crypto.SHA1, // TODO: Support SHA256
 	}, nil
+}
+
+// PackfileWriter helps create Git objects and pack them into a packfile.
+// It maintains state about the objects being written and handles the packfile format.
+type PackfileWriter struct {
+	// Objects that will be written to the packfile
+	objects []PackfileObject
+	// The hash algorithm to use (SHA1 or SHA256)
+	algo crypto.Hash
+	// Buffer to store the final packfile
+	buf bytes.Buffer
+}
+
+// NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm.
+func NewPackfileWriter(algo crypto.Hash) *PackfileWriter {
+	return &PackfileWriter{
+		objects: make([]PackfileObject, 0),
+		algo:    algo,
+	}
+}
+
+// AddBlob adds a blob object to the packfile.
+// The blob contains the raw file contents.
+func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
+	obj := PackfileObject{
+		Type: ObjectTypeBlob,
+		Data: data,
+	}
+
+	h, err := Object(w.algo, obj.Type, obj.Data)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("computing blob hash: %w", err)
+	}
+	obj.Hash = h
+
+	w.objects = append(w.objects, obj)
+	return h, nil
+}
+
+// AddTree adds a tree object to the packfile.
+// The tree represents a directory structure with file modes and hashes.
+func (w *PackfileWriter) AddTree(entries []PackfileTreeEntry) (hash.Hash, error) {
+	// Sort entries by name for consistent hashing
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].FileName < entries[j].FileName
+	})
+
+	// Build tree data
+	var data bytes.Buffer
+	for _, entry := range entries {
+		// Write mode as octal string
+		fmt.Fprintf(&data, "%o ", entry.FileMode)
+		// Write filename
+		data.WriteString(entry.FileName)
+		data.WriteByte(0) // NUL byte
+		// Write hash
+		hashBytes, err := hex.DecodeString(entry.Hash)
+		if err != nil {
+			return hash.Hash{}, fmt.Errorf("decoding hash for %s: %w", entry.FileName, err)
+		}
+		data.Write(hashBytes)
+	}
+
+	obj := PackfileObject{
+		Type: ObjectTypeTree,
+		Data: data.Bytes(),
+		Tree: entries,
+	}
+
+	h, err := Object(w.algo, obj.Type, obj.Data)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("computing tree hash: %w", err)
+	}
+	obj.Hash = h
+
+	w.objects = append(w.objects, obj)
+	return h, nil
+}
+
+// AddCommit adds a commit object to the packfile.
+// The commit references a tree and optionally a parent commit.
+func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string) (hash.Hash, error) {
+	var data bytes.Buffer
+
+	// Write tree
+	fmt.Fprintf(&data, "tree %s\n", tree.String())
+
+	// Write parent if provided
+	if !parent.Is(hash.Zero) {
+		fmt.Fprintf(&data, "parent %s\n", parent.String())
+	}
+
+	// Write author
+	fmt.Fprintf(&data, "author %s\n", author.String())
+
+	// Write committer
+	fmt.Fprintf(&data, "committer %s\n", committer.String())
+
+	// Write message
+	data.WriteString("\n")
+	data.WriteString(message)
+
+	obj := PackfileObject{
+		Type: ObjectTypeCommit,
+		Data: data.Bytes(),
+		Commit: &PackfileCommit{
+			Tree:      tree,
+			Parent:    parent,
+			Author:    author,
+			Committer: committer,
+			Message:   message,
+		},
+	}
+
+	h, err := Object(w.algo, obj.Type, obj.Data)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("computing commit hash: %w", err)
+	}
+	obj.Hash = h
+
+	w.objects = append(w.objects, obj)
+	return h, nil
+}
+
+// WritePackfile writes all objects to a packfile and returns the packfile data.
+// The packfile format is:
+// - Reference update command: <old-value> <new-value> <ref-name>\000<capabilities>\n
+// - Flush packet (0000)
+// - 4-byte signature: "PACK"
+// - 4-byte version number (2)
+// - 4-byte number of objects
+// - Object entries
+// - 20-byte SHA1 of the packfile
+func (w *PackfileWriter) WritePackfile() ([]byte, error) {
+	// Write signature
+	if _, err := w.buf.WriteString("PACK"); err != nil {
+		return nil, fmt.Errorf("writing packfile signature: %w", err)
+	}
+
+	// Write version (2)
+	if err := binary.Write(&w.buf, binary.BigEndian, uint32(2)); err != nil {
+		return nil, fmt.Errorf("writing packfile version: %w", err)
+	}
+
+	// Write number of objects
+	numObjects := len(w.objects)
+	if numObjects > math.MaxUint32 {
+		return nil, fmt.Errorf("too many objects: %d exceeds maximum of %d", numObjects, math.MaxUint32)
+	}
+
+	if err := binary.Write(&w.buf, binary.BigEndian, uint32(numObjects)); err != nil {
+		return nil, fmt.Errorf("writing object count: %w", err)
+	}
+
+	// Write each object
+	for _, obj := range w.objects {
+		if err := w.writeObject(obj); err != nil {
+			return nil, fmt.Errorf("writing object: %w", err)
+		}
+	}
+
+	// Compute and write packfile hash
+	packHash := w.algo.New()
+	if _, err := packHash.Write(w.buf.Bytes()); err != nil {
+		return nil, fmt.Errorf("writing to pack hash: %w", err)
+	}
+	if _, err := w.buf.Write(packHash.Sum(nil)); err != nil {
+		return nil, fmt.Errorf("writing pack hash: %w", err)
+	}
+
+	// Get the packfile data
+	packfileData := w.buf.Bytes()
+
+	// Find the commit hash from the objects
+	var parentHash, commitHash hash.Hash
+	for _, obj := range w.objects {
+		if obj.Type == ObjectTypeCommit {
+			commitHash = obj.Hash
+			parentHash = obj.Commit.Parent
+			break
+		}
+	}
+
+	if commitHash.Is(hash.Zero) {
+		return nil, errors.New("no commit object found in packfile")
+	}
+
+	// Create the complete message with reference update command
+	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n0000<packfile data>
+	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
+		parentHash.String(), // old value (zero hash for new refs)
+		commitHash.String(), // new value (the commit hash)
+		"refs/heads/main")   // ref name
+
+	// Calculate the length of the ref update line (including the 4 bytes of length)
+	refUpdateLen := len(refUpdate) + 4
+	refUpdateLine := fmt.Sprintf("%04x%s", refUpdateLen, refUpdate)
+
+	// Combine everything
+	completeData := make([]byte, 0, len(refUpdateLine)+4+len(packfileData))
+	completeData = append(completeData, []byte(refUpdateLine)...)
+	completeData = append(completeData, []byte("0000")...) // flush packet
+	completeData = append(completeData, packfileData...)
+
+	return completeData, nil
+}
+
+// writeObject writes a single object to the packfile.
+// The object format is:
+// - Type and size (variable length)
+// - Compressed object data
+func (w *PackfileWriter) writeObject(obj PackfileObject) error {
+	// Write type and size
+	size := len(obj.Data)
+	firstByte := byte(obj.Type)<<4 | byte(size&0x0f)
+	size >>= 4
+
+	for size > 0 {
+		firstByte |= 0x80
+		w.buf.WriteByte(firstByte)
+		firstByte = byte(size & 0x7f)
+		size >>= 7
+	}
+	w.buf.WriteByte(firstByte)
+
+	// Compress and write data
+	zw := zlib.NewWriter(&w.buf)
+	if _, err := zw.Write(obj.Data); err != nil {
+		return fmt.Errorf("compressing object data: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("closing zlib writer: %w", err)
+	}
+
+	return nil
 }
