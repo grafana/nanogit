@@ -234,21 +234,21 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
-		// Ensure clean working directory
+		t.Log("Cleaning working directory")
 		local.Git(t, "clean", "-fd")
 		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
-		// Create a new file to be updated
+		t.Log("Creating initial file to be updated")
 		newContent := []byte("New file content")
 		local.CreateFile(t, "tobeupdated.txt", string(newContent))
 
-		// Add and commit the file to be updated
+		t.Log("Committing initial file")
 		local.Git(t, "add", "tobeupdated.txt")
 		local.Git(t, "commit", "-m", "Add file to be updated")
 		local.Git(t, "push")
 
-		// Get current ref
+		t.Log("Getting current ref")
 		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
 		require.NoError(t, err)
 		ref := nanogit.Ref{
@@ -256,11 +256,11 @@ func TestClient_Files(t *testing.T) {
 			Hash: currentHash,
 		}
 
-		// Create a writer
+		t.Log("Creating ref writer")
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
 
-		// Update the test file
+		t.Log("Updating file content")
 		updatedContent := []byte("Updated content")
 		blobHash, err := writer.UpdateBlob(ctx, "tobeupdated.txt", updatedContent)
 		require.NoError(t, err)
@@ -277,54 +277,54 @@ func TestClient_Files(t *testing.T) {
 			Time:  time.Now(),
 		}
 
-		// Commit the changes
+		t.Log("Committing changes")
 		commit, err := writer.Commit(ctx, "Update test file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		// Clean up and pull changes
+		t.Log("Pulling latest changes")
 		local.Git(t, "clean", "-fd")
 		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
-		// Verify commit hash
+		t.Log("Verifying commit hash")
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
-		// Verify file content was updated
+		t.Log("Verifying updated file content")
 		content, err := os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
 		require.NoError(t, err)
 		require.Equal(t, updatedContent, content)
 
-		// Verify author and committer
+		t.Log("Verifying author and committer")
 		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
 		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
 		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
 		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
 
-		// Verify the test file was not removed
+		t.Log("Verifying test file was preserved")
 		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
 		require.NoError(t, err)
 		require.Equal(t, testContent, otherContent)
 	})
 	t.Run("UpdateBlob with nested file", func(t *testing.T) {
-		// Ensure clean working directory
+		t.Log("Ensuring clean working directory")
 		local.Git(t, "clean", "-fd")
 		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
-		// Create a new file to be updated
+		t.Log("Creating new file to be updated")
 		newContent := []byte("New file content")
 		local.CreateDirPath(t, "dir/subdir")
 		local.CreateFile(t, "dir/subdir/tobeupdated.txt", string(newContent))
 
-		// Add and commit the file to be updated
+		t.Log("Adding and committing the file to be updated")
 		local.Git(t, "add", "dir/subdir/tobeupdated.txt")
 		local.Git(t, "commit", "-m", "Add file to be updated")
 		local.Git(t, "push")
 
-		// Get current ref
+		t.Log("Getting current ref")
 		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
 		require.NoError(t, err)
 		ref := nanogit.Ref{
@@ -332,11 +332,11 @@ func TestClient_Files(t *testing.T) {
 			Hash: currentHash,
 		}
 
-		// Create a writer
+		t.Log("Creating ref writer")
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
 
-		// Update the nested file
+		t.Log("Updating nested file content")
 		updatedContent := []byte("Updated nested content")
 		blobHash, err := writer.UpdateBlob(ctx, "dir/subdir/tobeupdated.txt", updatedContent)
 		require.NoError(t, err)
@@ -353,35 +353,35 @@ func TestClient_Files(t *testing.T) {
 			Time:  time.Now(),
 		}
 
-		// Commit the changes
+		t.Log("Committing changes")
 		commit, err := writer.Commit(ctx, "Update nested file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		// Clean up and pull changes
+		t.Log("Cleaning up and pulling changes")
 		local.Git(t, "clean", "-fd")
 		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
-		// Verify commit hash
+		t.Log("Verifying commit hash")
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
-		// Verify file content was updated
+		t.Log("Verifying file content was updated")
 		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
 		require.NoError(t, err)
 		require.Equal(t, updatedContent, content)
 
-		// Verify the test file was not removed
+		t.Log("Verifying test file was preserved")
 		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
 		require.NoError(t, err)
 		require.Equal(t, testContent, otherContent)
 
-		// Verify author
+		t.Log("Verifying author")
 		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
 		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-		// Verify committer
+		t.Log("Verifying committer")
 		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
 		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
 	})
