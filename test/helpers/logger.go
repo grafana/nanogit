@@ -63,6 +63,11 @@ func (l *TestLogger) Error(msg string, keysAndValues ...any) {
 	l.log("Error", msg, keysAndValues)
 }
 
+// Success implements nanogit.Logger.
+func (l *TestLogger) Success(msg string, keysAndValues ...any) {
+	l.log("Success", msg, keysAndValues)
+}
+
 // log is a helper method to log messages and store them in entries.
 func (l *TestLogger) log(level, msg string, args []any) {
 	l.mu.RLock()
@@ -89,6 +94,8 @@ func (l *TestLogger) log(level, msg string, args []any) {
 		l.t.Logf("%s⚠️  [WARN] %s%s", ColorYellow, formattedMsg, ColorReset)
 	case "Error":
 		l.t.Logf("%s❌ [ERROR] %s%s", ColorRed, formattedMsg, ColorReset)
+	case "Success":
+		l.t.Logf("%s✅ [SUCCESS] %s%s", ColorGreen, formattedMsg, ColorReset)
 	}
 	l.mu.RUnlock()
 
