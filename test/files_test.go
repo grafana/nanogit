@@ -246,8 +246,12 @@ func TestClient_Files(t *testing.T) {
 		local.Git(t, "push")
 
 		// Get current ref
-		ref, err := client.GetRef(ctx, "refs/heads/main")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
 		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
 
 		// Create a writer
 		writer, err := client.NewRefWriter(ctx, ref)
@@ -316,8 +320,12 @@ func TestClient_Files(t *testing.T) {
 		local.Git(t, "push", "origin", "main")
 
 		// Get current ref
-		ref, err := client.GetRef(ctx, "refs/heads/main")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
 		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
 
 		// Create a writer
 		writer, err := client.NewRefWriter(ctx, ref)
