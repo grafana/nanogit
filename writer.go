@@ -97,9 +97,11 @@ func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte)
 	}
 
 	w.logger.Debug("created blob", "hash", blobHash.String())
-
-	// Remove the old entry from the tree entries
-	delete(w.treeEntries, path)
+	w.treeEntries[path] = &TreeEntry{
+		Path: path,
+		Hash: blobHash,
+		Type: protocol.ObjectTypeBlob,
+	}
 
 	// Add the new entry
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
