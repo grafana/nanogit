@@ -9,7 +9,7 @@ import (
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
 type TestLogger struct {
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	t       *testing.T
 	entries []struct {
 		level string
@@ -36,6 +36,19 @@ func (l *TestLogger) ForSubtest(t *testing.T) {
 	l.t = t
 }
 
+func (l *TestLogger) T() *testing.T {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.t
+}
+
+// Logf logs a message to the test output with colors and emojis.
+func (l *TestLogger) Logf(format string, args ...any) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	l.t.Logf(format, args...)
+}
+
 // Debug implements nanogit.Logger.
 func (l *TestLogger) Debug(msg string, keysAndValues ...any) {
 	l.log("Debug", msg, keysAndValues)
@@ -58,6 +71,9 @@ func (l *TestLogger) Error(msg string, keysAndValues ...any) {
 
 // log is a helper method to log messages and store them in entries.
 func (l *TestLogger) log(level, msg string, args []any) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
 	// Format the message with key-value pairs
 	formattedMsg := msg
 	if len(args) > 0 {
