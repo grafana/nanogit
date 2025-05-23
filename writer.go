@@ -97,8 +97,13 @@ func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte)
 	}
 
 	w.logger.Debug("created blob", "hash", blobHash.String())
+
+	// Remove the old entry from the tree entries
+	delete(w.treeEntries, path)
+
+	// Add the new entry
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return nil, fmt.Errorf("creating root tree: %w", err)
+		return nil, fmt.Errorf("updating tree: %w", err)
 	}
 
 	return blobHash, nil
@@ -225,7 +230,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 				w.treeCache[existingObj.Hash.String()] = existingTree
 			}
 
-			newObj, err := w.updateTreeEntry(existingTree, existingObj, current)
+			newObj, err := w.updateTreeEntry(existingTree, current)
 			if err != nil {
 				return fmt.Errorf("updating tree for %s: %w", currentPath, err)
 			}
@@ -259,7 +264,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 		return nil
 	}
 
-	newRootObj, err := w.updateTreeEntry(w.lastTree, nil, current)
+	newRootObj, err := w.updateTreeEntry(w.lastTree, current)
 	if err != nil {
 		return fmt.Errorf("updating root tree: %w", err)
 	}
@@ -269,17 +274,13 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	return nil
 }
 
-func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, existingEntry *TreeEntry, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
+func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	if obj.Type != protocol.ObjectTypeTree {
 		return nil, errors.New("object is not a tree")
 	}
 
 	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree)+1)
 	for _, entry := range obj.Tree {
-		if existingEntry != nil && entry.Hash == existingEntry.Hash.String() {
-			continue
-		}
-
 		combinedEntries = append(combinedEntries, entry)
 	}
 
