@@ -3,11 +3,13 @@ package helpers
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
 type TestLogger struct {
+	mu      sync.Mutex
 	t       *testing.T
 	entries []struct {
 		level string
@@ -29,6 +31,8 @@ func NewTestLogger(t *testing.T) *TestLogger {
 }
 
 func (l *TestLogger) ForSubtest(t *testing.T) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.t = t
 }
 
