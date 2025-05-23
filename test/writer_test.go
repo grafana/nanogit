@@ -239,6 +239,11 @@ func TestClient_Writer(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
+		logger.Info("Getting git status before pull")
+		status := local.Git(t, "status")
+		diff := local.Git(t, "diff", "HEAD", "refs/heads/main")
+		logger.Info("Git status", "status", status, "diff", diff)
+
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
 
