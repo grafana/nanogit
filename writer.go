@@ -225,11 +225,26 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			// If tree exists, add our entries to it
 			existingTree, ok := w.treeCache[existingObj.Hash.String()]
 			if !ok {
+				w.logger.Info("fetch tree not found in cache", "path", currentPath, "hash", existingObj.Hash.String())
 				existingTree, err := w.getObject(ctx, existingObj.Hash)
 				if err != nil {
 					return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
 				}
 				w.treeCache[existingObj.Hash.String()] = existingTree
+				if existingTree == nil {
+					return fmt.Errorf("tree for %s %s is nil from remote", currentPath, existingObj.Hash.String())
+				}
+
+				if existingTree.Type != protocol.ObjectTypeTree {
+					return fmt.Errorf("tree for %s %s is not a tree", currentPath, existingObj.Hash.String())
+				}
+
+				w.logger.Info("tree object found in remote", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
+			} else {
+				if existingTree == nil {
+					return fmt.Errorf("tree for %s %s is nil in cache", currentPath, existingObj.Hash.String())
+				}
+				w.logger.Debug("tree object found in cache", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
 			}
 
 			newObj, err := w.updateTreeEntry(existingTree, current)

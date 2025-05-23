@@ -296,7 +296,6 @@ func TestClient_Writer(t *testing.T) {
 		require.NotEqual(t, newContent, otherContent)
 	})
 	t.Run("UpdateBlob with nested file", func(t *testing.T) {
-		t.Skip("Skipping nested file update test")
 		logger, local, client, initCommitFile := quickSetup(t)
 		ctx := context.Background()
 		logger.ForSubtest(t)
@@ -388,8 +387,6 @@ func TestClient_Writer(t *testing.T) {
 	})
 
 	t.Run("UpdateBlob with nonexistent file", func(t *testing.T) {
-		t.Skip("Skipping nonexistent file update test")
-
 		logger, _, client, _ := quickSetup(t)
 		ctx := context.Background()
 		logger.ForSubtest(t)
