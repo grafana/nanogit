@@ -38,6 +38,8 @@ func TestClient_Files(t *testing.T) {
 	// Create and switch to main branch
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
+	// Track current branch
+	local.Git(t, "branch", "--set-upstream-to=origin/main", "main")
 
 	logger := helpers.NewTestLogger(t)
 	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
