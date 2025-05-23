@@ -233,7 +233,8 @@ func TestClient_Files(t *testing.T) {
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
 		// Pull latest changes before starting the test
-		local.Git(t, "pull", "origin", "main")
+		local.Git(t, "clean", "-fd")
+		local.Git(t, "pull")
 
 		// Create a new file to be updated
 		newContent := []byte("New file content")
@@ -242,7 +243,7 @@ func TestClient_Files(t *testing.T) {
 		// Add and commit the file to be updated
 		local.Git(t, "add", "tobeupdated.txt")
 		local.Git(t, "commit", "-m", "Add file to be updated")
-		local.Git(t, "push", "origin", "main")
+		local.Git(t, "push")
 
 		// Get current ref
 		ref, err := client.GetRef(ctx, "refs/heads/main")
@@ -276,8 +277,9 @@ func TestClient_Files(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		// Verify using Git CLI
-		local.Git(t, "pull", "origin", "main")
+		// Clean up any untracked files before pulling
+		local.Git(t, "clean", "-fd")
+		local.Git(t, "pull")
 
 		// Verify commit hash
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
@@ -299,8 +301,9 @@ func TestClient_Files(t *testing.T) {
 		require.Equal(t, testContent, otherContent)
 	})
 	t.Run("UpdateBlob with nested file", func(t *testing.T) {
-		// Pull latest chVanges before starting the test
-		local.Git(t, "pull", "origin", "main")
+		// Pull latest changes before starting the test
+		local.Git(t, "clean", "-fd")
+		local.Git(t, "pull")
 
 		// Create a new file to be updated
 		newContent := []byte("New file content")
@@ -345,7 +348,9 @@ func TestClient_Files(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify using Git CLI
-		local.Git(t, "pull", "origin", "main")
+		// Clean up any untracked files before pulling
+		local.Git(t, "clean", "-fd")
+		local.Git(t, "pull")
 
 		// Verify commit hash
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
