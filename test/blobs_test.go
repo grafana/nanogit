@@ -49,15 +49,19 @@ func TestClient_Blobs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	logger.Info("Testing GetBlob with valid hash", "hash", blobHash)
-	content, err := client.GetBlob(ctx, blobHash)
-	require.NoError(t, err)
-	assert.Equal(t, testContent, content)
+	t.Run("GetBlob with valid hash", func(t *testing.T) {
+		logger.Info("Testing GetBlob with valid hash", "hash", blobHash)
+		content, err := client.GetBlob(ctx, blobHash)
+		require.NoError(t, err)
+		assert.Equal(t, testContent, content)
+	})
 
-	logger.Info("Testing GetBlob with non-existent hash")
-	nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-	require.NoError(t, err)
-	_, err = client.GetBlob(ctx, nonExistentHash)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+	t.Run("GetBlob with non-existent hash", func(t *testing.T) {
+		logger.Info("Testing GetBlob with non-existent hash")
+		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+		require.NoError(t, err)
+		_, err = client.GetBlob(ctx, nonExistentHash)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+	})
 }
