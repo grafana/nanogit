@@ -3,11 +3,13 @@ package helpers
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
 type TestLogger struct {
+	mu      sync.RWMutex
 	t       *testing.T
 	entries []struct {
 		level string
@@ -26,6 +28,19 @@ func NewTestLogger(t *testing.T) *TestLogger {
 			args  []any
 		}, 0),
 	}
+}
+
+func (l *TestLogger) ForSubtest(t *testing.T) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.t = t
+}
+
+// Logf logs a message to the test output with colors and emojis.
+func (l *TestLogger) Logf(format string, args ...any) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	l.t.Logf(format, args...)
 }
 
 // Debug implements nanogit.Logger.
@@ -48,8 +63,15 @@ func (l *TestLogger) Error(msg string, keysAndValues ...any) {
 	l.log("Error", msg, keysAndValues)
 }
 
+// Success implements nanogit.Logger.
+func (l *TestLogger) Success(msg string, keysAndValues ...any) {
+	l.log("Success", msg, keysAndValues)
+}
+
 // log is a helper method to log messages and store them in entries.
 func (l *TestLogger) log(level, msg string, args []any) {
+	l.mu.RLock()
+
 	// Format the message with key-value pairs
 	formattedMsg := msg
 	if len(args) > 0 {
@@ -65,21 +87,26 @@ func (l *TestLogger) log(level, msg string, args []any) {
 	// Log to test output with colors and emojis
 	switch level {
 	case "Debug":
-		l.t.Logf("%s🔍 [DEBUG] %s%s", ColorBlue, formattedMsg, ColorReset)
+		l.t.Logf("%s🔍 [DEBUG] %s%s", ColorGray, formattedMsg, ColorReset)
 	case "Info":
-		l.t.Logf("%sℹ️  [INFO] %s%s", ColorGreen, formattedMsg, ColorReset)
+		l.t.Logf("%sℹ️  [INFO] %s%s", ColorBlue, formattedMsg, ColorReset)
 	case "Warn":
 		l.t.Logf("%s⚠️  [WARN] %s%s", ColorYellow, formattedMsg, ColorReset)
 	case "Error":
 		l.t.Logf("%s❌ [ERROR] %s%s", ColorRed, formattedMsg, ColorReset)
+	case "Success":
+		l.t.Logf("%s✅ [SUCCESS] %s%s", ColorGreen, formattedMsg, ColorReset)
 	}
+	l.mu.RUnlock()
 
 	// Store in entries
+	l.mu.Lock()
 	l.entries = append(l.entries, struct {
 		level string
 		msg   string
 		args  []any
 	}{level, msg, args})
+	l.mu.Unlock()
 }
 
 // GetEntries returns all logged entries.
@@ -88,11 +115,17 @@ func (l *TestLogger) GetEntries() []struct {
 	msg   string
 	args  []any
 } {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
 	return l.entries
 }
 
 // Clear clears all logged entries.
 func (l *TestLogger) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	l.entries = make([]struct {
 		level string
 		msg   string

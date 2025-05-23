@@ -15,47 +15,53 @@ import (
 )
 
 func TestClient_Blobs(t *testing.T) {
-	// set up remote repo
-	gitServer := helpers.NewGitServer(t)
+	logger := helpers.NewTestLogger(t)
+	logger.Info("Setting up remote repository")
+	gitServer := helpers.NewGitServer(t, logger)
+
 	user := gitServer.CreateUser(t)
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
-	// set up local repo
-	local := helpers.NewLocalGitRepo(t)
+	logger.Info("Setting up local repository")
+	local := helpers.NewLocalGitRepo(t, logger)
 	local.Git(t, "config", "user.name", user.Username)
 	local.Git(t, "config", "user.email", user.Email)
 	local.Git(t, "remote", "add", "origin", remote.AuthURL())
 
-	// Create and commit a test file
+	logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
 	local.CreateFile(t, "test.txt", string(testContent))
 	local.Git(t, "add", "test.txt")
 	local.Git(t, "commit", "-m", "Initial commit")
 
-	// Create and switch to main branch
+	logger.Info("Setting up main branch and pushing changes")
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	// Get the blob hash
+	logger.Info("Getting blob hash", "file", "test.txt")
 	blobHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
 	require.NoError(t, err)
 
-	logger := helpers.NewTestLogger(t)
+	logger.Info("Creating client")
 	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Test GetBlob
-	content, err := client.GetBlob(ctx, blobHash)
-	require.NoError(t, err)
-	assert.Equal(t, testContent, content)
+	t.Run("GetBlob with valid hash", func(t *testing.T) {
+		logger.Info("Testing GetBlob with valid hash", "hash", blobHash)
+		content, err := client.GetBlob(ctx, blobHash)
+		require.NoError(t, err)
+		assert.Equal(t, testContent, content)
+	})
 
-	// Test GetBlob with non-existent hash
-	nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-	require.NoError(t, err)
-	_, err = client.GetBlob(ctx, nonExistentHash)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+	t.Run("GetBlob with non-existent hash", func(t *testing.T) {
+		logger.Info("Testing GetBlob with non-existent hash")
+		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+		require.NoError(t, err)
+		_, err = client.GetBlob(ctx, nonExistentHash)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+	})
 }

@@ -14,31 +14,33 @@ import (
 )
 
 func TestClient_RepoExists(t *testing.T) {
-	// set up remote repo
-	gitServer := helpers.NewGitServer(t)
+	logger := helpers.NewTestLogger(t)
+	logger.Info("Setting up remote repository")
+	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
-	// set up local repo
-	local := helpers.NewLocalGitRepo(t)
+	logger.Info("Setting up local repository")
+	local := helpers.NewLocalGitRepo(t, logger)
 	local.Git(t, "config", "user.name", user.Username)
 	local.Git(t, "config", "user.email", user.Email)
 	local.Git(t, "remote", "add", "origin", remote.AuthURL())
 
-	// Create and commit a test file
+	logger.Info("Creating and committing a test file")
 	local.CreateFile(t, "test.txt", "test content")
 	local.Git(t, "add", "test.txt")
 	local.Git(t, "commit", "-m", "Initial commit")
 
-	// Create and switch to main branch
+	logger.Info("Creating and switching to main branch")
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	logger := helpers.NewTestLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	t.Run("existing repository", func(t *testing.T) {
+		logger.ForSubtest(t)
+
 		client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 		require.NoError(t, err)
 
@@ -48,6 +50,8 @@ func TestClient_RepoExists(t *testing.T) {
 	})
 
 	t.Run("non-existent repository", func(t *testing.T) {
+		logger.ForSubtest(t)
+
 		nonExistentClient, err := nanogit.NewClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(user.Username, user.Password))
 		require.NoError(t, err)
 
@@ -57,6 +61,8 @@ func TestClient_RepoExists(t *testing.T) {
 	})
 
 	t.Run("unauthorized access", func(t *testing.T) {
+		logger.ForSubtest(t)
+
 		unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
 		require.NoError(t, err)
 
