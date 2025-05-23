@@ -352,7 +352,7 @@ func TestClient_Writer(t *testing.T) {
 		local.Git(t, "fetch", "origin")
 		status := local.Git(t, "status")
 		logger.Info("Git status", "status")
-		require.Contains(t, status, "Your branch is ahead of 'origin/main' by 1 commit")
+		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
 		logger.Info("Checking for untracked files")
 		untracked := local.Git(t, "ls-files", "--others", "--exclude-standard")
 		require.Empty(t, untracked, "Found untracked files: %s", untracked)
