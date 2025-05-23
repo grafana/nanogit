@@ -281,8 +281,19 @@ func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protoc
 		return nil, errors.New("object is not a tree")
 	}
 
-	combinedEntries := append(make([]protocol.PackfileTreeEntry, 0, len(obj.Tree)+1), obj.Tree...)
+	// Create a new slice for the updated entries
+	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree))
+
+	// Add all entries except the one we're updating
+	for _, entry := range obj.Tree {
+		if entry.FileName != current.FileName {
+			combinedEntries = append(combinedEntries, entry)
+		}
+	}
+
+	// Add the new/updated entry
 	combinedEntries = append(combinedEntries, current)
+
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {
 		return nil, fmt.Errorf("building tree object: %w", err)
