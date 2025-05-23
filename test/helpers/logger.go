@@ -82,9 +82,9 @@ func (l *TestLogger) log(level, msg string, args []any) {
 	// Log to test output with colors and emojis
 	switch level {
 	case "Debug":
-		l.t.Logf("%s🔍 [DEBUG] %s%s", ColorBlue, formattedMsg, ColorReset)
+		l.t.Logf("%s🔍 [DEBUG] %s%s", ColorGray, formattedMsg, ColorReset)
 	case "Info":
-		l.t.Logf("%sℹ️  [INFO] %s%s", ColorGreen, formattedMsg, ColorReset)
+		l.t.Logf("%sℹ️  [INFO] %s%s", ColorBlue, formattedMsg, ColorReset)
 	case "Warn":
 		l.t.Logf("%s⚠️  [WARN] %s%s", ColorYellow, formattedMsg, ColorReset)
 	case "Error":
