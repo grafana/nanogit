@@ -252,9 +252,21 @@ func TestClient_Writer(t *testing.T) {
 		status := local.Git(t, "status")
 		logger.Info("Git status", "status", status)
 		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
+
+		logger.Info("Checking repository state")
+		logger.Info("Current branch", "branch", local.Git(t, "branch", "--show-current"))
+		logger.Info("Remote tracking branch", "branch", local.Git(t, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
+		logger.Info("Local commit", "hash", local.Git(t, "rev-parse", "HEAD"))
+		logger.Info("Remote commit", "hash", local.Git(t, "rev-parse", "origin/main"))
+
 		logger.Info("Checking for untracked files")
 		untracked := local.Git(t, "ls-files", "--others", "--exclude-standard")
+		logger.Info("Untracked files", "files", untracked)
 		require.Empty(t, untracked, "Found untracked files: %s", untracked)
+
+		logger.Info("Checking index state")
+		indexFiles := local.Git(t, "ls-files", "--stage")
+		logger.Info("Files in index", "files", indexFiles)
 
 		logger.Info("Logging repository contents before pull")
 		local.LogRepoContents(t)
