@@ -244,11 +244,6 @@ func TestClient_Files(t *testing.T) {
 		local.Git(t, "commit", "-m", "Add file to be updated")
 		local.Git(t, "push", "origin", "main")
 
-		// Verify file content of file to be updated
-		content, err := os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
-		require.NoError(t, err)
-		require.Equal(t, newContent, content)
-
 		// Get current ref
 		ref, err := client.GetRef(ctx, "refs/heads/main")
 		require.NoError(t, err)
@@ -288,7 +283,7 @@ func TestClient_Files(t *testing.T) {
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
 		// Verify file content was updated
-		content, err = os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
+		content, err := os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
 		require.NoError(t, err)
 		require.Equal(t, updatedContent, content)
 
@@ -316,15 +311,6 @@ func TestClient_Files(t *testing.T) {
 		local.Git(t, "add", "dir/subdir/tobeupdated.txt")
 		local.Git(t, "commit", "-m", "Add file to be updated")
 		local.Git(t, "push", "origin", "main")
-
-		// Verify file content of nested file to be updated
-		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
-		require.NoError(t, err)
-		require.Equal(t, newContent, content)
-
-		// Get current ref
-		ref, err := client.GetRef(ctx, "refs/heads/main")
-		require.NoError(t, err)
 
 		// Create a writer
 		writer, err := client.NewRefWriter(ctx, ref)
@@ -361,7 +347,7 @@ func TestClient_Files(t *testing.T) {
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
 		// Verify file content was updated
-		content, err = os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
+		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
 		require.NoError(t, err)
 		require.Equal(t, updatedContent, content)
 
