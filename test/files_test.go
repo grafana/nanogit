@@ -312,6 +312,10 @@ func TestClient_Files(t *testing.T) {
 		local.Git(t, "commit", "-m", "Add file to be updated")
 		local.Git(t, "push", "origin", "main")
 
+		// Get current ref
+		ref, err := client.GetRef(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
 		// Create a writer
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
