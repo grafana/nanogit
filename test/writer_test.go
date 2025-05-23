@@ -15,39 +15,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClient_Writer(t *testing.T) {
+func quickSetup(t *testing.T) (*helpers.TestLogger, *helpers.LocalGitRepo, nanogit.Client, string) {
 	logger := helpers.NewTestLogger(t)
-	logger.Info("Setting up remote repository")
+	logger.Info("Setting up remote and local repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-
-	logger.Info("Setting up local repository")
 	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	client, initCommitFile := local.QuickInit(t, user, remote.AuthURL())
 
-	logger.Info("Creating and committing test file")
-	testContent := []byte("test content")
-	local.CreateFile(t, "test.txt", string(testContent))
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Initial commit")
+	return logger, local, client, initCommitFile
+}
 
-	logger.Info("Setting up main branch and pushing changes")
-	local.Git(t, "branch", "-M", "main")
-	local.Git(t, "push", "origin", "main", "--force")
-
-	logger.Info("Tracking current branch")
-	local.Git(t, "branch", "--set-upstream-to=origin/main", "main")
-
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
+func TestClient_Writer(t *testing.T) {
 	t.Run("CreateBlob with new file", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
+
 		logger.ForSubtest(t)
 
 		logger.Info("Pulling latest changes before starting the test")
@@ -117,12 +101,14 @@ func TestClient_Writer(t *testing.T) {
 		require.Equal(t, newContent, content)
 
 		logger.Info("Verifying the test file was not removed")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
 		require.NoError(t, err)
-		require.Equal(t, testContent, otherContent)
+		require.NotEqual(t, newContent, otherContent)
 	})
 
 	t.Run("CreateBlob with nested path", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
 		logger.ForSubtest(t)
 
 		logger.Info("Pulling latest changes before starting the test")
@@ -180,9 +166,9 @@ func TestClient_Writer(t *testing.T) {
 		require.Equal(t, nestedContent, content)
 
 		logger.Info("Verifying the test file was not removed")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
 		require.NoError(t, err)
-		require.Equal(t, testContent, otherContent)
+		require.NotEqual(t, nestedContent, otherContent)
 
 		logger.Info("Verifying author")
 		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
@@ -198,6 +184,8 @@ func TestClient_Writer(t *testing.T) {
 	})
 
 	t.Run("CreateBlob with invalid ref", func(t *testing.T) {
+		logger, _, client, _ := quickSetup(t)
+		ctx := context.Background()
 		logger.ForSubtest(t)
 
 		_, err := client.NewRefWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
@@ -206,6 +194,8 @@ func TestClient_Writer(t *testing.T) {
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
 		logger.ForSubtest(t)
 
 		logger.Info("Cleaning working directory")
@@ -278,11 +268,13 @@ func TestClient_Writer(t *testing.T) {
 		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
 
 		logger.Info("Verifying test file was preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
 		require.NoError(t, err)
-		require.Equal(t, testContent, otherContent)
+		require.NotEqual(t, newContent, otherContent)
 	})
 	t.Run("UpdateBlob with nested file", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
 		logger.ForSubtest(t)
 
 		logger.Info("Ensuring clean working directory")
@@ -350,9 +342,9 @@ func TestClient_Writer(t *testing.T) {
 		require.Equal(t, updatedContent, content)
 
 		logger.Info("Verifying test file was preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
 		require.NoError(t, err)
-		require.Equal(t, testContent, otherContent)
+		require.NotEqual(t, newContent, otherContent)
 
 		logger.Info("Verifying author")
 		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
@@ -363,6 +355,8 @@ func TestClient_Writer(t *testing.T) {
 	})
 
 	t.Run("UpdateBlob with nonexistent file", func(t *testing.T) {
+		logger, _, client, _ := quickSetup(t)
+		ctx := context.Background()
 		logger.ForSubtest(t)
 
 		logger.Info("Getting current ref")

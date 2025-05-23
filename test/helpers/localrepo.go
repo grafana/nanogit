@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/nanogit"
 	"github.com/stretchr/testify/require"
 )
 
@@ -101,4 +102,28 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 		r.logger.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorBlue, ColorPurple, ColorReset)
 	}
 	return strings.TrimSpace(string(output))
+}
+
+func (r *LocalGitRepo) QuickInit(t *testing.T, user *User, remoteURL string) (client nanogit.Client, fileName string) {
+	r.logger.Info("Setting up local repository")
+	r.Git(t, "config", "user.name", user.Username)
+	r.Git(t, "config", "user.email", user.Email)
+	r.Git(t, "remote", "add", "origin", remoteURL)
+
+	r.logger.Info("Creating and committing test file")
+	testContent := []byte("test content")
+	r.CreateFile(t, "test.txt", string(testContent))
+	r.Git(t, "add", "test.txt")
+	r.Git(t, "commit", "-m", "Initial commit")
+
+	r.logger.Info("Setting up main branch and pushing changes")
+	r.Git(t, "branch", "-M", "main")
+	r.Git(t, "push", "origin", "main", "--force")
+
+	r.logger.Info("Tracking current branch")
+	r.Git(t, "branch", "--set-upstream-to=origin/main", "main")
+
+	client, err := nanogit.NewClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password))
+	require.NoError(t, err)
+	return client, "test.txt"
 }
