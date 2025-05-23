@@ -66,7 +66,6 @@ func (l *TestLogger) Error(msg string, keysAndValues ...any) {
 // log is a helper method to log messages and store them in entries.
 func (l *TestLogger) log(level, msg string, args []any) {
 	l.mu.RLock()
-	l.mu.RUnlock()
 
 	// Format the message with key-value pairs
 	formattedMsg := msg
