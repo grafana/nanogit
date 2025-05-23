@@ -245,8 +245,14 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Git status", "status", status)
 		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
 
+		logger.Info("Logging repository contents before pull")
+		local.LogRepoContents(t)
+
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
+
+		logger.Info("Logging repository contents after pull")
+		local.LogRepoContents(t)
 
 		logger.Info("Verifying commit hash")
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
@@ -325,9 +331,13 @@ func TestClient_Writer(t *testing.T) {
 		status := local.Git(t, "status")
 		logger.Info("Git status", "status")
 		require.Contains(t, status, "Your branch is ahead of 'origin/main' by 1 commit")
+		logger.Info("Logging repository contents before pull")
+		local.LogRepoContents(t)
 
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
+		logger.Info("Logging repository contents after pull")
+		local.LogRepoContents(t)
 
 		logger.Info("Verifying commit hash")
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
