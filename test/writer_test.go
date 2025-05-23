@@ -214,11 +214,18 @@ func TestClient_Writer(t *testing.T) {
 		writer, err := client.NewRefWriter(ctx, ref)
 		require.NoError(t, err)
 
+		logger.Info("Verifying blob hash before update")
+		oldBlobHash := local.Git(t, "rev-parse", "HEAD:tobeupdated.txt")
+		logger.Info("Old blob hash", "hash", oldBlobHash)
+
 		logger.Info("Updating file content")
 		updatedContent := []byte("Updated content")
 		blobHash, err := writer.UpdateBlob(ctx, "tobeupdated.txt", updatedContent)
 		require.NoError(t, err)
 		require.NotNil(t, blobHash)
+
+		logger.Info("Blob hash changed", "old_hash", oldBlobHash, "new_hash", blobHash.String())
+		require.NotEqual(t, oldBlobHash, blobHash.String())
 
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -239,23 +246,26 @@ func TestClient_Writer(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
+		// Pull
 		logger.Info("Getting git status before pull")
 		local.Git(t, "fetch", "origin")
 		status := local.Git(t, "status")
 		logger.Info("Git status", "status", status)
 		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
+		logger.Info("Checking for untracked files")
+		untracked := local.Git(t, "ls-files", "--others", "--exclude-standard")
+		require.Empty(t, untracked, "Found untracked files: %s", untracked)
 
 		logger.Info("Logging repository contents before pull")
 		local.LogRepoContents(t)
-
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
-
 		logger.Info("Logging repository contents after pull")
 		local.LogRepoContents(t)
 
+		// After pull
 		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
 
 		logger.Info("Verifying updated file content")
 		content, err := os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
@@ -326,21 +336,26 @@ func TestClient_Writer(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
+		// Pulling
 		logger.Info("Getting git status before pull")
 		local.Git(t, "fetch", "origin")
 		status := local.Git(t, "status")
 		logger.Info("Git status", "status")
 		require.Contains(t, status, "Your branch is ahead of 'origin/main' by 1 commit")
+		logger.Info("Checking for untracked files")
+		untracked := local.Git(t, "ls-files", "--others", "--exclude-standard")
+		require.Empty(t, untracked, "Found untracked files: %s", untracked)
+
 		logger.Info("Logging repository contents before pull")
 		local.LogRepoContents(t)
-
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
 		logger.Info("Logging repository contents after pull")
 		local.LogRepoContents(t)
 
+		// After pull
 		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
 
 		logger.Info("Verifying file content was updated")
 		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))

@@ -129,7 +129,7 @@ func (r *LocalGitRepo) QuickInit(t *testing.T, user *User, remoteURL string) (cl
 }
 
 func (r *LocalGitRepo) LogRepoContents(t *testing.T) {
-	r.logger.Info("Logging repository contents")
+	r.logger.Info("Repository contents:")
 	var printDir func(path string, indent string)
 	printDir = func(path string, indent string) {
 		files, err := os.ReadDir(path)
@@ -137,10 +137,10 @@ func (r *LocalGitRepo) LogRepoContents(t *testing.T) {
 		for _, file := range files {
 			fullPath := filepath.Join(path, file.Name())
 			if file.IsDir() {
-				r.logger.Info("📁 Directory", "name", indent+file.Name()+"/")
+				r.logger.Info(indent + "📁 " + file.Name() + "/")
 				printDir(fullPath, indent+"  ")
 			} else {
-				r.logger.Info("📄 File", "name", indent+file.Name())
+				r.logger.Info(indent + "📄 " + file.Name())
 			}
 		}
 	}
