@@ -231,18 +231,19 @@ func TestClient_Writer(t *testing.T) {
 			Time:  time.Now(),
 		}
 
-		logger.Info("Committing changes")
+		logger.Info("Committing changes", "previous_commit", ref.Hash.String(), "ref", ref.Name)
 		commit, err := writer.Commit(ctx, "Update test file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
-		logger.Info("Pushing changes")
+		logger.Info("Pushing changes", "blob_hash", blobHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
 		logger.Info("Getting git status before pull")
+		local.Git(t, "fetch", "origin")
 		status := local.Git(t, "status")
-		diff := local.Git(t, "diff", "HEAD", "refs/heads/main")
-		logger.Info("Git status", "status", status, "diff", diff)
+		logger.Info("Git status", "status", status)
+		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
 
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
@@ -320,9 +321,10 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 
 		logger.Info("Getting git status before pull")
+		local.Git(t, "fetch", "origin")
 		status := local.Git(t, "status")
-		diff := local.Git(t, "diff", "HEAD", "refs/heads/main")
-		logger.Info("Git status", "status", status, "diff", diff)
+		logger.Info("Git status", "status")
+		require.Contains(t, status, "Your branch is ahead of 'origin/main' by 1 commit")
 
 		logger.Info("Pulling latest changes")
 		local.Git(t, "pull")
