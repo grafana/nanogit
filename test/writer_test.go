@@ -36,9 +36,6 @@ func TestClient_Writer(t *testing.T) {
 
 		logger.ForSubtest(t)
 
-		logger.Info("Pulling latest changes before starting the test")
-		local.Git(t, "pull", "origin", "main")
-
 		newContent := []byte("new content")
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -72,8 +69,8 @@ func TestClient_Writer(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		logger.Info("Verifying using Git CLI")
-		local.Git(t, "pull", "origin", "main")
+		logger.Info("Pulling latest changes")
+		local.Git(t, "pull")
 		require.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
 		logger.Info("Verifying file content")
@@ -113,9 +110,6 @@ func TestClient_Writer(t *testing.T) {
 		ctx := context.Background()
 		logger.ForSubtest(t)
 
-		logger.Info("Pulling latest changes before starting the test")
-		local.Git(t, "pull", "origin", "main")
-
 		nestedContent := []byte("nested content")
 		author := nanogit.Author{
 			Name:  "Test Author",
@@ -148,7 +142,7 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 
 		logger.Info("Verifying using Git CLI")
-		local.Git(t, "pull", "origin", "main")
+		local.Git(t, "pull")
 
 		logger.Info("Verifying commit hash")
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
@@ -200,12 +194,6 @@ func TestClient_Writer(t *testing.T) {
 		ctx := context.Background()
 		logger.ForSubtest(t)
 
-		logger.Info("Cleaning working directory")
-		local.Git(t, "clean", "-fd")
-		local.Git(t, "reset", "--hard")
-		local.Git(t, "pull")
-
-		logger.Info("Creating initial file to be updated")
 		newContent := []byte("New file content")
 		local.CreateFile(t, "tobeupdated.txt", string(newContent))
 
@@ -251,8 +239,6 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 
 		logger.Info("Pulling latest changes")
-		local.Git(t, "clean", "-fd")
-		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
 		logger.Info("Verifying commit hash")
@@ -278,11 +264,6 @@ func TestClient_Writer(t *testing.T) {
 		logger, local, client, initCommitFile := quickSetup(t)
 		ctx := context.Background()
 		logger.ForSubtest(t)
-
-		logger.Info("Ensuring clean working directory")
-		local.Git(t, "clean", "-fd")
-		local.Git(t, "reset", "--hard")
-		local.Git(t, "pull")
 
 		logger.Info("Creating new file to be updated")
 		newContent := []byte("New file content")
@@ -330,10 +311,8 @@ func TestClient_Writer(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		logger.Info("Cleaning up and pulling changes")
-		local.Git(t, "clean", "-fd")
-		local.Git(t, "reset", "--hard")
-		local.Git(t, "pull")
+		logger.Info("Pulling latest changes")
+		local.Git(t, "pull", "origin", "main")
 
 		logger.Info("Verifying commit hash")
 		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
