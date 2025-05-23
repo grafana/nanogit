@@ -21,7 +21,7 @@ func TestClient_IsAuthorized(t *testing.T) {
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t)
+	local := helpers.NewLocalGitRepo(t, logger)
 	local.Git(t, "config", "user.name", user.Username)
 	local.Git(t, "config", "user.email", user.Email)
 	local.Git(t, "remote", "add", "origin", remote.AuthURL())

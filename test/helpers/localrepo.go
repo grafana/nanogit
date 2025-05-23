@@ -14,42 +14,43 @@ import (
 // It provides methods to initialize, modify, and manage a Git repository
 // in a temporary directory.
 type LocalGitRepo struct {
-	Path string // Path to the local Git repository
+	logger *TestLogger
+	Path   string // Path to the local Git repository
 }
 
 // NewLocalGitRepo creates a new LocalGitRepo instance with a temporary directory
 // as its path. The temporary directory is automatically cleaned up when the test
 // completes.
-func NewLocalGitRepo(t *testing.T) *LocalGitRepo {
+func NewLocalGitRepo(t *testing.T, logger *TestLogger) *LocalGitRepo {
 	p := t.TempDir()
 	t.Cleanup(func() {
 		t.Logf("%s📦 [LOCAL] 🧹 Cleaning up local repository at %s%s", ColorYellow, p, ColorReset)
 		require.NoError(t, os.RemoveAll(p))
 	})
 
-	t.Logf("%s📦 [LOCAL] 📁 Creating new local repository at %s%s", ColorBlue, p, ColorReset)
-	r := &LocalGitRepo{Path: p}
+	logger.t.Logf("%s📦 [LOCAL] 📁 Creating new local repository at %s%s", ColorBlue, p, ColorReset)
+	r := &LocalGitRepo{Path: p, logger: logger}
 	r.Git(t, "init")
-	t.Logf("%s📦 [LOCAL] ✅ Local repository initialized successfully%s", ColorGreen, ColorReset)
+	logger.t.Logf("%s📦 [LOCAL] ✅ Local repository initialized successfully%s", ColorGreen, ColorReset)
 	return r
 }
 
 // CreateDirPath creates a directory path in the repository.
 // It creates all necessary parent directories if they don't exist.
 func (r *LocalGitRepo) CreateDirPath(t *testing.T, dirpath string) {
-	t.Logf("%s📦 [LOCAL] 📁 Creating directory path '%s' in repository%s", ColorBlue, dirpath, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] 📁 Creating directory path '%s' in repository%s", ColorBlue, dirpath, ColorReset)
 	err := os.MkdirAll(filepath.Join(r.Path, dirpath), 0755)
 	require.NoError(t, err)
-	t.Logf("%s📦 [LOCAL] ✅ Directory path '%s' created successfully%s", ColorGreen, dirpath, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] ✅ Directory path '%s' created successfully%s", ColorGreen, dirpath, ColorReset)
 }
 
 // CreateFile creates a new file in the repository with the specified filename
 // and content. The file is created with read/write permissions for the owner only.
 func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
-	t.Logf("%s📦 [LOCAL] 📝 Creating file '%s' in repository%s", ColorBlue, filename, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] 📝 Creating file '%s' in repository%s", ColorBlue, filename, ColorReset)
 	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
 	require.NoError(t, err)
-	t.Logf("%s📦 [LOCAL] ✅ File '%s' created successfully%s", ColorGreen, filename, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] ✅ File '%s' created successfully%s", ColorGreen, filename, ColorReset)
 }
 
 // Git executes a Git command in the repository directory.
@@ -64,40 +65,40 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 	cmdStr := strings.Join(args, " ")
 
 	// Log the git command being executed with a special format
-	t.Logf("%s📦 [LOCAL] %s┌─────────────────────────────────────────────┐%s", ColorBlue, ColorPurple, ColorReset)
-	t.Logf("%s📦 [LOCAL] %s│ %sGit Command%s%s", ColorBlue, ColorPurple, ColorCyan, ColorPurple, ColorReset)
-	t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorBlue, ColorPurple, ColorReset)
-	t.Logf("%s📦 [LOCAL] %s│ %s$ git %s%s", ColorBlue, ColorPurple, ColorCyan, cmdStr, ColorReset)
-	t.Logf("%s📦 [LOCAL] %s│ %sPath: %s%s", ColorBlue, ColorPurple, ColorCyan, r.Path, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] %s┌─────────────────────────────────────────────┐%s", ColorBlue, ColorPurple, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] %s│ %sGit Command%s%s", ColorBlue, ColorPurple, ColorCyan, ColorPurple, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorBlue, ColorPurple, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] %s│ %s$ git %s%s", ColorBlue, ColorPurple, ColorCyan, cmdStr, ColorReset)
+	r.logger.t.Logf("%s📦 [LOCAL] %s│ %sPath: %s%s", ColorBlue, ColorPurple, ColorCyan, r.Path, ColorReset)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Add error information to the same box
-		t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorRed, ColorPurple, ColorReset)
-		t.Logf("%s📦 [LOCAL] %s│ %sError: %s%s", ColorRed, ColorPurple, ColorRed, err.Error(), ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorRed, ColorPurple, ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s│ %sError: %s%s", ColorRed, ColorPurple, ColorRed, err.Error(), ColorReset)
 		if len(output) > 0 {
-			t.Logf("%s📦 [LOCAL] %s│ %sOutput:%s", ColorRed, ColorPurple, ColorRed, ColorReset)
+			r.logger.t.Logf("%s📦 [LOCAL] %s│ %sOutput:%s", ColorRed, ColorPurple, ColorRed, ColorReset)
 			for _, line := range strings.Split(string(output), "\n") {
 				if line != "" {
 					t.Logf("%s📦 [LOCAL] %s│ %s  %s%s", ColorRed, ColorPurple, ColorRed, line, ColorReset)
 				}
 			}
 		}
-		t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorRed, ColorPurple, ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorRed, ColorPurple, ColorReset)
 		require.NoError(t, err, "git command failed: %s\nOutput: %s", cmdStr, output)
 	} else if len(output) > 0 {
 		// Add output to the same box
-		t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorCyan, ColorPurple, ColorReset)
-		t.Logf("%s📦 [LOCAL] %s│ %sOutput:%s", ColorCyan, ColorPurple, ColorCyan, ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorCyan, ColorPurple, ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s│ %sOutput:%s", ColorCyan, ColorPurple, ColorCyan, ColorReset)
 		for _, line := range strings.Split(string(output), "\n") {
 			if line != "" {
-				t.Logf("%s📦 [LOCAL] %s│ %s%s%s", ColorCyan, ColorPurple, ColorCyan, line, ColorReset)
+				r.logger.t.Logf("%s📦 [LOCAL] %s│ %s%s%s", ColorCyan, ColorPurple, ColorCyan, line, ColorReset)
 			}
 		}
-		t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorCyan, ColorPurple, ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorCyan, ColorPurple, ColorReset)
 	} else {
 		// Close the box if there's no output
-		t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorBlue, ColorPurple, ColorReset)
+		r.logger.t.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorBlue, ColorPurple, ColorReset)
 	}
 	return strings.TrimSpace(string(output))
 }

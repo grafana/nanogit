@@ -22,7 +22,7 @@ func TestClient_Refs(t *testing.T) {
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t)
+	local := helpers.NewLocalGitRepo(t, logger)
 	local.Git(t, "config", "user.name", user.Username)
 	local.Git(t, "config", "user.email", user.Email)
 	// Easy way to add remote with username and password without modifying the host configuration
