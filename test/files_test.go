@@ -234,8 +234,9 @@ func TestClient_Files(t *testing.T) {
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
-		// Pull latest changes before starting the test
+		// Ensure clean working directory
 		local.Git(t, "clean", "-fd")
+		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
 		// Create a new file to be updated
@@ -283,8 +284,9 @@ func TestClient_Files(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		// Clean up any untracked files before pulling
+		// Clean up and pull changes
 		local.Git(t, "clean", "-fd")
+		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
 		// Verify commit hash
@@ -307,8 +309,9 @@ func TestClient_Files(t *testing.T) {
 		require.Equal(t, testContent, otherContent)
 	})
 	t.Run("UpdateBlob with nested file", func(t *testing.T) {
-		// Pull latest changes before starting the test
+		// Ensure clean working directory
 		local.Git(t, "clean", "-fd")
+		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
 		// Create a new file to be updated
@@ -319,7 +322,7 @@ func TestClient_Files(t *testing.T) {
 		// Add and commit the file to be updated
 		local.Git(t, "add", "dir/subdir/tobeupdated.txt")
 		local.Git(t, "commit", "-m", "Add file to be updated")
-		local.Git(t, "push", "origin", "main")
+		local.Git(t, "push")
 
 		// Get current ref
 		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
@@ -357,9 +360,9 @@ func TestClient_Files(t *testing.T) {
 		err = writer.Push(ctx)
 		require.NoError(t, err)
 
-		// Verify using Git CLI
-		// Clean up any untracked files before pulling
+		// Clean up and pull changes
 		local.Git(t, "clean", "-fd")
+		local.Git(t, "reset", "--hard")
 		local.Git(t, "pull")
 
 		// Verify commit hash
