@@ -36,12 +36,6 @@ func (l *TestLogger) ForSubtest(t *testing.T) {
 	l.t = t
 }
 
-func (l *TestLogger) T() *testing.T {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.t
-}
-
 // Logf logs a message to the test output with colors and emojis.
 func (l *TestLogger) Logf(format string, args ...any) {
 	l.mu.RLock()
@@ -72,7 +66,7 @@ func (l *TestLogger) Error(msg string, keysAndValues ...any) {
 // log is a helper method to log messages and store them in entries.
 func (l *TestLogger) log(level, msg string, args []any) {
 	l.mu.RLock()
-	defer l.mu.RUnlock()
+	l.mu.RUnlock()
 
 	// Format the message with key-value pairs
 	formattedMsg := msg
@@ -97,13 +91,16 @@ func (l *TestLogger) log(level, msg string, args []any) {
 	case "Error":
 		l.t.Logf("%s❌ [ERROR] %s%s", ColorRed, formattedMsg, ColorReset)
 	}
+	l.mu.RUnlock()
 
 	// Store in entries
+	l.mu.Lock()
 	l.entries = append(l.entries, struct {
 		level string
 		msg   string
 		args  []any
 	}{level, msg, args})
+	l.mu.Unlock()
 }
 
 // GetEntries returns all logged entries.
@@ -112,11 +109,17 @@ func (l *TestLogger) GetEntries() []struct {
 	msg   string
 	args  []any
 } {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
 	return l.entries
 }
 
 // Clear clears all logged entries.
 func (l *TestLogger) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	l.entries = make([]struct {
 		level string
 		msg   string
