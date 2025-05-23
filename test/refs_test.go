@@ -15,38 +15,38 @@ import (
 )
 
 func TestClient_Refs(t *testing.T) {
-	// set up remote repo
-	gitServer := helpers.NewGitServer(t)
+	logger := helpers.NewTestLogger(t)
+	logger.Info("Setting up remote repository")
+	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
-	// set up local repo
+	logger.Info("Setting up local repository")
 	local := helpers.NewLocalGitRepo(t)
 	local.Git(t, "config", "user.name", user.Username)
 	local.Git(t, "config", "user.email", user.Email)
 	// Easy way to add remote with username and password without modifying the host configuration
 	local.Git(t, "remote", "add", "origin", remote.AuthURL())
 
-	// commit something
+	logger.Info("Committing something")
 	local.CreateFile(t, "test.txt", "test content")
 	local.Git(t, "add", "test.txt")
 	local.Git(t, "commit", "-m", "Initial commit")
 	firstCommit, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 
-	// main branch
+	logger.Info("Setting up main branch and pushing changes")
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "-u", "origin", "main", "--force")
 
-	// test-branch
+	logger.Info("Creating test branch")
 	local.Git(t, "branch", "test-branch")
 	local.Git(t, "push", "origin", "test-branch", "--force")
 
-	// v1.0.0 tag
+	logger.Info("Creating v1.0.0 tag")
 	local.Git(t, "tag", "v1.0.0")
 	local.Git(t, "push", "origin", "v1.0.0", "--force")
 
-	logger := helpers.NewTestLogger(t)
 	gitClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
@@ -66,7 +66,7 @@ func TestClient_Refs(t *testing.T) {
 
 	assert.ElementsMatch(t, wantRefs, refs)
 
-	// Get refs one by one
+	logger.Info("Getting refs one by one")
 	for _, ref := range wantRefs {
 		ref, err := gitClient.GetRef(ctx, ref.Name)
 		require.NoError(t, err, "GetRef failed: %v", err)
@@ -74,56 +74,56 @@ func TestClient_Refs(t *testing.T) {
 		assert.Equal(t, firstCommit, ref.Hash)
 	}
 
-	// get-ref with non-existent ref
+	logger.Info("Getting ref with non-existent ref")
 	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
 	require.Equal(t, err, nanogit.ErrRefNotFound)
 
-	// create-ref
+	logger.Info("Creating ref with new-branch")
 	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
 	require.NoError(t, err)
 
-	// get-ref with new-branch
+	logger.Info("Getting ref with new-branch")
 	ref, err := gitClient.GetRef(ctx, "refs/heads/new-branch")
 	require.NoError(t, err)
 	assert.Equal(t, firstCommit, ref.Hash)
 
-	// Create a new commit
+	logger.Info("Creating a new commit")
 	local.Git(t, "commit", "--allow-empty", "-m", "new commit")
 	newHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 	local.Git(t, "push", "origin", "main", "--force")
 
-	// Update ref to point to new commit
+	logger.Info("Updating ref to point to new commit")
 	err = gitClient.UpdateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: newHash})
 	require.NoError(t, err)
 
-	// Get ref and verify it points to new commit
+	logger.Info("Getting ref and verifying it points to new commit")
 	ref, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
 	require.NoError(t, err)
 	assert.Equal(t, newHash, ref.Hash)
 
-	// delete-ref
+	logger.Info("Deleting ref with new-branch")
 	err = gitClient.DeleteRef(ctx, "refs/heads/new-branch")
 	require.NoError(t, err)
 
-	// get-ref with new-branch should fail
+	logger.Info("Getting ref with new-branch should fail")
 	_, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
 	require.Equal(t, err, nanogit.ErrRefNotFound)
 
-	// create-tag
+	logger.Info("Creating tag with v2.0.0")
 	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
 	require.NoError(t, err)
 
-	// get-ref with new tag
+	logger.Info("Getting ref with new tag")
 	ref, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
 	require.NoError(t, err)
 	assert.Equal(t, firstCommit, ref.Hash)
 
-	// delete-tag
+	logger.Info("Deleting tag with v2.0.0")
 	err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")
 	require.NoError(t, err)
 
-	// get-ref with new tag should fail
+	logger.Info("Getting ref with new tag should fail")
 	_, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
 	require.Equal(t, err, nanogit.ErrRefNotFound)
 }

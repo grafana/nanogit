@@ -18,11 +18,7 @@ import (
 )
 
 type containerLogger struct {
-	t *testing.T
-}
-
-func NewContainerLogger(t *testing.T) *containerLogger {
-	return &containerLogger{t: t}
+	*TestLogger
 }
 
 func (l *containerLogger) Accept(log testcontainers.Log) {
@@ -71,12 +67,11 @@ type GitServer struct {
 // - Pre-configured admin user
 // - Disabled SSH and mailer
 // Returns a GitServer instance ready for testing.
-func NewGitServer(t *testing.T) *GitServer {
+func NewGitServer(t *testing.T, logger *TestLogger) *GitServer {
 	ctx := context.Background()
 
+	containerLogger := &containerLogger{logger}
 	t.Logf("%s🚀 Starting Gitea server container...%s", ColorGreen, ColorReset)
-
-	logConsumer := NewContainerLogger(t)
 
 	// Start Gitea container
 	req := testcontainers.ContainerRequest{
@@ -98,7 +93,7 @@ func NewGitServer(t *testing.T) *GitServer {
 		WaitingFor: wait.ForHTTP("/api/v1/version").WithPort("3000").WithStartupTimeout(30 * time.Second),
 		LogConsumerCfg: &testcontainers.LogConsumerConfig{
 			Opts:      []testcontainers.LogProductionOption{testcontainers.WithLogProductionTimeout(10 * time.Second)},
-			Consumers: []testcontainers.LogConsumer{logConsumer},
+			Consumers: []testcontainers.LogConsumer{containerLogger},
 		},
 	}
 

@@ -16,18 +16,19 @@ import (
 )
 
 func TestClient_Tree(t *testing.T) {
-	// set up remote repo
-	gitServer := helpers.NewGitServer(t)
+	logger := helpers.NewTestLogger(t)
+	logger.Info("Setting up remote repository")
+	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
 	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
 
-	// set up local repo
+	logger.Info("Setting up local repository")
 	local := helpers.NewLocalGitRepo(t)
 	local.Git(t, "config", "user.name", user.Username)
 	local.Git(t, "config", "user.email", user.Email)
 	local.Git(t, "remote", "add", "origin", remote.AuthURL())
 
-	// Create a directory structure with files
+	logger.Info("Creating a directory structure with files")
 	local.CreateDirPath(t, "dir1")
 	local.CreateDirPath(t, "dir2")
 	local.CreateFile(t, "dir1/file1.txt", "content1")
@@ -35,31 +36,30 @@ func TestClient_Tree(t *testing.T) {
 	local.CreateFile(t, "dir2/file3.txt", "content3")
 	local.CreateFile(t, "root.txt", "root content")
 
-	// Add and commit the files
+	logger.Info("Adding and committing the files")
 	local.Git(t, "add", ".")
 	local.Git(t, "commit", "-m", "Initial commit with tree structure")
 
-	// Create and switch to main branch
+	logger.Info("Creating and switching to main branch")
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	// Get the tree hash
+	logger.Info("Getting the tree hash")
 	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
 	require.NoError(t, err)
 
-	logger := helpers.NewTestLogger(t)
 	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Test GetTree
+	logger.Info("Testing GetTree")
 	tree, err := client.GetTree(ctx, treeHash)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 
-	// Helper to get the hash for a given path (file or directory)
+	logger.Info("Helper to get the hash for a given path (file or directory)")
 	getHash := func(path string) hash.Hash {
 		out := local.Git(t, "rev-parse", "HEAD:"+path)
 		h, err := hash.FromHex(out)
@@ -67,7 +67,7 @@ func TestClient_Tree(t *testing.T) {
 		return h
 	}
 
-	// Define expected entries with correct hashes
+	logger.Info("Defining expected entries with correct hashes")
 	wantEntries := []nanogit.TreeEntry{
 		{
 			Name: "root.txt",
@@ -113,13 +113,13 @@ func TestClient_Tree(t *testing.T) {
 		},
 	}
 
-	// Verify tree structure
+	logger.Info("Verifying tree structure")
 	require.Len(t, tree.Entries, len(wantEntries))
 
-	// Compare entries using EqualElements
+	logger.Info("Comparing entries using EqualElements")
 	assert.ElementsMatch(t, wantEntries, tree.Entries, "Tree entries do not match expected values")
 
-	// Test GetTree with non-existent hash
+	logger.Info("Testing GetTree with non-existent hash")
 	nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 	require.NoError(t, err)
 	_, err = client.GetTree(ctx, nonExistentHash)

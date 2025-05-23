@@ -28,6 +28,10 @@ func NewTestLogger(t *testing.T) *TestLogger {
 	}
 }
 
+func (l *TestLogger) ForSubtest(t *testing.T) {
+	l.t = t
+}
+
 // Debug implements nanogit.Logger.
 func (l *TestLogger) Debug(msg string, keysAndValues ...any) {
 	l.log("Debug", msg, keysAndValues)
