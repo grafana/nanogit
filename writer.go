@@ -184,16 +184,10 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	// Add the file to the tree
 	for i := len(dirParts) - 1; i >= 0; i-- {
 		currentPath := strings.Join(dirParts[:i+1], "/")
-		// Check if we already have this tree
-		existingBlob, exists := w.treeEntries[currentPath]
-		// build the tree object to compare
-		newObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
-		if err != nil {
-			return fmt.Errorf("building tree object: %w", err)
-		}
-
-		if exists && (existingBlob.Hash.Is(newObj.Hash) || existingBlob.Type != protocol.ObjectTypeTree) {
-			return errors.New("this should not be the case")
+		// Check if not a tree
+		existingObj, exists := w.treeEntries[currentPath]
+		if exists && existingObj.Type != protocol.ObjectTypeTree {
+			return errors.New("existing tree entry is not a tree")
 		}
 
 		// Create new tree
@@ -222,16 +216,16 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			}
 		} else {
 			// If tree exists, add our entries to it
-			existingTree, ok := w.treeCache[existingBlob.Hash.String()]
+			existingTree, ok := w.treeCache[existingObj.Hash.String()]
 			if !ok {
-				existingTree, err = w.getObject(ctx, existingBlob.Hash)
+				existingTree, err := w.getObject(ctx, existingObj.Hash)
 				if err != nil {
 					return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
 				}
-				w.treeCache[existingBlob.Hash.String()] = existingTree
+				w.treeCache[existingObj.Hash.String()] = existingTree
 			}
 
-			newObj, err := w.updateTreeEntry(existingTree, existingBlob, current)
+			newObj, err := w.updateTreeEntry(existingTree, existingObj, current)
 			if err != nil {
 				return fmt.Errorf("updating tree for %s: %w", currentPath, err)
 			}

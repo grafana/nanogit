@@ -26,27 +26,27 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 	// Add emojis and colors based on log level/content
 	switch {
 	case strings.Contains(content, "401 Unauthorized"):
-		l.Error("🖥️  [SERVER] 🔒 %s", content)
+		l.Error("🖥️  [SERVER] 🔒 " + content)
 	case strings.Contains(content, "403 Forbidden"):
-		l.Error("🖥️  [SERVER] 🚫 %s", content)
+		l.Error("🖥️  [SERVER] 🚫 " + content)
 	case strings.Contains(content, "404 Not Found"):
-		l.Info("🖥️  [SERVER] 🔍 %s", content)
+		l.Info("🖥️  [SERVER] 🔍 " + content)
 	case strings.Contains(content, "500 Internal Server Error"):
-		l.Error("🖥️  [SERVER] 💥 %s", content)
+		l.Error("🖥️  [SERVER] 💥 " + content)
 	case strings.Contains(content, "200 OK"):
-		l.Success("🖥️ [SERVER]  %s", content)
+		l.Success("🖥️ [SERVER] " + content)
 	case strings.Contains(content, "201 Created"):
-		l.Success("🖥️  [SERVER] ✨ %s", content)
+		l.Success("🖥️  [SERVER] ✨ " + content)
 	case strings.Contains(content, "204 No Content"):
-		l.Success("🖥️  [SERVER] ✨ %s", content)
+		l.Success("🖥️  [SERVER] ✨ " + content)
 	case strings.Contains(strings.ToLower(content), "error"):
-		l.Error("🖥️  [SERVER] %s", content)
+		l.Error("🖥️  [SERVER] " + content)
 	case strings.Contains(strings.ToLower(content), "warn"):
-		l.Warn("🖥️  [SERVER] ️%s", content)
+		l.Warn("🖥️  [SERVER] " + content)
 	case strings.Contains(strings.ToLower(content), "info"):
-		l.Info("%s🖥️  [SERVER] %s", content)
+		l.Info("🖥️  [SERVER] " + content)
 	default:
-		l.Info("%s🖥️  [SERVER] %s", content)
+		l.Info("🖥️  [SERVER] " + content)
 	}
 }
 
