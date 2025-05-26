@@ -261,3 +261,197 @@ func TestProcessFlatTreeEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTree(t *testing.T) {
+	mustFromHex := func(hs string) hash.Hash {
+		h, err := hash.FromHex(hs)
+		if err != nil {
+			t.Fatalf("failed to parse hash %s: %v", hs, err)
+		}
+		return h
+	}
+
+	tests := []struct {
+		name          string
+		treeHash      string
+		mockResponse  []byte
+		statusCode    int
+		expectedTree  *Tree
+		expectedError string
+	}{
+		{
+			name:       "successful root tree retrieval",
+			treeHash:   "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
+			statusCode: http.StatusOK,
+			expectedTree: &Tree{
+				Entries: []TreeEntry{
+					{
+						Name: "root.txt",
+						Mode: 33188, // 100644 in octal
+						Type: protocol.ObjectTypeBlob,
+						Hash: mustFromHex("6eec10ba6e8a5379cae2c49d01d214fd41fb713f"),
+					},
+					{
+						Name: "dir1",
+						Mode: 16384, // 040000 in octal
+						Type: protocol.ObjectTypeTree,
+						Hash: mustFromHex("1ae8c212049c2661d606c787235163365d440dcc"),
+					},
+					{
+						Name: "dir2",
+						Mode: 16384, // 040000 in octal
+						Type: protocol.ObjectTypeTree,
+						Hash: mustFromHex("fb90cfcb8044471fec2bb75a67cca6b16e7de4bc"),
+					},
+				},
+			},
+		},
+		{
+			name:          "tree not found",
+			treeHash:      "1234567890abcdef1234567890abcdef12345678",
+			mockResponse:  []byte("0049ERR upload-pack: not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0"),
+			statusCode:    http.StatusOK,
+			expectedError: "not our ref",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.mockResponse != nil {
+					w.WriteHeader(tt.statusCode)
+					if _, err := w.Write(tt.mockResponse); err != nil {
+						t.Errorf("failed to write response: %v", err)
+					}
+					return
+				}
+
+				// Load test data based on the tree hash
+				testData, err := os.ReadFile(fmt.Sprintf("testdata/%s_gettree", tt.treeHash))
+				if err != nil {
+					t.Errorf("failed to read test data: %v", err)
+					return
+				}
+
+				w.WriteHeader(tt.statusCode)
+				if _, err := w.Write(testData); err != nil {
+					t.Errorf("failed to write response: %v", err)
+					return
+				}
+			}))
+			defer server.Close()
+
+			client, err := NewClient(server.URL)
+			require.NoError(t, err)
+
+			treeHash, err := hash.FromHex(tt.treeHash)
+			require.NoError(t, err)
+
+			tree, err := client.GetTree(context.Background(), treeHash)
+
+			if tt.expectedError != "" {
+				require.ErrorContains(t, err, tt.expectedError)
+				assert.Nil(t, tree)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, tree)
+			assert.Equal(t, len(tt.expectedTree.Entries), len(tree.Entries))
+
+			// Verify each entry (order doesn't matter)
+			for _, expectedEntry := range tt.expectedTree.Entries {
+				found := false
+				for _, actualEntry := range tree.Entries {
+					if actualEntry.Name == expectedEntry.Name {
+						assert.Equal(t, expectedEntry.Mode, actualEntry.Mode)
+						assert.Equal(t, expectedEntry.Type, actualEntry.Type)
+						assert.Equal(t, expectedEntry.Hash, actualEntry.Hash)
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected entry %s not found", expectedEntry.Name)
+			}
+		})
+	}
+}
+
+func TestGetTreeByPath(t *testing.T) {
+	tests := []struct {
+		name          string
+		rootHash      string
+		path          string
+		expectedError string
+		expectedName  string // Name of the directory we expect to get
+	}{
+		{
+			name:         "get root tree with empty path",
+			rootHash:     "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
+			path:         "",
+			expectedName: "", // Root doesn't have a name
+		},
+		{
+			name:         "get root tree with dot path",
+			rootHash:     "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
+			path:         ".",
+			expectedName: "",
+		},
+		{
+			name:         "get subdirectory tree",
+			rootHash:     "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
+			path:         "dir1",
+			expectedName: "dir1",
+		},
+		{
+			name:          "nonexistent path",
+			rootHash:      "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
+			path:          "nonexistent",
+			expectedError: "path component 'nonexistent' not found",
+		},
+		{
+			name:          "path to file instead of directory",
+			rootHash:      "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
+			path:          "root.txt",
+			expectedError: "path component 'root.txt' is not a directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Load test data - using the same test data as GetFlatTree
+				testData, err := os.ReadFile(fmt.Sprintf("testdata/%s_gettree", tt.rootHash))
+				if err != nil {
+					t.Errorf("failed to read test data: %v", err)
+					return
+				}
+
+				w.WriteHeader(http.StatusOK)
+				if _, err := w.Write(testData); err != nil {
+					t.Errorf("failed to write response: %v", err)
+					return
+				}
+			}))
+			defer server.Close()
+
+			client, err := NewClient(server.URL)
+			require.NoError(t, err)
+
+			rootHash, err := hash.FromHex(tt.rootHash)
+			require.NoError(t, err)
+
+			tree, err := client.GetTreeByPath(context.Background(), rootHash, tt.path)
+
+			if tt.expectedError != "" {
+				require.ErrorContains(t, err, tt.expectedError)
+				assert.Nil(t, tree)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, tree)
+			assert.NotEmpty(t, tree.Entries, "Tree should have entries")
+		})
+	}
+}

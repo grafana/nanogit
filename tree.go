@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -20,6 +21,19 @@ type FlatTreeEntry struct {
 
 type FlatTree struct {
 	Entries []FlatTreeEntry
+	Hash    hash.Hash
+}
+
+type TreeEntry struct {
+	Name string
+	// Mode is in octal
+	Mode uint32
+	Hash hash.Hash
+	Type protocol.ObjectType
+}
+
+type Tree struct {
+	Entries []TreeEntry
 	Hash    hash.Hash
 }
 
@@ -129,4 +143,104 @@ func (c *clientImpl) processTreeEntries(ctx context.Context, entries []FlatTreeE
 	}
 
 	return result, nil
+}
+
+// GetTree retrieves a single tree object (direct children only, non-recursive)
+func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+	obj, err := c.getObject(ctx, h)
+	if err != nil {
+		return nil, fmt.Errorf("getting object: %w", err)
+	}
+
+	var tree *protocol.PackfileObject
+	if obj.Type == protocol.ObjectTypeCommit && obj.Hash.Is(h) {
+		// If it's a commit, get the tree hash from it
+		treeHash, err := hash.FromHex(obj.Commit.Tree.String())
+		if err != nil {
+			return nil, fmt.Errorf("parsing tree hash: %w", err)
+		}
+
+		treeObj, err := c.getObject(ctx, treeHash)
+		if err != nil {
+			return nil, fmt.Errorf("getting tree: %w", err)
+		}
+		tree = treeObj
+		h = treeHash
+	} else if obj.Type == protocol.ObjectTypeTree && obj.Hash.Is(h) {
+		tree = obj
+	} else {
+		return nil, errors.New("not found")
+	}
+
+	// Convert PackfileTreeEntry to TreeEntry (direct children only)
+	entries := make([]TreeEntry, len(tree.Tree))
+	for i, entry := range tree.Tree {
+		entryHash, err := hash.FromHex(entry.Hash)
+		if err != nil {
+			return nil, fmt.Errorf("parsing hash: %w", err)
+		}
+
+		// Determine the type based on the mode
+		entryType := protocol.ObjectTypeBlob
+		if entry.FileMode&0o40000 != 0 {
+			entryType = protocol.ObjectTypeTree
+		}
+
+		entries[i] = TreeEntry{
+			Name: entry.FileName,
+			Mode: uint32(entry.FileMode),
+			Hash: entryHash,
+			Type: entryType,
+		}
+	}
+
+	return &Tree{
+		Entries: entries,
+		Hash:    h,
+	}, nil
+}
+
+// GetTreeByPath retrieves a tree object at the specified path by recursively navigating the tree structure
+func (c *clientImpl) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
+	if path == "" || path == "." {
+		// Return the root tree
+		return c.GetTree(ctx, rootHash)
+	}
+
+	// Split the path into parts
+	parts := strings.Split(path, "/")
+	currentHash := rootHash
+
+	// Navigate through each part of the path
+	for _, part := range parts {
+		if part == "" {
+			continue // Skip empty parts (e.g., from leading/trailing slashes)
+		}
+
+		// Get the current tree
+		currentTree, err := c.GetTree(ctx, currentHash)
+		if err != nil {
+			return nil, fmt.Errorf("getting tree %s: %w", currentHash, err)
+		}
+
+		// Find the entry with the matching name
+		found := false
+		for _, entry := range currentTree.Entries {
+			if entry.Name == part {
+				if entry.Type != protocol.ObjectTypeTree {
+					return nil, fmt.Errorf("path component '%s' is not a directory", part)
+				}
+				currentHash = entry.Hash
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return nil, fmt.Errorf("path component '%s' not found", part)
+		}
+	}
+
+	// Get the final tree
+	return c.GetTree(ctx, currentHash)
 }
