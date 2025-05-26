@@ -252,10 +252,7 @@ type ListCommitsOptions struct {
 // ListCommits returns a list of commits starting from the specified commit,
 // walking backwards through the commit history. It supports filtering and pagination
 // similar to GitHub's API.
-func (c *clientImpl) ListCommits(ctx context.Context, startCommit hash.Hash, options *ListCommitsOptions) ([]Commit, error) {
-	if options == nil {
-		options = &ListCommitsOptions{}
-	}
+func (c *clientImpl) ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error) {
 
 	// Set defaults for pagination
 	perPage := options.PerPage
@@ -296,7 +293,7 @@ func (c *clientImpl) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		}
 
 		// Apply filters
-		if !c.commitMatchesFilters(ctx, commit, options) {
+		if !c.commitMatchesFilters(ctx, commit, &options) {
 			// Add parent to queue for continued traversal
 			if !commit.Parent.Is(hash.Zero) {
 				queue = append(queue, commit.Parent)

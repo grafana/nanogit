@@ -47,7 +47,7 @@ func TestClient_ListCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test basic listing without options
-		commits, err := client.ListCommits(ctx, headHash, nil)
+		commits, err := client.ListCommits(ctx, headHash, nanogit.ListCommitsOptions{})
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(commits), 3, "Should have at least 3 commits")
 
@@ -83,7 +83,7 @@ func TestClient_ListCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test first page with 2 items per page
-		options := &nanogit.ListCommitsOptions{
+		options := nanogit.ListCommitsOptions{
 			PerPage: 2,
 			Page:    1,
 		}
@@ -134,7 +134,7 @@ func TestClient_ListCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Filter commits affecting docs/ directory
-		options := &nanogit.ListCommitsOptions{
+		options := nanogit.ListCommitsOptions{
 			Path: "docs",
 		}
 		commits, err := client.ListCommits(ctx, headHash, options)
@@ -195,7 +195,7 @@ func TestClient_ListCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Filter commits since midTime (should get only the new commit)
-		options := &nanogit.ListCommitsOptions{
+		options := nanogit.ListCommitsOptions{
 			Since: midTime,
 		}
 		commits, err := client.ListCommits(ctx, headHash, options)
