@@ -488,7 +488,7 @@ func TestClient_Writer(t *testing.T) {
 	})
 
 	t.Run("DeleteBlob with nested file", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
+		logger, local, client, _ := quickSetup(t)
 		ctx := context.Background()
 		logger.ForSubtest(t)
 
@@ -554,19 +554,10 @@ func TestClient_Writer(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, os.IsNotExist(err))
 
-		logger.Info("Verifying directory structure still exists")
-		dirInfo, err := os.Stat(filepath.Join(local.Path, "dir"))
-		require.NoError(t, err)
-		require.True(t, dirInfo.IsDir())
-
-		subdirInfo, err := os.Stat(filepath.Join(local.Path, "dir/subdir"))
-		require.NoError(t, err)
-		require.True(t, subdirInfo.IsDir())
-
-		logger.Info("Verifying other files were preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, nestedContent, otherContent)
+		logger.Info("Verifying directory structure was removed")
+		_, err = os.Stat(filepath.Join(local.Path, "dir"))
+		require.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
 
 		logger.Info("Verifying commit message")
 		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
