@@ -404,4 +404,273 @@ func TestClient_Writer(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "blob at that path does not exist")
 	})
+
+	t.Run("DeleteBlob with existing file", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		logger.Info("Creating a file to be deleted")
+		fileContent := []byte("File to be deleted")
+		local.CreateFile(t, "tobedeleted.txt", string(fileContent))
+
+		logger.Info("Adding and committing the file to be deleted")
+		local.Git(t, "add", "tobedeleted.txt")
+		local.Git(t, "commit", "-m", "Add file to be deleted")
+		local.Git(t, "push")
+
+		logger.Info("Verifying file exists before deletion")
+		_, err := os.Stat(filepath.Join(local.Path, "tobedeleted.txt"))
+		require.NoError(t, err)
+
+		logger.Info("Getting current ref")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
+		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
+
+		logger.Info("Creating ref writer")
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		logger.Info("Deleting the file")
+		treeHash, err := writer.DeleteBlob(ctx, "tobedeleted.txt")
+		require.NoError(t, err)
+		require.NotNil(t, treeHash)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		logger.Info("Committing deletion", "previous_commit", ref.Hash.String(), "ref", ref.Name)
+		commit, err := writer.Commit(ctx, "Delete test file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+
+		logger.Info("Pushing changes", "tree_hash", treeHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		logger.Info("Pulling latest changes")
+		local.Git(t, "pull")
+
+		logger.Info("Verifying commit hash")
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
+
+		logger.Info("Verifying file was deleted")
+		_, err = os.Stat(filepath.Join(local.Path, "tobedeleted.txt"))
+		require.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
+
+		logger.Info("Verifying other files were preserved")
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+		require.NoError(t, err)
+		require.NotEqual(t, fileContent, otherContent)
+
+		logger.Info("Verifying commit message")
+		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
+		require.Equal(t, "Delete test file", strings.TrimSpace(commitMsg))
+
+		logger.Info("Verifying author and committer")
+		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
+		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
+		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+	})
+
+	t.Run("DeleteBlob with nested file", func(t *testing.T) {
+		logger, local, client, _ := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		logger.Info("Creating nested file to be deleted")
+		nestedContent := []byte("Nested file to be deleted")
+		local.CreateDirPath(t, "dir/subdir")
+		local.CreateFile(t, "dir/subdir/tobedeleted.txt", string(nestedContent))
+
+		logger.Info("Adding and committing the nested file")
+		local.Git(t, "add", "dir/subdir/tobedeleted.txt")
+		local.Git(t, "commit", "-m", "Add nested file to be deleted")
+		local.Git(t, "push")
+
+		logger.Info("Verifying nested file exists before deletion")
+		_, err := os.Stat(filepath.Join(local.Path, "dir/subdir/tobedeleted.txt"))
+		require.NoError(t, err)
+
+		logger.Info("Getting current ref")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
+		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
+
+		logger.Info("Creating ref writer")
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		logger.Info("Deleting the nested file")
+		treeHash, err := writer.DeleteBlob(ctx, "dir/subdir/tobedeleted.txt")
+		require.NoError(t, err)
+		require.NotNil(t, treeHash)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		logger.Info("Committing deletion", "previous_commit", ref.Hash.String(), "ref", ref.Name)
+		commit, err := writer.Commit(ctx, "Delete nested file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+
+		logger.Info("Pushing changes", "tree_hash", treeHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		logger.Info("Pulling latest changes")
+		local.Git(t, "pull")
+
+		logger.Info("Verifying commit hash")
+		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
+
+		logger.Info("Verifying nested file was deleted")
+		_, err = os.Stat(filepath.Join(local.Path, "dir/subdir/tobedeleted.txt"))
+		require.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
+
+		logger.Info("Verifying directory structure was removed")
+		_, err = os.Stat(filepath.Join(local.Path, "dir"))
+		require.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
+
+		logger.Info("Verifying commit message")
+		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
+		require.Equal(t, "Delete nested file", strings.TrimSpace(commitMsg))
+
+		logger.Info("Verifying author and committer")
+		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
+		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
+		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+	})
+
+	t.Run("DeleteBlob with nonexistent file", func(t *testing.T) {
+		logger, _, client, _ := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		logger.Info("Getting current ref")
+		ref, err := client.GetRef(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
+		logger.Info("Creating a writer")
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		logger.Info("Trying to delete a nonexistent file")
+		_, err = writer.DeleteBlob(ctx, "nonexistent.txt")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "blob at that path does not exist")
+	})
+
+	t.Run("DeleteBlob preserves other files in same directory", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		logger.Info("Creating multiple files in same directory")
+		file1Content := []byte("File 1 content")
+		file2Content := []byte("File 2 content")
+		local.CreateDirPath(t, "shared")
+		local.CreateFile(t, "shared/file1.txt", string(file1Content))
+		local.CreateFile(t, "shared/file2.txt", string(file2Content))
+
+		logger.Info("Adding and committing all files")
+		local.Git(t, "add", "shared/")
+		local.Git(t, "commit", "-m", "Add files to shared directory")
+		local.Git(t, "push")
+
+		logger.Info("Verifying both files exist before deletion")
+		_, err := os.Stat(filepath.Join(local.Path, "shared/file1.txt"))
+		require.NoError(t, err)
+		_, err = os.Stat(filepath.Join(local.Path, "shared/file2.txt"))
+		require.NoError(t, err)
+
+		logger.Info("Getting current ref")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
+		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
+
+		logger.Info("Creating ref writer")
+		writer, err := client.NewRefWriter(ctx, ref)
+		require.NoError(t, err)
+
+		logger.Info("Deleting only file1.txt")
+		treeHash, err := writer.DeleteBlob(ctx, "shared/file1.txt")
+		require.NoError(t, err)
+		require.NotNil(t, treeHash)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		logger.Info("Committing deletion")
+		commit, err := writer.Commit(ctx, "Delete file1.txt only", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+
+		logger.Info("Pushing changes")
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		logger.Info("Pulling latest changes")
+		local.Git(t, "pull")
+
+		logger.Info("Verifying file1.txt was deleted")
+		_, err = os.Stat(filepath.Join(local.Path, "shared/file1.txt"))
+		require.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
+
+		logger.Info("Verifying file2.txt still exists")
+		content, err := os.ReadFile(filepath.Join(local.Path, "shared/file2.txt"))
+		require.NoError(t, err)
+		require.Equal(t, file2Content, content)
+
+		logger.Info("Verifying directory still exists")
+		dirInfo, err := os.Stat(filepath.Join(local.Path, "shared"))
+		require.NoError(t, err)
+		require.True(t, dirInfo.IsDir())
+
+		logger.Info("Verifying other files were preserved")
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+		require.NoError(t, err)
+		require.NotEqual(t, file1Content, otherContent)
+		require.NotEqual(t, file2Content, otherContent)
+	})
 }
