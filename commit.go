@@ -101,11 +101,11 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 	}
 
 	// Get both trees
-	baseTree, err := c.GetTree(ctx, base.Commit.Tree)
+	baseTree, err := c.GetFlatTree(ctx, base.Commit.Tree)
 	if err != nil {
 		return nil, fmt.Errorf("getting base tree: %w", err)
 	}
-	headTree, err := c.GetTree(ctx, head.Commit.Tree)
+	headTree, err := c.GetFlatTree(ctx, head.Commit.Tree)
 	if err != nil {
 		return nil, fmt.Errorf("getting head tree: %w", err)
 	}
@@ -128,16 +128,16 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 //
 // The function returns a sorted list of changes, with each change containing
 // the relevant file information and status.
-func (c *clientImpl) compareTrees(base, head *Tree) ([]CommitFile, error) {
+func (c *clientImpl) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 	changes := make([]CommitFile, 0)
 
 	// Build maps for efficient lookup
-	inHead := make(map[string]TreeEntry)
+	inHead := make(map[string]FlatTreeEntry)
 	for _, entry := range head.Entries {
 		inHead[entry.Path] = entry
 	}
 
-	inBase := make(map[string]TreeEntry)
+	inBase := make(map[string]FlatTreeEntry)
 	for _, entry := range base.Entries {
 		inBase[entry.Path] = entry
 	}

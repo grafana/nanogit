@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetTree(t *testing.T) {
+func TestGetFlatTree(t *testing.T) {
 	// FIXME: we should control the response from server in this unit and not use fixtures
 	mustFromHex := func(hs string) hash.Hash {
 		h, err := hash.FromHex(hs)
@@ -31,15 +31,15 @@ func TestGetTree(t *testing.T) {
 		commitHash    string
 		mockResponse  []byte
 		statusCode    int
-		expectedTree  *Tree
+		expectedTree  *FlatTree
 		expectedError string
 	}{
 		{
 			name:       "successful tree retrieval",
 			commitHash: "dc3245b0d6b48a874ae6fc599a26ce990ea05ff2",
 			statusCode: http.StatusOK,
-			expectedTree: &Tree{
-				Entries: []TreeEntry{
+			expectedTree: &FlatTree{
+				Entries: []FlatTreeEntry{
 					{
 						Name: "root.txt",
 						Path: "root.txt",
@@ -174,7 +174,7 @@ func TestGetTree(t *testing.T) {
 			hash, err := hash.FromHex(tt.commitHash)
 			require.NoError(t, err)
 
-			tree, err := client.GetTree(context.Background(), hash)
+			tree, err := client.GetFlatTree(context.Background(), hash)
 
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
@@ -189,23 +189,23 @@ func TestGetTree(t *testing.T) {
 	}
 }
 
-func TestProcessTreeEntries(t *testing.T) {
+func TestProcessFlatTreeEntries(t *testing.T) {
 	tests := []struct {
 		name          string
-		entries       []TreeEntry
+		entries       []FlatTreeEntry
 		basePath      string
-		expected      []TreeEntry
+		expected      []FlatTreeEntry
 		expectedError string
 	}{
 		{
 			name:     "empty entries",
-			entries:  []TreeEntry{},
+			entries:  []FlatTreeEntry{},
 			basePath: "",
-			expected: []TreeEntry{},
+			expected: []FlatTreeEntry{},
 		},
 		{
 			name: "single file entry",
-			entries: []TreeEntry{
+			entries: []FlatTreeEntry{
 				{
 					Name: "file.txt",
 					Path: "file.txt",
@@ -214,7 +214,7 @@ func TestProcessTreeEntries(t *testing.T) {
 				},
 			},
 			basePath: "",
-			expected: []TreeEntry{
+			expected: []FlatTreeEntry{
 				{
 					Name: "file.txt",
 					Path: "file.txt",
@@ -225,7 +225,7 @@ func TestProcessTreeEntries(t *testing.T) {
 		},
 		{
 			name: "nested path",
-			entries: []TreeEntry{
+			entries: []FlatTreeEntry{
 				{
 					Name: "file.txt",
 					Path: "file.txt",
@@ -234,7 +234,7 @@ func TestProcessTreeEntries(t *testing.T) {
 				},
 			},
 			basePath: "dir",
-			expected: []TreeEntry{
+			expected: []FlatTreeEntry{
 				{
 					Name: "file.txt",
 					Path: "dir/file.txt",
