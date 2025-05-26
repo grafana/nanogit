@@ -17,7 +17,7 @@ type File struct {
 
 // GetFile retrieves a file from the repository at the given path
 func (c *clientImpl) GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error) {
-	tree, err := c.GetTree(ctx, hash)
+	tree, err := c.GetFlatTree(ctx, hash)
 	if err != nil {
 		return nil, err
 	}

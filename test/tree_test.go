@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClient_Tree(t *testing.T) {
+func TestClient_GetFlatTree(t *testing.T) {
 	logger := helpers.NewTestLogger(t)
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
@@ -55,7 +55,7 @@ func TestClient_Tree(t *testing.T) {
 	defer cancel()
 
 	logger.Info("Testing GetTree")
-	tree, err := client.GetTree(ctx, treeHash)
+	tree, err := client.GetFlatTree(ctx, treeHash)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 
@@ -68,7 +68,7 @@ func TestClient_Tree(t *testing.T) {
 	}
 
 	logger.Info("Defining expected entries with correct hashes")
-	wantEntries := []nanogit.TreeEntry{
+	wantEntries := []nanogit.FlatTreeEntry{
 		{
 			Name: "root.txt",
 			Path: "root.txt",
@@ -122,7 +122,7 @@ func TestClient_Tree(t *testing.T) {
 	logger.Info("Testing GetTree with non-existent hash")
 	nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 	require.NoError(t, err)
-	_, err = client.GetTree(ctx, nonExistentHash)
+	_, err = client.GetFlatTree(ctx, nonExistentHash)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not our ref")
 }

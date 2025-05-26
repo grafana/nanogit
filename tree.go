@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-type TreeEntry struct {
+type FlatTreeEntry struct {
 	Name string
 	Path string
 	// Mode is in octal
@@ -18,13 +18,13 @@ type TreeEntry struct {
 	Type protocol.ObjectType
 }
 
-type Tree struct {
-	Entries []TreeEntry
+type FlatTree struct {
+	Entries []FlatTreeEntry
 	Hash    hash.Hash
 }
 
-// GetTree retrieves a tree for a given commit hash
-func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+// GetFlatTree retrieves a tree for a given commit hash
+func (c *clientImpl) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, error) {
 	obj, err := c.getObject(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
@@ -54,9 +54,9 @@ func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 	return c.processTree(ctx, h, tree)
 }
 
-func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *protocol.PackfileObject) (*Tree, error) {
+func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *protocol.PackfileObject) (*FlatTree, error) {
 	// Convert PackfileTreeEntry to TreeEntry
-	entries := make([]TreeEntry, len(tree.Tree))
+	entries := make([]FlatTreeEntry, len(tree.Tree))
 	for i, entry := range tree.Tree {
 		hash, err := hash.FromHex(entry.Hash)
 		if err != nil {
@@ -69,7 +69,7 @@ func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *
 			entryType = protocol.ObjectTypeTree
 		}
 
-		entries[i] = TreeEntry{
+		entries[i] = FlatTreeEntry{
 			Name: entry.FileName,
 			Path: entry.FileName,
 			Mode: uint32(entry.FileMode),
@@ -88,15 +88,15 @@ func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *
 		return nil, errors.New("tree not found")
 	}
 
-	return &Tree{
+	return &FlatTree{
 		Entries: result,
 		Hash:    treeHash,
 	}, nil
 }
 
 // processTreeEntries recursively processes tree entries and builds a flat list
-func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry, basePath string) ([]TreeEntry, error) {
-	result := make([]TreeEntry, 0, len(entries))
+func (c *clientImpl) processTreeEntries(ctx context.Context, entries []FlatTreeEntry, basePath string) ([]FlatTreeEntry, error) {
+	result := make([]FlatTreeEntry, 0, len(entries))
 	for _, entry := range entries {
 		// Build the full path for the entry
 		entryPath := entry.Name
@@ -114,7 +114,7 @@ func (c *clientImpl) processTreeEntries(ctx context.Context, entries []TreeEntry
 		if entry.Type == protocol.ObjectTypeTree {
 			// Fetch the nested tree
 			// TODO: is there a way to avoid fetching the tree again?
-			nestedTree, err := c.GetTree(ctx, entry.Hash)
+			nestedTree, err := c.GetFlatTree(ctx, entry.Hash)
 			if err != nil {
 				return nil, fmt.Errorf("fetching nested tree %s: %w", entry.Hash, err)
 			}

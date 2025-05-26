@@ -35,7 +35,7 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 		return nil, fmt.Errorf("getting current tree: %w", err)
 	}
 
-	entries := make(map[string]*TreeEntry, len(currentTree.Entries))
+	entries := make(map[string]*FlatTreeEntry, len(currentTree.Entries))
 	for _, entry := range currentTree.Entries {
 		entries[entry.Path] = &entry
 	}
@@ -61,7 +61,7 @@ type refWriter struct {
 	lastCommit  *Commit
 	lastTree    *protocol.PackfileObject
 	treeCache   map[string]*protocol.PackfileObject
-	treeEntries map[string]*TreeEntry
+	treeEntries map[string]*FlatTreeEntry
 }
 
 // CreateBlob creates a new blob in the specified path.
@@ -97,7 +97,7 @@ func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte)
 	}
 
 	w.logger.Debug("created blob", "hash", blobHash.String())
-	w.treeEntries[path] = &TreeEntry{
+	w.treeEntries[path] = &FlatTreeEntry{
 		Path: path,
 		Hash: blobHash,
 		Type: protocol.ObjectTypeBlob,
@@ -235,7 +235,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			}
 
 			w.treeCache[treeObj.Hash.String()] = &treeObj
-			w.treeEntries[currentPath] = &TreeEntry{
+			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
 				Hash: treeObj.Hash,
 				Type: protocol.ObjectTypeTree,
@@ -269,7 +269,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 			}
 
 			w.treeCache[newObj.Hash.String()] = newObj
-			w.treeEntries[currentPath] = &TreeEntry{
+			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
 				Hash: newObj.Hash,
 				Type: protocol.ObjectTypeTree,
@@ -414,7 +414,7 @@ func (w *refWriter) removeBlobFromTree(ctx context.Context, path string) error {
 
 		// Update our references
 		w.treeCache[newObj.Hash.String()] = newObj
-		w.treeEntries[currentPath] = &TreeEntry{
+		w.treeEntries[currentPath] = &FlatTreeEntry{
 			Path: currentPath,
 			Hash: newObj.Hash,
 			Type: protocol.ObjectTypeTree,
