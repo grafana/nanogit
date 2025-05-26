@@ -54,7 +54,7 @@ type Client interface {
 	DeleteRef(ctx context.Context, refName string) error
 	NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error)
 	// Blob operations
-	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
+	GetBlob(ctx context.Context, hash hash.Hash) (*Blob, error)
 	GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error)
 	// Tree operations
 	GetFlatTree(ctx context.Context, hash hash.Hash) (*FlatTree, error)

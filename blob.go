@@ -10,14 +10,19 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) ([]byte, error) {
+func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
 	obj, err := c.getObject(ctx, blobID)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
 
 	if obj.Type == protocol.ObjectTypeBlob && obj.Hash.Is(blobID) {
-		return obj.Data, nil
+		return &Blob{
+			Name:    "", // Not available from blob object alone
+			Mode:    0,  // Not available from blob object alone
+			Hash:    blobID,
+			Content: obj.Data,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("blob not found: %s", blobID)
@@ -27,7 +32,6 @@ type Blob struct {
 	Name    string
 	Mode    uint32
 	Hash    hash.Hash
-	Path    string
 	Content []byte
 }
 
@@ -90,7 +94,7 @@ func (c *clientImpl) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 			}
 
 			// Get the blob content
-			content, err := c.GetBlob(ctx, entry.Hash)
+			blob, err := c.GetBlob(ctx, entry.Hash)
 			if err != nil {
 				return nil, fmt.Errorf("getting blob content: %w", err)
 			}
@@ -99,8 +103,7 @@ func (c *clientImpl) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 				Name:    entry.Name,
 				Mode:    entry.Mode,
 				Hash:    entry.Hash,
-				Path:    path,
-				Content: content,
+				Content: blob.Content,
 			}, nil
 		}
 	}

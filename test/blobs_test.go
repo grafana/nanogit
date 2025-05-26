@@ -51,9 +51,10 @@ func TestClient_Blobs(t *testing.T) {
 
 	t.Run("GetBlob with valid hash", func(t *testing.T) {
 		logger.Info("Testing GetBlob with valid hash", "hash", blobHash)
-		content, err := client.GetBlob(ctx, blobHash)
+		blob, err := client.GetBlob(ctx, blobHash)
 		require.NoError(t, err)
-		assert.Equal(t, testContent, content)
+		assert.Equal(t, testContent, blob.Content)
+		assert.Equal(t, blobHash, blob.Hash)
 	})
 
 	t.Run("GetBlob with non-existent hash", func(t *testing.T) {
@@ -116,7 +117,7 @@ func TestClient_GetBlobByPath(t *testing.T) {
 		fileHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
 		require.NoError(t, err)
 		assert.Equal(t, fileHash, file.Hash)
-		assert.Equal(t, "test.txt", file.Path)
+		assert.Equal(t, "test.txt", file.Name)
 		assert.Equal(t, uint32(33188), file.Mode)
 	})
 
@@ -256,7 +257,7 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 
 			require.NoError(t, err, "Failed to get file for path: %s", tt.path)
 			assert.Equal(t, tt.expected, file.Content)
-			assert.Equal(t, tt.path, file.Path)
+			// Note: file.Name contains just the filename, not the full path
 			assert.Equal(t, uint32(33188), file.Mode) // 100644 in octal
 
 			// Verify the hash matches what Git CLI returns
