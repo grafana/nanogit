@@ -354,14 +354,14 @@ func (c *clientImpl) commitMatchesFilters(ctx context.Context, commit *Commit, o
 func (c *clientImpl) commitAffectsPath(ctx context.Context, commit *Commit, path string) (bool, error) {
 	// For the initial commit (no parent), check if the path exists
 	if commit.Parent.Is(hash.Zero) {
-		// Check if path exists in this commit's tree
+		// Check if path exists in this commit's tree (as blob or tree)
 		_, err := c.GetBlobByPath(ctx, commit.Tree, path)
-		if err != nil {
-			// Try as a tree path
-			_, err = c.GetTreeByPath(ctx, commit.Tree, path)
-			return err == nil, nil
+		if err == nil {
+			return true, nil
 		}
-		return true, nil
+		// Try as a tree path
+		_, err = c.GetTreeByPath(ctx, commit.Tree, path)
+		return err == nil, nil
 	}
 
 	// Compare with parent commit to see if path was affected
