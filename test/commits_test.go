@@ -164,50 +164,6 @@ func TestClient_ListCommits(t *testing.T) {
 		assert.GreaterOrEqual(t, found, 1, "Should find commit affecting src/main.go")
 	})
 
-	t.Run("ListCommits with author filter", func(t *testing.T) {
-		logger := helpers.NewTestLogger(t)
-		logger.ForSubtest(t)
-		gitServer := helpers.NewGitServer(t, logger)
-		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
-		// Create a commit with specific author
-		local.Git(t, "config", "user.email", "author1@example.com")
-		local.Git(t, "config", "user.name", "Author One")
-		local.CreateFile(t, "file1.txt", "content 1")
-		local.Git(t, "add", "file1.txt")
-		local.Git(t, "commit", "-m", "Author 1 commit")
-		local.Git(t, "push")
-
-		// Create a commit with different author
-		local.Git(t, "config", "user.email", "author2@example.com")
-		local.Git(t, "config", "user.name", "Author Two")
-		local.CreateFile(t, "file2.txt", "content 2")
-		local.Git(t, "add", "file2.txt")
-		local.Git(t, "commit", "-m", "Author 2 commit")
-		local.Git(t, "push")
-
-		headHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-
-		// Filter by first author
-		options := &nanogit.ListCommitsOptions{
-			Author: "author1@example.com",
-		}
-		commits, err := client.ListCommits(ctx, headHash, options)
-		require.NoError(t, err)
-
-		// Should find only commits by author1
-		for _, commit := range commits {
-			if commit.Message == "Author 1 commit" {
-				assert.Equal(t, "author1@example.com", commit.Author.Email)
-			}
-		}
-	})
-
 	t.Run("ListCommits with time filters", func(t *testing.T) {
 		logger := helpers.NewTestLogger(t)
 		logger.ForSubtest(t)

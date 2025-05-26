@@ -247,10 +247,6 @@ type ListCommitsOptions struct {
 	// Until filters commits to only those created before this time.
 	// If zero, no time filtering is applied.
 	Until time.Time
-
-	// Author filters commits to only those authored by the specified email.
-	// If empty, commits from all authors are included.
-	Author string
 }
 
 // ListCommits returns a list of commits starting from the specified commit,
@@ -337,11 +333,6 @@ func (c *clientImpl) commitMatchesFilters(ctx context.Context, commit *Commit, o
 		return false
 	}
 	if !options.Until.IsZero() && commit.Time().After(options.Until) {
-		return false
-	}
-
-	// Check author filter
-	if options.Author != "" && commit.Author.Email != options.Author {
 		return false
 	}
 
