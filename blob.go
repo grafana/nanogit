@@ -89,16 +89,7 @@ func (c *clientImpl) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 				return nil, fmt.Errorf("'%s' is not a file", fileName)
 			}
 
-			// Get the blob content
-			blob, err := c.GetBlob(ctx, entry.Hash)
-			if err != nil {
-				return nil, fmt.Errorf("getting blob content: %w", err)
-			}
-
-			return &Blob{
-				Hash:    entry.Hash,
-				Content: blob.Content,
-			}, nil
+			return c.GetBlob(ctx, entry.Hash)
 		}
 	}
 
