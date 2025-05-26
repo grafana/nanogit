@@ -138,3 +138,131 @@ func TestClient_GetBlobByPath(t *testing.T) {
 		assert.Contains(t, err.Error(), "not our ref")
 	})
 }
+
+func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
+	logger := helpers.NewTestLogger(t)
+	logger.Info("Setting up remote repository")
+	gitServer := helpers.NewGitServer(t, logger)
+	user := gitServer.CreateUser(t)
+	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+
+	logger.Info("Setting up local repository")
+	local := helpers.NewLocalGitRepo(t, logger)
+	local.Git(t, "config", "user.name", user.Username)
+	local.Git(t, "config", "user.email", user.Email)
+	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+
+	logger.Info("Creating nested directory structure with files")
+	local.CreateDirPath(t, "dir1/subdir1")
+	local.CreateDirPath(t, "dir1/subdir2")
+	local.CreateDirPath(t, "dir2")
+
+	// Create files at various levels
+	rootContent := []byte("root file content")
+	local.CreateFile(t, "root.txt", string(rootContent))
+
+	dir1Content := []byte("dir1 file content")
+	local.CreateFile(t, "dir1/file1.txt", string(dir1Content))
+
+	nestedContent := []byte("deeply nested content")
+	local.CreateFile(t, "dir1/subdir1/nested.txt", string(nestedContent))
+
+	dir2Content := []byte("dir2 file content")
+	local.CreateFile(t, "dir2/file2.txt", string(dir2Content))
+
+	logger.Info("Adding and committing all files")
+	local.Git(t, "add", ".")
+	local.Git(t, "commit", "-m", "Initial commit with nested structure")
+
+	logger.Info("Setting up main branch and pushing changes")
+	local.Git(t, "branch", "-M", "main")
+	local.Git(t, "push", "origin", "main", "--force")
+
+	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	logger.Info("Getting the commit hash")
+	commitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		path        string
+		expected    []byte
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			name:     "root file",
+			path:     "root.txt",
+			expected: rootContent,
+		},
+		{
+			name:     "file in first level directory",
+			path:     "dir1/file1.txt",
+			expected: dir1Content,
+		},
+		{
+			name:     "deeply nested file",
+			path:     "dir1/subdir1/nested.txt",
+			expected: nestedContent,
+		},
+		{
+			name:     "file in different directory",
+			path:     "dir2/file2.txt",
+			expected: dir2Content,
+		},
+		{
+			name:        "nonexistent file in existing directory",
+			path:        "dir1/nonexistent.txt",
+			shouldError: true,
+			errorMsg:    "file not found",
+		},
+		{
+			name:        "file in nonexistent directory",
+			path:        "nonexistent/file.txt",
+			shouldError: true,
+			errorMsg:    "path component 'nonexistent' not found",
+		},
+		{
+			name:        "empty path",
+			path:        "",
+			shouldError: true,
+			errorMsg:    "path cannot be empty",
+		},
+		{
+			name:        "path pointing to directory instead of file",
+			path:        "dir1",
+			shouldError: true,
+			errorMsg:    "'dir1' is not a file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger.ForSubtest(t)
+
+			file, err := client.GetBlobByPath(ctx, commitHash, tt.path)
+
+			if tt.shouldError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+				assert.Nil(t, file)
+				return
+			}
+
+			require.NoError(t, err, "Failed to get file for path: %s", tt.path)
+			assert.Equal(t, tt.expected, file.Content)
+			assert.Equal(t, tt.path, file.Path)
+			assert.Equal(t, uint32(33188), file.Mode) // 100644 in octal
+
+			// Verify the hash matches what Git CLI returns
+			expectedHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:"+tt.path))
+			require.NoError(t, err)
+			assert.Equal(t, expectedHash, file.Hash)
+		})
+	}
+}
