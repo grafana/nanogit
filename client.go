@@ -68,6 +68,7 @@ type Client interface {
 	// Commit operations
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
+	ListCommits(ctx context.Context, startCommit hash.Hash, options *ListCommitsOptions) ([]Commit, error)
 }
 
 // Option is a function that configures a Client.

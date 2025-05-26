@@ -224,3 +224,170 @@ func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, er
 		Message: strings.TrimSpace(commit.Commit.Message),
 	}, nil
 }
+
+// ListCommitsOptions provides filtering and pagination options for listing commits.
+// Similar to GitHub's API, it allows limiting results, filtering by path, and pagination.
+type ListCommitsOptions struct {
+	// PerPage specifies the number of commits to return per page.
+	// If 0, defaults to 30. Maximum allowed is 100.
+	PerPage int
+
+	// Page specifies which page of results to return (1-based).
+	// If 0, defaults to 1.
+	Page int
+
+	// Path filters commits to only those that affect the specified file or directory path.
+	// If empty, all commits are included.
+	Path string
+
+	// Since filters commits to only those created after this time.
+	// If zero, no time filtering is applied.
+	Since time.Time
+
+	// Until filters commits to only those created before this time.
+	// If zero, no time filtering is applied.
+	Until time.Time
+
+	// Author filters commits to only those authored by the specified email.
+	// If empty, commits from all authors are included.
+	Author string
+}
+
+// ListCommits returns a list of commits starting from the specified commit,
+// walking backwards through the commit history. It supports filtering and pagination
+// similar to GitHub's API.
+func (c *clientImpl) ListCommits(ctx context.Context, startCommit hash.Hash, options *ListCommitsOptions) ([]Commit, error) {
+	if options == nil {
+		options = &ListCommitsOptions{}
+	}
+
+	// Set defaults for pagination
+	perPage := options.PerPage
+	if perPage <= 0 {
+		perPage = 30
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+
+	page := options.Page
+	if page <= 0 {
+		page = 1
+	}
+
+	// Calculate how many commits to skip and collect
+	skip := (page - 1) * perPage
+	collect := perPage
+
+	var commits []Commit
+	visited := make(map[string]bool)
+	queue := []hash.Hash{startCommit}
+
+	for len(queue) > 0 && len(commits) < skip+collect {
+		currentHash := queue[0]
+		queue = queue[1:]
+
+		// Skip if already visited (handle merge commits)
+		if visited[currentHash.String()] {
+			continue
+		}
+		visited[currentHash.String()] = true
+
+		// Get the commit object
+		commit, err := c.GetCommit(ctx, currentHash)
+		if err != nil {
+			return nil, fmt.Errorf("getting commit %s: %w", currentHash.String(), err)
+		}
+
+		// Apply filters
+		if !c.commitMatchesFilters(ctx, commit, options) {
+			// Add parent to queue for continued traversal
+			if !commit.Parent.Is(hash.Zero) {
+				queue = append(queue, commit.Parent)
+			}
+			continue
+		}
+
+		// Add to results
+		commits = append(commits, *commit)
+
+		// Continue with parent commit
+		if !commit.Parent.Is(hash.Zero) {
+			queue = append(queue, commit.Parent)
+		}
+	}
+
+	// Apply pagination
+	if skip >= len(commits) {
+		return []Commit{}, nil
+	}
+
+	end := skip + collect
+	if end > len(commits) {
+		end = len(commits)
+	}
+
+	return commits[skip:end], nil
+}
+
+// commitMatchesFilters checks if a commit matches the specified filters.
+func (c *clientImpl) commitMatchesFilters(ctx context.Context, commit *Commit, options *ListCommitsOptions) bool {
+	// Check time filters
+	if !options.Since.IsZero() && commit.Time().Before(options.Since) {
+		return false
+	}
+	if !options.Until.IsZero() && commit.Time().After(options.Until) {
+		return false
+	}
+
+	// Check author filter
+	if options.Author != "" && commit.Author.Email != options.Author {
+		return false
+	}
+
+	// Check path filter
+	if options.Path != "" {
+		affected, err := c.commitAffectsPath(ctx, commit, options.Path)
+		if err != nil {
+			// Log error but don't fail the entire operation
+			c.logger.Debug("error checking if commit affects path", "commit", commit.Hash.String(), "path", options.Path, "error", err.Error())
+			return false
+		}
+		if !affected {
+			return false
+		}
+	}
+
+	return true
+}
+
+// commitAffectsPath checks if a commit affects the specified path by comparing
+// it with its parent commit.
+func (c *clientImpl) commitAffectsPath(ctx context.Context, commit *Commit, path string) (bool, error) {
+	// For the initial commit (no parent), check if the path exists
+	if commit.Parent.Is(hash.Zero) {
+		// Check if path exists in this commit's tree
+		_, err := c.GetBlobByPath(ctx, commit.Tree, path)
+		if err != nil {
+			// Try as a tree path
+			_, err = c.GetTreeByPath(ctx, commit.Tree, path)
+			return err == nil, nil
+		}
+		return true, nil
+	}
+
+	// Compare with parent commit to see if path was affected
+	changes, err := c.CompareCommits(ctx, commit.Parent, commit.Hash)
+	if err != nil {
+		return false, fmt.Errorf("comparing commits: %w", err)
+	}
+
+	// Check if any changes affect the specified path
+	for _, change := range changes {
+		if change.Path == path || strings.HasPrefix(change.Path, path+"/") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
