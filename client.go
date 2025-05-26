@@ -54,13 +54,13 @@ type Client interface {
 	DeleteRef(ctx context.Context, refName string) error
 	NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error)
 	// Blob operations
-	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
+	GetBlob(ctx context.Context, hash hash.Hash) (*Blob, error)
+	GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error)
 	// Tree operations
 	GetFlatTree(ctx context.Context, hash hash.Hash) (*FlatTree, error)
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
 	GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error)
 	// File operations
-	GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error)
 	// Commit operations
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)

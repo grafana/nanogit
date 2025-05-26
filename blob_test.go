@@ -98,14 +98,15 @@ func TestGetBlob(t *testing.T) {
 			h, err := hash.FromHex(tt.blobID)
 			require.NoError(t, err)
 
-			data, err := client.GetBlob(context.Background(), h)
+			blob, err := client.GetBlob(context.Background(), h)
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				require.Nil(t, data)
+				require.Nil(t, blob)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedData, data)
+				require.Equal(t, tt.expectedData, blob.Content)
+				require.Equal(t, h, blob.Hash)
 			}
 		})
 	}
