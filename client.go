@@ -57,6 +57,8 @@ type Client interface {
 	GetBlob(ctx context.Context, hash hash.Hash) ([]byte, error)
 	// Tree operations
 	GetFlatTree(ctx context.Context, hash hash.Hash) (*FlatTree, error)
+	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
+	GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error)
 	// File operations
 	GetFile(ctx context.Context, hash hash.Hash, path string) (*File, error)
 	// Commit operations
