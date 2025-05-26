@@ -112,7 +112,26 @@ func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte)
 }
 
 func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
-	return nil, nil
+	if w.treeEntries[path] == nil {
+		return nil, errors.New("blob at that path does not exist")
+	}
+
+	if w.treeEntries[path].Type != protocol.ObjectTypeBlob {
+		return nil, errors.New("entry at that path is not a blob")
+	}
+	blobHash := w.treeEntries[path].Hash
+
+	w.logger.Debug("deleting blob", "path", path)
+
+	// Remove the entry from our tracking
+	delete(w.treeEntries, path)
+
+	// Update the tree structure to remove the entry
+	if err := w.removeBlobFromTree(ctx, path); err != nil {
+		return nil, fmt.Errorf("removing blob from tree: %w", err)
+	}
+
+	return blobHash, nil
 }
 
 func (w *refWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
@@ -304,6 +323,137 @@ func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protoc
 	combinedEntries = append(combinedEntries, current)
 
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
+	if err != nil {
+		return nil, fmt.Errorf("building tree object: %w", err)
+	}
+
+	w.writer.AddObject(newObj)
+
+	return &newObj, nil
+}
+
+func (w *refWriter) removeBlobFromTree(ctx context.Context, path string) error {
+	// Split the path into parts
+	pathParts := strings.Split(path, "/")
+	if len(pathParts) == 0 {
+		return errors.New("empty path")
+	}
+
+	// Get the file name and directory parts
+	fileName := pathParts[len(pathParts)-1]
+	dirParts := pathParts[:len(pathParts)-1]
+
+	// Start from the immediate parent directory and work our way up
+	// updating trees that need to have the entry removed
+	for i := len(dirParts) - 1; i >= -1; i-- {
+		var currentPath string
+		var targetFileName string
+
+		if i == -1 {
+			// We're at the root level
+			currentPath = ""
+			targetFileName = fileName
+			if len(dirParts) > 0 {
+				targetFileName = dirParts[0]
+			}
+		} else {
+			// We're in a subdirectory
+			currentPath = strings.Join(dirParts[:i+1], "/")
+			if i == len(dirParts)-1 {
+				targetFileName = fileName
+			} else {
+				targetFileName = dirParts[i+1]
+			}
+		}
+
+		// Get the tree we need to modify
+		var treeObj *protocol.PackfileObject
+		if currentPath == "" {
+			// Root tree
+			treeObj = w.lastTree
+		} else {
+			// Get from cache or fetch
+			existingObj, exists := w.treeEntries[currentPath]
+			if !exists {
+				// If parent directory doesn't exist, we're done
+				break
+			}
+
+			if existingObj.Type != protocol.ObjectTypeTree {
+				return errors.New("parent path is not a tree")
+			}
+
+			var ok bool
+			treeObj, ok = w.treeCache[existingObj.Hash.String()]
+			if !ok {
+				var err error
+				treeObj, err = w.getObject(ctx, existingObj.Hash)
+				if err != nil {
+					return fmt.Errorf("getting tree %s: %w", currentPath, err)
+				}
+				w.treeCache[existingObj.Hash.String()] = treeObj
+			}
+		}
+
+		// Remove the target entry from this tree
+		newObj, err := w.removeTreeEntry(treeObj, targetFileName)
+		if err != nil {
+			return fmt.Errorf("removing entry from tree %s: %w", currentPath, err)
+		}
+
+		// Update our references
+		if currentPath == "" {
+			// Update root tree
+			w.lastTree = newObj
+			w.treeCache[newObj.Hash.String()] = newObj
+		} else {
+			// Update tree entry
+			w.treeCache[newObj.Hash.String()] = newObj
+			w.treeEntries[currentPath] = &TreeEntry{
+				Path: currentPath,
+				Hash: newObj.Hash,
+				Type: protocol.ObjectTypeTree,
+			}
+		}
+
+		w.logger.Debug("updated tree after removal", "path", currentPath, "hash", newObj.Hash.String(), "removed", targetFileName)
+
+		// If we're not at the root, we need to update the parent with the new hash
+		// This is handled in the next iteration of the loop
+	}
+
+	return nil
+}
+
+func (w *refWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
+	if obj == nil {
+		return nil, errors.New("object is nil")
+	}
+
+	if obj.Type != protocol.ObjectTypeTree {
+		return nil, errors.New("object is not a tree")
+	}
+
+	// Create a new slice excluding the target entry
+	filteredEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree))
+	found := false
+
+	for _, entry := range obj.Tree {
+		if entry.FileName != targetFileName {
+			filteredEntries = append(filteredEntries, entry)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		// Entry not found in tree, but this might be okay for intermediate trees
+		// Return the original object unchanged
+		return obj, nil
+	}
+
+	// Build new tree object with the filtered entries
+	newObj, err := protocol.BuildTreeObject(crypto.SHA1, filteredEntries)
 	if err != nil {
 		return nil, fmt.Errorf("building tree object: %w", err)
 	}
