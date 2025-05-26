@@ -18,8 +18,6 @@ func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 
 	if obj.Type == protocol.ObjectTypeBlob && obj.Hash.Is(blobID) {
 		return &Blob{
-			Name:    "", // Not available from blob object alone
-			Mode:    0,  // Not available from blob object alone
 			Hash:    blobID,
 			Content: obj.Data,
 		}, nil
@@ -29,8 +27,6 @@ func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 }
 
 type Blob struct {
-	Name    string
-	Mode    uint32
 	Hash    hash.Hash
 	Content []byte
 }
@@ -100,8 +96,6 @@ func (c *clientImpl) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 			}
 
 			return &Blob{
-				Name:    entry.Name,
-				Mode:    entry.Mode,
 				Hash:    entry.Hash,
 				Content: blob.Content,
 			}, nil

@@ -112,13 +112,10 @@ func TestClient_GetBlobByPath(t *testing.T) {
 		}
 		require.NoError(t, err)
 		assert.Equal(t, testContent, file.Content)
-		assert.Equal(t, uint32(33188), file.Mode)
 
 		fileHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:test.txt"))
 		require.NoError(t, err)
 		assert.Equal(t, fileHash, file.Hash)
-		assert.Equal(t, "test.txt", file.Name)
-		assert.Equal(t, uint32(33188), file.Mode)
 	})
 
 	t.Run("GetBlobByPath with non-existent file", func(t *testing.T) {
@@ -257,8 +254,6 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 
 			require.NoError(t, err, "Failed to get file for path: %s", tt.path)
 			assert.Equal(t, tt.expected, file.Content)
-			// Note: file.Name contains just the filename, not the full path
-			assert.Equal(t, uint32(33188), file.Mode) // 100644 in octal
 
 			// Verify the hash matches what Git CLI returns
 			expectedHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD:"+tt.path))
