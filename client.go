@@ -30,6 +30,10 @@ type RefWriter interface {
 	// Returns the hash of the tree after deletion.
 	DeleteBlob(ctx context.Context, path string) (hash.Hash, error)
 
+	// DeleteTree stages the deletion of a directory and all its contents at the given path.
+	// Returns the hash of the deleted tree.
+	DeleteTree(ctx context.Context, path string) (hash.Hash, error)
+
 	// Commit creates a new commit with all staged changes.
 	// Returns the hash of the created commit.
 	Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error)
