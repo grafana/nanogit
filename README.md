@@ -1,7 +1,5 @@
 # nanogit
 
-A limited, cloud-ready Git implementation for use in Grafana.
-
 [![License](https://img.shields.io/github/license/grafana/nanogit)](LICENSE.md)
 [![Go Report Card](https://goreportcard.com/badge/github.com/grafana/nanogit)](https://goreportcard.com/report/github.com/grafana/nanogit)
 [![GoDoc](https://godoc.org/github.com/grafana/nanogit?status.svg)](https://godoc.org/github.com/grafana/nanogit)
@@ -65,32 +63,130 @@ go get github.com/grafana/nanogit
 ### Usage
 
 ```go
-import "github.com/grafana/nanogit"
+package main
 
-// Create a new client
-client, err := nanogit.NewClient("https://github.com/grafana/nanogit.git")
-if err != nil {
-    log.Fatal(err)
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/grafana/nanogit"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create a new client with authentication
+    client, err := nanogit.NewHTTPClient(
+        "https://github.com/user/repo.git",
+        nanogit.WithBasicAuth("username", "token"),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Check if repository exists and is accessible
+    authorized, err := client.IsAuthorized(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    if !authorized {
+        log.Fatal("Not authorized to access repository")
+    }
+
+    // Get the main branch reference
+    ref, err := client.GetRef(ctx, "refs/heads/main")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Main branch points to: %s\n", ref.Hash.String())
+
+    // Get the root tree from the latest commit
+    commit, err := client.GetCommit(ctx, ref.Hash)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Read an existing file
+    blob, err := client.GetBlobByPath(ctx, commit.Tree, "README.md")
+    if err != nil {
+        log.Printf("README.md not found: %v", err)
+    } else {
+        fmt.Printf("Current README.md content:\n%s\n", string(blob.Content))
+    }
+
+    // Create a staged writer to make changes
+    writer, err := client.NewStagedWriter(ctx, ref)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Stage multiple changes
+    // 1. Create a new file
+    newFileContent := []byte("# New Feature\n\nThis is a new feature file.\n")
+    _, err = writer.CreateBlob(ctx, "docs/new-feature.md", newFileContent)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // 2. Update an existing file (if it exists)
+    if blob != nil {
+        updatedContent := append(blob.Content, []byte("\n## Recent Changes\n\nUpdated via nanogit!\n")...)
+        _, err = writer.UpdateBlob(ctx, "README.md", updatedContent)
+        if err != nil {
+            log.Fatal(err)
+        }
+    }
+
+    // 3. Create a configuration file
+    configContent := []byte(`{
+  "version": "1.0.0",
+  "feature_enabled": true
+}`)
+    _, err = writer.CreateBlob(ctx, "config/settings.json", configContent)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Commit all staged changes
+    author := nanogit.Author{
+        Name:  "Automated Bot",
+        Email: "bot@example.com",
+        Time:  time.Now(),
+    }
+    
+    commit, err = writer.Commit(ctx, "Add new feature and update documentation", author, author)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Created commit: %s\n", commit.Hash.String())
+
+    // Push changes to the remote repository
+    err = writer.Push(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("Successfully pushed changes to remote repository!")
+
+    // List recent commits to verify our changes
+    options := nanogit.ListCommitsOptions{
+        PerPage: 5,
+        Page:    1,
+    }
+    commits, err := client.ListCommits(ctx, commit.Hash, options)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println("\nRecent commits:")
+    for _, c := range commits {
+        fmt.Printf("  %s: %s (by %s)\n", 
+            c.Hash.String()[:8], 
+            c.Message, 
+            c.Author.Name)
+    }
 }
-
-// Check if repository exists
-exists, err := client.RepoExists(context.Background())
-if err != nil {
-    log.Fatal(err)
-}
-if !exists {
-    log.Fatal("Repository does not exist")
-}
-
-// Get a file from the repository
-file, err := client.GetFile(context.Background(), "main", "README.md")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Print the file contents
-fmt.Printf("File contents: %s\n", string(file.Content))
-
 ```
 
 ## Contributing

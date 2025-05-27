@@ -45,6 +45,7 @@ type StagedWriter interface {
 }
 
 // Client defines the interface for interacting with a Git repository.
+// It provides methods for repository operations, reference management,
 type Client interface {
 	// Repo operations
 	IsAuthorized(ctx context.Context) (bool, error)
@@ -70,17 +71,24 @@ type Client interface {
 	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
 }
 
-// Option is a function that configures a Client.
+// Option is a function that configures a Client during creation.
+// Options allow customization of the HTTP client, authentication, logging, and other settings.
 type Option func(*httpClient) error
 
 // httpClient is the private implementation of the Client interface.
+// It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
-	base      *url.URL
-	client    *http.Client
+	// Base URL of the Git repository
+	base *url.URL
+	// HTTP client used for making requests
+	client *http.Client
+	// User-Agent header value for requests
 	userAgent string
-	logger    Logger
-
+	// Logger for debug and info messages
+	logger Logger
+	// Basic authentication credentials (username/password)
 	basicAuth *struct{ Username, Password string }
+	// Token-based authentication header
 	tokenAuth *string
 }
 
@@ -212,7 +220,30 @@ func (c *httpClient) smartInfo(ctx context.Context, service string) ([]byte, err
 	return body, nil
 }
 
-// NewHTTPClient returns a new Client for the given repository.
+// NewHTTPClient creates a new Git client for the specified repository URL.
+// The client implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
+// It supports both HTTP and HTTPS URLs and can be configured with various options
+// for authentication, logging, and HTTP client customization.
+//
+// Parameters:
+//   - repo: Repository URL (must be HTTP or HTTPS)
+//   - options: Configuration options for authentication, logging, etc.
+//
+// Returns:
+//   - Client: Configured Git client interface
+//   - error: Error if URL is invalid or configuration fails
+//
+// Example:
+//
+//	// Create client with basic authentication
+//	client, err := nanogit.NewHTTPClient(
+//	    "https://github.com/user/repo",
+//	    nanogit.WithBasicAuth("username", "password"),
+//	    nanogit.WithLogger(logger),
+//	)
+//	if err != nil {
+//	    return err
+//	}
 func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	if repo == "" {
 		return nil, errors.New("repository URL cannot be empty")
@@ -247,7 +278,14 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	return c, nil
 }
 
-// WithUserAgent overrides the default User-Agent header.
+// WithUserAgent configures a custom User-Agent header for HTTP requests.
+// If not specified, a default User-Agent will be used.
+//
+// Parameters:
+//   - agent: Custom User-Agent string to use in requests
+//
+// Returns:
+//   - Option: Configuration function for the client
 func WithUserAgent(agent string) Option {
 	return func(c *httpClient) error {
 		c.userAgent = agent
@@ -255,8 +293,16 @@ func WithUserAgent(agent string) Option {
 	}
 }
 
-// WithHTTPClient overrides the default http.Client.
-// It will return an error if the provided http.Client is nil.
+// WithHTTPClient configures a custom HTTP client for making requests.
+// This allows customization of timeouts, transport settings, proxies, and other HTTP behavior.
+// The provided client must not be nil.
+//
+// Parameters:
+//   - client: Custom HTTP client to use for requests
+//
+// Returns:
+//   - Option: Configuration function for the client
+//   - error: Error if the provided HTTP client is nil
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *httpClient) error {
 		if client == nil {

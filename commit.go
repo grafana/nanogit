@@ -14,48 +14,55 @@ import (
 
 // Author represents the person who created the changes in the commit.
 // It includes their name, email, and the timestamp of when they made the changes.
+// This is typically the person who wrote the code or made the modifications.
 type Author struct {
-	Name  string
+	// Name is the full name of the author (e.g., "John Doe")
+	Name string
+	// Email is the email address of the author (e.g., "john@example.com")
 	Email string
-	Time  time.Time
+	// Time is when the changes were originally made by the author
+	Time time.Time
 }
 
 // Committer represents the person who created the commit object.
 // This is often the same as the author, but can be different in cases
-// where someone else commits changes on behalf of the author.
+// where someone else commits changes on behalf of the author (e.g., via patches).
 type Committer struct {
-	Name  string
+	// Name is the full name of the committer (e.g., "Jane Smith")
+	Name string
+	// Email is the email address of the committer (e.g., "jane@example.com")
 	Email string
-	Time  time.Time
+	// Time is when the commit object was created
+	Time time.Time
 }
 
 // Commit represents a Git commit object.
 // It contains metadata about the commit, including the author, committer,
 // commit message, and references to the parent commits and tree.
 type Commit struct {
-	// Hash is the hash of the commit object.
+	// Hash is the SHA-1 hash of the commit object
 	Hash hash.Hash
 	// Tree is the hash of the root tree object that represents the state
-	// of the repository at the time of the commit.
+	// of the repository at the time of the commit
 	Tree hash.Hash
-
-	// Parent is a list of hashes of parent commits.
-	// TODO: Merge commits can have multiple parents.
+	// Parent is the hash of the parent commit
+	// TODO: Merge commits can have multiple parents, but currently only single parent is supported
 	Parent hash.Hash
-
-	// Author is the person who created the changes in the commit.
+	// Author is the person who created the changes in the commit
 	Author Author
-
-	// Committer is the person who created the commit object.
+	// Committer is the person who created the commit object
 	Committer Committer
-
-	// Message is the commit message that describes the changes made in this commit.
+	// Message is the commit message that describes the changes made in this commit
 	Message string
 }
 
-// Time returns the time when the commit was created.
-// This is the same as the committer's time, as the committer is the person
-// who actually created the commit object in the repository.
+// Time returns the timestamp when the commit object was created.
+// This is equivalent to the committer's timestamp, as the committer is the person
+// who actually created the commit object in the repository. For most commits,
+// this will be the same as the author time, but they can differ in some workflows.
+//
+// Returns:
+//   - time.Time: The timestamp when the commit was created
 func (c *Commit) Time() time.Time {
 	return c.Committer.Time
 }
@@ -64,22 +71,47 @@ func (c *Commit) Time() time.Time {
 // It contains information about how a file was modified, including its path,
 // mode, hash, and the type of change (added, modified, deleted, etc.).
 type CommitFile struct {
-	Path    string              // Path of the file in the head commit
-	Mode    uint32              // File mode in the head commit (e.g., 100644 for regular files)
-	OldMode uint32              // Original mode in the base commit (for modified files)
-	Hash    hash.Hash           // File hash in the head commit
-	OldHash hash.Hash           // Original hash in the base commit (for modified files)
-	Status  protocol.FileStatus // Status of the file change (added, modified, deleted, etc.)
+	// Path of the file in the head commit
+	Path string
+	// Mode is the file mode in the head commit (e.g., 100644 for regular files)
+	Mode uint32
+	// OldMode is the original file mode in the base commit (for modified files)
+	OldMode uint32
+	// Hash is the file hash in the head commit
+	Hash hash.Hash
+	// OldHash is the original file hash in the base commit (for modified files)
+	OldHash hash.Hash
+	// Status indicates the type of file change (added, modified, deleted, etc.)
+	Status protocol.FileStatus
 }
 
 // CompareCommits compares two commits and returns the differences between them.
-// It takes a base commit and a head commit, and returns a list of file changes
-// that occurred between them. The changes include:
+// This method performs a comprehensive diff between two commits, analyzing
+// all file changes that occurred between the base and head commits.
+//
+// The comparison includes:
 //   - Added files (present in head but not in base)
 //   - Modified files (different content or mode between base and head)
 //   - Deleted files (present in base but not in head)
 //
-// The returned changes are sorted by file path for consistent ordering.
+// Parameters:
+//   - ctx: Context for the operation
+//   - baseCommit: Hash of the base commit (older commit)
+//   - headCommit: Hash of the head commit (newer commit)
+//
+// Returns:
+//   - []CommitFile: Sorted list of file changes between the commits
+//   - error: Error if either commit cannot be found or comparison fails
+//
+// Example:
+//
+//	changes, err := client.CompareCommits(ctx, oldCommit, newCommit)
+//	if err != nil {
+//	    return err
+//	}
+//	for _, change := range changes {
+//	    fmt.Printf("%s: %s\n", change.Status, change.Path)
+//	}
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	// Get both commits
 	base, err := c.getObject(ctx, baseCommit)
@@ -186,7 +218,25 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 	return changes, nil
 }
 
-// GetCommit returns a commit object from the repository.
+// GetCommit retrieves a specific commit object from the repository by its hash.
+// This method fetches the complete commit information including metadata,
+// author, committer, message, and references to parent commits and tree.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - hash: SHA-1 hash of the commit to retrieve
+//
+// Returns:
+//   - *Commit: The commit object with all metadata
+//   - error: Error if the commit is not found or cannot be retrieved
+//
+// Example:
+//
+//	commit, err := client.GetCommit(ctx, commitHash)
+//	if err != nil {
+//	    return err
+//	}
+//	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
 	commit, err := c.getObject(ctx, hash)
 	if err != nil {
@@ -228,30 +278,55 @@ func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, er
 // ListCommitsOptions provides filtering and pagination options for listing commits.
 // Similar to GitHub's API, it allows limiting results, filtering by path, and pagination.
 type ListCommitsOptions struct {
-	// PerPage specifies the number of commits to return per page.
-	// If 0, defaults to 30. Maximum allowed is 100.
+	// PerPage specifies the number of commits to return per page
+	// If 0, defaults to 30. Maximum allowed is 100
 	PerPage int
-
-	// Page specifies which page of results to return (1-based).
-	// If 0, defaults to 1.
+	// Page specifies which page of results to return (1-based)
+	// If 0, defaults to 1
 	Page int
-
-	// Path filters commits to only those that affect the specified file or directory path.
-	// If empty, all commits are included.
+	// Path filters commits to only those that affect the specified file or directory path
+	// If empty, all commits are included
 	Path string
-
-	// Since filters commits to only those created after this time.
-	// If zero, no time filtering is applied.
+	// Since filters commits to only those created after this time
+	// If zero, no time filtering is applied
 	Since time.Time
-
-	// Until filters commits to only those created before this time.
-	// If zero, no time filtering is applied.
+	// Until filters commits to only those created before this time
+	// If zero, no time filtering is applied
 	Until time.Time
 }
 
-// ListCommits returns a list of commits starting from the specified commit,
-// walking backwards through the commit history. It supports filtering and pagination
-// similar to GitHub's API.
+// ListCommits retrieves a list of commits starting from the specified commit,
+// walking backwards through the commit history. This method supports filtering
+// and pagination similar to GitHub's API, allowing you to traverse repository
+// history efficiently.
+//
+// The method traverses the commit graph starting from the specified commit,
+// following parent links to build a chronological list of commits. It supports
+// various filters to narrow down results and pagination for large histories.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - startCommit: Hash of the commit to start traversal from (typically HEAD)
+//   - options: Filtering and pagination options
+//
+// Returns:
+//   - []Commit: List of commits matching the specified criteria
+//   - error: Error if traversal fails or commits cannot be retrieved
+//
+// Example:
+//
+//	// Get the latest 10 commits on main branch
+//	options := nanogit.ListCommitsOptions{
+//	    PerPage: 10,
+//	    Page:    1,
+//	}
+//	commits, err := client.ListCommits(ctx, mainBranchHash, options)
+//	if err != nil {
+//	    return err
+//	}
+//	for _, commit := range commits {
+//	    fmt.Printf("%s: %s\n", commit.Hash.String()[:8], commit.Message)
+//	}
 func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error) {
 
 	// Set defaults for pagination

@@ -10,6 +10,24 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// GetBlob retrieves a blob (file content) from the repository by its hash.
+// This method fetches the raw content of a file stored in the Git object database.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - blobID: SHA-1 hash of the blob object to retrieve
+//
+// Returns:
+//   - *Blob: The blob object containing hash and file content
+//   - error: Error if the blob is not found or cannot be retrieved
+//
+// Example:
+//
+//	blob, err := client.GetBlob(ctx, blobHash)
+//	if err != nil {
+//	    return err
+//	}
+//	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
 	obj, err := c.getObject(ctx, blobID)
 	if err != nil {
@@ -26,12 +44,39 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	return nil, fmt.Errorf("blob not found: %s", blobID)
 }
 
+// Blob represents a Git blob object, which stores the content of a file.
+// In Git, all file content is stored as blob objects in the object database.
 type Blob struct {
-	Hash    hash.Hash
+	// Hash is the SHA-1 hash of the blob object
+	Hash hash.Hash
+	// Content is the raw file content as bytes
 	Content []byte
 }
 
-// GetBlobByPath retrieves a file from the repository at the given path
+// GetBlobByPath retrieves a file from the repository by navigating through
+// the directory structure to the specified path. This method efficiently
+// traverses the tree hierarchy to locate and fetch the file content.
+//
+// The path should use forward slashes ("/") as separators, similar to Unix paths.
+// The method navigates through directory trees to find the target file.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - rootHash: Hash of the root tree to start navigation from
+//   - path: File path to retrieve (e.g., "src/main.go" or "docs/readme.md")
+//
+// Returns:
+//   - *Blob: The blob object containing the file content
+//   - error: Error if path doesn't exist, contains non-files, or retrieval fails
+//
+// Example:
+//
+//	// Get the content of a specific file
+//	blob, err := client.GetBlobByPath(ctx, rootTreeHash, "src/main.go")
+//	if err != nil {
+//	    return fmt.Errorf("file not found: %w", err)
+//	}
+//	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
 	if path == "" {
 		return nil, errors.New("path cannot be empty")
