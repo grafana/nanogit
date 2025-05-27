@@ -2,6 +2,7 @@ package mocks_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -127,7 +128,7 @@ func (s *MyService) GetMainBranch(ctx context.Context) (nanogit.Ref, error) {
 		return nanogit.Ref{}, fmt.Errorf("authorization failed: %w", err)
 	}
 	if !authorized {
-		return nanogit.Ref{}, fmt.Errorf("authorization failed: not authorized")
+		return nanogit.Ref{}, errors.New("authorization failed: not authorized")
 	}
 
 	// Get the main branch
