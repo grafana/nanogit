@@ -7,6 +7,25 @@ on:
     branches: [main]
 
 jobs:
+  generate:
+    name: Generated Files
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Generate files
+        run: make generate
+      - name: Verify generated files are up to date
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files are out of date. Run 'make generate' to update them."
+            git diff
+            exit 1
+          fi
+
   format:
     name: Format
     runs-on: ubuntu-latest

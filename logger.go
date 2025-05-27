@@ -22,6 +22,8 @@ func WithLogger(logger Logger) Option {
 	}
 }
 
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/logger.go . Logger
+
 // Logger is a minimal logging interface for nanogit clients.
 type Logger interface {
 	Debug(msg string, keysAndValues ...any)
