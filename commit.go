@@ -114,7 +114,7 @@ type CommitFile struct {
 //	}
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	// Get both commits
-	base, err := c.getObject(ctx, baseCommit)
+	base, err := c.getSingleObject(ctx, baseCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting base commit: %w", err)
 	}
@@ -123,7 +123,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, errors.New("base commit is not a commit")
 	}
 
-	head, err := c.getObject(ctx, headCommit)
+	head, err := c.getSingleObject(ctx, headCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting head commit: %w", err)
 	}
@@ -238,7 +238,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	commit, err := c.getObject(ctx, hash)
+	commit, err := c.getSingleObject(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
 	}

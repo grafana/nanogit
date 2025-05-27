@@ -97,7 +97,7 @@ type Tree struct {
 //	    fmt.Printf("%s (%s)\n", entry.Path, entry.Type)
 //	}
 func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, error) {
-	obj, err := c.getObject(ctx, h)
+	obj, err := c.getSingleObject(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
@@ -111,7 +111,7 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 			return nil, fmt.Errorf("parsing tree hash: %w", err)
 		}
 
-		treeObj, err := c.getObject(ctx, treeHash)
+		treeObj, err := c.getSingleObject(ctx, treeHash)
 		if err != nil {
 			return nil, fmt.Errorf("getting tree: %w", err)
 		}
@@ -256,7 +256,7 @@ func (c *httpClient) processTreeEntries(ctx context.Context, entries []FlatTreeE
 //	    }
 //	}
 func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
-	obj, err := c.getObject(ctx, h)
+	obj, err := c.getSingleObject(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
@@ -269,7 +269,7 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 			return nil, fmt.Errorf("parsing tree hash: %w", err)
 		}
 
-		treeObj, err := c.getObject(ctx, treeHash)
+		treeObj, err := c.getSingleObject(ctx, treeHash)
 		if err != nil {
 			return nil, fmt.Errorf("getting tree: %w", err)
 		}

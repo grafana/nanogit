@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *httpClient) getObject(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
 	pkt, err := protocol.FormatPacks(
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
