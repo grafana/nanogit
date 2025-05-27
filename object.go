@@ -12,73 +12,101 @@ import (
 )
 
 func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
-	pkt, err := protocol.FormatPacks(
+	objects, err := c.getObjects(ctx, want)
+	if err != nil {
+		return nil, err
+	}
+
+	if obj, ok := objects[want.String()]; ok {
+		return obj, nil
+	}
+
+	return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrRefNotFound)
+}
+
+func (c *httpClient) getMultipleObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	objects, err := c.getObjects(ctx, want...)
+	if err != nil {
+		return nil, err
+	}
+
+	found := make(map[string]bool)
+	for _, obj := range objects {
+		for _, w := range want {
+			if obj.Hash.Is(w) {
+				found[obj.Hash.String()] = true
+			}
+		}
+	}
+
+	for _, want := range want {
+		if !found[want.String()] {
+			return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrRefNotFound)
+		}
+	}
+
+	return objects, nil
+}
+
+func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
 		protocol.SpecialPack(protocol.DelimeterPacket),
 		protocol.PackLine("no-progress\n"),
 		protocol.PackLine("filter blob:none\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", want.String())),
-		protocol.PackLine("done\n"),
-	)
+	}
+
+	for _, w := range want {
+		packs = append(packs, protocol.PackLine(fmt.Sprintf("want %s\n", w.String())))
+	}
+	packs = append(packs, protocol.PackLine("done\n"))
+
+	pkt, err := protocol.FormatPacks(packs...)
 	if err != nil {
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	c.logger.Debug("Fetch request", "object", want.String(), "request", string(pkt))
+	c.logger.Debug("Fetch request", "want", want, "request", string(pkt))
 
 	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
-		c.logger.Debug("UploadPack error", "object", want.String(), "error", err)
+		c.logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, errors.New("object not found")
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "object", want.String(), "response", hex.EncodeToString(out))
+	c.logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
 
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		c.logger.Debug("ParsePack error", "object", want.String(), "error", err)
+		c.logger.Debug("ParsePack error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	c.logger.Debug("Parsed lines", "object", want.String(), "lines", lines)
+	c.logger.Debug("Parsed lines", "want", want, "lines", lines)
 
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		c.logger.Debug("ParseFetchResponse error", "object", want.String(), "error", err)
+		c.logger.Debug("ParseFetchResponse error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
-	found := false
-	var foundObj *protocol.PackfileObject
-	var allObjs []string
+	objects := make(map[string]*protocol.PackfileObject)
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			c.logger.Debug("ReadObject error", "object", want.String(), "error", err)
+			c.logger.Debug("ReadObject error", "want", want, "error", err)
 			break
 		}
 		if obj.Object == nil {
 			break
 		}
 
-		allObjs = append(allObjs, fmt.Sprintf("%s (%v)", obj.Object.Hash.String(), obj.Object.Type))
-
-		if obj.Object.Hash.Is(want) {
-			found = true
-			foundObj = obj.Object
-			c.logger.Debug("Found object", "object", want.String(), "type", obj.Object.Type)
-			break
-		}
+		objects[obj.Object.Hash.String()] = obj.Object
 	}
 
-	if !found {
-		c.logger.Debug("Object not found in packfile. Objects in packfile:", "object", want.String(), "objects", allObjs)
-		return nil, errors.New("object not found")
-	}
-
-	return foundObj, nil
+	return objects, nil
 }

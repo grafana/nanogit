@@ -184,9 +184,9 @@ func TestClient_Writer(t *testing.T) {
 		ctx := context.Background()
 		logger.ForSubtest(t)
 
-		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
+		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "object not found")
+		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
