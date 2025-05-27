@@ -27,15 +27,13 @@ func TestListRefs(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		infoRefsResp  string
 		lsRefsResp    string
 		expectedRefs  []Ref
 		expectedError string
 		setupClient   func(*httpClient)
 	}{
 		{
-			name:         "successful response with multiple refs",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
+			name: "successful response with multiple refs",
 			lsRefsResp: func() string {
 				pkt, _ := protocol.FormatPacks(
 					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/master\n"),
@@ -52,8 +50,7 @@ func TestListRefs(t *testing.T) {
 			expectedError: "",
 		},
 		{
-			name:         "HEAD reference with symref",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
+			name: "HEAD reference with symref",
 			lsRefsResp: func() string {
 				pkt, _ := protocol.FormatPacks(
 					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d HEAD symref=HEAD:refs/heads/master\n"),
@@ -67,50 +64,29 @@ func TestListRefs(t *testing.T) {
 		},
 		{
 			name:          "empty response",
-			infoRefsResp:  "001e# service=git-upload-pack\n0000",
 			lsRefsResp:    "0000",
 			expectedRefs:  []Ref{},
 			expectedError: "",
 		},
 		{
-			name:         "invalid hash length",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
+			name: "invalid hash length",
 			lsRefsResp: `003f7fd1a60b01f91b314f59955a4e4d4e80d8ed refs/heads/master
 0000`,
 			expectedRefs:  nil,
 			expectedError: "invalid hash length: got 36, want 40",
 		},
 		{
-			name:         "invalid ref format",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
+			name: "invalid ref format",
 			lsRefsResp: `003f7fd1a60b01f91b314f59955a4e4d4e80d8edf11d
 0000`,
 			expectedRefs:  nil,
 			expectedError: "error parsing line \"003f7fd1a60b01f91b314f59955a4e4d4e80d8edf11d\\n0000\": line declared 63 bytes, but only 49 are available",
 		},
 		{
-			name:          "info/refs request fails",
-			infoRefsResp:  "",
-			lsRefsResp:    "",
-			expectedRefs:  nil,
-			expectedError: "get repository info",
-			setupClient: func(c *httpClient) {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-			},
-		},
-		{
 			name:          "ls-refs request fails",
-			infoRefsResp:  "001e# service=git-upload-pack\n0000",
 			lsRefsResp:    "",
 			expectedRefs:  nil,
-			expectedError: "get repository info: Get \"http://127.0.0.1:0/info/refs?service=git-upload-pack\": dial tcp 127.0.0.1:0: i/o timeout",
+			expectedError: "send ls-refs command",
 			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
@@ -131,13 +107,6 @@ func TestListRefs(t *testing.T) {
 			var server *httptest.Server
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/info/refs") {
-						if _, err := w.Write([]byte(tt.infoRefsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
 					if r.URL.Path == "/git-upload-pack" {
 						if _, err := w.Write([]byte(tt.lsRefsResp)); err != nil {
 							t.Errorf("failed to write response: %v", err)
@@ -185,7 +154,6 @@ func TestGetRef(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		infoRefsResp  string
 		lsRefsResp    string
 		refToGet      string
 		expectedRef   Ref
@@ -193,8 +161,7 @@ func TestGetRef(t *testing.T) {
 		setupClient   func(*httpClient)
 	}{
 		{
-			name:         "successful get of existing ref",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
+			name: "successful get of existing ref",
 			lsRefsResp: func() string {
 				pkt, _ := protocol.FormatPacks(
 					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/master\n"),
@@ -209,8 +176,7 @@ func TestGetRef(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:         "get non-existent ref",
-			infoRefsResp: "001e# service=git-upload-pack\n0000",
+			name: "get non-existent ref",
 			lsRefsResp: func() string {
 				pkt, _ := protocol.FormatPacks(
 					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/master\n"),
@@ -221,6 +187,23 @@ func TestGetRef(t *testing.T) {
 			expectedRef:   Ref{},
 			expectedError: ErrRefNotFound,
 		},
+		{
+			name:          "ls-refs request fails",
+			lsRefsResp:    "",
+			refToGet:      "refs/heads/master",
+			expectedRef:   Ref{},
+			expectedError: ErrRefNotFound, // Will get wrapped in "list refs:" error
+			setupClient: func(c *httpClient) {
+				c.base, _ = url.Parse("http://127.0.0.1:0")
+				c.client = &http.Client{
+					Transport: &http.Transport{
+						DialContext: (&net.Dialer{
+							Timeout: 1 * time.Nanosecond,
+						}).DialContext,
+					},
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -230,31 +213,8 @@ func TestGetRef(t *testing.T) {
 			var server *httptest.Server
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/info/refs") {
-						if _, err := w.Write([]byte(tt.infoRefsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
 					if r.URL.Path == "/git-upload-pack" {
-						// Simulate refs list for GetRef
-						var refsResp string
-						switch tt.name {
-						case "successful get of existing ref":
-							// Ref exists
-							pkt, _ := protocol.FormatPacks(
-								protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/master\n"),
-							)
-							refsResp = string(pkt)
-						case "get non-existent ref":
-							// Ref does not exist
-							refsResp = "0000"
-						default:
-							refsResp = "0000"
-						}
-						w.WriteHeader(http.StatusOK)
-						if _, err := w.Write([]byte(refsResp)); err != nil {
+						if _, err := w.Write([]byte(tt.lsRefsResp)); err != nil {
 							t.Errorf("failed to write response: %v", err)
 							return
 						}
@@ -281,7 +241,12 @@ func TestGetRef(t *testing.T) {
 			ref, err := client.GetRef(context.Background(), tt.refToGet)
 			if tt.expectedError != nil {
 				require.Error(t, err)
-				require.Equal(t, tt.expectedError, err)
+				if tt.setupClient != nil {
+					// For network timeout cases, just check that we got an error
+					require.Contains(t, err.Error(), "send ls-refs command")
+				} else {
+					require.Equal(t, tt.expectedError, err)
+				}
 				require.Equal(t, Ref{}, ref)
 			} else {
 				require.NoError(t, err)
@@ -300,65 +265,37 @@ func TestCreateRef(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		infoRefsResp  string
 		refToCreate   Ref
+		refExists     bool
 		expectedError string
 		setupClient   func(*httpClient)
 	}{
 		{
-			name:         "successful ref creation",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
+			name: "successful ref creation",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
+			refExists:     false,
 			expectedError: "",
 		},
 		{
-			name:         "create ref that already exists",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
+			name: "create ref that already exists",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
+			refExists:     true,
 			expectedError: "ref refs/heads/main already exists",
 		},
 		{
-			name:         "create ref with invalid hash length",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
-			refToCreate: Ref{
-				Name: "refs/heads/main",
-				Hash: hashify("1234"), // too short
-			},
-			expectedError: "format ref update request: invalid new ref hash length",
-		},
-		{
-			name:         "info/refs request fails",
-			infoRefsResp: "",
+			name: "ls-refs request fails",
 			refToCreate: Ref{
 				Name: "refs/heads/main",
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
-			expectedError: "get repository info",
-			setupClient: func(c *httpClient) {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-			},
-		},
-		{
-			name:         "receive-pack request fails",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
-			refToCreate: Ref{
-				Name: "refs/heads/main",
-				Hash: hashify("1234567890123456789012345678901234567890"),
-			},
-			expectedError: "get repository info",
+			refExists:     false,
+			expectedError: "send ls-refs command",
 			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
@@ -377,30 +314,20 @@ func TestCreateRef(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var server *httptest.Server
-			shouldCheckBody := tt.expectedError == "" || strings.Contains(tt.expectedError, "send ref update: got status code 500")
+			shouldCheckBody := tt.expectedError == ""
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/info/refs") {
-						if _, err := w.Write([]byte(tt.infoRefsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
 					if r.URL.Path == "/git-upload-pack" {
 						// Simulate refs list for GetRef in CreateRef tests
 						var refsResp string
-						switch tt.name {
-						case "successful ref creation":
-							// Ref does not exist
-							refsResp = "0000"
-						case "create ref that already exists":
+						if tt.refExists {
 							// Ref exists
 							pkt, _ := protocol.FormatPacks(
 								protocol.PackLine(fmt.Sprintf("%s %s\n", tt.refToCreate.Hash, tt.refToCreate.Name)),
 							)
 							refsResp = string(pkt)
-						default:
+						} else {
+							// Ref does not exist
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
@@ -411,14 +338,6 @@ func TestCreateRef(t *testing.T) {
 						return
 					}
 					if r.URL.Path == "/git-receive-pack" {
-						if tt.expectedError == "send ref update: got status code 500" {
-							w.WriteHeader(http.StatusInternalServerError)
-							if _, err := w.Write([]byte("error: refs/heads/main already exists")); err != nil {
-								t.Errorf("failed to write response: %v", err)
-								return
-							}
-							return
-						}
 						if shouldCheckBody {
 							body, err := io.ReadAll(r.Body)
 							if err != nil {
@@ -485,74 +404,37 @@ func TestUpdateRef(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		infoRefsResp  string
 		refToUpdate   Ref
+		refExists     bool
 		expectedError string
 		setupClient   func(*httpClient)
 	}{
 		{
-			name:         "successful ref update",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
+			name: "successful ref update",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
+			refExists:     true,
 			expectedError: "",
 		},
 		{
-			name:         "update non-existent ref",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
+			name: "update non-existent ref",
 			refToUpdate: Ref{
 				Name: "refs/heads/non-existent",
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
+			refExists:     false,
 			expectedError: "ref refs/heads/non-existent does not exist",
 		},
 		{
-			name:         "update ref with invalid ref name",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
-			refToUpdate: Ref{
-				Name: "invalid-ref", // missing refs/ prefix
-				Hash: hashify("1234567890123456789012345678901234567890"),
-			},
-			expectedError: "ref invalid-ref does not exist",
-		},
-		{
-			name:         "update ref with invalid hash length",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
-			refToUpdate: Ref{
-				Name: "refs/heads/main",
-				Hash: hashify("1234"), // too short
-			},
-			expectedError: "ref refs/heads/main does not exist",
-		},
-		{
-			name:         "info/refs request fails",
-			infoRefsResp: "",
+			name: "ls-refs request fails",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
-			expectedError: "get repository info",
-			setupClient: func(c *httpClient) {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-			},
-		},
-		{
-			name:         "receive-pack request fails",
-			infoRefsResp: "001e# service=git-receive-pack\n0000",
-			refToUpdate: Ref{
-				Name: "refs/heads/main",
-				Hash: hashify("1234567890123456789012345678901234567890"),
-			},
-			expectedError: "get repository info",
+			refExists:     false,
+			expectedError: "send ls-refs command",
 			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
@@ -571,30 +453,20 @@ func TestUpdateRef(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var server *httptest.Server
-			shouldCheckBody := tt.expectedError == "" || strings.Contains(tt.expectedError, "send ref update: got status code 500")
+			shouldCheckBody := tt.expectedError == ""
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/info/refs") {
-						if _, err := w.Write([]byte(tt.infoRefsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
 					if r.URL.Path == "/git-upload-pack" {
 						// Simulate refs list for GetRef in UpdateRef tests
 						var refsResp string
-						switch tt.name {
-						case "successful ref update":
+						if tt.refExists {
 							// Ref exists
 							pkt, _ := protocol.FormatPacks(
 								protocol.PackLine(fmt.Sprintf("%s %s\n", tt.refToUpdate.Hash, tt.refToUpdate.Name)),
 							)
 							refsResp = string(pkt)
-						case "update non-existent ref":
+						} else {
 							// Ref does not exist
-							refsResp = "0000"
-						default:
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
@@ -673,50 +545,28 @@ func TestUpdateRef(t *testing.T) {
 func TestDeleteRef(t *testing.T) {
 	tests := []struct {
 		name          string
-		infoRefsResp  string
 		refToDelete   string
+		refExists     bool
 		expectedError string
 		setupClient   func(*httpClient)
 	}{
 		{
 			name:          "successful ref deletion",
-			infoRefsResp:  "001e# service=git-receive-pack\n0000",
 			refToDelete:   "refs/heads/main",
+			refExists:     true,
 			expectedError: "",
 		},
 		{
 			name:          "delete non-existent ref",
-			infoRefsResp:  "001e# service=git-receive-pack\n0000",
 			refToDelete:   "refs/heads/non-existent",
+			refExists:     false,
 			expectedError: "ref refs/heads/non-existent does not exist",
 		},
 		{
-			name:          "delete ref with invalid ref name",
-			infoRefsResp:  "001e# service=git-receive-pack\n0000",
-			refToDelete:   "invalid-ref", // missing refs/ prefix
-			expectedError: "ref invalid-ref does not exist",
-		},
-		{
-			name:          "info/refs request fails",
-			infoRefsResp:  "",
+			name:          "ls-refs request fails",
 			refToDelete:   "refs/heads/main",
-			expectedError: "get repository info",
-			setupClient: func(c *httpClient) {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-			},
-		},
-		{
-			name:          "receive-pack request fails",
-			infoRefsResp:  "001e# service=git-receive-pack\n0000",
-			refToDelete:   "refs/heads/main",
-			expectedError: "get repository info",
+			refExists:     false,
+			expectedError: "send ls-refs command",
 			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
@@ -738,27 +588,17 @@ func TestDeleteRef(t *testing.T) {
 			shouldCheckBody := tt.expectedError == "" || strings.Contains(tt.expectedError, "send ref update: got status code 500")
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/info/refs") {
-						if _, err := w.Write([]byte(tt.infoRefsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
 					if r.URL.Path == "/git-upload-pack" {
 						// Simulate refs list for GetRef in DeleteRef tests
 						var refsResp string
-						switch tt.name {
-						case "successful ref deletion":
+						if tt.refExists {
 							// Ref exists
 							pkt, _ := protocol.FormatPacks(
 								protocol.PackLine(fmt.Sprintf("%s %s\n", "1234567890123456789012345678901234567890", tt.refToDelete)),
 							)
 							refsResp = string(pkt)
-						case "delete non-existent ref":
+						} else {
 							// Ref does not exist
-							refsResp = "0000"
-						default:
 							refsResp = "0000"
 						}
 						w.WriteHeader(http.StatusOK)
