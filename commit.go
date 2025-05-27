@@ -80,7 +80,7 @@ type CommitFile struct {
 //   - Deleted files (present in base but not in head)
 //
 // The returned changes are sorted by file path for consistent ordering.
-func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
+func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	// Get both commits
 	base, err := c.getObject(ctx, baseCommit)
 	if err != nil {
@@ -128,7 +128,7 @@ func (c *clientImpl) CompareCommits(ctx context.Context, baseCommit, headCommit 
 //
 // The function returns a sorted list of changes, with each change containing
 // the relevant file information and status.
-func (c *clientImpl) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
+func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 	changes := make([]CommitFile, 0)
 
 	// Build maps for efficient lookup
@@ -187,7 +187,7 @@ func (c *clientImpl) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 }
 
 // GetCommit returns a commit object from the repository.
-func (c *clientImpl) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
+func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
 	commit, err := c.getObject(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
@@ -252,7 +252,7 @@ type ListCommitsOptions struct {
 // ListCommits returns a list of commits starting from the specified commit,
 // walking backwards through the commit history. It supports filtering and pagination
 // similar to GitHub's API.
-func (c *clientImpl) ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error) {
+func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error) {
 
 	// Set defaults for pagination
 	perPage := options.PerPage
@@ -324,7 +324,7 @@ func (c *clientImpl) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 }
 
 // commitMatchesFilters checks if a commit matches the specified filters.
-func (c *clientImpl) commitMatchesFilters(ctx context.Context, commit *Commit, options *ListCommitsOptions) bool {
+func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *Commit, options *ListCommitsOptions) bool {
 	// Check time filters
 	if !options.Since.IsZero() && commit.Time().Before(options.Since) {
 		return false
@@ -351,7 +351,7 @@ func (c *clientImpl) commitMatchesFilters(ctx context.Context, commit *Commit, o
 
 // commitAffectsPath checks if a commit affects the specified path by comparing
 // it with its parent commit.
-func (c *clientImpl) commitAffectsPath(ctx context.Context, commit *Commit, path string) (bool, error) {
+func (c *httpClient) commitAffectsPath(ctx context.Context, commit *Commit, path string) (bool, error) {
 	// For the initial commit (no parent), check if the path exists
 	if commit.Parent.Is(hash.Zero) {
 		// Check if path exists in this commit's tree (as blob or tree)

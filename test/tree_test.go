@@ -48,7 +48,7 @@ func TestClient_GetFlatTree(t *testing.T) {
 	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -160,7 +160,7 @@ func TestClient_GetTree(t *testing.T) {
 	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -253,7 +253,7 @@ func TestClient_GetTreeByPath(t *testing.T) {
 	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

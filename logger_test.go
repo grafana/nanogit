@@ -9,11 +9,11 @@ import (
 func TestWithLogger(t *testing.T) {
 	t.Run("sets custom logger", func(t *testing.T) {
 		logger := &testLogger{}
-		client, err := NewClient("https://github.com/owner/repo", WithLogger(logger))
+		client, err := NewHTTPClient("https://github.com/owner/repo", WithLogger(logger))
 		require.NoError(t, err)
 
-		c, ok := client.(*clientImpl)
-		require.True(t, ok, "client should be of type *clientImpl")
+		c, ok := client.(*httpClient)
+		require.True(t, ok, "client should be of type *httpClient")
 		require.Equal(t, logger, c.logger, "logger should be set to the provided logger")
 
 		// Trigger a log event
@@ -25,7 +25,7 @@ func TestWithLogger(t *testing.T) {
 	})
 
 	t.Run("returns error if logger is nil", func(t *testing.T) {
-		client, err := NewClient("https://github.com/owner/repo", WithLogger(nil))
+		client, err := NewHTTPClient("https://github.com/owner/repo", WithLogger(nil))
 		require.Error(t, err)
 		require.Nil(t, client)
 		require.Equal(t, "logger cannot be nil", err.Error())

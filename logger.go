@@ -5,7 +5,7 @@ import "errors"
 // WithLogger sets a custom logger for the client.
 // If not provided, the default slog logger will be used.
 func WithLogger(logger Logger) Option {
-	return func(c *clientImpl) error {
+	return func(c *httpClient) error {
 		if logger == nil {
 			return errors.New("logger cannot be nil")
 		}

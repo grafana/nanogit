@@ -168,7 +168,7 @@ func TestGetFlatTree(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(server.URL)
+			client, err := NewHTTPClient(server.URL)
 			require.NoError(t, err)
 
 			hash, err := hash.FromHex(tt.commitHash)
@@ -247,7 +247,7 @@ func TestProcessFlatTreeEntries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &clientImpl{}
+			client := &httpClient{}
 			result, err := client.processTreeEntries(context.Background(), tt.entries, tt.basePath)
 
 			if tt.expectedError != "" {
@@ -341,7 +341,7 @@ func TestGetTree(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(server.URL)
+			client, err := NewHTTPClient(server.URL)
 			require.NoError(t, err)
 
 			treeHash, err := hash.FromHex(tt.treeHash)
@@ -435,7 +435,7 @@ func TestGetTreeByPath(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(server.URL)
+			client, err := NewHTTPClient(server.URL)
 			require.NoError(t, err)
 
 			rootHash, err := hash.FromHex(tt.rootHash)

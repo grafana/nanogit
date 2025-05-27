@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error) {
+func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
@@ -42,8 +42,8 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 
 	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
-	return &refWriter{
-		clientImpl: c,
+	return &stagedWriter{
+		httpClient: c,
 		ref:        ref,
 		writer:     writer,
 		lastCommit: commit,
@@ -54,8 +54,8 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 	}, nil
 }
 
-type refWriter struct {
-	*clientImpl
+type stagedWriter struct {
+	*httpClient
 	ref         Ref
 	writer      *protocol.PackfileWriter
 	lastCommit  *Commit
@@ -65,7 +65,7 @@ type refWriter struct {
 }
 
 // CreateBlob creates a new blob in the specified path.
-func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if w.treeEntries[path] != nil {
 		return nil, errors.New("blob at that path already exists")
 	}
@@ -85,7 +85,7 @@ func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte)
 	return blobHash, nil
 }
 
-func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
 		return nil, errors.New("blob at that path does not exist")
 	}
@@ -111,7 +111,7 @@ func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte)
 	return blobHash, nil
 }
 
-func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
+func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
 		return nil, errors.New("blob at that path does not exist")
 	}
@@ -134,7 +134,7 @@ func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, err
 	return blobHash, nil
 }
 
-func (w *refWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
+func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
 		return nil, errors.New("tree at that path does not exist")
 	}
@@ -170,7 +170,7 @@ func (w *refWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, err
 	return treeHash, nil
 }
 
-func (w *refWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
+func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
 	authorIdentity := protocol.Identity{
 		Name:      author.Name,
 		Email:     author.Email,
@@ -202,7 +202,7 @@ func (w *refWriter) Commit(ctx context.Context, message string, author Author, c
 	return w.lastCommit, nil
 }
 
-func (w *refWriter) Push(ctx context.Context) error {
+func (w *stagedWriter) Push(ctx context.Context) error {
 	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
 	packfile, err := w.writer.WritePackfile()
@@ -223,7 +223,7 @@ func (w *refWriter) Push(ctx context.Context) error {
 
 // updateTree updates the tree for the given path.
 // It returns the new tree hash
-func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
+func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -336,7 +336,7 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	return nil
 }
 
-func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
+func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	if obj == nil {
 		return nil, errors.New("object is nil")
 	}
@@ -368,7 +368,7 @@ func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protoc
 	return &newObj, nil
 }
 
-func (w *refWriter) removeBlobFromTree(ctx context.Context, path string) error {
+func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -477,7 +477,7 @@ func (w *refWriter) removeBlobFromTree(ctx context.Context, path string) error {
 	return nil
 }
 
-func (w *refWriter) removeTreeFromTree(ctx context.Context, path string) error {
+func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -586,7 +586,7 @@ func (w *refWriter) removeTreeFromTree(ctx context.Context, path string) error {
 	return nil
 }
 
-func (w *refWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
+func (w *stagedWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
 	if obj == nil {
 		return nil, errors.New("object is nil")
 	}

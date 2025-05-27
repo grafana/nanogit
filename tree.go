@@ -38,7 +38,7 @@ type Tree struct {
 }
 
 // GetFlatTree retrieves a tree for a given commit hash
-func (c *clientImpl) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, error) {
+func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, error) {
 	obj, err := c.getObject(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
@@ -68,7 +68,7 @@ func (c *clientImpl) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 	return c.processTree(ctx, h, tree)
 }
 
-func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *protocol.PackfileObject) (*FlatTree, error) {
+func (c *httpClient) processTree(ctx context.Context, treeHash hash.Hash, tree *protocol.PackfileObject) (*FlatTree, error) {
 	// Convert PackfileTreeEntry to TreeEntry
 	entries := make([]FlatTreeEntry, len(tree.Tree))
 	for i, entry := range tree.Tree {
@@ -109,7 +109,7 @@ func (c *clientImpl) processTree(ctx context.Context, treeHash hash.Hash, tree *
 }
 
 // processTreeEntries recursively processes tree entries and builds a flat list
-func (c *clientImpl) processTreeEntries(ctx context.Context, entries []FlatTreeEntry, basePath string) ([]FlatTreeEntry, error) {
+func (c *httpClient) processTreeEntries(ctx context.Context, entries []FlatTreeEntry, basePath string) ([]FlatTreeEntry, error) {
 	result := make([]FlatTreeEntry, 0, len(entries))
 	for _, entry := range entries {
 		// Build the full path for the entry
@@ -146,7 +146,7 @@ func (c *clientImpl) processTreeEntries(ctx context.Context, entries []FlatTreeE
 }
 
 // GetTree retrieves a single tree object (direct children only, non-recursive)
-func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 	obj, err := c.getObject(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
@@ -201,7 +201,7 @@ func (c *clientImpl) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 }
 
 // GetTreeByPath retrieves a tree object at the specified path by recursively navigating the tree structure
-func (c *clientImpl) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
+func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
 	if path == "" || path == "." {
 		// Return the root tree
 		return c.GetTree(ctx, rootHash)

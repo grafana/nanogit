@@ -21,7 +21,7 @@ type Ref struct {
 
 // ListRefs sends a request to list all references in the repository.
 // It returns a map of reference names to their commit hashes.
-func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
+func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 	// First get the initial capability advertisement
 	_, err := c.smartInfo(ctx, "git-upload-pack")
 	if err != nil {
@@ -71,7 +71,7 @@ func (c *clientImpl) ListRefs(ctx context.Context) ([]Ref, error) {
 // GetRef sends a request to get a single reference in the repository.
 // It returns the reference name, hash, and any error encountered.
 // FIXME: Fetch only the requested ref, not all refs.
-func (c *clientImpl) GetRef(ctx context.Context, refName string) (Ref, error) {
+func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 	refs, err := c.ListRefs(ctx)
 	if err != nil {
 		return Ref{}, fmt.Errorf("list refs: %w", err)
@@ -88,7 +88,7 @@ func (c *clientImpl) GetRef(ctx context.Context, refName string) (Ref, error) {
 
 // CreateRef creates a new reference in the repository.
 // It returns any error encountered.
-func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
+func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	_, err := c.GetRef(ctx, ref.Name)
 	switch {
 	case err != nil && !errors.Is(err, ErrRefNotFound):
@@ -119,7 +119,7 @@ func (c *clientImpl) CreateRef(ctx context.Context, ref Ref) error {
 
 // UpdateRef updates an existing reference in the repository.
 // It returns any error encountered.
-func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
+func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, ref.Name)
 	if err != nil {
@@ -153,7 +153,7 @@ func (c *clientImpl) UpdateRef(ctx context.Context, ref Ref) error {
 // DeleteRef deletes a reference from the repository.
 // It returns ErrRefNotFound if the reference does not exist,
 // or any other error encountered during the deletion process.
-func (c *clientImpl) DeleteRef(ctx context.Context, refName string) error {
+func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, refName)
 	if err != nil {

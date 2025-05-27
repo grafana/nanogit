@@ -41,7 +41,7 @@ func TestClient_IsAuthorized(t *testing.T) {
 	t.Run("successful authorization", func(t *testing.T) {
 		logger.ForSubtest(t)
 
-		client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 		require.NoError(t, err)
 		auth, err := client.IsAuthorized(ctx)
 		require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestClient_IsAuthorized(t *testing.T) {
 	t.Run("unauthorized access with wrong credentials", func(t *testing.T) {
 		logger.ForSubtest(t)
 
-		unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
+		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
 		require.NoError(t, err)
 		auth, err := unauthorizedClient.IsAuthorized(ctx)
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestClient_IsAuthorized(t *testing.T) {
 		logger.ForSubtest(t)
 
 		token := gitServer.GenerateUserToken(t, user.Username, user.Password)
-		client, err := nanogit.NewClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(logger))
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(logger))
 		require.NoError(t, err)
 		auth, err := client.IsAuthorized(ctx)
 		require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestClient_IsAuthorized(t *testing.T) {
 		logger.ForSubtest(t)
 
 		invalidToken := "token invalid-token"
-		client, err := nanogit.NewClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(logger))
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(logger))
 		require.NoError(t, err)
 		auth, err := client.IsAuthorized(ctx)
 		require.NoError(t, err)

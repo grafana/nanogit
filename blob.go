@@ -10,7 +10,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *clientImpl) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
+func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
 	obj, err := c.getObject(ctx, blobID)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
@@ -32,7 +32,7 @@ type Blob struct {
 }
 
 // GetBlobByPath retrieves a file from the repository at the given path
-func (c *clientImpl) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
+func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
 	if path == "" {
 		return nil, errors.New("path cannot be empty")
 	}

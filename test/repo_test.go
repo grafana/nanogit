@@ -41,7 +41,7 @@ func TestClient_RepoExists(t *testing.T) {
 	t.Run("existing repository", func(t *testing.T) {
 		logger.ForSubtest(t)
 
-		client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 		require.NoError(t, err)
 
 		exists, err := client.RepoExists(ctx)
@@ -52,7 +52,7 @@ func TestClient_RepoExists(t *testing.T) {
 	t.Run("non-existent repository", func(t *testing.T) {
 		logger.ForSubtest(t)
 
-		nonExistentClient, err := nanogit.NewClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(user.Username, user.Password))
+		nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(user.Username, user.Password))
 		require.NoError(t, err)
 
 		exists, err := nonExistentClient.RepoExists(ctx)
@@ -63,7 +63,7 @@ func TestClient_RepoExists(t *testing.T) {
 	t.Run("unauthorized access", func(t *testing.T) {
 		logger.ForSubtest(t)
 
-		unauthorizedClient, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
+		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
 		require.NoError(t, err)
 
 		exists, err := unauthorizedClient.RepoExists(ctx)

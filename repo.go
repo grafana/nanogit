@@ -13,7 +13,7 @@ import (
 //   - true if the repository exists and is accessible
 //   - false if the repository does not exist (404)
 //   - error if there are any other connection or protocol issues
-func (c *clientImpl) RepoExists(ctx context.Context) (bool, error) {
+func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 	_, err := c.smartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		if strings.Contains(err.Error(), "404 Not Found") {

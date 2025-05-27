@@ -57,7 +57,7 @@ func TestClient_GetCommit(t *testing.T) {
 	local.Git(t, "push", "origin", "main", "--force")
 
 	// Create client and get commit
-	client, err := nanogit.NewClient(remote.AuthURL(), nanogit.WithBasicAuth(user.Username, user.Password))
+	client, err := nanogit.NewHTTPClient(remote.AuthURL(), nanogit.WithBasicAuth(user.Username, user.Password))
 	require.NoError(t, err)
 
 	commit, err := client.GetCommit(context.Background(), initialCommitHash)
@@ -167,7 +167,7 @@ func TestClient_CompareCommits(t *testing.T) {
 	local.Git(t, "ls-remote", remote.AuthURL())
 
 	logger.Info("Creating client")
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

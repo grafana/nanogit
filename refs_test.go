@@ -31,7 +31,7 @@ func TestListRefs(t *testing.T) {
 		lsRefsResp    string
 		expectedRefs  []Ref
 		expectedError string
-		setupClient   func(*clientImpl)
+		setupClient   func(*httpClient)
 	}{
 		{
 			name:         "successful response with multiple refs",
@@ -94,7 +94,7 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp:    "",
 			expectedRefs:  nil,
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -111,7 +111,7 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp:    "",
 			expectedRefs:  nil,
 			expectedError: "get repository info: Get \"http://127.0.0.1:0/info/refs?service=git-upload-pack\": dial tcp 127.0.0.1:0: i/o timeout",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -155,10 +155,10 @@ func TestListRefs(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
+				c, ok := client.(*httpClient)
 				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
@@ -190,7 +190,7 @@ func TestGetRef(t *testing.T) {
 		refToGet      string
 		expectedRef   Ref
 		expectedError error
-		setupClient   func(*clientImpl)
+		setupClient   func(*httpClient)
 	}{
 		{
 			name:         "successful get of existing ref",
@@ -270,10 +270,10 @@ func TestGetRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
+				c, ok := client.(*httpClient)
 				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
@@ -303,7 +303,7 @@ func TestCreateRef(t *testing.T) {
 		infoRefsResp  string
 		refToCreate   Ref
 		expectedError string
-		setupClient   func(*clientImpl)
+		setupClient   func(*httpClient)
 	}{
 		{
 			name:         "successful ref creation",
@@ -340,7 +340,7 @@ func TestCreateRef(t *testing.T) {
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -359,7 +359,7 @@ func TestCreateRef(t *testing.T) {
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -457,10 +457,10 @@ func TestCreateRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
+				c, ok := client.(*httpClient)
 				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
@@ -488,7 +488,7 @@ func TestUpdateRef(t *testing.T) {
 		infoRefsResp  string
 		refToUpdate   Ref
 		expectedError string
-		setupClient   func(*clientImpl)
+		setupClient   func(*httpClient)
 	}{
 		{
 			name:         "successful ref update",
@@ -534,7 +534,7 @@ func TestUpdateRef(t *testing.T) {
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -553,7 +553,7 @@ func TestUpdateRef(t *testing.T) {
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -651,10 +651,10 @@ func TestUpdateRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
+				c, ok := client.(*httpClient)
 				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
@@ -676,7 +676,7 @@ func TestDeleteRef(t *testing.T) {
 		infoRefsResp  string
 		refToDelete   string
 		expectedError string
-		setupClient   func(*clientImpl)
+		setupClient   func(*httpClient)
 	}{
 		{
 			name:          "successful ref deletion",
@@ -701,7 +701,7 @@ func TestDeleteRef(t *testing.T) {
 			infoRefsResp:  "",
 			refToDelete:   "refs/heads/main",
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -717,7 +717,7 @@ func TestDeleteRef(t *testing.T) {
 			infoRefsResp:  "001e# service=git-receive-pack\n0000",
 			refToDelete:   "refs/heads/main",
 			expectedError: "get repository info",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -815,10 +815,10 @@ func TestDeleteRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
 			if tt.setupClient != nil {
-				c, ok := client.(*clientImpl)
+				c, ok := client.(*httpClient)
 				require.True(t, ok, "client should be of type *client")
 				tt.setupClient(c)
 			}
