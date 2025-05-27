@@ -1,3 +1,7 @@
+.PHONY: generate
+generate:
+	COUNTERFEITER_NO_GENERATE_WARNING=true go generate ./...
+
 .PHONY: fmt
 fmt:
 	go run golang.org/x/tools/cmd/goimports@v0.27.0 -w .

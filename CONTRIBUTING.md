@@ -147,6 +147,18 @@ For more information:
 - [Testcontainers-go Documentation](https://golang.testcontainers.org/)
 - [Gitea Documentation](https://docs.gitea.io/)
 
+### Testing with Mocks
+
+nanogit includes generated mocks for easy unit testing using [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter). 
+
+To regenerate mocks after interface changes:
+
+```bash
+make generate
+```
+
+The generated mocks are located in the `mocks/` directory and provide test doubles for both `Client` and `StagedWriter` interfaces. See [mocks/example_test.go](mocks/example_test.go) for complete usage examples.
+
 ### Code Style
 
 * Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)

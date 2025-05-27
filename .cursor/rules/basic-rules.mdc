@@ -48,6 +48,7 @@ Always prioritize security, scalability, and maintainability in your designs and
 - Do not wrap with things like `failed to do something: %w`, simply wrap with `do something: %w`. Add some extra text if the context is not clear.
 - Handle errors at appropriate levels
 - Document error conditions in godoc
+- Use `errors.New` if the error is just a text and not `fmt` package.
 
 # Documentation
 
