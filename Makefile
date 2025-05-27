@@ -1,6 +1,6 @@
 .PHONY: generate
 generate:
-	go generate ./...
+	COUNTERFEITER_NO_GENERATE_WARNING=true go generate ./...
 
 .PHONY: fmt
 fmt:

@@ -17,6 +17,8 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Generate files
+        env:
+          COUNTERFEITER_NO_GENERATE_WARNING: true
         run: make generate
       - name: Verify generated files are up to date
         run: |

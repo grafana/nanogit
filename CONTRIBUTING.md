@@ -157,7 +157,7 @@ To regenerate mocks after interface changes:
 make generate
 ```
 
-The generated mocks are located in the `mocks/` directory and provide test doubles for both `Client` and `StagedWriter` interfaces. See [example_test.go](example_test.go) for complete usage examples.
+The generated mocks are located in the `mocks/` directory and provide test doubles for both `Client` and `StagedWriter` interfaces. See [mocks/example_test.go](mocks/example_test.go) for complete usage examples.
 
 ### Code Style
 
