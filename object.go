@@ -24,30 +24,6 @@ func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*prot
 	return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrRefNotFound)
 }
 
-func (c *httpClient) getMultipleObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	objects, err := c.getObjects(ctx, want...)
-	if err != nil {
-		return nil, err
-	}
-
-	found := make(map[string]bool)
-	for _, obj := range objects {
-		for _, w := range want {
-			if obj.Hash.Is(w) {
-				found[obj.Hash.String()] = true
-			}
-		}
-	}
-
-	for _, want := range want {
-		if !found[want.String()] {
-			return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrRefNotFound)
-		}
-	}
-
-	return objects, nil
-}
-
 func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
