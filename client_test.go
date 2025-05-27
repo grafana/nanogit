@@ -67,7 +67,7 @@ func TestNewClient(t *testing.T) {
 			name: "option returns error",
 			repo: "https://github.com/owner/repo",
 			options: []Option{
-				func(c *clientImpl) error {
+				func(c *httpClient) error {
 					return errors.New("option application failed")
 				},
 			},
@@ -131,7 +131,7 @@ func TestNewClient(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := NewClient(tt.repo, tt.options...)
+			got, err := NewHTTPClient(tt.repo, tt.options...)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -167,7 +167,7 @@ func TestWithHTTPClient(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewClient("https://github.com/owner/repo", WithHTTPClient(tt.httpClient))
+			client, err := NewHTTPClient("https://github.com/owner/repo", WithHTTPClient(tt.httpClient))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -176,7 +176,7 @@ func TestWithHTTPClient(t *testing.T) {
 
 			require.NoError(t, err)
 
-			c, ok := client.(*clientImpl)
+			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
 
 			if tt.httpClient == nil {
@@ -218,7 +218,7 @@ func TestUploadPack(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    func(*clientImpl)
+		setupClient    func(*httpClient)
 	}{
 		{
 			name:           "successful response",
@@ -250,7 +250,7 @@ func TestUploadPack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.client = &http.Client{
 					Timeout: 1 * time.Nanosecond,
 				}
@@ -262,7 +262,7 @@ func TestUploadPack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -315,9 +315,9 @@ func TestUploadPack(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
-			c, ok := client.(*clientImpl)
+			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
 			if tt.setupClient != nil {
 				tt.setupClient(c)
@@ -343,7 +343,7 @@ func TestReceivePack(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    func(*clientImpl)
+		setupClient    func(*httpClient)
 	}{
 		{
 			name:           "successful response",
@@ -375,7 +375,7 @@ func TestReceivePack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.client = &http.Client{
 					Timeout: 1 * time.Nanosecond,
 				}
@@ -387,7 +387,7 @@ func TestReceivePack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -440,9 +440,9 @@ func TestReceivePack(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
-			c, ok := client.(*clientImpl)
+			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
 			if tt.setupClient != nil {
 				tt.setupClient(c)
@@ -468,7 +468,7 @@ func TestSmartInfo(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    func(*clientImpl)
+		setupClient    func(*httpClient)
 	}{
 		{
 			name:           "successful response",
@@ -500,7 +500,7 @@ func TestSmartInfo(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.client = &http.Client{
 					Timeout: 1 * time.Nanosecond,
 				}
@@ -512,7 +512,7 @@ func TestSmartInfo(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: func(c *clientImpl) {
+			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -569,9 +569,9 @@ func TestSmartInfo(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewClient(url)
+			client, err := NewHTTPClient(url)
 			require.NoError(t, err)
-			c, ok := client.(*clientImpl)
+			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
 			if tt.setupClient != nil {
 				tt.setupClient(c)

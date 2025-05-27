@@ -13,11 +13,11 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-// RefWriter provides a transactional interface for writing changes to Git objects.
+// StagedWriter provides a transactional interface for writing changes to Git objects.
 // It allows staging multiple changes (file writes, updates, deletes) before committing them together.
 // Changes are staged in memory and only sent to the server when Push() is called.
 // This can be used to write to any Git object: commits, tags, branches, or other references.
-type RefWriter interface {
+type StagedWriter interface {
 	// CreateBlob stages a new file to be written at the given path.
 	// Returns the hash of the created blob.
 	CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error)
@@ -45,10 +45,10 @@ type RefWriter interface {
 }
 
 // Client defines the interface for interacting with a Git repository.
+// It provides methods for repository operations, reference management,
 type Client interface {
-	// IsAuthorized checks if the client can successfully communicate with the Git server.
+	// Repo operations
 	IsAuthorized(ctx context.Context) (bool, error)
-	// RepoExists checks if the repository exists on the server.
 	RepoExists(ctx context.Context) (bool, error)
 	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)
@@ -56,7 +56,6 @@ type Client interface {
 	CreateRef(ctx context.Context, ref Ref) error
 	UpdateRef(ctx context.Context, ref Ref) error
 	DeleteRef(ctx context.Context, refName string) error
-	NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error)
 	// Blob operations
 	GetBlob(ctx context.Context, hash hash.Hash) (*Blob, error)
 	GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error)
@@ -64,29 +63,37 @@ type Client interface {
 	GetFlatTree(ctx context.Context, hash hash.Hash) (*FlatTree, error)
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
 	GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error)
-	// File operations
 	// Commit operations
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
+	// Write operations
+	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
 }
 
-// Option is a function that configures a Client.
-type Option func(*clientImpl) error
+// Option is a function that configures a Client during creation.
+// Options allow customization of the HTTP client, authentication, logging, and other settings.
+type Option func(*httpClient) error
 
-// clientImpl is the private implementation of the Client interface.
-type clientImpl struct {
-	base      *url.URL
-	client    *http.Client
+// httpClient is the private implementation of the Client interface.
+// It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
+type httpClient struct {
+	// Base URL of the Git repository
+	base *url.URL
+	// HTTP client used for making requests
+	client *http.Client
+	// User-Agent header value for requests
 	userAgent string
-	logger    Logger
-
+	// Logger for debug and info messages
+	logger Logger
+	// Basic authentication credentials (username/password)
 	basicAuth *struct{ Username, Password string }
+	// Token-based authentication header
 	tokenAuth *string
 }
 
 // addDefaultHeaders adds the default headers to the request.
-func (c *clientImpl) addDefaultHeaders(req *http.Request) {
+func (c *httpClient) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
 	if c.userAgent == "" {
 		c.userAgent = "nanogit/0"
@@ -103,7 +110,7 @@ func (c *clientImpl) addDefaultHeaders(req *http.Request) {
 
 // uploadPack sends a POST request to the git-upload-pack endpoint.
 // This endpoint is used to fetch objects and refs from the remote repository.
-func (c *clientImpl) uploadPack(ctx context.Context, data []byte) ([]byte, error) {
+func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
@@ -134,7 +141,7 @@ func (c *clientImpl) uploadPack(ctx context.Context, data []byte) ([]byte, error
 
 // receivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-func (c *clientImpl) receivePack(ctx context.Context, data []byte) ([]byte, error) {
+func (c *httpClient) receivePack(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
@@ -173,7 +180,7 @@ func (c *clientImpl) receivePack(ctx context.Context, data []byte) ([]byte, erro
 }
 
 // smartInfo sends a GET request to the info/refs endpoint.
-func (c *clientImpl) smartInfo(ctx context.Context, service string) ([]byte, error) {
+func (c *httpClient) smartInfo(ctx context.Context, service string) ([]byte, error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
 	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
 	// See: https://git-scm.com/docs/http-protocol#_smart_clients
@@ -213,8 +220,31 @@ func (c *clientImpl) smartInfo(ctx context.Context, service string) ([]byte, err
 	return body, nil
 }
 
-// NewClient returns a new Client for the given repository.
-func NewClient(repo string, options ...Option) (Client, error) {
+// NewHTTPClient creates a new Git client for the specified repository URL.
+// The client implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
+// It supports both HTTP and HTTPS URLs and can be configured with various options
+// for authentication, logging, and HTTP client customization.
+//
+// Parameters:
+//   - repo: Repository URL (must be HTTP or HTTPS)
+//   - options: Configuration options for authentication, logging, etc.
+//
+// Returns:
+//   - Client: Configured Git client interface
+//   - error: Error if URL is invalid or configuration fails
+//
+// Example:
+//
+//	// Create client with basic authentication
+//	client, err := nanogit.NewHTTPClient(
+//	    "https://github.com/user/repo",
+//	    nanogit.WithBasicAuth("username", "password"),
+//	    nanogit.WithLogger(logger),
+//	)
+//	if err != nil {
+//	    return err
+//	}
+func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	if repo == "" {
 		return nil, errors.New("repository URL cannot be empty")
 	}
@@ -231,7 +261,7 @@ func NewClient(repo string, options ...Option) (Client, error) {
 	u.Path = strings.TrimRight(u.Path, "/")
 	u.Path = strings.TrimSuffix(u.Path, ".git")
 
-	c := &clientImpl{
+	c := &httpClient{
 		base:   u,
 		client: &http.Client{},
 		logger: &noopLogger{}, // No-op logger by default
@@ -248,23 +278,38 @@ func NewClient(repo string, options ...Option) (Client, error) {
 	return c, nil
 }
 
-// WithUserAgent overrides the default User-Agent header.
+// WithUserAgent configures a custom User-Agent header for HTTP requests.
+// If not specified, a default User-Agent will be used.
+//
+// Parameters:
+//   - agent: Custom User-Agent string to use in requests
+//
+// Returns:
+//   - Option: Configuration function for the client
 func WithUserAgent(agent string) Option {
-	return func(c *clientImpl) error {
+	return func(c *httpClient) error {
 		c.userAgent = agent
 		return nil
 	}
 }
 
-// WithHTTPClient overrides the default http.Client.
-// It will return an error if the provided http.Client is nil.
-func WithHTTPClient(httpClient *http.Client) Option {
-	return func(c *clientImpl) error {
-		if httpClient == nil {
+// WithHTTPClient configures a custom HTTP client for making requests.
+// This allows customization of timeouts, transport settings, proxies, and other HTTP behavior.
+// The provided client must not be nil.
+//
+// Parameters:
+//   - client: Custom HTTP client to use for requests
+//
+// Returns:
+//   - Option: Configuration function for the client
+//   - error: Error if the provided HTTP client is nil
+func WithHTTPClient(client *http.Client) Option {
+	return func(c *httpClient) error {
+		if client == nil {
 			return errors.New("httpClient is nil")
 		}
 
-		c.client = httpClient
+		c.client = client
 		return nil
 	}
 }

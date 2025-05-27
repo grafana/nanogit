@@ -11,7 +11,35 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, error) {
+// NewStagedWriter creates a new StagedWriter for staging changes to a Git reference.
+// It initializes the writer with the current state of the specified reference,
+// allowing you to stage multiple changes (create/update/delete blobs and trees)
+// before committing and pushing them as a single atomic operation.
+//
+// The writer maintains an in-memory representation of the repository state and
+// tracks all changes until they are committed and pushed.
+//
+// Example usage:
+//
+//	writer, err := client.NewStagedWriter(ctx, ref)
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// Stage multiple changes
+//	writer.CreateBlob(ctx, "new.txt", []byte("content"))
+//	writer.UpdateBlob(ctx, "existing.txt", []byte("updated"))
+//	writer.DeleteBlob(ctx, "old.txt")
+//
+//	// Commit all changes at once
+//	commit, err := writer.Commit(ctx, "Update files", author, committer)
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// Push to remote
+//	return writer.Push(ctx)
+func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
@@ -42,8 +70,8 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 
 	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
-	return &refWriter{
-		clientImpl: c,
+	return &stagedWriter{
+		httpClient: c,
 		ref:        ref,
 		writer:     writer,
 		lastCommit: commit,
@@ -54,18 +82,53 @@ func (c *clientImpl) NewRefWriter(ctx context.Context, ref Ref) (RefWriter, erro
 	}, nil
 }
 
-type refWriter struct {
-	*clientImpl
-	ref         Ref
-	writer      *protocol.PackfileWriter
-	lastCommit  *Commit
-	lastTree    *protocol.PackfileObject
-	treeCache   map[string]*protocol.PackfileObject
+// stagedWriter implements the StagedWriter interface.
+// It maintains the state of staged changes for a Git reference, including:
+//   - A packfile writer for creating new Git objects
+//   - Cache of tree objects to avoid redundant fetches
+//   - Mapping of file paths to their tree entries
+//   - Reference to the last commit and tree state
+//
+// The writer operates by maintaining an in-memory representation of the
+// repository state and building up a packfile of new objects as changes
+// are staged. When committed, all changes are applied atomically.
+type stagedWriter struct {
+	// Embedded HTTP client for Git operations
+	*httpClient
+	// Git reference being modified
+	ref Ref
+	// Packfile writer for creating objects
+	writer *protocol.PackfileWriter
+	// Last commit on the reference
+	lastCommit *Commit
+	// Root tree object from last commit
+	lastTree *protocol.PackfileObject
+	// Cache of fetched tree objects
+	treeCache map[string]*protocol.PackfileObject
+	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
 }
 
-// CreateBlob creates a new blob in the specified path.
-func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+// CreateBlob creates a new blob object at the specified path with the given content.
+// The path can include directory separators ("/") to create nested directory structures.
+// If intermediate directories don't exist, they will be created automatically.
+//
+// This operation stages the blob creation but does not immediately commit it.
+// You must call Commit() and Push() to persist the changes.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: File path where the blob should be created (e.g., "docs/readme.md")
+//   - content: Raw content of the file as bytes
+//
+// Returns:
+//   - hash.Hash: The SHA-1 hash of the created blob object
+//   - error: Error if the path already exists or if blob creation fails
+//
+// Example:
+//
+//	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
+func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if w.treeEntries[path] != nil {
 		return nil, errors.New("blob at that path already exists")
 	}
@@ -85,7 +148,25 @@ func (w *refWriter) CreateBlob(ctx context.Context, path string, content []byte)
 	return blobHash, nil
 }
 
-func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+// UpdateBlob updates the content of an existing blob at the specified path.
+// The blob must already exist at the given path, otherwise an error is returned.
+//
+// This operation stages the blob update but does not immediately commit it.
+// You must call Commit() and Push() to persist the changes.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: File path of the existing blob to update
+//   - content: New content for the file as bytes
+//
+// Returns:
+//   - hash.Hash: The SHA-1 hash of the updated blob object
+//   - error: Error if the path doesn't exist or if blob update fails
+//
+// Example:
+//
+//	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
+func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
 		return nil, errors.New("blob at that path does not exist")
 	}
@@ -111,7 +192,25 @@ func (w *refWriter) UpdateBlob(ctx context.Context, path string, content []byte)
 	return blobHash, nil
 }
 
-func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
+// DeleteBlob removes a blob (file) at the specified path from the repository.
+// The blob must exist and must be a file (not a directory), otherwise an error is returned.
+// If removing the blob leaves empty parent directories, those directories will also be removed.
+//
+// This operation stages the blob deletion but does not immediately commit it.
+// You must call Commit() and Push() to persist the changes.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: File path of the blob to delete
+//
+// Returns:
+//   - hash.Hash: The SHA-1 hash of the deleted blob object
+//   - error: Error if the path doesn't exist, is not a blob, or deletion fails
+//
+// Example:
+//
+//	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
+func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
 		return nil, errors.New("blob at that path does not exist")
 	}
@@ -134,7 +233,27 @@ func (w *refWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, err
 	return blobHash, nil
 }
 
-func (w *refWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
+// DeleteTree removes an entire directory tree at the specified path from the repository.
+// This operation recursively deletes all files and subdirectories within the specified path.
+// The path must exist and must be a directory (tree), otherwise an error is returned.
+//
+// This is equivalent to `rm -rf <path>` in Unix systems.
+//
+// This operation stages the tree deletion but does not immediately commit it.
+// You must call Commit() and Push() to persist the changes.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: Directory path to delete recursively
+//
+// Returns:
+//   - hash.Hash: The SHA-1 hash of the deleted tree object
+//   - error: Error if the path doesn't exist, is not a tree, or deletion fails
+//
+// Example:
+//
+//	hash, err := writer.DeleteTree(ctx, "old-directory")
+func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
 		return nil, errors.New("tree at that path does not exist")
 	}
@@ -170,7 +289,32 @@ func (w *refWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, err
 	return treeHash, nil
 }
 
-func (w *refWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
+// Commit creates a new commit object with all the staged changes and the specified metadata.
+// This operation takes all the changes that have been staged via CreateBlob, UpdateBlob,
+// DeleteBlob, and DeleteTree operations and creates a single commit containing all of them.
+//
+// The commit is created in memory but not yet pushed to the remote repository.
+// You must call Push() to send the commit to the remote.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - message: Commit message describing the changes
+//   - author: Information about who authored the changes
+//   - committer: Information about who created the commit (often same as author)
+//
+// Returns:
+//   - *Commit: The created commit object with hash and metadata
+//   - error: Error if commit creation fails
+//
+// Example:
+//
+//	author := nanogit.Author{
+//	    Name:  "John Doe",
+//	    Email: "john@example.com",
+//	    Time:  time.Now(),
+//	}
+//	commit, err := writer.Commit(ctx, "Add new features", author, author)
+func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
 	authorIdentity := protocol.Identity{
 		Name:      author.Name,
 		Email:     author.Email,
@@ -202,7 +346,26 @@ func (w *refWriter) Commit(ctx context.Context, message string, author Author, c
 	return w.lastCommit, nil
 }
 
-func (w *refWriter) Push(ctx context.Context) error {
+// Push sends all staged changes and commits to the remote Git repository.
+// This operation packages all the staged objects into a Git packfile and
+// transmits it to the remote repository using the Git protocol.
+//
+// After a successful push, the writer is reset and can be used to stage
+// additional changes for future commits.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//
+// Returns:
+//   - error: Error if the push operation fails
+//
+// Example:
+//
+//	err := writer.Push(ctx)
+//	if err != nil {
+//	    log.Printf("Failed to push changes: %v", err)
+//	}
+func (w *stagedWriter) Push(ctx context.Context) error {
 	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
 	packfile, err := w.writer.WritePackfile()
@@ -221,9 +384,16 @@ func (w *refWriter) Push(ctx context.Context) error {
 	return nil
 }
 
-// updateTree updates the tree for the given path.
-// It returns the new tree hash
-func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
+// addMissingOrStaleTreeEntries updates the tree structure to include a new or updated blob.
+// This method handles the complex tree manipulation required when adding files to Git:
+//   - Creates missing intermediate directories as needed
+//   - Updates existing tree objects to include the new blob
+//   - Properly handles nested directory structures
+//   - Maintains proper Git tree object format and hashing
+//
+// The method works by traversing the path from the deepest directory up to the root,
+// creating or updating tree objects as necessary to accommodate the new blob.
+func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -336,7 +506,18 @@ func (w *refWriter) addMissingOrStaleTreeEntries(ctx context.Context, path strin
 	return nil
 }
 
-func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
+// updateTreeEntry creates a new tree object by adding or updating an entry in an existing tree.
+// This method takes an existing tree object and either adds a new entry or updates an existing
+// entry with the same filename. It maintains proper Git tree object sorting and formatting.
+//
+// Parameters:
+//   - obj: The existing tree object to modify
+//   - current: The tree entry to add or update
+//
+// Returns:
+//   - *protocol.PackfileObject: New tree object with the updated entry
+//   - error: Error if tree creation fails
+func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	if obj == nil {
 		return nil, errors.New("object is nil")
 	}
@@ -368,7 +549,16 @@ func (w *refWriter) updateTreeEntry(obj *protocol.PackfileObject, current protoc
 	return &newObj, nil
 }
 
-func (w *refWriter) removeBlobFromTree(ctx context.Context, path string) error {
+// removeBlobFromTree removes a blob entry from the tree structure and updates all parent trees.
+// This method handles the complex tree manipulation required when deleting files from Git:
+//   - Removes the blob from its immediate parent directory
+//   - Updates all ancestor directories with new tree hashes
+//   - Properly handles nested directory structures
+//   - Maintains Git tree object integrity throughout the hierarchy
+//
+// The method works by traversing from the immediate parent directory up to the root,
+// updating each tree object to reflect the removal of the blob or updated child tree.
+func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -477,7 +667,15 @@ func (w *refWriter) removeBlobFromTree(ctx context.Context, path string) error {
 	return nil
 }
 
-func (w *refWriter) removeTreeFromTree(ctx context.Context, path string) error {
+// removeTreeFromTree removes a directory tree from the tree structure and updates all parent trees.
+// This method handles the complex tree manipulation required when deleting directories from Git:
+//   - Removes the directory from its immediate parent
+//   - Updates all ancestor directories with new tree hashes
+//   - Properly handles nested directory structures
+//   - Maintains Git tree object integrity throughout the hierarchy
+//
+// This is similar to removeBlobFromTree but handles directory removal instead of file removal.
+func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) error {
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -586,7 +784,20 @@ func (w *refWriter) removeTreeFromTree(ctx context.Context, path string) error {
 	return nil
 }
 
-func (w *refWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
+// removeTreeEntry creates a new tree object by removing a specific entry from an existing tree.
+// This is a lower-level helper method that handles the actual removal of an entry from a
+// Git tree object, creating a new tree object with the filtered entries.
+//
+// Parameters:
+//   - obj: The tree object to modify
+//   - targetFileName: The filename of the entry to remove
+//
+// Returns:
+//   - *protocol.PackfileObject: New tree object without the specified entry
+//   - error: Error if tree creation fails
+//
+// Note: If the target entry is not found, the original object is returned unchanged.
+func (w *stagedWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
 	if obj == nil {
 		return nil, errors.New("object is nil")
 	}

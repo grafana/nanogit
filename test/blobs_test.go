@@ -43,7 +43,7 @@ func TestClient_Blobs(t *testing.T) {
 	require.NoError(t, err)
 
 	logger.Info("Creating client")
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -93,7 +93,7 @@ func TestClient_GetBlobByPath(t *testing.T) {
 	logger.Info("Tracking current branch")
 	local.Git(t, "branch", "--set-upstream-to=origin/main", "main")
 
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -176,7 +176,7 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	client, err := nanogit.NewClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

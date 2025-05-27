@@ -92,7 +92,7 @@ func TestGetBlob(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(server.URL)
+			client, err := NewHTTPClient(server.URL)
 			require.NoError(t, err)
 
 			h, err := hash.FromHex(tt.blobID)

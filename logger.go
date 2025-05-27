@@ -2,10 +2,18 @@ package nanogit
 
 import "errors"
 
-// WithLogger sets a custom logger for the client.
-// If not provided, the default slog logger will be used.
+// WithLogger configures a custom logger for the Git client.
+// This allows integration with existing logging infrastructure and debugging.
+// If not provided, a no-op logger will be used by default.
+//
+// Parameters:
+//   - logger: Custom logger implementation
+//
+// Returns:
+//   - Option: Configuration function for the client
+//   - error: Error if the provided logger is nil
 func WithLogger(logger Logger) Option {
-	return func(c *clientImpl) error {
+	return func(c *httpClient) error {
 		if logger == nil {
 			return errors.New("logger cannot be nil")
 		}

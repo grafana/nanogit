@@ -61,10 +61,10 @@ func TestAuthentication(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(server.URL, tt.authOption)
+			client, err := NewHTTPClient(server.URL, tt.authOption)
 			require.NoError(t, err)
 
-			c, ok := client.(*clientImpl)
+			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
 
 			_, err = c.uploadPack(context.Background(), []byte("test"))
@@ -104,7 +104,7 @@ func TestWithBasicAuth(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewClient("https://github.com/owner/repo", WithBasicAuth(tt.username, tt.password))
+			client, err := NewHTTPClient("https://github.com/owner/repo", WithBasicAuth(tt.username, tt.password))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -112,8 +112,8 @@ func TestWithBasicAuth(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			c, ok := client.(*clientImpl)
-			require.True(t, ok, "client should be of type *clientImpl")
+			c, ok := client.(*httpClient)
+			require.True(t, ok, "client should be of type *httpClient")
 			require.NotNil(t, c.basicAuth)
 			require.Equal(t, tt.username, c.basicAuth.Username)
 			require.Equal(t, tt.password, c.basicAuth.Password)
@@ -148,7 +148,7 @@ func TestWithTokenAuth(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewClient("https://github.com/owner/repo", WithTokenAuth(tt.token))
+			client, err := NewHTTPClient("https://github.com/owner/repo", WithTokenAuth(tt.token))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -156,8 +156,8 @@ func TestWithTokenAuth(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			c, ok := client.(*clientImpl)
-			require.True(t, ok, "client should be of type *clientImpl")
+			c, ok := client.(*httpClient)
+			require.True(t, ok, "client should be of type *httpClient")
 			require.NotNil(t, c.tokenAuth)
 			require.Equal(t, tt.token, *c.tokenAuth)
 		})
@@ -192,7 +192,7 @@ func TestAuthConflict(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewClient("https://github.com/owner/repo", tt.options...)
+			client, err := NewHTTPClient("https://github.com/owner/repo", tt.options...)
 			require.Error(t, err)
 			require.Equal(t, tt.wantErr.Error(), err.Error())
 			require.Nil(t, client)
@@ -207,7 +207,7 @@ func TestIsAuthorized(t *testing.T) {
 		responseBody  string
 		expectedAuth  bool
 		expectedError string
-		setupAuth     func(*clientImpl)
+		setupAuth     func(*httpClient)
 	}{
 		{
 			name:          "authorized with basic auth",
@@ -215,7 +215,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "capabilities",
 			expectedAuth:  true,
 			expectedError: "",
-			setupAuth: func(c *clientImpl) {
+			setupAuth: func(c *httpClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
@@ -225,7 +225,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "capabilities",
 			expectedAuth:  true,
 			expectedError: "",
-			setupAuth: func(c *clientImpl) {
+			setupAuth: func(c *httpClient) {
 				token := "token123"
 				c.tokenAuth = &token
 			},
@@ -236,7 +236,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "unauthorized",
 			expectedAuth:  false,
 			expectedError: "",
-			setupAuth: func(c *clientImpl) {
+			setupAuth: func(c *httpClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "wrong"}
 			},
 		},
@@ -246,7 +246,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "server error",
 			expectedAuth:  false,
 			expectedError: "get repository info: got status code 500: 500 Internal Server Error",
-			setupAuth: func(c *clientImpl) {
+			setupAuth: func(c *httpClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
@@ -274,11 +274,11 @@ func TestIsAuthorized(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient(server.URL)
+			client, err := NewHTTPClient(server.URL)
 			require.NoError(t, err)
 
-			c, ok := client.(*clientImpl)
-			require.True(t, ok, "client should be of type *clientImpl")
+			c, ok := client.(*httpClient)
+			require.True(t, ok, "client should be of type *httpClient")
 			tt.setupAuth(c)
 
 			authorized, err := c.IsAuthorized(context.Background())

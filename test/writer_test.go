@@ -56,7 +56,7 @@ func TestClient_Writer(t *testing.T) {
 			Name: "refs/heads/main",
 			Hash: currentHash,
 		}
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		_, err = writer.CreateBlob(ctx, "new.txt", newContent)
@@ -131,7 +131,7 @@ func TestClient_Writer(t *testing.T) {
 			Hash: currentHash,
 		}
 
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestClient_Writer(t *testing.T) {
 		ctx := context.Background()
 		logger.ForSubtest(t)
 
-		_, err := client.NewRefWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
+		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "object not found")
 	})
@@ -211,7 +211,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Verifying blob hash before update")
@@ -319,7 +319,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Updating nested file content")
@@ -396,7 +396,7 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 
 		logger.Info("Creating a writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Trying to update a nonexistent file")
@@ -432,7 +432,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Deleting the file")
@@ -515,7 +515,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Deleting the nested file")
@@ -580,7 +580,7 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 
 		logger.Info("Creating a writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Trying to delete a nonexistent file")
@@ -621,7 +621,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Deleting only file1.txt")
@@ -710,7 +710,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Deleting the entire directory")
@@ -804,7 +804,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Deleting the entire nested directory")
@@ -860,7 +860,7 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 
 		logger.Info("Creating a writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Trying to delete a nonexistent directory")
@@ -890,7 +890,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating a writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Trying to delete a file as if it were a directory")
@@ -929,7 +929,7 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		logger.Info("Creating ref writer")
-		writer, err := client.NewRefWriter(ctx, ref)
+		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
 		logger.Info("Deleting only subdir1, leaving subdir2 and parent")
