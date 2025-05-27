@@ -57,8 +57,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	cache := make(map[string]*protocol.PackfileObject)
 	cache[treeObj.Hash.String()] = treeObj
 
-	// TODO: pass function to cache
-	currentTree, err := c.processTree(ctx, commit.Tree, treeObj)
+	currentTree, err := c.GetFlatTree(ctx, commit.Tree)
 	if err != nil {
 		return nil, fmt.Errorf("getting current tree: %w", err)
 	}
