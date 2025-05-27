@@ -49,13 +49,8 @@ type Ref struct {
 //	    fmt.Printf("%s -> %s\n", ref.Name, ref.Hash.String())
 //	}
 func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
-	// First get the initial capability advertisement
-	_, err := c.smartInfo(ctx, "git-upload-pack")
-	if err != nil {
-		return nil, fmt.Errorf("get repository info: %w", err)
-	}
-
-	// Now send the ls-refs command
+	// Send the ls-refs command directly - Protocol v2 allows this without needing
+	// a separate capability advertisement request
 	pkt, err := protocol.FormatPacks(
 		protocol.PackLine("command=ls-refs\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -165,12 +160,8 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("ref %s already exists", ref.Name)
 	}
 
-	// First get the initial capability advertisement
-	_, err = c.smartInfo(ctx, "git-receive-pack")
-	if err != nil {
-		return fmt.Errorf("get receive-pack capability: %w", err)
-	}
-
+	// Create and send the ref update request directly - Protocol v2 allows this
+	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewCreateRefRequest(ref.Name, ref.Hash).Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
@@ -217,13 +208,8 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("get ref: %w", err)
 	}
 
-	// First get the initial capability advertisement
-	_, err = c.smartInfo(ctx, "git-receive-pack")
-	if err != nil {
-		return fmt.Errorf("get receive-pack capability: %w", err)
-	}
-
-	// Create the ref update request
+	// Create and send the ref update request directly - Protocol v2 allows this
+	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewUpdateRefRequest(oldRef.Hash, ref.Hash, ref.Name).Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)
@@ -267,13 +253,8 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 		return fmt.Errorf("get ref: %w", err)
 	}
 
-	// First get the initial capability advertisement
-	_, err = c.smartInfo(ctx, "git-receive-pack")
-	if err != nil {
-		return fmt.Errorf("get receive-pack capability: %w", err)
-	}
-
-	// Create the ref update request
+	// Create and send the ref update request directly - Protocol v2 allows this
+	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewDeleteRefRequest(oldRef.Hash, refName).Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request: %w", err)

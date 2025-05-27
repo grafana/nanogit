@@ -29,7 +29,7 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
-	obj, err := c.getObject(ctx, blobID)
+	obj, err := c.getSingleObject(ctx, blobID)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
 	}
