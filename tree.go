@@ -177,8 +177,19 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 					return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts", hashStr, maxRetries)
 				}
 
-				// Add missing objects to retries list
-				retries = append(retries, requestedHash)
+				// Check if already in retries to avoid duplicates
+				alreadyInRetries := false
+				for _, existing := range retries {
+					if existing.Is(requestedHash) {
+						alreadyInRetries = true
+						break
+					}
+				}
+
+				// Add missing objects to retries list if not already there
+				if !alreadyInRetries {
+					retries = append(retries, requestedHash)
+				}
 			}
 		}
 
@@ -196,6 +207,12 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 // It iterates through the provided objects, optionally adds them to allObjects if addToCollection is true,
 // and identifies any missing child tree objects that need to be fetched.
 func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.PackfileObject, allObjects map[string]*protocol.PackfileObject, pending []hash.Hash) ([]hash.Hash, error) {
+	// Track which hashes are already pending to avoid duplicates
+	pendingSet := make(map[string]bool)
+	for _, h := range pending {
+		pendingSet[h.String()] = true
+	}
+
 	for _, obj := range objects {
 		if obj.Type != protocol.ObjectTypeTree {
 			continue
@@ -213,6 +230,11 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 				continue
 			}
 
+			// Skip if already pending to avoid duplicates
+			if pendingSet[entry.Hash] {
+				continue
+			}
+
 			// If it's a directory, we need to add it to the pending list
 			childHash, err := hash.FromHex(entry.Hash)
 			if err != nil {
@@ -220,6 +242,7 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 			}
 
 			pending = append(pending, childHash)
+			pendingSet[entry.Hash] = true
 		}
 	}
 
