@@ -120,6 +120,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 	}
 
 	pending := []hash.Hash{}
+	retries := []hash.Hash{}
 	if tree == nil {
 		pending = append(pending, treeHash)
 	}
@@ -129,16 +130,35 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 		return nil, hash.Zero, err
 	}
 
-	// We'll fetch the objects in batches of 50 max
+	// Batch sizes
 	const batchSize = 50
+	const retryBatchSize = 5
 
-	for len(pending) > 0 {
-		currentBatch := pending
-		if len(pending) > batchSize {
-			currentBatch = pending[:batchSize]
-			pending = pending[batchSize:]
+	// Track retry attempts to prevent infinite loops
+	retryCount := make(map[string]int)
+	const maxRetries = 3
+
+	for len(pending) > 0 || len(retries) > 0 {
+		var currentBatch []hash.Hash
+
+		// Process retries first with smaller batches
+		if len(retries) > 0 {
+			currentBatch = retries
+			if len(retries) > retryBatchSize {
+				currentBatch = retries[:retryBatchSize]
+				retries = retries[retryBatchSize:]
+			} else {
+				retries = nil
+			}
 		} else {
-			pending = nil
+			// Process normal pending with larger batches
+			currentBatch = pending
+			if len(pending) > batchSize {
+				currentBatch = pending[:batchSize]
+				pending = pending[batchSize:]
+			} else {
+				pending = nil
+			}
 		}
 
 		objects, err := c.getObjects(ctx, currentBatch...)
@@ -146,13 +166,23 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 			return nil, hash.Zero, fmt.Errorf("getting objects: %w", err)
 		}
 
-		// Check if all expected objects were returned
+		// Check which objects were actually returned
 		for _, requestedHash := range currentBatch {
 			if _, exists := objects[requestedHash.String()]; !exists {
-				return nil, hash.Zero, fmt.Errorf("object %s not returned in batch response", requestedHash.String())
+				hashStr := requestedHash.String()
+				retryCount[hashStr]++
+
+				// If we've retried this object too many times, give up
+				if retryCount[hashStr] > maxRetries {
+					return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts", hashStr, maxRetries)
+				}
+
+				// Add missing objects to retries list
+				retries = append(retries, requestedHash)
 			}
 		}
 
+		// Process any new tree dependencies from successful objects
 		pending, err = c.collectMissingTreeHashes(objects, allObjects, pending)
 		if err != nil {
 			return nil, hash.Zero, err
