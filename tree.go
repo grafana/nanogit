@@ -97,16 +97,27 @@ type Tree struct {
 //	    fmt.Printf("%s (%s)\n", entry.Path, entry.Type)
 //	}
 func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, error) {
-	// Make initial getObjects call - this could potentially return many objects we need
-	initialObjects, err := c.getObjects(ctx, h)
+	allTreeObjects, treeHash, err := c.fetchAllTreeObjects(ctx, h)
 	if err != nil {
-		return nil, fmt.Errorf("getting initial objects: %w", err)
+		return nil, err
+	}
+
+	return c.flatten(treeHash, allTreeObjects)
+}
+
+// fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
+// an initial request and iteratively fetching missing tree objects in batches.
+func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[string]*protocol.PackfileObject, hash.Hash, error) {
+	// Make initial getObjects call - this could potentially return many objects we need
+	allObjects, err := c.getObjects(ctx, h)
+	if err != nil {
+		return nil, hash.Zero, fmt.Errorf("getting initial objects: %w", err)
 	}
 
 	// Find our target object in the response
-	obj, exists := initialObjects[h.String()]
+	obj, exists := allObjects[h.String()]
 	if !exists {
-		return nil, fmt.Errorf("object %s not found: %w", h.String(), ErrRefNotFound)
+		return nil, hash.Zero, fmt.Errorf("object %s not found: %w", h.String(), ErrRefNotFound)
 	}
 
 	var tree *protocol.PackfileObject
@@ -116,21 +127,21 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 		// Extract tree hash from commit
 		treeHash, err = hash.FromHex(obj.Commit.Tree.String())
 		if err != nil {
-			return nil, fmt.Errorf("parsing tree hash: %w", err)
+			return nil, hash.Zero, fmt.Errorf("parsing tree hash: %w", err)
 		}
 
 		// Check if the tree object is already in our initial response
-		if treeObj, exists := initialObjects[treeHash.String()]; exists {
+		if treeObj, exists := allObjects[treeHash.String()]; exists {
 			tree = treeObj
 		} else {
-			// Tree not in initial response, we'll fetch it in buildFlatTreeIteratively
+			// Tree not in initial response, we'll fetch it later
 			tree = nil
 		}
 	} else if obj.Type == protocol.ObjectTypeTree {
 		tree = obj
 		treeHash = h
 	} else {
-		return nil, errors.New("target object is not a commit or tree")
+		return nil, hash.Zero, errors.New("target object is not a commit or tree")
 	}
 
 	pending := []hash.Hash{}
@@ -138,13 +149,13 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 		pending = append(pending, treeHash)
 	}
 
-	for _, obj := range initialObjects {
+	for _, obj := range allObjects {
 		if obj.Type != protocol.ObjectTypeTree {
 			continue
 		}
 
 		for _, entry := range obj.Tree {
-			if initialObjects[entry.Hash] != nil {
+			if allObjects[entry.Hash] != nil {
 				continue
 			}
 
@@ -156,7 +167,7 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 			// if it's a directory, we need to add it to the pending list
 			childHash, err := hash.FromHex(entry.Hash)
 			if err != nil {
-				return nil, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
+				return nil, hash.Zero, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
 			}
 
 			pending = append(pending, childHash)
@@ -177,13 +188,13 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 
 		objects, err := c.getObjects(ctx, currentBatch...)
 		if err != nil {
-			return nil, fmt.Errorf("getting objects: %w", err)
+			return nil, hash.Zero, fmt.Errorf("getting objects: %w", err)
 		}
 
 		// Check if all expected objects were returned
 		for _, requestedHash := range currentBatch {
 			if _, exists := objects[requestedHash.String()]; !exists {
-				return nil, fmt.Errorf("object %s not returned in batch response", requestedHash.String())
+				return nil, hash.Zero, fmt.Errorf("object %s not returned in batch response", requestedHash.String())
 			}
 		}
 
@@ -192,10 +203,10 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 				continue
 			}
 
-			initialObjects[obj.Hash.String()] = obj
+			allObjects[obj.Hash.String()] = obj
 
 			for _, entry := range obj.Tree {
-				if initialObjects[entry.Hash] != nil {
+				if allObjects[entry.Hash] != nil {
 					continue
 				}
 
@@ -207,7 +218,7 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 				// if it's a directory, we need to add it to the pending list
 				childHash, err := hash.FromHex(entry.Hash)
 				if err != nil {
-					return nil, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
+					return nil, hash.Zero, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
 				}
 
 				pending = append(pending, childHash)
@@ -215,14 +226,15 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 		}
 	}
 
+	return allObjects, treeHash, nil
+}
+
+// flatten converts collected tree objects into a flat tree structure using breadth-first traversal.
+func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects map[string]*protocol.PackfileObject) (*FlatTree, error) {
 	// Get the root tree object
-	rootTree := tree
-	if rootTree == nil {
-		var exists bool
-		rootTree, exists = initialObjects[treeHash.String()]
-		if !exists {
-			return nil, fmt.Errorf("root tree %s not found in collected objects", treeHash.String())
-		}
+	rootTree, exists := allTreeObjects[treeHash.String()]
+	if !exists {
+		return nil, fmt.Errorf("root tree %s not found in collected objects", treeHash.String())
 	}
 
 	// Build flat entries iteratively using breadth-first traversal
@@ -271,7 +283,7 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 
 			// If this is a tree, add it to the queue for processing
 			if entryType == protocol.ObjectTypeTree {
-				childTree, exists := initialObjects[entry.Hash]
+				childTree, exists := allTreeObjects[entry.Hash]
 				if !exists {
 					return nil, fmt.Errorf("tree object %s not found in collection", entry.Hash)
 				}
