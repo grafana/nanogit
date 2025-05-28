@@ -114,17 +114,17 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 
 	// Make initial getObjects call - this could potentially return many objects we need
 	totalRequests++
-	allObjects, err := c.getObjects(ctx, h)
+	initialObjects, err := c.getObjects(ctx, h)
 	if err != nil {
 		return nil, hash.Zero, fmt.Errorf("getting initial objects: %w", err)
 	}
 
-	totalObjectsFetched = len(allObjects)
+	totalObjectsFetched = len(initialObjects)
 	c.logger.Debug("initial request completed",
-		"objects_returned", len(allObjects),
+		"objects_returned", len(initialObjects),
 		"target_hash", h.String())
 
-	tree, treeHash, err := c.findRootTree(h, allObjects)
+	tree, treeHash, err := c.findRootTree(h, initialObjects)
 	if err != nil {
 		return nil, hash.Zero, err
 	}
@@ -139,7 +139,8 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 	processedTrees := make(map[string]bool)  // Trees we've already analyzed for dependencies
 	requestedHashes := make(map[string]bool) // Hashes we've already requested or are pending/retrying
 
-	pending, err = c.collectMissingTreeHashes(allObjects, allObjects, pending, processedTrees, requestedHashes)
+	allObjects := make(map[string]*protocol.PackfileObject)
+	pending, err = c.collectMissingTreeHashes(initialObjects, allObjects, pending, processedTrees, requestedHashes)
 	if err != nil {
 		return nil, hash.Zero, err
 	}
@@ -151,13 +152,13 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 
 	// Batch sizes
 	const batchSize = 50
-	const retryBatchSize = 1 // Use individual requests for retries
+	const retryBatchSize = 1 // TODO: revisit this. Use individual requests for retries
 
 	// Track retry attempts to prevent infinite loops
 	retryCount := make(map[string]int)
-	const maxRetries = 5
+	const maxRetries = 3
 
-	batchNumber := 0
+	var batchNumber int
 	const maxBatches = 1000 // Safeguard against infinite loops
 
 	for len(pending) > 0 || len(retries) > 0 {
@@ -223,39 +224,34 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 
 		// Check which objects were actually returned
 		for _, requestedHash := range currentBatch {
-			if _, exists := objects[requestedHash.String()]; !exists {
-				hashStr := requestedHash.String()
-				retryCount[hashStr]++
+			if _, exists := objects[requestedHash.String()]; exists {
+				continue
+			}
 
-				// Log retry attempts for debugging
-				c.logger.Warn("object not returned by server",
+			hashStr := requestedHash.String()
+			retryCount[hashStr]++
+
+			// Log retry attempts for debugging
+			c.logger.Warn("object not returned by server",
+				"hash", hashStr,
+				"attempt", retryCount[hashStr],
+				"max_retries", maxRetries)
+
+			// If we've retried this object too many times, give up
+			if retryCount[hashStr] > maxRetries {
+				c.logger.Error("object persistently not returned by server",
 					"hash", hashStr,
-					"attempt", retryCount[hashStr],
-					"max_retries", maxRetries)
+					"attempts", maxRetries,
+					"total_requests", totalRequests,
+					"total_objects_fetched", totalObjectsFetched)
+				return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts (batch sizes: %d then %d). This may indicate a server-side issue - the object might be missing or inaccessible", hashStr, maxRetries, batchSize, retryBatchSize)
+			}
 
-				// If we've retried this object too many times, give up
-				if retryCount[hashStr] > maxRetries {
-					c.logger.Error("object persistently not returned by server",
-						"hash", hashStr,
-						"attempts", maxRetries,
-						"total_requests", totalRequests,
-						"total_objects_fetched", totalObjectsFetched)
-					return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts (batch sizes: %d then %d). This may indicate a server-side issue - the object might be missing or inaccessible", hashStr, maxRetries, batchSize, retryBatchSize)
-				}
-
-				// Check if already in retries to avoid duplicates
-				alreadyInRetries := false
-				for _, existing := range retries {
-					if existing.Is(requestedHash) {
-						alreadyInRetries = true
-						break
-					}
-				}
-
-				// Add missing objects to retries list if not already there
-				if !alreadyInRetries {
-					retries = append(retries, requestedHash)
-				}
+			// Add missing objects to retries list if not already added
+			// We use requestedHashes to track this since it's more efficient than searching the retries slice
+			if !requestedHashes[hashStr] {
+				retries = append(retries, requestedHash)
+				requestedHashes[hashStr] = true
 			}
 		}
 
@@ -288,6 +284,20 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 		requestedHashes[h.String()] = true
 	}
 
+	// We could have the children of the trees we already have, so we need to add them to the allObjects map
+	for _, obj := range objects {
+		if obj.Type != protocol.ObjectTypeTree {
+			continue
+		}
+
+		// Skip if we've already processed this tree for dependencies
+		if processedTrees[obj.Hash.String()] {
+			continue
+		}
+
+		allObjects[obj.Hash.String()] = obj
+	}
+
 	for _, obj := range objects {
 		if obj.Type != protocol.ObjectTypeTree {
 			continue
@@ -299,7 +309,6 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 		}
 
 		treesProcessed++
-		allObjects[obj.Hash.String()] = obj
 		processedTrees[obj.Hash.String()] = true
 
 		for _, entry := range obj.Tree {
