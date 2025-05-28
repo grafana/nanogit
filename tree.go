@@ -135,6 +135,8 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 			treeCount++
 		case protocol.ObjectTypeBlob:
 			blobCount++
+		case protocol.ObjectTypeInvalid, protocol.ObjectTypeTag, protocol.ObjectTypeReserved, protocol.ObjectTypeOfsDelta, protocol.ObjectTypeRefDelta:
+			otherCount++
 		default:
 			otherCount++
 		}
