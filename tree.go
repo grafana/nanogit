@@ -108,56 +108,204 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 // fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
 // an initial request and iteratively fetching missing tree objects in batches.
 func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[string]*protocol.PackfileObject, hash.Hash, error) {
-	// Make initial getObjects call - this could potentially return many objects we need
-	allObjects, err := c.getObjects(ctx, h)
+	// Track essential metrics
+	var totalRequests int
+	var totalObjectsFetched int
+
+	// First, get just the specific commit/tree object we want
+	// Use getSpecificObject instead of getObjects to avoid fetching entire repository history.
+	// getObjects with filter blob:none returns ALL commits and trees in the repository,
+	// while getSpecificObject returns only what we specifically request.
+	totalRequests++
+	// TODO: I would probably have to block it to be with a tree hash
+	initialObjects, err := c.getCommitTree(ctx, h)
 	if err != nil {
-		return nil, hash.Zero, fmt.Errorf("getting initial objects: %w", err)
+		return nil, hash.Zero, fmt.Errorf("getting specific object: %w", err)
 	}
 
-	tree, treeHash, err := c.findRootTree(h, allObjects)
+	totalObjectsFetched = len(initialObjects)
+
+	// Debug: analyze what types of objects we got
+	var commitCount, treeCount, blobCount, otherCount int
+	for _, obj := range initialObjects {
+		switch obj.Type {
+		case protocol.ObjectTypeCommit:
+			commitCount++
+		case protocol.ObjectTypeTree:
+			treeCount++
+		case protocol.ObjectTypeBlob:
+			blobCount++
+		case protocol.ObjectTypeInvalid, protocol.ObjectTypeTag, protocol.ObjectTypeReserved, protocol.ObjectTypeOfsDelta, protocol.ObjectTypeRefDelta:
+			otherCount++
+		default:
+			otherCount++
+		}
+	}
+
+	c.logger.Debug("initial targeted request completed",
+		"objects_returned", len(initialObjects),
+		"target_hash", h.String(),
+		"commits", commitCount,
+		"trees", treeCount,
+		"blobs", blobCount,
+		"other", otherCount)
+
+	tree, treeHash, err := c.findRootTree(h, initialObjects)
 	if err != nil {
 		return nil, hash.Zero, err
 	}
 
 	pending := []hash.Hash{}
+	retries := []hash.Hash{}
 	if tree == nil {
 		pending = append(pending, treeHash)
 	}
 
-	pending, err = c.collectMissingTreeHashes(allObjects, allObjects, pending)
+	// Global tracking to prevent infinite loops
+	processedTrees := make(map[string]bool)  // Trees we've already analyzed for dependencies
+	requestedHashes := make(map[string]bool) // Hashes we've already requested or are pending/retrying
+
+	allObjects := make(map[string]*protocol.PackfileObject)
+	pending, err = c.collectMissingTreeHashes(initialObjects, allObjects, pending, processedTrees, requestedHashes)
 	if err != nil {
 		return nil, hash.Zero, err
 	}
 
-	// We'll fetch the objects in batches of 50 max
-	const batchSize = 50
+	c.logger.Debug("initial dependency analysis completed",
+		"initial_pending", len(pending),
+		"processed_trees", len(processedTrees),
+		"requested_hashes", len(requestedHashes))
 
-	for len(pending) > 0 {
-		currentBatch := pending
-		if len(pending) > batchSize {
-			currentBatch = pending[:batchSize]
-			pending = pending[batchSize:]
-		} else {
-			pending = nil
+	// Batch sizes
+	const batchSize = 10
+	const retryBatchSize = 10 // TODO: revisit this. Use individual requests for retries
+
+	// Track retry attempts to prevent infinite loops
+	retryCount := make(map[string]int)
+	const maxRetries = 3
+
+	var batchNumber int
+	const maxBatches = 1000 // Safeguard against infinite loops
+
+	for len(pending) > 0 || len(retries) > 0 {
+		batchNumber++
+
+		// Safeguard against infinite loops
+		if batchNumber > maxBatches {
+			c.logger.Error("exceeded maximum batch limit, possible infinite loop",
+				"max_batches", maxBatches,
+				"remaining_pending", len(pending),
+				"remaining_retries", len(retries),
+				"processed_trees", len(processedTrees),
+				"requested_hashes", len(requestedHashes),
+				"total_objects", len(allObjects))
+			return nil, hash.Zero, fmt.Errorf("exceeded maximum batch limit (%d), possible infinite loop detected", maxBatches)
 		}
 
+		var currentBatch []hash.Hash
+		var batchType string
+
+		// Process retries first with smaller batches
+		if len(retries) > 0 {
+			batchType = "retry"
+			currentBatch = retries
+			if len(retries) > retryBatchSize {
+				currentBatch = retries[:retryBatchSize]
+				retries = retries[retryBatchSize:]
+			} else {
+				retries = nil
+			}
+		} else {
+			batchType = "normal"
+			// Process normal pending with larger batches
+			currentBatch = pending
+			if len(pending) > batchSize {
+				currentBatch = pending[:batchSize]
+				pending = pending[batchSize:]
+			} else {
+				pending = nil
+			}
+		}
+
+		c.logger.Debug("processing batch",
+			"batch_number", batchNumber,
+			"batch_type", batchType,
+			"batch_size", len(currentBatch),
+			"remaining_pending", len(pending),
+			"remaining_retries", len(retries))
+
+		totalRequests++
 		objects, err := c.getObjects(ctx, currentBatch...)
 		if err != nil {
 			return nil, hash.Zero, fmt.Errorf("getting objects: %w", err)
 		}
 
-		// Check if all expected objects were returned
+		totalObjectsFetched += len(objects)
+
+		// Analyze what we got back vs what we requested
+		var requestedReceived, additionalReceived int
 		for _, requestedHash := range currentBatch {
-			if _, exists := objects[requestedHash.String()]; !exists {
-				return nil, hash.Zero, fmt.Errorf("object %s not returned in batch response", requestedHash.String())
+			if _, exists := objects[requestedHash.String()]; exists {
+				requestedReceived++
+			}
+		}
+		additionalReceived = len(objects) - requestedReceived
+
+		c.logger.Debug("batch completed",
+			"batch_number", batchNumber,
+			"requested", len(currentBatch),
+			"received", len(objects),
+			"requested_received", requestedReceived,
+			"additional_received", additionalReceived,
+			"total_objects", totalObjectsFetched,
+			"total_requests", totalRequests)
+
+		// Check which objects were actually returned
+		for _, requestedHash := range currentBatch {
+			if _, exists := objects[requestedHash.String()]; exists {
+				continue
+			}
+
+			hashStr := requestedHash.String()
+			retryCount[hashStr]++
+
+			// Log retry attempts for debugging
+			c.logger.Warn("object not returned by server",
+				"hash", hashStr,
+				"attempt", retryCount[hashStr],
+				"max_retries", maxRetries)
+
+			// If we've retried this object too many times, give up
+			if retryCount[hashStr] > maxRetries {
+				c.logger.Error("object persistently not returned by server",
+					"hash", hashStr,
+					"attempts", maxRetries,
+					"total_requests", totalRequests,
+					"total_objects_fetched", totalObjectsFetched)
+				return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts (batch sizes: %d then %d). This may indicate a server-side issue - the object might be missing or inaccessible", hashStr, maxRetries, batchSize, retryBatchSize)
+			}
+
+			// Add missing objects to retries list if not already added
+			// We use requestedHashes to track this since it's more efficient than searching the retries slice
+			if !requestedHashes[hashStr] {
+				retries = append(retries, requestedHash)
+				requestedHashes[hashStr] = true
 			}
 		}
 
-		pending, err = c.collectMissingTreeHashes(objects, allObjects, pending)
+		// Process any new tree dependencies from successful objects
+		pending, err = c.collectMissingTreeHashes(objects, allObjects, pending, processedTrees, requestedHashes)
 		if err != nil {
 			return nil, hash.Zero, err
 		}
 	}
+
+	// Log final summary
+	c.logger.Info("tree object collection completed",
+		"target_hash", h.String(),
+		"total_requests", totalRequests,
+		"total_objects_fetched", totalObjectsFetched,
+		"total_batches", batchNumber)
 
 	return allObjects, treeHash, nil
 }
@@ -165,21 +313,55 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 // collectMissingTreeHashes processes tree objects and collects missing child tree hashes.
 // It iterates through the provided objects, optionally adds them to allObjects if addToCollection is true,
 // and identifies any missing child tree objects that need to be fetched.
-func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.PackfileObject, allObjects map[string]*protocol.PackfileObject, pending []hash.Hash) ([]hash.Hash, error) {
+func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.PackfileObject, allObjects map[string]*protocol.PackfileObject, pending []hash.Hash, processedTrees map[string]bool, requestedHashes map[string]bool) ([]hash.Hash, error) {
+	var treesProcessed int
+	var newTreesFound int
+
+	// Mark current pending hashes as requested
+	for _, h := range pending {
+		requestedHashes[h.String()] = true
+	}
+
+	// We could have the children of the trees we already have, so we need to add them to the allObjects map
 	for _, obj := range objects {
 		if obj.Type != protocol.ObjectTypeTree {
 			continue
 		}
 
+		// Skip if we've already processed this tree for dependencies
+		if processedTrees[obj.Hash.String()] {
+			continue
+		}
+
 		allObjects[obj.Hash.String()] = obj
+	}
+
+	for _, obj := range objects {
+		if obj.Type != protocol.ObjectTypeTree {
+			continue
+		}
+
+		// Skip if we've already processed this tree for dependencies
+		if processedTrees[obj.Hash.String()] {
+			continue
+		}
+
+		treesProcessed++
+		processedTrees[obj.Hash.String()] = true
 
 		for _, entry := range obj.Tree {
+			// Skip if we already have this object
 			if allObjects[entry.Hash] != nil {
 				continue
 			}
 
 			// If it's a file, we can ignore it
 			if entry.FileMode&0o40000 == 0 {
+				continue
+			}
+
+			// Skip if we've already requested this hash
+			if requestedHashes[entry.Hash] {
 				continue
 			}
 
@@ -190,7 +372,16 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 			}
 
 			pending = append(pending, childHash)
+			requestedHashes[entry.Hash] = true
+			newTreesFound++
 		}
+	}
+
+	if newTreesFound > 0 {
+		c.logger.Debug("discovered tree dependencies",
+			"trees_processed", treesProcessed,
+			"new_trees_found", newTreesFound,
+			"total_pending", len(pending))
 	}
 
 	return pending, nil
@@ -223,9 +414,15 @@ func (c *httpClient) findRootTree(targetHash hash.Hash, allObjects map[string]*p
 			// Tree not in available objects, we'll fetch it later
 			tree = nil
 		}
+
+		c.logger.Debug("resolved commit to tree",
+			"commit_hash", targetHash.String(),
+			"tree_hash", treeHash.String(),
+			"tree_available", tree != nil)
 	} else if obj.Type == protocol.ObjectTypeTree {
 		tree = obj
 		treeHash = targetHash
+		c.logger.Debug("using tree directly", "tree_hash", treeHash.String())
 	} else {
 		return nil, hash.Zero, errors.New("target object is not a commit or tree")
 	}

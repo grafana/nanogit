@@ -57,7 +57,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	cache := make(map[string]*protocol.PackfileObject)
 	cache[treeObj.Hash.String()] = treeObj
 
-	currentTree, err := c.GetFlatTree(ctx, commit.Tree)
+	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting current tree: %w", err)
 	}
@@ -367,7 +367,7 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 func (w *stagedWriter) Push(ctx context.Context) error {
 	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
-	packfile, err := w.writer.WritePackfile()
+	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
 	if err != nil {
 		return fmt.Errorf("writing packfile: %w", err)
 	}
