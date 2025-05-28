@@ -44,8 +44,12 @@ func TestClient_GetFlatTree(t *testing.T) {
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	logger.Info("Getting the tree hash")
-	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
+	// logger.Info("Getting the tree hash")
+	// treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
+	// require.NoError(t, err)
+
+	logger.Info("Getting the commit hash")
+	commitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 
 	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
@@ -55,7 +59,7 @@ func TestClient_GetFlatTree(t *testing.T) {
 	defer cancel()
 
 	logger.Info("Testing GetTree")
-	tree, err := client.GetFlatTree(ctx, treeHash)
+	tree, err := client.GetFlatTree(ctx, commitHash)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 

@@ -117,7 +117,8 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 	// getObjects with filter blob:none returns ALL commits and trees in the repository,
 	// while getSpecificObject returns only what we specifically request.
 	totalRequests++
-	initialObjects, err := c.getSpecificObject(ctx, h)
+	// TODO: I would probably have to block it to be with a tree hash
+	initialObjects, err := c.getCommitTree(ctx, h)
 	if err != nil {
 		return nil, hash.Zero, fmt.Errorf("getting specific object: %w", err)
 	}
@@ -238,10 +239,22 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 		}
 
 		totalObjectsFetched += len(objects)
+
+		// Analyze what we got back vs what we requested
+		var requestedReceived, additionalReceived int
+		for _, requestedHash := range currentBatch {
+			if _, exists := objects[requestedHash.String()]; exists {
+				requestedReceived++
+			}
+		}
+		additionalReceived = len(objects) - requestedReceived
+
 		c.logger.Debug("batch completed",
 			"batch_number", batchNumber,
 			"requested", len(currentBatch),
 			"received", len(objects),
+			"requested_received", requestedReceived,
+			"additional_received", additionalReceived,
 			"total_objects", totalObjectsFetched,
 			"total_requests", totalRequests)
 
