@@ -175,7 +175,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 
 	// Batch sizes
 	const batchSize = 10
-	const retryBatchSize = 1 // TODO: revisit this. Use individual requests for retries
+	const retryBatchSize = 10 // TODO: revisit this. Use individual requests for retries
 
 	// Track retry attempts to prevent infinite loops
 	retryCount := make(map[string]int)
