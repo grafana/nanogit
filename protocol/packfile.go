@@ -535,7 +535,7 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 // - 4-byte number of objects
 // - Object entries
 // - 20-byte SHA1 of the packfile
-func (w *PackfileWriter) WritePackfile() ([]byte, error) {
+func (w *PackfileWriter) WritePackfile(refName string, oldRefHash hash.Hash) ([]byte, error) {
 	// Write signature
 	if _, err := w.buf.WriteString("PACK"); err != nil {
 		return nil, fmt.Errorf("writing packfile signature: %w", err)
@@ -575,13 +575,12 @@ func (w *PackfileWriter) WritePackfile() ([]byte, error) {
 	// Get the packfile data
 	packfileData := w.buf.Bytes()
 
-	// Find the commit hash from the objects
-	var parentHash, commitHash hash.Hash
+	// Find the LAST commit hash from the objects (the tip of the chain)
+	var commitHash hash.Hash
 	for _, obj := range w.objects {
 		if obj.Type == ObjectTypeCommit {
 			commitHash = obj.Hash
-			parentHash = obj.Commit.Parent
-			break
+			// Don't break - keep iterating to find the LAST commit
 		}
 	}
 
@@ -592,9 +591,9 @@ func (w *PackfileWriter) WritePackfile() ([]byte, error) {
 	// Create the complete message with reference update command
 	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n0000<packfile data>
 	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
-		parentHash.String(), // old value (zero hash for new refs)
-		commitHash.String(), // new value (the commit hash)
-		"refs/heads/main")   // ref name
+		oldRefHash.String(), // old value (current ref hash)
+		commitHash.String(), // new value (the last commit hash)
+		refName)             // ref name (from parameter)
 
 	// Calculate the length of the ref update line (including the 4 bytes of length)
 	refUpdateLen := len(refUpdate) + 4

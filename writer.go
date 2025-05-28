@@ -367,7 +367,7 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 func (w *stagedWriter) Push(ctx context.Context) error {
 	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
-	packfile, err := w.writer.WritePackfile()
+	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
 	if err != nil {
 		return fmt.Errorf("writing packfile: %w", err)
 	}

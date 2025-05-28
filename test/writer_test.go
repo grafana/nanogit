@@ -980,4 +980,133 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, subdir1File, otherContent)
 	})
+
+	t.Run("Multiple commits should all be visible after push", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		logger.Info("Getting current ref")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
+		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
+
+		logger.Info("Creating staged writer")
+		writer, err := client.NewStagedWriter(ctx, ref)
+		require.NoError(t, err)
+
+		// Create first commit
+		logger.Info("Creating first file and commit")
+		_, err = writer.CreateBlob(ctx, "file1.txt", []byte("First file content"))
+		require.NoError(t, err)
+		commit1, err := writer.Commit(ctx, "Add first file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit1)
+		logger.Info("First commit", "hash", commit1.Hash.String())
+
+		// Create second commit
+		logger.Info("Creating second file and commit")
+		_, err = writer.CreateBlob(ctx, "file2.txt", []byte("Second file content"))
+		require.NoError(t, err)
+		commit2, err := writer.Commit(ctx, "Add second file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit2)
+		logger.Info("Second commit", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
+
+		// Create third commit
+		logger.Info("Creating third file and commit")
+		_, err = writer.CreateBlob(ctx, "file3.txt", []byte("Third file content"))
+		require.NoError(t, err)
+		commit3, err := writer.Commit(ctx, "Add third file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit3)
+		logger.Info("Third commit", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
+
+		// Verify commit chain is correct
+		require.Equal(t, currentHash, commit1.Parent, "First commit should have initial commit as parent")
+		require.Equal(t, commit1.Hash, commit2.Parent, "Second commit should have first commit as parent")
+		require.Equal(t, commit2.Hash, commit3.Parent, "Third commit should have second commit as parent")
+
+		// Push all commits
+		logger.Info("Pushing all commits")
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		// Pull and verify
+		logger.Info("Pulling changes")
+		local.Git(t, "pull")
+
+		// Verify final commit hash
+		logger.Info("Verifying final commit hash")
+		finalHash := local.Git(t, "rev-parse", "HEAD")
+		require.Equal(t, commit3.Hash.String(), finalHash, "HEAD should point to third commit")
+
+		// Verify all three commits exist in history
+		logger.Info("Verifying commit history")
+		commitHistory := local.Git(t, "log", "--oneline", "--format=%H %s")
+		logger.Info("Commit history", "history", commitHistory)
+
+		// Should contain all three commits
+		require.Contains(t, commitHistory, commit1.Hash.String(), "First commit should be in history")
+		require.Contains(t, commitHistory, commit2.Hash.String(), "Second commit should be in history")
+		require.Contains(t, commitHistory, commit3.Hash.String(), "Third commit should be in history")
+
+		// Verify commit messages are correct
+		require.Contains(t, commitHistory, "Add first file", "First commit message should be in history")
+		require.Contains(t, commitHistory, "Add second file", "Second commit message should be in history")
+		require.Contains(t, commitHistory, "Add third file", "Third commit message should be in history")
+
+		// Verify all files exist
+		logger.Info("Verifying all files exist")
+		content1, err := os.ReadFile(filepath.Join(local.Path, "file1.txt"))
+		require.NoError(t, err)
+		require.Equal(t, []byte("First file content"), content1)
+
+		content2, err := os.ReadFile(filepath.Join(local.Path, "file2.txt"))
+		require.NoError(t, err)
+		require.Equal(t, []byte("Second file content"), content2)
+
+		content3, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
+		require.NoError(t, err)
+		require.Equal(t, []byte("Third file content"), content3)
+
+		// Verify original file is preserved
+		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+		require.NoError(t, err)
+		require.NotEmpty(t, otherContent)
+
+		// Verify individual commits are reachable
+		logger.Info("Verifying individual commits are reachable")
+		commit1Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", commit1.Hash.String()))
+		require.Contains(t, commit1Files, "file1.txt")
+		require.Contains(t, commit1Files, initCommitFile)
+		require.NotContains(t, commit1Files, "file2.txt")
+		require.NotContains(t, commit1Files, "file3.txt")
+
+		commit2Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", commit2.Hash.String()))
+		require.Contains(t, commit2Files, "file1.txt")
+		require.Contains(t, commit2Files, "file2.txt")
+		require.Contains(t, commit2Files, initCommitFile)
+		require.NotContains(t, commit2Files, "file3.txt")
+
+		commit3Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", commit3.Hash.String()))
+		require.Contains(t, commit3Files, "file1.txt")
+		require.Contains(t, commit3Files, "file2.txt")
+		require.Contains(t, commit3Files, "file3.txt")
+		require.Contains(t, commit3Files, initCommitFile)
+	})
 }
