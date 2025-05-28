@@ -108,11 +108,21 @@ func (c *httpClient) GetFlatTree(ctx context.Context, h hash.Hash) (*FlatTree, e
 // fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
 // an initial request and iteratively fetching missing tree objects in batches.
 func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[string]*protocol.PackfileObject, hash.Hash, error) {
+	// Track essential metrics
+	var totalRequests int
+	var totalObjectsFetched int
+
 	// Make initial getObjects call - this could potentially return many objects we need
+	totalRequests++
 	allObjects, err := c.getObjects(ctx, h)
 	if err != nil {
 		return nil, hash.Zero, fmt.Errorf("getting initial objects: %w", err)
 	}
+
+	totalObjectsFetched = len(allObjects)
+	c.logger.Debug("initial request completed",
+		"objects_returned", len(allObjects),
+		"target_hash", h.String())
 
 	tree, treeHash, err := c.findRootTree(h, allObjects)
 	if err != nil {
@@ -132,17 +142,22 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 
 	// Batch sizes
 	const batchSize = 50
-	const retryBatchSize = 5
+	const retryBatchSize = 1 // Use individual requests for retries
 
 	// Track retry attempts to prevent infinite loops
 	retryCount := make(map[string]int)
-	const maxRetries = 3
+	const maxRetries = 5
+
+	batchNumber := 0
 
 	for len(pending) > 0 || len(retries) > 0 {
+		batchNumber++
 		var currentBatch []hash.Hash
+		var batchType string
 
 		// Process retries first with smaller batches
 		if len(retries) > 0 {
+			batchType = "retry"
 			currentBatch = retries
 			if len(retries) > retryBatchSize {
 				currentBatch = retries[:retryBatchSize]
@@ -151,6 +166,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 				retries = nil
 			}
 		} else {
+			batchType = "normal"
 			// Process normal pending with larger batches
 			currentBatch = pending
 			if len(pending) > batchSize {
@@ -161,10 +177,26 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 			}
 		}
 
+		c.logger.Debug("processing batch",
+			"batch_number", batchNumber,
+			"batch_type", batchType,
+			"batch_size", len(currentBatch),
+			"remaining_pending", len(pending),
+			"remaining_retries", len(retries))
+
+		totalRequests++
 		objects, err := c.getObjects(ctx, currentBatch...)
 		if err != nil {
 			return nil, hash.Zero, fmt.Errorf("getting objects: %w", err)
 		}
+
+		totalObjectsFetched += len(objects)
+		c.logger.Debug("batch completed",
+			"batch_number", batchNumber,
+			"requested", len(currentBatch),
+			"received", len(objects),
+			"total_objects", totalObjectsFetched,
+			"total_requests", totalRequests)
 
 		// Check which objects were actually returned
 		for _, requestedHash := range currentBatch {
@@ -172,9 +204,20 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 				hashStr := requestedHash.String()
 				retryCount[hashStr]++
 
+				// Log retry attempts for debugging
+				c.logger.Warn("object not returned by server",
+					"hash", hashStr,
+					"attempt", retryCount[hashStr],
+					"max_retries", maxRetries)
+
 				// If we've retried this object too many times, give up
 				if retryCount[hashStr] > maxRetries {
-					return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts", hashStr, maxRetries)
+					c.logger.Error("object persistently not returned by server",
+						"hash", hashStr,
+						"attempts", maxRetries,
+						"total_requests", totalRequests,
+						"total_objects_fetched", totalObjectsFetched)
+					return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts (batch sizes: %d then %d). This may indicate a server-side issue - the object might be missing or inaccessible", hashStr, maxRetries, batchSize, retryBatchSize)
 				}
 
 				// Check if already in retries to avoid duplicates
@@ -200,6 +243,13 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 		}
 	}
 
+	// Log final summary
+	c.logger.Info("tree object collection completed",
+		"target_hash", h.String(),
+		"total_requests", totalRequests,
+		"total_objects_fetched", totalObjectsFetched,
+		"total_batches", batchNumber)
+
 	return allObjects, treeHash, nil
 }
 
@@ -207,6 +257,9 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 // It iterates through the provided objects, optionally adds them to allObjects if addToCollection is true,
 // and identifies any missing child tree objects that need to be fetched.
 func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.PackfileObject, allObjects map[string]*protocol.PackfileObject, pending []hash.Hash) ([]hash.Hash, error) {
+	var treesProcessed int
+	var newTreesFound int
+
 	// Track which hashes are already pending to avoid duplicates
 	pendingSet := make(map[string]bool)
 	for _, h := range pending {
@@ -218,6 +271,7 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 			continue
 		}
 
+		treesProcessed++
 		allObjects[obj.Hash.String()] = obj
 
 		for _, entry := range obj.Tree {
@@ -243,7 +297,15 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 
 			pending = append(pending, childHash)
 			pendingSet[entry.Hash] = true
+			newTreesFound++
 		}
+	}
+
+	if newTreesFound > 0 {
+		c.logger.Debug("discovered tree dependencies",
+			"trees_processed", treesProcessed,
+			"new_trees_found", newTreesFound,
+			"total_pending", len(pending))
 	}
 
 	return pending, nil
@@ -276,9 +338,15 @@ func (c *httpClient) findRootTree(targetHash hash.Hash, allObjects map[string]*p
 			// Tree not in available objects, we'll fetch it later
 			tree = nil
 		}
+
+		c.logger.Debug("resolved commit to tree",
+			"commit_hash", targetHash.String(),
+			"tree_hash", treeHash.String(),
+			"tree_available", tree != nil)
 	} else if obj.Type == protocol.ObjectTypeTree {
 		tree = obj
 		treeHash = targetHash
+		c.logger.Debug("using tree directly", "tree_hash", treeHash.String())
 	} else {
 		return nil, hash.Zero, errors.New("target object is not a commit or tree")
 	}
