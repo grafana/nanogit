@@ -112,17 +112,40 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 	var totalRequests int
 	var totalObjectsFetched int
 
-	// Make initial getObjects call - this could potentially return many objects we need
+	// First, get just the specific commit/tree object we want
+	// Use getSpecificObject instead of getObjects to avoid fetching entire repository history.
+	// getObjects with filter blob:none returns ALL commits and trees in the repository,
+	// while getSpecificObject returns only what we specifically request.
 	totalRequests++
-	initialObjects, err := c.getObjects(ctx, h)
+	initialObjects, err := c.getSpecificObject(ctx, h)
 	if err != nil {
-		return nil, hash.Zero, fmt.Errorf("getting initial objects: %w", err)
+		return nil, hash.Zero, fmt.Errorf("getting specific object: %w", err)
 	}
 
 	totalObjectsFetched = len(initialObjects)
-	c.logger.Debug("initial request completed",
+
+	// Debug: analyze what types of objects we got
+	var commitCount, treeCount, blobCount, otherCount int
+	for _, obj := range initialObjects {
+		switch obj.Type {
+		case protocol.ObjectTypeCommit:
+			commitCount++
+		case protocol.ObjectTypeTree:
+			treeCount++
+		case protocol.ObjectTypeBlob:
+			blobCount++
+		default:
+			otherCount++
+		}
+	}
+
+	c.logger.Debug("initial targeted request completed",
 		"objects_returned", len(initialObjects),
-		"target_hash", h.String())
+		"target_hash", h.String(),
+		"commits", commitCount,
+		"trees", treeCount,
+		"blobs", blobCount,
+		"other", otherCount)
 
 	tree, treeHash, err := c.findRootTree(h, initialObjects)
 	if err != nil {
