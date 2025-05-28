@@ -113,31 +113,13 @@ type CommitFile struct {
 //	    fmt.Printf("%s: %s\n", change.Status, change.Path)
 //	}
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
-	// Get both commits
-	base, err := c.getSingleObject(ctx, baseCommit)
-	if err != nil {
-		return nil, fmt.Errorf("getting base commit: %w", err)
-	}
-
-	if base.Type != protocol.ObjectTypeCommit {
-		return nil, errors.New("base commit is not a commit")
-	}
-
-	head, err := c.getSingleObject(ctx, headCommit)
-	if err != nil {
-		return nil, fmt.Errorf("getting head commit: %w", err)
-	}
-
-	if head.Type != protocol.ObjectTypeCommit {
-		return nil, errors.New("head commit is not a commit")
-	}
-
 	// Get both trees
-	baseTree, err := c.GetFlatTree(ctx, base.Commit.Tree)
+	baseTree, err := c.GetFlatTree(ctx, baseCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting base tree: %w", err)
 	}
-	headTree, err := c.GetFlatTree(ctx, head.Commit.Tree)
+
+	headTree, err := c.GetFlatTree(ctx, headCommit)
 	if err != nil {
 		return nil, fmt.Errorf("getting head tree: %w", err)
 	}
