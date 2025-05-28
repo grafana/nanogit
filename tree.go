@@ -135,10 +135,19 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 		pending = append(pending, treeHash)
 	}
 
-	pending, err = c.collectMissingTreeHashes(allObjects, allObjects, pending)
+	// Global tracking to prevent infinite loops
+	processedTrees := make(map[string]bool)  // Trees we've already analyzed for dependencies
+	requestedHashes := make(map[string]bool) // Hashes we've already requested or are pending/retrying
+
+	pending, err = c.collectMissingTreeHashes(allObjects, allObjects, pending, processedTrees, requestedHashes)
 	if err != nil {
 		return nil, hash.Zero, err
 	}
+
+	c.logger.Debug("initial dependency analysis completed",
+		"initial_pending", len(pending),
+		"processed_trees", len(processedTrees),
+		"requested_hashes", len(requestedHashes))
 
 	// Batch sizes
 	const batchSize = 50
@@ -149,9 +158,23 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 	const maxRetries = 5
 
 	batchNumber := 0
+	const maxBatches = 1000 // Safeguard against infinite loops
 
 	for len(pending) > 0 || len(retries) > 0 {
 		batchNumber++
+
+		// Safeguard against infinite loops
+		if batchNumber > maxBatches {
+			c.logger.Error("exceeded maximum batch limit, possible infinite loop",
+				"max_batches", maxBatches,
+				"remaining_pending", len(pending),
+				"remaining_retries", len(retries),
+				"processed_trees", len(processedTrees),
+				"requested_hashes", len(requestedHashes),
+				"total_objects", len(allObjects))
+			return nil, hash.Zero, fmt.Errorf("exceeded maximum batch limit (%d), possible infinite loop detected", maxBatches)
+		}
+
 		var currentBatch []hash.Hash
 		var batchType string
 
@@ -237,7 +260,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 		}
 
 		// Process any new tree dependencies from successful objects
-		pending, err = c.collectMissingTreeHashes(objects, allObjects, pending)
+		pending, err = c.collectMissingTreeHashes(objects, allObjects, pending, processedTrees, requestedHashes)
 		if err != nil {
 			return nil, hash.Zero, err
 		}
@@ -256,14 +279,13 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, h hash.Hash) (map[
 // collectMissingTreeHashes processes tree objects and collects missing child tree hashes.
 // It iterates through the provided objects, optionally adds them to allObjects if addToCollection is true,
 // and identifies any missing child tree objects that need to be fetched.
-func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.PackfileObject, allObjects map[string]*protocol.PackfileObject, pending []hash.Hash) ([]hash.Hash, error) {
+func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.PackfileObject, allObjects map[string]*protocol.PackfileObject, pending []hash.Hash, processedTrees map[string]bool, requestedHashes map[string]bool) ([]hash.Hash, error) {
 	var treesProcessed int
 	var newTreesFound int
 
-	// Track which hashes are already pending to avoid duplicates
-	pendingSet := make(map[string]bool)
+	// Mark current pending hashes as requested
 	for _, h := range pending {
-		pendingSet[h.String()] = true
+		requestedHashes[h.String()] = true
 	}
 
 	for _, obj := range objects {
@@ -271,10 +293,17 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 			continue
 		}
 
+		// Skip if we've already processed this tree for dependencies
+		if processedTrees[obj.Hash.String()] {
+			continue
+		}
+
 		treesProcessed++
 		allObjects[obj.Hash.String()] = obj
+		processedTrees[obj.Hash.String()] = true
 
 		for _, entry := range obj.Tree {
+			// Skip if we already have this object
 			if allObjects[entry.Hash] != nil {
 				continue
 			}
@@ -284,8 +313,8 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 				continue
 			}
 
-			// Skip if already pending to avoid duplicates
-			if pendingSet[entry.Hash] {
+			// Skip if we've already requested this hash
+			if requestedHashes[entry.Hash] {
 				continue
 			}
 
@@ -296,7 +325,7 @@ func (c *httpClient) collectMissingTreeHashes(objects map[string]*protocol.Packf
 			}
 
 			pending = append(pending, childHash)
-			pendingSet[entry.Hash] = true
+			requestedHashes[entry.Hash] = true
 			newTreesFound++
 		}
 	}
