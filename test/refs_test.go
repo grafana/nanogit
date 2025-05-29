@@ -78,9 +78,9 @@ func TestClient_Refs(t *testing.T) {
 
 	logger.Info("Getting ref with non-existent ref")
 	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
-	var notFoundErr *nanogit.ObjectNotFoundError
+	var notFoundErr *nanogit.RefNotFoundError
 	require.True(t, errors.As(err, &notFoundErr))
-	require.Equal(t, "refs/heads/non-existent", notFoundErr.ObjectID)
+	require.Equal(t, "refs/heads/non-existent", notFoundErr.RefName)
 
 	logger.Info("Creating ref with new-branch")
 	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
@@ -112,9 +112,9 @@ func TestClient_Refs(t *testing.T) {
 
 	logger.Info("Getting ref with new-branch should fail")
 	_, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
-	var notFoundErr2 *nanogit.ObjectNotFoundError
+	var notFoundErr2 *nanogit.RefNotFoundError
 	require.True(t, errors.As(err, &notFoundErr2))
-	require.Equal(t, "refs/heads/new-branch", notFoundErr2.ObjectID)
+	require.Equal(t, "refs/heads/new-branch", notFoundErr2.RefName)
 
 	logger.Info("Creating tag with v2.0.0")
 	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
@@ -131,7 +131,7 @@ func TestClient_Refs(t *testing.T) {
 
 	logger.Info("Getting ref with new tag should fail")
 	_, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
-	var notFoundErr3 *nanogit.ObjectNotFoundError
+	var notFoundErr3 *nanogit.RefNotFoundError
 	require.True(t, errors.As(err, &notFoundErr3))
-	require.Equal(t, "refs/tags/v2.0.0", notFoundErr3.ObjectID)
+	require.Equal(t, "refs/tags/v2.0.0", notFoundErr3.RefName)
 }

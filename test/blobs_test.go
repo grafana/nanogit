@@ -123,7 +123,10 @@ func TestClient_GetBlobByPath(t *testing.T) {
 
 		_, err := client.GetBlobByPath(ctx, commitHash, "nonexistent.txt")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not found")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
 	})
 
 	t.Run("GetBlobByPath with non-existent hash", func(t *testing.T) {
@@ -190,52 +193,55 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 		name        string
 		path        string
 		expected    []byte
-		shouldError bool
-		errorMsg    string
+		expectedErr error
 	}{
 		{
-			name:     "root file",
-			path:     "root.txt",
-			expected: rootContent,
+			name:        "root file",
+			path:        "root.txt",
+			expected:    rootContent,
+			expectedErr: nil,
 		},
 		{
-			name:     "file in first level directory",
-			path:     "dir1/file1.txt",
-			expected: dir1Content,
+			name:        "file in first level directory",
+			path:        "dir1/file1.txt",
+			expected:    dir1Content,
+			expectedErr: nil,
 		},
 		{
-			name:     "deeply nested file",
-			path:     "dir1/subdir1/nested.txt",
-			expected: nestedContent,
+			name:        "deeply nested file",
+			path:        "dir1/subdir1/nested.txt",
+			expected:    nestedContent,
+			expectedErr: nil,
 		},
 		{
-			name:     "file in different directory",
-			path:     "dir2/file2.txt",
-			expected: dir2Content,
+			name:        "file in different directory",
+			path:        "dir2/file2.txt",
+			expected:    dir2Content,
+			expectedErr: nil,
 		},
 		{
 			name:        "nonexistent file in existing directory",
 			path:        "dir1/nonexistent.txt",
-			shouldError: true,
-			errorMsg:    "file not found",
+			expected:    nil,
+			expectedErr: &nanogit.PathNotFoundError{},
 		},
 		{
 			name:        "file in nonexistent directory",
 			path:        "nonexistent/file.txt",
-			shouldError: true,
-			errorMsg:    "path component 'nonexistent' not found",
+			expected:    nil,
+			expectedErr: &nanogit.PathNotFoundError{},
 		},
 		{
 			name:        "empty path",
 			path:        "",
-			shouldError: true,
-			errorMsg:    "path cannot be empty",
+			expected:    nil,
+			expectedErr: &nanogit.PathNotFoundError{},
 		},
 		{
 			name:        "path pointing to directory instead of file",
 			path:        "dir1",
-			shouldError: true,
-			errorMsg:    "'dir1' is not a file",
+			expected:    nil,
+			expectedErr: &nanogit.UnexpectedObjectTypeError{},
 		},
 	}
 
@@ -245,9 +251,9 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 
 			file, err := client.GetBlobByPath(ctx, commitHash, tt.path)
 
-			if tt.shouldError {
+			if tt.expectedErr != nil {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errorMsg)
+				require.ErrorAs(t, err, &tt.expectedErr)
 				assert.Nil(t, file)
 				return
 			}

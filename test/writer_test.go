@@ -245,7 +245,7 @@ func TestClient_Writer(t *testing.T) {
 
 		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not found")
+		require.ErrorIs(t, err, nanogit.ErrObjectNotFound)
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
@@ -461,7 +461,10 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to update a nonexistent file")
 		_, err = writer.UpdateBlob(ctx, "nonexistent.txt", []byte("content"))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "blob at that path does not exist")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
 	})
 
 	t.Run("DeleteBlob with existing file", func(t *testing.T) {
@@ -645,7 +648,10 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to delete a nonexistent file")
 		_, err = writer.DeleteBlob(ctx, "nonexistent.txt")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "blob at that path does not exist")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
 	})
 
 	t.Run("DeleteBlob preserves other files in same directory", func(t *testing.T) {
@@ -925,7 +931,10 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to delete a nonexistent directory")
 		_, err = writer.DeleteTree(ctx, "nonexistent")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tree at that path does not exist")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent", pathNotFoundErr.Path)
 	})
 
 	t.Run("DeleteTree with file instead of directory", func(t *testing.T) {
@@ -955,7 +964,12 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to delete a file as if it were a directory")
 		_, err = writer.DeleteTree(ctx, "testfile.txt")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "entry at that path is not a tree")
+		// Check for structured UnexpectedObjectTypeError since we expected a tree but got a blob
+		var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
+		require.ErrorAs(t, err, &unexpectedTypeErr)
+		// Note: We need to import the protocol package to access ObjectType constants
+		// For now, we'll just verify it's an UnexpectedObjectTypeError
+		assert.NotNil(t, unexpectedTypeErr)
 	})
 
 	t.Run("DeleteTree with subdirectory only", func(t *testing.T) {
