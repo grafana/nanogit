@@ -367,6 +367,11 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 //	    log.Printf("Failed to push changes: %v", err)
 //	}
 func (w *stagedWriter) Push(ctx context.Context) error {
+	// Check if there are any objects to push
+	if !w.writer.HasObjects() {
+		return ErrNothingToPush
+	}
+
 	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
 	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
