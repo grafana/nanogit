@@ -108,6 +108,31 @@ type stagedWriter struct {
 	treeEntries map[string]*FlatTreeEntry
 }
 
+// BlobExists checks if a blob exists at the given path in the repository.
+// This method verifies the existence of a file by checking the tree entries
+// that have been loaded into memory.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: File path to check (e.g., "docs/readme.md")
+//
+// Returns:
+//   - bool: True if the blob exists at the specified path
+//   - error: Error if the check fails
+//
+// Example:
+//
+//	exists, err := writer.BlobExists(ctx, "src/main.go")
+func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error) {
+	entry, exists := w.treeEntries[path]
+	if !exists {
+		return false, nil
+	}
+
+	// Check if the entry is actually a blob
+	return entry.Type == protocol.ObjectTypeBlob, nil
+}
+
 // CreateBlob creates a new blob object at the specified path with the given content.
 // The path can include directory separators ("/") to create nested directory structures.
 // If intermediate directories don't exist, they will be created automatically.
@@ -128,20 +153,26 @@ type stagedWriter struct {
 //
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	if w.treeEntries[path] != nil {
-		return nil, errors.New("blob at that path already exists")
+	if obj, ok := w.treeEntries[path]; ok {
+		return nil, NewObjectAlreadyExistsError(obj.Hash)
 	}
 
 	// Create the blob for the file content
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
-		return nil, fmt.Errorf("creating blob: %w", err)
+		return nil, fmt.Errorf("create blob: %w", err)
 	}
 
 	w.logger.Debug("created blob", "hash", blobHash.String())
+	w.treeEntries[path] = &FlatTreeEntry{
+		Path: path,
+		Hash: blobHash,
+		Type: protocol.ObjectTypeBlob,
+		Mode: 0o100644,
+	}
 
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return nil, fmt.Errorf("creating root tree: %w", err)
+		return nil, fmt.Errorf("add new blob to tree: %w", err)
 	}
 
 	return blobHash, nil
@@ -167,13 +198,13 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
-		return nil, errors.New("blob at that path does not exist")
+		return nil, NewPathNotFoundError(path)
 	}
 
 	// Create the blob for the file content
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
-		return nil, fmt.Errorf("creating blob: %w", err)
+		return nil, fmt.Errorf("create blob: %w", err)
 	}
 
 	w.logger.Debug("created blob", "hash", blobHash.String())
@@ -185,7 +216,7 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 
 	// Add the new entry
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return nil, fmt.Errorf("updating tree: %w", err)
+		return nil, fmt.Errorf("update tree with updated blob: %w", err)
 	}
 
 	return blobHash, nil
@@ -210,15 +241,16 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
-	if w.treeEntries[path] == nil {
-		return nil, errors.New("blob at that path does not exist")
+	existing, ok := w.treeEntries[path]
+	if !ok {
+		return nil, NewPathNotFoundError(path)
 	}
 
-	if w.treeEntries[path].Type != protocol.ObjectTypeBlob {
-		return nil, errors.New("entry at that path is not a blob")
+	if existing.Type != protocol.ObjectTypeBlob {
+		return nil, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeBlob, existing.Type)
 	}
-	blobHash := w.treeEntries[path].Hash
 
+	blobHash := existing.Hash
 	w.logger.Debug("deleting blob", "path", path)
 
 	// Remove the entry from our tracking
@@ -226,10 +258,73 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 
 	// Update the tree structure to remove the entry
 	if err := w.removeBlobFromTree(ctx, path); err != nil {
-		return nil, fmt.Errorf("removing blob from tree: %w", err)
+		return nil, fmt.Errorf("remove blob from tree: %w", err)
 	}
 
 	return blobHash, nil
+}
+
+// GetTree retrieves the tree object at the specified path from the repository.
+// The tree represents a directory structure containing files and subdirectories.
+// The path must exist and must be a directory (tree), otherwise an error is returned.
+//
+// This operation retrieves the tree from memory if it has been staged,
+// or from the repository if it hasn't been modified.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: Directory path to retrieve
+//
+// Returns:
+//   - *Tree: The tree object containing directory entries
+//   - error: Error if the path doesn't exist, is not a tree, or retrieval fails
+//
+// Example:
+//
+//	tree, err := writer.GetTree(ctx, "src")
+//	if err != nil {
+//	    return fmt.Errorf("failed to get tree: %w", err)
+//	}
+//	for _, entry := range tree.Entries {
+//	    fmt.Printf("Found %s: %s\n", entry.Type, entry.Name)
+//	}
+func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) {
+	existing, ok := w.treeEntries[path]
+	if !ok {
+		return nil, NewPathNotFoundError(path)
+	}
+
+	if existing.Type != protocol.ObjectTypeTree {
+		return nil, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type)
+	}
+
+	// Get all entries that are direct children of this path
+	pathPrefix := path + "/"
+	var entries []TreeEntry
+
+	for entryPath, entry := range w.treeEntries {
+		if entryPath == path {
+			continue // Skip the tree itself
+		}
+
+		// Check if this is a direct child (no intermediate slashes)
+		if strings.HasPrefix(entryPath, pathPrefix) {
+			remainingPath := entryPath[len(pathPrefix):]
+			if !strings.Contains(remainingPath, "/") {
+				entries = append(entries, TreeEntry{
+					Name: remainingPath,
+					Type: entry.Type,
+					Hash: entry.Hash,
+					Mode: entry.Mode,
+				})
+			}
+		}
+	}
+
+	return &Tree{
+		Hash:    existing.Hash,
+		Entries: entries,
+	}, nil
 }
 
 // DeleteTree removes an entire directory tree at the specified path from the repository.
@@ -253,14 +348,15 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 //
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
-	if w.treeEntries[path] == nil {
-		return nil, errors.New("tree at that path does not exist")
+	existing, ok := w.treeEntries[path]
+	if !ok {
+		return nil, NewPathNotFoundError(path)
 	}
 
-	if w.treeEntries[path].Type != protocol.ObjectTypeTree {
-		return nil, errors.New("entry at that path is not a tree")
+	if existing.Type != protocol.ObjectTypeTree {
+		return nil, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type)
 	}
-	treeHash := w.treeEntries[path].Hash
+	treeHash := existing.Hash
 
 	w.logger.Debug("deleting tree", "path", path)
 
@@ -282,7 +378,7 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 	// Update the tree structure to remove the directory entry
 	if err := w.removeTreeFromTree(ctx, path); err != nil {
-		return nil, fmt.Errorf("removing tree from tree: %w", err)
+		return nil, fmt.Errorf("remove tree from entire tree: %w", err)
 	}
 
 	return treeHash, nil
@@ -314,6 +410,11 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 //	}
 //	commit, err := writer.Commit(ctx, "Add new features", author, author)
 func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
+	// Check if there are any changes to commit
+	if !w.writer.HasObjects() {
+		return nil, ErrNothingToCommit
+	}
+
 	authorIdentity := protocol.Identity{
 		Name:      author.Name,
 		Email:     author.Email,
@@ -330,7 +431,7 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 
 	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message)
 	if err != nil {
-		return nil, fmt.Errorf("creating commit: %w", err)
+		return nil, fmt.Errorf("create commit: %w", err)
 	}
 
 	w.lastCommit = &Commit{
@@ -365,16 +466,21 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 //	    log.Printf("Failed to push changes: %v", err)
 //	}
 func (w *stagedWriter) Push(ctx context.Context) error {
+	// Check if there are any objects to push
+	if !w.writer.HasObjects() {
+		return ErrNothingToPush
+	}
+
 	// TODO: write in chunks and not having all bytes in memory
 	// Write the packfile
 	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
 	if err != nil {
-		return fmt.Errorf("writing packfile: %w", err)
+		return fmt.Errorf("write packfile: %w", err)
 	}
 
 	// Send the packfile to the server
 	if _, err := w.receivePack(ctx, packfile); err != nil {
-		return fmt.Errorf("sending packfile: %w", err)
+		return fmt.Errorf("send packfile: %w", err)
 	}
 
 	// Reset things to accumulate things for next push
@@ -418,7 +524,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 		// Check if not a tree
 		existingObj, exists := w.treeEntries[currentPath]
 		if exists && existingObj.Type != protocol.ObjectTypeTree {
-			return errors.New("existing tree entry is not a tree")
+			return NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type)
 		}
 
 		// Create new tree
@@ -426,7 +532,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			// Create new tree
 			treeObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 			if err != nil {
-				return fmt.Errorf("creating tree for %s: %w", currentPath, err)
+				return fmt.Errorf("create tree for %s: %w", currentPath, err)
 			}
 
 			w.writer.AddObject(treeObj)
@@ -444,6 +550,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Path: currentPath,
 				Hash: treeObj.Hash,
 				Type: protocol.ObjectTypeTree,
+				Mode: 0o40000,
 			}
 		} else {
 			// If tree exists, add our entries to it
@@ -453,7 +560,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				var err error
 				existingTree, err = w.getSingleObject(ctx, existingObj.Hash)
 				if err != nil {
-					return fmt.Errorf("getting existing tree %s: %w", currentPath, err)
+					return fmt.Errorf("get existing tree %s: %w", currentPath, err)
 				}
 				w.treeCache[existingObj.Hash.String()] = existingTree
 				w.logger.Info("tree object found in remote", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
@@ -463,7 +570,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 
 			newObj, err := w.updateTreeEntry(existingTree, current)
 			if err != nil {
-				return fmt.Errorf("updating tree for %s: %w", currentPath, err)
+				return fmt.Errorf("update tree for %s: %w", currentPath, err)
 			}
 
 			w.logger.Debug("add updated tree object", "path", currentPath, "hash", newObj.Hash.String(), "children", len(existingTree.Tree)+1)
@@ -485,7 +592,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	if len(w.lastTree.Tree) == 0 {
 		newRoot, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
 		if err != nil {
-			return fmt.Errorf("building new root tree: %w", err)
+			return fmt.Errorf("build new root tree: %w", err)
 		}
 
 		w.writer.AddObject(newRoot)
@@ -497,7 +604,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 
 	newRootObj, err := w.updateTreeEntry(w.lastTree, current)
 	if err != nil {
-		return fmt.Errorf("updating root tree: %w", err)
+		return fmt.Errorf("update root tree: %w", err)
 	}
 	w.treeCache[newRootObj.Hash.String()] = newRootObj
 	w.lastTree = newRootObj
@@ -522,7 +629,7 @@ func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current pro
 	}
 
 	if obj.Type != protocol.ObjectTypeTree {
-		return nil, errors.New("object is not a tree")
+		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
 	}
 
 	// Create a new slice for the updated entries
@@ -540,7 +647,7 @@ func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current pro
 
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {
-		return nil, fmt.Errorf("building tree object: %w", err)
+		return nil, fmt.Errorf("build tree object: %w", err)
 	}
 
 	w.writer.AddObject(newObj)
@@ -573,7 +680,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		// File is in root directory
 		newRootObj, err := w.removeTreeEntry(w.lastTree, fileName)
 		if err != nil {
-			return fmt.Errorf("removing file from root tree: %w", err)
+			return fmt.Errorf("remove file from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
 		w.treeCache[newRootObj.Hash.String()] = newRootObj
@@ -591,11 +698,11 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		// Get the tree we need to modify
 		existingObj, exists := w.treeEntries[currentPath]
 		if !exists {
-			return fmt.Errorf("parent directory %s does not exist", currentPath)
+			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, NewPathNotFoundError(currentPath))
 		}
 
 		if existingObj.Type != protocol.ObjectTypeTree {
-			return errors.New("parent path is not a tree")
+			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
 		// Get tree object from cache or fetch it
@@ -604,7 +711,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			var err error
 			treeObj, err = w.getSingleObject(ctx, existingObj.Hash)
 			if err != nil {
-				return fmt.Errorf("getting tree %s: %w", currentPath, err)
+				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
 			w.treeCache[existingObj.Hash.String()] = treeObj
 		}
@@ -616,7 +723,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			// This is the immediate parent - remove the file
 			newObj, err = w.removeTreeEntry(treeObj, fileName)
 			if err != nil {
-				return fmt.Errorf("removing file from tree %s: %w", currentPath, err)
+				return fmt.Errorf("remove file from tree %s: %w", currentPath, err)
 			}
 			w.logger.Debug("removed file from parent tree", "path", currentPath, "file", fileName, "new_hash", newObj.Hash.String())
 		} else {
@@ -629,7 +736,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			}
 			newObj, err = w.updateTreeEntry(treeObj, childEntry)
 			if err != nil {
-				return fmt.Errorf("updating tree %s with new child: %w", currentPath, err)
+				return fmt.Errorf("update tree %s with new child: %w", currentPath, err)
 			}
 			w.logger.Debug("updated parent tree with new child", "path", currentPath, "child", childDirName, "child_hash", updatedChildHash.String(), "new_hash", newObj.Hash.String())
 		}
@@ -656,7 +763,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 
 	newRootObj, err := w.updateTreeEntry(w.lastTree, rootDirEntry)
 	if err != nil {
-		return fmt.Errorf("updating root tree: %w", err)
+		return fmt.Errorf("update root tree: %w", err)
 	}
 
 	w.lastTree = newRootObj
@@ -690,7 +797,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		// Directory is in root
 		newRootObj, err := w.removeTreeEntry(w.lastTree, dirName)
 		if err != nil {
-			return fmt.Errorf("removing directory from root tree: %w", err)
+			return fmt.Errorf("remove directory from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
 		w.treeCache[newRootObj.Hash.String()] = newRootObj
@@ -708,11 +815,11 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		// Get the tree we need to modify
 		existingObj, exists := w.treeEntries[currentPath]
 		if !exists {
-			return fmt.Errorf("parent directory %s does not exist", currentPath)
+			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, NewPathNotFoundError(currentPath))
 		}
 
 		if existingObj.Type != protocol.ObjectTypeTree {
-			return errors.New("parent path is not a tree")
+			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
 		// Get tree object from cache or fetch it
@@ -721,7 +828,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			var err error
 			treeObj, err = w.getSingleObject(ctx, existingObj.Hash)
 			if err != nil {
-				return fmt.Errorf("getting tree %s: %w", currentPath, err)
+				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
 			w.treeCache[existingObj.Hash.String()] = treeObj
 		}
@@ -733,7 +840,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			// This is the immediate parent - remove the directory
 			newObj, err = w.removeTreeEntry(treeObj, dirName)
 			if err != nil {
-				return fmt.Errorf("removing directory from tree %s: %w", currentPath, err)
+				return fmt.Errorf("remove directory from tree %s: %w", currentPath, err)
 			}
 			w.logger.Debug("removed directory from parent tree", "path", currentPath, "dir", dirName, "new_hash", newObj.Hash.String())
 		} else {
@@ -746,7 +853,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			}
 			newObj, err = w.updateTreeEntry(treeObj, childEntry)
 			if err != nil {
-				return fmt.Errorf("updating tree %s with new child: %w", currentPath, err)
+				return fmt.Errorf("update tree %s with new child: %w", currentPath, err)
 			}
 			w.logger.Debug("updated parent tree with new child", "path", currentPath, "child", childDirName, "child_hash", updatedChildHash.String(), "new_hash", newObj.Hash.String())
 		}
@@ -773,7 +880,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 
 	newRootObj, err := w.updateTreeEntry(w.lastTree, rootDirEntry)
 	if err != nil {
-		return fmt.Errorf("updating root tree: %w", err)
+		return fmt.Errorf("update root tree: %w", err)
 	}
 
 	w.lastTree = newRootObj
@@ -802,7 +909,7 @@ func (w *stagedWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileN
 	}
 
 	if obj.Type != protocol.ObjectTypeTree {
-		return nil, errors.New("object is not a tree")
+		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
 	}
 
 	// Create a new slice excluding the target entry
@@ -826,7 +933,7 @@ func (w *stagedWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileN
 	// Build new tree object with the filtered entries
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, filteredEntries)
 	if err != nil {
-		return nil, fmt.Errorf("building tree object: %w", err)
+		return nil, fmt.Errorf("build tree object: %w", err)
 	}
 
 	w.writer.AddObject(newObj)

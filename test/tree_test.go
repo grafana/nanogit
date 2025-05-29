@@ -44,10 +44,6 @@ func TestClient_GetFlatTree(t *testing.T) {
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	// logger.Info("Getting the tree hash")
-	// treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
-	// require.NoError(t, err)
-
 	logger.Info("Getting the commit hash")
 	commitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
@@ -274,7 +270,7 @@ func TestClient_GetTreeByPath(t *testing.T) {
 	testCases := []struct {
 		name          string
 		path          string
-		expectedError string
+		expectedError error
 		verifyFunc    func(tree *nanogit.Tree)
 	}{
 		{
@@ -321,17 +317,17 @@ func TestClient_GetTreeByPath(t *testing.T) {
 		{
 			name:          "nonexistent path",
 			path:          "nonexistent",
-			expectedError: "path component 'nonexistent' not found",
+			expectedError: &nanogit.PathNotFoundError{},
 		},
 		{
 			name:          "path to file instead of directory",
 			path:          "root.txt",
-			expectedError: "path component 'root.txt' is not a directory",
+			expectedError: &nanogit.UnexpectedObjectTypeError{},
 		},
 		{
 			name:          "nested nonexistent path",
 			path:          "dir1/nonexistent",
-			expectedError: "path component 'nonexistent' not found",
+			expectedError: &nanogit.PathNotFoundError{},
 		},
 	}
 
@@ -341,9 +337,9 @@ func TestClient_GetTreeByPath(t *testing.T) {
 
 			tree, err := client.GetTreeByPath(ctx, treeHash, tc.path)
 
-			if tc.expectedError != "" {
+			if tc.expectedError != nil {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.expectedError)
+				require.ErrorAs(t, err, &tc.expectedError)
 				assert.Nil(t, tree)
 				return
 			}

@@ -10,6 +10,20 @@ import (
 )
 
 type FakeStagedWriter struct {
+	BlobExistsStub        func(context.Context, string) (bool, error)
+	blobExistsMutex       sync.RWMutex
+	blobExistsArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+	}
+	blobExistsReturns struct {
+		result1 bool
+		result2 error
+	}
+	blobExistsReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
 	CommitStub        func(context.Context, string, nanogit.Author, nanogit.Committer) (*nanogit.Commit, error)
 	commitMutex       sync.RWMutex
 	commitArgsForCall []struct {
@@ -69,6 +83,20 @@ type FakeStagedWriter struct {
 		result1 hash.Hash
 		result2 error
 	}
+	GetTreeStub        func(context.Context, string) (*nanogit.Tree, error)
+	getTreeMutex       sync.RWMutex
+	getTreeArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+	}
+	getTreeReturns struct {
+		result1 *nanogit.Tree
+		result2 error
+	}
+	getTreeReturnsOnCall map[int]struct {
+		result1 *nanogit.Tree
+		result2 error
+	}
 	PushStub        func(context.Context) error
 	pushMutex       sync.RWMutex
 	pushArgsForCall []struct {
@@ -97,6 +125,71 @@ type FakeStagedWriter struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeStagedWriter) BlobExists(arg1 context.Context, arg2 string) (bool, error) {
+	fake.blobExistsMutex.Lock()
+	ret, specificReturn := fake.blobExistsReturnsOnCall[len(fake.blobExistsArgsForCall)]
+	fake.blobExistsArgsForCall = append(fake.blobExistsArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+	}{arg1, arg2})
+	stub := fake.BlobExistsStub
+	fakeReturns := fake.blobExistsReturns
+	fake.recordInvocation("BlobExists", []interface{}{arg1, arg2})
+	fake.blobExistsMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeStagedWriter) BlobExistsCallCount() int {
+	fake.blobExistsMutex.RLock()
+	defer fake.blobExistsMutex.RUnlock()
+	return len(fake.blobExistsArgsForCall)
+}
+
+func (fake *FakeStagedWriter) BlobExistsCalls(stub func(context.Context, string) (bool, error)) {
+	fake.blobExistsMutex.Lock()
+	defer fake.blobExistsMutex.Unlock()
+	fake.BlobExistsStub = stub
+}
+
+func (fake *FakeStagedWriter) BlobExistsArgsForCall(i int) (context.Context, string) {
+	fake.blobExistsMutex.RLock()
+	defer fake.blobExistsMutex.RUnlock()
+	argsForCall := fake.blobExistsArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeStagedWriter) BlobExistsReturns(result1 bool, result2 error) {
+	fake.blobExistsMutex.Lock()
+	defer fake.blobExistsMutex.Unlock()
+	fake.BlobExistsStub = nil
+	fake.blobExistsReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeStagedWriter) BlobExistsReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.blobExistsMutex.Lock()
+	defer fake.blobExistsMutex.Unlock()
+	fake.BlobExistsStub = nil
+	if fake.blobExistsReturnsOnCall == nil {
+		fake.blobExistsReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.blobExistsReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeStagedWriter) Commit(arg1 context.Context, arg2 string, arg3 nanogit.Author, arg4 nanogit.Committer) (*nanogit.Commit, error) {
@@ -367,6 +460,71 @@ func (fake *FakeStagedWriter) DeleteTreeReturnsOnCall(i int, result1 hash.Hash, 
 	}{result1, result2}
 }
 
+func (fake *FakeStagedWriter) GetTree(arg1 context.Context, arg2 string) (*nanogit.Tree, error) {
+	fake.getTreeMutex.Lock()
+	ret, specificReturn := fake.getTreeReturnsOnCall[len(fake.getTreeArgsForCall)]
+	fake.getTreeArgsForCall = append(fake.getTreeArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+	}{arg1, arg2})
+	stub := fake.GetTreeStub
+	fakeReturns := fake.getTreeReturns
+	fake.recordInvocation("GetTree", []interface{}{arg1, arg2})
+	fake.getTreeMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeStagedWriter) GetTreeCallCount() int {
+	fake.getTreeMutex.RLock()
+	defer fake.getTreeMutex.RUnlock()
+	return len(fake.getTreeArgsForCall)
+}
+
+func (fake *FakeStagedWriter) GetTreeCalls(stub func(context.Context, string) (*nanogit.Tree, error)) {
+	fake.getTreeMutex.Lock()
+	defer fake.getTreeMutex.Unlock()
+	fake.GetTreeStub = stub
+}
+
+func (fake *FakeStagedWriter) GetTreeArgsForCall(i int) (context.Context, string) {
+	fake.getTreeMutex.RLock()
+	defer fake.getTreeMutex.RUnlock()
+	argsForCall := fake.getTreeArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeStagedWriter) GetTreeReturns(result1 *nanogit.Tree, result2 error) {
+	fake.getTreeMutex.Lock()
+	defer fake.getTreeMutex.Unlock()
+	fake.GetTreeStub = nil
+	fake.getTreeReturns = struct {
+		result1 *nanogit.Tree
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeStagedWriter) GetTreeReturnsOnCall(i int, result1 *nanogit.Tree, result2 error) {
+	fake.getTreeMutex.Lock()
+	defer fake.getTreeMutex.Unlock()
+	fake.GetTreeStub = nil
+	if fake.getTreeReturnsOnCall == nil {
+		fake.getTreeReturnsOnCall = make(map[int]struct {
+			result1 *nanogit.Tree
+			result2 error
+		})
+	}
+	fake.getTreeReturnsOnCall[i] = struct {
+		result1 *nanogit.Tree
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeStagedWriter) Push(arg1 context.Context) error {
 	fake.pushMutex.Lock()
 	ret, specificReturn := fake.pushReturnsOnCall[len(fake.pushArgsForCall)]
@@ -502,6 +660,8 @@ func (fake *FakeStagedWriter) UpdateBlobReturnsOnCall(i int, result1 hash.Hash, 
 func (fake *FakeStagedWriter) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.blobExistsMutex.RLock()
+	defer fake.blobExistsMutex.RUnlock()
 	fake.commitMutex.RLock()
 	defer fake.commitMutex.RUnlock()
 	fake.createBlobMutex.RLock()
@@ -510,6 +670,8 @@ func (fake *FakeStagedWriter) Invocations() map[string][][]interface{} {
 	defer fake.deleteBlobMutex.RUnlock()
 	fake.deleteTreeMutex.RLock()
 	defer fake.deleteTreeMutex.RUnlock()
+	fake.getTreeMutex.RLock()
+	defer fake.getTreeMutex.RUnlock()
 	fake.pushMutex.RLock()
 	defer fake.pushMutex.RUnlock()
 	fake.updateBlobMutex.RLock()

@@ -481,6 +481,11 @@ func (w *PackfileWriter) AddObject(obj PackfileObject) {
 	w.objects = append(w.objects, obj)
 }
 
+// HasObjects returns true if the writer has any objects staged for writing.
+func (w *PackfileWriter) HasObjects() bool {
+	return len(w.objects) > 0
+}
+
 // AddCommit adds a commit object to the packfile.
 // The commit references a tree and optionally a parent commit.
 func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string) (hash.Hash, error) {

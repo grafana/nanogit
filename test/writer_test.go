@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
 	"github.com/stretchr/testify/assert"
@@ -59,11 +60,33 @@ func TestClient_Writer(t *testing.T) {
 		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
 
+		// Verify nothing to push before creating blob
+		// TODO: make it a separate test
+		err = writer.Push(ctx)
+		require.Error(t, err)
+		require.ErrorIs(t, err, nanogit.ErrNothingToPush)
+
+		// Verify nothing to commit before creating blob
+		// TODO: make it a separate test
+		_, err = writer.Commit(ctx, "Add new file", author, committer)
+		require.Error(t, err)
+		require.ErrorIs(t, err, nanogit.ErrNothingToCommit)
+
+		// Verify blob exists before creating it
+		exists, err := writer.BlobExists(ctx, "new.txt")
+		require.NoError(t, err)
+		require.False(t, exists)
+
 		_, err = writer.CreateBlob(ctx, "new.txt", newContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add new file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
+
+		// Verify blob exists after creating it
+		exists, err = writer.BlobExists(ctx, "new.txt")
+		require.NoError(t, err)
+		require.True(t, exists)
 
 		logger.Info("Pushing the commit")
 		err = writer.Push(ctx)
@@ -133,13 +156,50 @@ func TestClient_Writer(t *testing.T) {
 
 		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
+
+		// Verify blob does not exist before creating it
+		exists, err := writer.BlobExists(ctx, "dir/subdir/file.txt")
+		require.NoError(t, err)
+		require.False(t, exists)
+
+		// Verify tree does not exist before creating it
+		_, err = writer.GetTree(ctx, "dir")
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.Error(t, err)
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "dir", pathNotFoundErr.Path)
+
 		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
+
+		// Verify blob exists after creating it
+		exists, err = writer.BlobExists(ctx, "dir/subdir/file.txt")
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		// Verify tree exists after creating it
+		tree, err := writer.GetTree(ctx, "dir")
+		require.NoError(t, err)
+		require.NotNil(t, tree)
+		require.Equal(t, 1, len(tree.Entries))
+		require.Equal(t, "subdir", tree.Entries[0].Name)
+		require.Equal(t, protocol.ObjectTypeTree, tree.Entries[0].Type)
+		require.Equal(t, uint32(0o40000), tree.Entries[0].Mode)
+
 		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
 		err = writer.Push(ctx)
 		require.NoError(t, err)
+
+		// Verify tree for subdir
+		subdirTree, err := writer.GetTree(ctx, "dir/subdir")
+		require.NoError(t, err)
+		require.NotNil(t, subdirTree)
+		require.Equal(t, 1, len(subdirTree.Entries))
+		require.Equal(t, "file.txt", subdirTree.Entries[0].Name)
+		require.Equal(t, protocol.ObjectTypeBlob, subdirTree.Entries[0].Type)
+		require.Equal(t, uint32(0o100644), subdirTree.Entries[0].Mode)
 
 		logger.Info("Verifying using Git CLI")
 		local.Git(t, "pull")
@@ -186,7 +246,7 @@ func TestClient_Writer(t *testing.T) {
 
 		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not found")
+		require.ErrorIs(t, err, nanogit.ErrObjectNotFound)
 	})
 
 	t.Run("UpdateBlob with existing file", func(t *testing.T) {
@@ -402,7 +462,10 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to update a nonexistent file")
 		_, err = writer.UpdateBlob(ctx, "nonexistent.txt", []byte("content"))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "blob at that path does not exist")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
 	})
 
 	t.Run("DeleteBlob with existing file", func(t *testing.T) {
@@ -586,7 +649,10 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to delete a nonexistent file")
 		_, err = writer.DeleteBlob(ctx, "nonexistent.txt")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "blob at that path does not exist")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
 	})
 
 	t.Run("DeleteBlob preserves other files in same directory", func(t *testing.T) {
@@ -866,7 +932,10 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to delete a nonexistent directory")
 		_, err = writer.DeleteTree(ctx, "nonexistent")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tree at that path does not exist")
+		// Check for structured PathNotFoundError
+		var pathNotFoundErr *nanogit.PathNotFoundError
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "nonexistent", pathNotFoundErr.Path)
 	})
 
 	t.Run("DeleteTree with file instead of directory", func(t *testing.T) {
@@ -896,7 +965,12 @@ func TestClient_Writer(t *testing.T) {
 		logger.Info("Trying to delete a file as if it were a directory")
 		_, err = writer.DeleteTree(ctx, "testfile.txt")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "entry at that path is not a tree")
+		// Check for structured UnexpectedObjectTypeError since we expected a tree but got a blob
+		var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
+		require.ErrorAs(t, err, &unexpectedTypeErr)
+		// Note: We need to import the protocol package to access ObjectType constants
+		// For now, we'll just verify it's an UnexpectedObjectTypeError
+		assert.NotNil(t, unexpectedTypeErr)
 	})
 
 	t.Run("DeleteTree with subdirectory only", func(t *testing.T) {
@@ -979,6 +1053,311 @@ func TestClient_Writer(t *testing.T) {
 		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
 		require.NoError(t, err)
 		require.NotEqual(t, subdir1File, otherContent)
+	})
+
+	t.Run("CreateBlob multiple files in different directories with one commit", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		logger.Info("Getting current ref")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
+		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
+
+		logger.Info("Creating staged writer")
+		writer, err := client.NewStagedWriter(ctx, ref)
+		require.NoError(t, err)
+
+		// Create multiple files in the same directory
+		logger.Info("Creating multiple JSON files in config directory")
+		config1Content := []byte(`{"database": {"host": "localhost", "port": 5432}}`)
+		config2Content := []byte(`{"api": {"timeout": 30, "retries": 3}}`)
+		config3Content := []byte(`{"logging": {"level": "info", "output": "stdout"}}`)
+
+		_, err = writer.CreateBlob(ctx, "config/database.json", config1Content)
+		require.NoError(t, err)
+
+		_, err = writer.CreateBlob(ctx, "config/api.json", config2Content)
+		require.NoError(t, err)
+
+		_, err = writer.CreateBlob(ctx, "config/logging.json", config3Content)
+		require.NoError(t, err)
+
+		// Create files in different subdirectories
+		logger.Info("Creating files in different subdirectories")
+		dataContent := []byte(`{"users": [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]}`)
+		schemaContent := []byte(`{"type": "object", "properties": {"name": {"type": "string"}}}`)
+
+		_, err = writer.CreateBlob(ctx, "data/users.json", dataContent)
+		require.NoError(t, err)
+
+		_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
+		require.NoError(t, err)
+
+		logger.Info("Committing all files")
+		commit, err := writer.Commit(ctx, "Add configuration and data files", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+
+		logger.Info("Pushing changes")
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		logger.Info("Pulling and verifying")
+		local.Git(t, "pull")
+
+		// Verify directory structure
+		logger.Info("Verifying directory structure")
+		configDir, err := os.Stat(filepath.Join(local.Path, "config"))
+		require.NoError(t, err)
+		require.True(t, configDir.IsDir())
+
+		dataDir, err := os.Stat(filepath.Join(local.Path, "data"))
+		require.NoError(t, err)
+		require.True(t, dataDir.IsDir())
+
+		schemasDir, err := os.Stat(filepath.Join(local.Path, "schemas"))
+		require.NoError(t, err)
+		require.True(t, schemasDir.IsDir())
+
+		// Verify all files exist with correct content
+		logger.Info("Verifying file contents")
+		content1, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
+		require.NoError(t, err)
+		require.Equal(t, config1Content, content1)
+
+		content2, err := os.ReadFile(filepath.Join(local.Path, "config/api.json"))
+		require.NoError(t, err)
+		require.Equal(t, config2Content, content2)
+
+		content3, err := os.ReadFile(filepath.Join(local.Path, "config/logging.json"))
+		require.NoError(t, err)
+		require.Equal(t, config3Content, content3)
+
+		dataFileContent, err := os.ReadFile(filepath.Join(local.Path, "data/users.json"))
+		require.NoError(t, err)
+		require.Equal(t, dataContent, dataFileContent)
+
+		schemaFileContent, err := os.ReadFile(filepath.Join(local.Path, "schemas/user.json"))
+		require.NoError(t, err)
+		require.Equal(t, schemaContent, schemaFileContent)
+
+		// Verify original file is preserved
+		logger.Info("Verifying original file preserved")
+		originalContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+		require.NoError(t, err)
+		require.NotEmpty(t, originalContent)
+
+		// Verify commit details
+		logger.Info("Verifying commit details")
+		finalHash := local.Git(t, "rev-parse", "HEAD")
+		require.Equal(t, commit.Hash.String(), finalHash)
+
+		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
+		require.Equal(t, "Add configuration and data files", strings.TrimSpace(commitMsg))
+	})
+
+	t.Run("CreateBlob multiple files in different directories across multiple commits", func(t *testing.T) {
+		logger, local, client, initCommitFile := quickSetup(t)
+		ctx := context.Background()
+		logger.ForSubtest(t)
+
+		author := nanogit.Author{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+		committer := nanogit.Committer{
+			Name:  "Test Committer",
+			Email: "test@example.com",
+			Time:  time.Now(),
+		}
+
+		logger.Info("Getting current ref")
+		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
+		require.NoError(t, err)
+		ref := nanogit.Ref{
+			Name: "refs/heads/main",
+			Hash: currentHash,
+		}
+
+		logger.Info("Creating staged writer")
+		writer, err := client.NewStagedWriter(ctx, ref)
+		require.NoError(t, err)
+
+		// First commit: Create config files
+		logger.Info("First commit: Creating configuration files")
+		dbConfigContent := []byte(`{"host": "localhost", "port": 5432, "database": "myapp"}`)
+		apiConfigContent := []byte(`{"baseUrl": "https://api.example.com", "timeout": 30}`)
+
+		_, err = writer.CreateBlob(ctx, "config/database.json", dbConfigContent)
+		require.NoError(t, err)
+
+		_, err = writer.CreateBlob(ctx, "config/api.json", apiConfigContent)
+		require.NoError(t, err)
+
+		commit1, err := writer.Commit(ctx, "Add database and API configuration", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit1)
+		logger.Info("First commit created", "hash", commit1.Hash.String())
+
+		// Second commit: Create documentation files
+		logger.Info("Second commit: Creating documentation files")
+		readmeContent := []byte(`# My Application\n\nThis is a sample application.`)
+		apiDocsContent := []byte(`# API Documentation\n\n## Endpoints\n\n- GET /users`)
+
+		_, err = writer.CreateBlob(ctx, "docs/README.md", readmeContent)
+		require.NoError(t, err)
+
+		_, err = writer.CreateBlob(ctx, "docs/api.md", apiDocsContent)
+		require.NoError(t, err)
+
+		commit2, err := writer.Commit(ctx, "Add documentation files", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit2)
+		logger.Info("Second commit created", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
+
+		// Third commit: Create test and data files
+		logger.Info("Third commit: Creating test and data files")
+		testDataContent := []byte(`{"testUsers": [{"id": 1, "name": "Test User"}]}`)
+		schemaContent := []byte(`{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object"}`)
+
+		_, err = writer.CreateBlob(ctx, "tests/data/users.json", testDataContent)
+		require.NoError(t, err)
+
+		_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
+		require.NoError(t, err)
+
+		commit3, err := writer.Commit(ctx, "Add test data and schema files", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit3)
+		logger.Info("Third commit created", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
+
+		// Verify commit chain before push
+		require.Equal(t, currentHash, commit1.Parent, "First commit should have initial commit as parent")
+		require.Equal(t, commit1.Hash, commit2.Parent, "Second commit should have first commit as parent")
+		require.Equal(t, commit2.Hash, commit3.Parent, "Third commit should have second commit as parent")
+
+		// Push all commits at once
+		logger.Info("Pushing all three commits")
+		err = writer.Push(ctx)
+		require.NoError(t, err)
+
+		// Pull and verify
+		logger.Info("Pulling changes")
+		local.Git(t, "pull")
+
+		// Verify final commit hash
+		logger.Info("Verifying final commit hash")
+		finalHash := local.Git(t, "rev-parse", "HEAD")
+		require.Equal(t, commit3.Hash.String(), finalHash, "HEAD should point to third commit")
+
+		// Verify all commits exist in history
+		logger.Info("Verifying commit history")
+		commitHistory := local.Git(t, "log", "--oneline", "--format=%H %s")
+		logger.Info("Commit history", "history", commitHistory)
+
+		require.Contains(t, commitHistory, commit1.Hash.String(), "First commit should be in history")
+		require.Contains(t, commitHistory, commit2.Hash.String(), "Second commit should be in history")
+		require.Contains(t, commitHistory, commit3.Hash.String(), "Third commit should be in history")
+
+		require.Contains(t, commitHistory, "Add database and API configuration", "First commit message should be in history")
+		require.Contains(t, commitHistory, "Add documentation files", "Second commit message should be in history")
+		require.Contains(t, commitHistory, "Add test data and schema files", "Third commit message should be in history")
+
+		// Verify directory structure
+		logger.Info("Verifying directory structure")
+		configDir, err := os.Stat(filepath.Join(local.Path, "config"))
+		require.NoError(t, err)
+		require.True(t, configDir.IsDir())
+
+		docsDir, err := os.Stat(filepath.Join(local.Path, "docs"))
+		require.NoError(t, err)
+		require.True(t, docsDir.IsDir())
+
+		testsDir, err := os.Stat(filepath.Join(local.Path, "tests"))
+		require.NoError(t, err)
+		require.True(t, testsDir.IsDir())
+
+		testDataDir, err := os.Stat(filepath.Join(local.Path, "tests/data"))
+		require.NoError(t, err)
+		require.True(t, testDataDir.IsDir())
+
+		schemasDir, err := os.Stat(filepath.Join(local.Path, "schemas"))
+		require.NoError(t, err)
+		require.True(t, schemasDir.IsDir())
+
+		// Verify all files exist with correct content
+		logger.Info("Verifying file contents")
+		dbConfig, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
+		require.NoError(t, err)
+		require.Equal(t, dbConfigContent, dbConfig)
+
+		apiConfig, err := os.ReadFile(filepath.Join(local.Path, "config/api.json"))
+		require.NoError(t, err)
+		require.Equal(t, apiConfigContent, apiConfig)
+
+		readme, err := os.ReadFile(filepath.Join(local.Path, "docs/README.md"))
+		require.NoError(t, err)
+		require.Equal(t, readmeContent, readme)
+
+		apiDocs, err := os.ReadFile(filepath.Join(local.Path, "docs/api.md"))
+		require.NoError(t, err)
+		require.Equal(t, apiDocsContent, apiDocs)
+
+		testData, err := os.ReadFile(filepath.Join(local.Path, "tests/data/users.json"))
+		require.NoError(t, err)
+		require.Equal(t, testDataContent, testData)
+
+		schema, err := os.ReadFile(filepath.Join(local.Path, "schemas/user.json"))
+		require.NoError(t, err)
+		require.Equal(t, schemaContent, schema)
+
+		// Verify original file is preserved
+		logger.Info("Verifying original file preserved")
+		originalContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+		require.NoError(t, err)
+		require.NotEmpty(t, originalContent)
+
+		// Verify individual commits show correct files
+		logger.Info("Verifying files in individual commits")
+		commit1Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", "-r", commit1.Hash.String()))
+		require.Contains(t, commit1Files, "config/database.json")
+		require.Contains(t, commit1Files, "config/api.json")
+		require.Contains(t, commit1Files, initCommitFile)
+		require.NotContains(t, commit1Files, "docs/README.md")
+
+		commit2Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", "-r", commit2.Hash.String()))
+		require.Contains(t, commit2Files, "config/database.json")
+		require.Contains(t, commit2Files, "config/api.json")
+		require.Contains(t, commit2Files, "docs/README.md")
+		require.Contains(t, commit2Files, "docs/api.md")
+		require.Contains(t, commit2Files, initCommitFile)
+		require.NotContains(t, commit2Files, "tests/data/users.json")
+
+		commit3Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", "-r", commit3.Hash.String()))
+		require.Contains(t, commit3Files, "config/database.json")
+		require.Contains(t, commit3Files, "config/api.json")
+		require.Contains(t, commit3Files, "docs/README.md")
+		require.Contains(t, commit3Files, "docs/api.md")
+		require.Contains(t, commit3Files, "tests/data/users.json")
+		require.Contains(t, commit3Files, "schemas/user.json")
+		require.Contains(t, commit3Files, initCommitFile)
 	})
 
 	t.Run("Multiple commits should all be visible after push", func(t *testing.T) {
