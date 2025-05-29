@@ -108,6 +108,31 @@ type stagedWriter struct {
 	treeEntries map[string]*FlatTreeEntry
 }
 
+// BlobExists checks if a blob exists at the given path in the repository.
+// This method verifies the existence of a file by checking the tree entries
+// that have been loaded into memory.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: File path to check (e.g., "docs/readme.md")
+//
+// Returns:
+//   - bool: True if the blob exists at the specified path
+//   - error: Error if the check fails
+//
+// Example:
+//
+//	exists, err := writer.BlobExists(ctx, "src/main.go")
+func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error) {
+	entry, exists := w.treeEntries[path]
+	if !exists {
+		return false, nil
+	}
+
+	// Check if the entry is actually a blob
+	return entry.Type == protocol.ObjectTypeBlob, nil
+}
+
 // CreateBlob creates a new blob object at the specified path with the given content.
 // The path can include directory separators ("/") to create nested directory structures.
 // If intermediate directories don't exist, they will be created automatically.

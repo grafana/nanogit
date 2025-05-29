@@ -71,11 +71,21 @@ func TestClient_Writer(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorIs(t, err, nanogit.ErrNothingToCommit)
 
+		// Verify blob exists before creating it
+		exists, err := writer.BlobExists(ctx, "new.txt")
+		require.NoError(t, err)
+		require.False(t, exists)
+
 		_, err = writer.CreateBlob(ctx, "new.txt", newContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add new file", author, committer)
 		require.NoError(t, err)
 		require.NotNil(t, commit)
+
+		// Verify blob exists after creating it
+		exists, err = writer.BlobExists(ctx, "new.txt")
+		require.NoError(t, err)
+		require.True(t, exists)
 
 		logger.Info("Pushing the commit")
 		err = writer.Push(ctx)
@@ -145,6 +155,12 @@ func TestClient_Writer(t *testing.T) {
 
 		writer, err := client.NewStagedWriter(ctx, ref)
 		require.NoError(t, err)
+
+		// Verify blob does not exist before creating it
+		exists, err := writer.BlobExists(ctx, "dir/subdir/file.txt")
+		require.NoError(t, err)
+		require.False(t, exists)
+
 		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
@@ -152,6 +168,11 @@ func TestClient_Writer(t *testing.T) {
 		require.NotNil(t, commit)
 		err = writer.Push(ctx)
 		require.NoError(t, err)
+
+		// Verify blob exists after creating it
+		exists, err = writer.BlobExists(ctx, "dir/subdir/file.txt")
+		require.NoError(t, err)
+		require.True(t, exists)
 
 		logger.Info("Verifying using Git CLI")
 		local.Git(t, "pull")

@@ -20,6 +20,9 @@ import (
 // Changes are staged in memory and only sent to the server when Push() is called.
 // This can be used to write to any Git object: commits, tags, branches, or other references.
 type StagedWriter interface {
+	// BlobExists checks if a blob exists at the given path.
+	BlobExists(ctx context.Context, path string) (bool, error)
+
 	// CreateBlob stages a new file to be written at the given path.
 	// Returns the hash of the created blob.
 	CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error)
