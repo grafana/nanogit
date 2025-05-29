@@ -36,7 +36,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	}
 
 	if obj.Type != protocol.ObjectTypeBlob {
-		return nil, NewUnexpectedObjectTypeError(blobID.String(), protocol.ObjectTypeBlob.String(), obj.Type.String())
+		return nil, NewUnexpectedObjectTypeError(blobID.String(), protocol.ObjectTypeBlob, obj.Type)
 	}
 
 	if obj.Hash.Is(blobID) {
@@ -109,7 +109,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeTree.String(), entry.Type.String())
+					return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeTree, entry.Type)
 				}
 				currentHash = entry.Hash
 				found = true
@@ -137,7 +137,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
 			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeBlob.String(), entry.Type.String())
+				return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeBlob, entry.Type)
 			}
 
 			return c.GetBlob(ctx, entry.Hash)

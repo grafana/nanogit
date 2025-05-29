@@ -417,7 +417,7 @@ func (c *httpClient) findRootTree(targetHash hash.Hash, allObjects map[string]*p
 			"tree_hash", treeHash.String(),
 			"tree_available", tree != nil)
 	} else {
-		return nil, hash.Zero, fmt.Errorf("object %s is not a commit: %w", targetHash.String(), NewUnexpectedObjectTypeError(targetHash.String(), "commit", obj.Type.String()))
+		return nil, hash.Zero, NewUnexpectedObjectTypeError(targetHash.String(), protocol.ObjectTypeCommit, obj.Type)
 	}
 
 	return tree, treeHash, nil
@@ -631,7 +631,7 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, fmt.Errorf("path component '%s' is not a directory: %w", part, NewUnexpectedObjectTypeError(entry.Hash.String(), "tree", entry.Type.String()))
+					return nil, fmt.Errorf("path component '%s' is not a directory: %w", part, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeTree, entry.Type))
 				}
 				currentHash = entry.Hash
 				found = true

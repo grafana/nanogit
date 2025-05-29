@@ -47,7 +47,7 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash) (m
 	if err != nil {
 		c.logger.Debug("UploadPack error", "want", commitHash, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
-			return nil, ErrObjectNotFound
+			return nil, NewObjectNotFoundError(commitHash.String())
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
@@ -110,7 +110,7 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 	if err != nil {
 		c.logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
-			return nil, ErrObjectNotFound
+			return nil, NewObjectNotFoundError(want[0].String())
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}

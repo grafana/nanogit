@@ -147,8 +147,14 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	_, err := c.GetRef(ctx, ref.Name)
 	switch {
-	case err != nil && !errors.Is(err, ErrObjectNotFound):
-		return fmt.Errorf("get ref: %w", err)
+	case err != nil:
+		// Check if it's a "not found" error, which is expected for creating new refs
+		var notFoundErr *ObjectNotFoundError
+		if !errors.As(err, &notFoundErr) {
+			// If it's not a "not found" error, return the actual error
+			return fmt.Errorf("get ref: %w", err)
+		}
+		// Ref doesn't exist, we can create it (this is the expected case)
 	case err == nil:
 		return NewObjectAlreadyExistsError(ref.Name)
 	}
@@ -195,7 +201,8 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, ref.Name)
 	if err != nil {
-		if errors.Is(err, ErrObjectNotFound) {
+		var notFoundErr *ObjectNotFoundError
+		if errors.As(err, &notFoundErr) {
 			return err
 		}
 
@@ -241,7 +248,8 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, refName)
 	if err != nil {
-		if errors.Is(err, ErrObjectNotFound) {
+		var notFoundErr *ObjectNotFoundError
+		if errors.As(err, &notFoundErr) {
 			return err
 		}
 		return fmt.Errorf("get ref: %w", err)

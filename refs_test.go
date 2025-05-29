@@ -3,6 +3,7 @@ package nanogit
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -176,7 +177,7 @@ func TestGetRef(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "get non-existent ref",
+			name: "ref not found",
 			lsRefsResp: func() string {
 				pkt, _ := protocol.FormatPacks(
 					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/master\n"),
@@ -185,14 +186,14 @@ func TestGetRef(t *testing.T) {
 			}(),
 			refToGet:      "refs/heads/non-existent",
 			expectedRef:   Ref{},
-			expectedError: ErrObjectNotFound,
+			expectedError: nil, // We'll check for structured error type
 		},
 		{
 			name:          "ls-refs request fails",
 			lsRefsResp:    "",
 			refToGet:      "refs/heads/master",
 			expectedRef:   Ref{},
-			expectedError: ErrObjectNotFound, // Will get wrapped in "list refs:" error
+			expectedError: nil, // We'll check for wrapped error differently
 			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
@@ -241,12 +242,19 @@ func TestGetRef(t *testing.T) {
 			ref, err := client.GetRef(context.Background(), tt.refToGet)
 			if tt.expectedError != nil {
 				require.Error(t, err)
-				if tt.setupClient != nil {
-					// For network timeout cases, just check that we got an error
-					require.Contains(t, err.Error(), "send ls-refs command")
-				} else {
-					require.Equal(t, tt.expectedError, err)
-				}
+				require.True(t, errors.Is(err, tt.expectedError))
+				require.Equal(t, Ref{}, ref)
+			} else if tt.setupClient != nil {
+				// For network timeout cases, just check that we got an error
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "send ls-refs command")
+				require.Equal(t, Ref{}, ref)
+			} else if tt.refToGet == "refs/heads/non-existent" {
+				// Check for structured ObjectNotFoundError
+				require.Error(t, err)
+				var notFoundErr *ObjectNotFoundError
+				require.True(t, errors.As(err, &notFoundErr))
+				require.Equal(t, "refs/heads/non-existent", notFoundErr.ObjectID)
 				require.Equal(t, Ref{}, ref)
 			} else {
 				require.NoError(t, err)
@@ -286,7 +294,7 @@ func TestCreateRef(t *testing.T) {
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			refExists:     true,
-			expectedError: "ref refs/heads/main already exists",
+			expectedError: "object refs/heads/main already exists",
 		},
 		{
 			name: "ls-refs request fails",
@@ -422,10 +430,10 @@ func TestUpdateRef(t *testing.T) {
 			name: "update non-existent ref",
 			refToUpdate: Ref{
 				Name: "refs/heads/non-existent",
-				Hash: hashify("1234567890123456789012345678901234567890"),
+				Hash: hashify("abcdef1234567890123456789012345678901234"),
 			},
 			refExists:     false,
-			expectedError: "ref refs/heads/non-existent does not exist",
+			expectedError: "object refs/heads/non-existent not found",
 		},
 		{
 			name: "ls-refs request fails",
@@ -560,7 +568,7 @@ func TestDeleteRef(t *testing.T) {
 			name:          "delete non-existent ref",
 			refToDelete:   "refs/heads/non-existent",
 			refExists:     false,
-			expectedError: "ref refs/heads/non-existent does not exist",
+			expectedError: "object refs/heads/non-existent not found",
 		},
 		{
 			name:          "ls-refs request fails",
