@@ -2,7 +2,6 @@ package nanogit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -231,7 +230,7 @@ func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, er
 	}
 
 	if commit.Type != protocol.ObjectTypeCommit {
-		return nil, errors.New("commit is not a commit")
+		return nil, NewUnexpectedObjectTypeError(hash, protocol.ObjectTypeCommit, commit.Type)
 	}
 
 	authorTime, err := commit.Commit.Author.Time()
