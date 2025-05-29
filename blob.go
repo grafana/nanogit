@@ -36,7 +36,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	}
 
 	if obj.Type != protocol.ObjectTypeBlob {
-		return nil, NewUnexpectedObjectTypeError(blobID.String(), protocol.ObjectTypeBlob, obj.Type)
+		return nil, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
 	}
 
 	if obj.Hash.Is(blobID) {
@@ -46,7 +46,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 		}, nil
 	}
 
-	return nil, NewObjectNotFoundError(blobID.String())
+	return nil, NewObjectNotFoundError(blobID)
 }
 
 // Blob represents a Git blob object, which stores the content of a file.
@@ -101,7 +101,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		// Get the current tree
 		currentTree, err := c.GetTree(ctx, currentHash)
 		if err != nil {
-			return nil, fmt.Errorf("getting tree %s: %w", currentHash, err)
+			return nil, fmt.Errorf("get tree %s: %w", currentHash, err)
 		}
 
 		// Find the entry with the matching name
@@ -109,7 +109,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeTree, entry.Type)
+					return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeTree, entry.Type)
 				}
 				currentHash = entry.Hash
 				found = true
@@ -118,14 +118,14 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		}
 
 		if !found {
-			return nil, NewObjectNotFoundError(fmt.Sprintf("path component '%s'", part))
+			return nil, NewPathNotFoundError(path)
 		}
 	}
 
 	// Get the final tree containing the target file
 	finalTree, err := c.GetTree(ctx, currentHash)
 	if err != nil {
-		return nil, fmt.Errorf("getting final tree %s: %w", currentHash, err)
+		return nil, fmt.Errorf("get final tree %s: %w", currentHash, err)
 	}
 
 	// Find the target file (last part of path)
@@ -137,12 +137,12 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
 			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeBlob, entry.Type)
+				return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeBlob, entry.Type)
 			}
 
 			return c.GetBlob(ctx, entry.Hash)
 		}
 	}
 
-	return nil, NewObjectNotFoundError(fmt.Sprintf("file '%s'", fileName))
+	return nil, NewPathNotFoundError(path)
 }

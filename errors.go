@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 var (
@@ -23,11 +24,11 @@ var (
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
 type ObjectNotFoundError struct {
-	ObjectID string
+	ObjectID hash.Hash
 }
 
 func (e *ObjectNotFoundError) Error() string {
-	return fmt.Sprintf("object %s not found", e.ObjectID)
+	return fmt.Sprintf("object %s not found: %w", e.ObjectID.String(), ErrObjectNotFound)
 }
 
 // Unwrap enables errors.Is() compatibility with ErrObjectNotFound
@@ -36,7 +37,7 @@ func (e *ObjectNotFoundError) Unwrap() error {
 }
 
 // NewObjectNotFoundError creates a new ObjectNotFoundError with the specified object ID.
-func NewObjectNotFoundError(objectID string) *ObjectNotFoundError {
+func NewObjectNotFoundError(objectID hash.Hash) *ObjectNotFoundError {
 	return &ObjectNotFoundError{
 		ObjectID: objectID,
 	}
@@ -44,11 +45,11 @@ func NewObjectNotFoundError(objectID string) *ObjectNotFoundError {
 
 // ObjectAlreadyExistsError provides structured information about a Git object that already exists.
 type ObjectAlreadyExistsError struct {
-	ObjectID string
+	ObjectID hash.Hash
 }
 
 func (e *ObjectAlreadyExistsError) Error() string {
-	return fmt.Sprintf("object %s already exists", e.ObjectID)
+	return fmt.Sprintf("object %s already exists: %w", e.ObjectID.String(), ErrObjectAlreadyExists)
 }
 
 // Unwrap enables errors.Is() compatibility with ErrObjectAlreadyExists
@@ -57,7 +58,7 @@ func (e *ObjectAlreadyExistsError) Unwrap() error {
 }
 
 // NewObjectAlreadyExistsError creates a new ObjectAlreadyExistsError with the specified object ID.
-func NewObjectAlreadyExistsError(objectID string) *ObjectAlreadyExistsError {
+func NewObjectAlreadyExistsError(objectID hash.Hash) *ObjectAlreadyExistsError {
 	return &ObjectAlreadyExistsError{
 		ObjectID: objectID,
 	}
@@ -65,14 +66,14 @@ func NewObjectAlreadyExistsError(objectID string) *ObjectAlreadyExistsError {
 
 // UnexpectedObjectTypeError provides structured information about a Git object with an unexpected type.
 type UnexpectedObjectTypeError struct {
-	ObjectID     string
+	ObjectID     hash.Hash
 	ExpectedType protocol.ObjectType
 	ActualType   protocol.ObjectType
 }
 
 func (e *UnexpectedObjectTypeError) Error() string {
-	return fmt.Sprintf("object %s has unexpected type %s (expected %s)",
-		e.ObjectID, e.ActualType, e.ExpectedType)
+	return fmt.Sprintf("object %s has unexpected type %s (expected %s): %w",
+		e.ObjectID.String(), e.ActualType.String(), e.ExpectedType.String(), ErrUnexpectedObjectType)
 }
 
 // Unwrap enables errors.Is() compatibility with ErrUnexpectedObjectType
@@ -81,10 +82,73 @@ func (e *UnexpectedObjectTypeError) Unwrap() error {
 }
 
 // NewUnexpectedObjectTypeError creates a new UnexpectedObjectTypeError with the specified details.
-func NewUnexpectedObjectTypeError(objectID string, expectedType, actualType protocol.ObjectType) *UnexpectedObjectTypeError {
+func NewUnexpectedObjectTypeError(objectID hash.Hash, expectedType, actualType protocol.ObjectType) *UnexpectedObjectTypeError {
 	return &UnexpectedObjectTypeError{
 		ObjectID:     objectID,
 		ExpectedType: expectedType,
 		ActualType:   actualType,
+	}
+}
+
+// PathNotFoundError provides structured information about a Git path that was not found.
+type PathNotFoundError struct {
+	Path string
+}
+
+func (e *PathNotFoundError) Error() string {
+	return fmt.Sprintf("path not found: %s: %w", e.Path, ErrObjectNotFound)
+}
+
+// Unwrap enables errors.Is() compatibility with ErrPathNotFound
+func (e *PathNotFoundError) Unwrap() error {
+	return ErrObjectNotFound
+}
+
+// NewPathNotFoundError creates a new PathNotFoundError with the specified path.
+func NewPathNotFoundError(path string) *PathNotFoundError {
+	return &PathNotFoundError{
+		Path: path,
+	}
+}
+
+// RefNotFoundError provides structured information about a Git reference that was not found.
+type RefNotFoundError struct {
+	RefName string
+}
+
+func (e *RefNotFoundError) Error() string {
+	return fmt.Sprintf("reference not found: %s: %w", e.RefName, ErrObjectNotFound)
+}
+
+// Unwrap enables errors.Is() compatibility with ErrRefNotFound
+func (e *RefNotFoundError) Unwrap() error {
+	return ErrObjectNotFound
+}
+
+// NewRefNotFoundError creates a new RefNotFoundError with the specified reference name.
+func NewRefNotFoundError(refName string) *RefNotFoundError {
+	return &RefNotFoundError{
+		RefName: refName,
+	}
+}
+
+// RefAlreadyExistsError provides structured information about a Git reference that already exists.
+type RefAlreadyExistsError struct {
+	RefName string
+}
+
+func (e *RefAlreadyExistsError) Error() string {
+	return fmt.Sprintf("reference already exists: %s: %w", e.RefName, ErrObjectAlreadyExists)
+}
+
+// Unwrap enables errors.Is() compatibility with ErrObjectAlreadyExists
+func (e *RefAlreadyExistsError) Unwrap() error {
+	return ErrObjectAlreadyExists
+}
+
+// NewRefAlreadyExistsError creates a new RefAlreadyExistsError with the specified reference name.
+func NewRefAlreadyExistsError(refName string) *RefAlreadyExistsError {
+	return &RefAlreadyExistsError{
+		RefName: refName,
 	}
 }
