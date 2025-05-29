@@ -220,10 +220,14 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	// TODO: optimize this one
-	commit, err := c.getSingleObject(ctx, hash)
+	objects, err := c.getCommitTree(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
+	}
+
+	commit, ok := objects[hash.String()]
+	if !ok {
+		return nil, NewObjectNotFoundError(hash)
 	}
 
 	if commit.Type != protocol.ObjectTypeCommit {
