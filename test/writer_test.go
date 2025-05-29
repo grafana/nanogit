@@ -65,6 +65,12 @@ func TestClient_Writer(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorIs(t, err, nanogit.ErrNothingToPush)
 
+		// Verify nothing to commit before creating blob
+		// TODO: make it a separate test
+		_, err = writer.Commit(ctx, "Add new file", author, committer)
+		require.Error(t, err)
+		require.ErrorIs(t, err, nanogit.ErrNothingToCommit)
+
 		_, err = writer.CreateBlob(ctx, "new.txt", newContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add new file", author, committer)

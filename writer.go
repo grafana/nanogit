@@ -316,6 +316,11 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 //	}
 //	commit, err := writer.Commit(ctx, "Add new features", author, author)
 func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
+	// Check if there are any changes to commit
+	if !w.writer.HasObjects() {
+		return nil, ErrNothingToCommit
+	}
+
 	authorIdentity := protocol.Identity{
 		Name:      author.Name,
 		Email:     author.Email,

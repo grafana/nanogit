@@ -23,6 +23,10 @@ var (
 	// ErrNothingToPush is returned when attempting to push changes but no objects have been staged.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrNothingToPush = errors.New("nothing to push")
+
+	// ErrNothingToCommit is returned when attempting to commit but no changes have been staged.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrNothingToCommit = errors.New("nothing to commit")
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
