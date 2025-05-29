@@ -3,7 +3,6 @@ package nanogit
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -242,7 +241,7 @@ func TestGetRef(t *testing.T) {
 			ref, err := client.GetRef(context.Background(), tt.refToGet)
 			if tt.expectedError != nil {
 				require.Error(t, err)
-				require.True(t, errors.Is(err, tt.expectedError))
+				require.ErrorIs(t, err, tt.expectedError)
 				require.Equal(t, Ref{}, ref)
 			} else if tt.setupClient != nil {
 				// For network timeout cases, just check that we got an error
@@ -250,11 +249,11 @@ func TestGetRef(t *testing.T) {
 				require.Contains(t, err.Error(), "send ls-refs command")
 				require.Equal(t, Ref{}, ref)
 			} else if tt.refToGet == "refs/heads/non-existent" {
-				// Check for structured ObjectNotFoundError
+				// Check for structured RefNotFoundError
 				require.Error(t, err)
-				var notFoundErr *ObjectNotFoundError
-				require.True(t, errors.As(err, &notFoundErr))
-				require.Equal(t, "refs/heads/non-existent", notFoundErr.ObjectID)
+				var notFoundErr *RefNotFoundError
+				require.ErrorAs(t, err, &notFoundErr)
+				require.Equal(t, "refs/heads/non-existent", notFoundErr.RefName)
 				require.Equal(t, Ref{}, ref)
 			} else {
 				require.NoError(t, err)
@@ -294,7 +293,7 @@ func TestCreateRef(t *testing.T) {
 				Hash: hashify("1234567890123456789012345678901234567890"),
 			},
 			refExists:     true,
-			expectedError: "object refs/heads/main already exists",
+			expectedError: "reference already exists: refs/heads/main",
 		},
 		{
 			name: "ls-refs request fails",
@@ -433,7 +432,7 @@ func TestUpdateRef(t *testing.T) {
 				Hash: hashify("abcdef1234567890123456789012345678901234"),
 			},
 			refExists:     false,
-			expectedError: "object refs/heads/non-existent not found",
+			expectedError: "reference not found: refs/heads/non-existent",
 		},
 		{
 			name: "ls-refs request fails",
@@ -568,7 +567,7 @@ func TestDeleteRef(t *testing.T) {
 			name:          "delete non-existent ref",
 			refToDelete:   "refs/heads/non-existent",
 			refExists:     false,
-			expectedError: "object refs/heads/non-existent not found",
+			expectedError: "reference not found: refs/heads/non-existent",
 		},
 		{
 			name:          "ls-refs request fails",

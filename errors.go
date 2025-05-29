@@ -2,7 +2,6 @@ package nanogit
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -28,7 +27,7 @@ type ObjectNotFoundError struct {
 }
 
 func (e *ObjectNotFoundError) Error() string {
-	return fmt.Sprintf("object %s not found: %w", e.ObjectID.String(), ErrObjectNotFound)
+	return "object " + e.ObjectID.String() + " not found"
 }
 
 // Unwrap enables errors.Is() compatibility with ErrObjectNotFound
@@ -49,7 +48,7 @@ type ObjectAlreadyExistsError struct {
 }
 
 func (e *ObjectAlreadyExistsError) Error() string {
-	return fmt.Sprintf("object %s already exists: %w", e.ObjectID.String(), ErrObjectAlreadyExists)
+	return "object " + e.ObjectID.String() + " already exists"
 }
 
 // Unwrap enables errors.Is() compatibility with ErrObjectAlreadyExists
@@ -72,8 +71,7 @@ type UnexpectedObjectTypeError struct {
 }
 
 func (e *UnexpectedObjectTypeError) Error() string {
-	return fmt.Sprintf("object %s has unexpected type %s (expected %s): %w",
-		e.ObjectID.String(), e.ActualType.String(), e.ExpectedType.String(), ErrUnexpectedObjectType)
+	return "object " + e.ObjectID.String() + " has unexpected type " + e.ActualType.String() + " (expected " + e.ExpectedType.String() + ")"
 }
 
 // Unwrap enables errors.Is() compatibility with ErrUnexpectedObjectType
@@ -96,7 +94,7 @@ type PathNotFoundError struct {
 }
 
 func (e *PathNotFoundError) Error() string {
-	return fmt.Sprintf("path not found: %s: %w", e.Path, ErrObjectNotFound)
+	return "path not found: " + e.Path
 }
 
 // Unwrap enables errors.Is() compatibility with ErrPathNotFound
@@ -117,7 +115,7 @@ type RefNotFoundError struct {
 }
 
 func (e *RefNotFoundError) Error() string {
-	return fmt.Sprintf("reference not found: %s: %w", e.RefName, ErrObjectNotFound)
+	return "reference not found: " + e.RefName
 }
 
 // Unwrap enables errors.Is() compatibility with ErrRefNotFound
@@ -138,7 +136,7 @@ type RefAlreadyExistsError struct {
 }
 
 func (e *RefAlreadyExistsError) Error() string {
-	return fmt.Sprintf("reference already exists: %s: %w", e.RefName, ErrObjectAlreadyExists)
+	return "reference already exists: " + e.RefName
 }
 
 // Unwrap enables errors.Is() compatibility with ErrObjectAlreadyExists

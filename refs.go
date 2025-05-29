@@ -146,15 +146,13 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 //	}
 func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	_, err := c.GetRef(ctx, ref.Name)
-	switch {
-	case err != nil:
-		if !errors.Is(err, ErrObjectNotFound) {
-			return fmt.Errorf("get ref: %w", err)
-		}
-		// Ref doesn't exist, we can create it (this is the expected case)
-	case err == nil:
+	if err == nil {
 		return NewRefAlreadyExistsError(ref.Name)
 	}
+	if !errors.Is(err, ErrObjectNotFound) {
+		return fmt.Errorf("get ref: %w", err)
+	}
+	// Ref doesn't exist, we can create it (this is the expected case)
 
 	// Create and send the ref update request directly - Protocol v2 allows this
 	// without needing a separate capability advertisement request
