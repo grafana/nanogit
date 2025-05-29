@@ -3,7 +3,6 @@ package nanogit
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -21,7 +20,7 @@ func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*prot
 		return obj, nil
 	}
 
-	return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrRefNotFound)
+	return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrObjectNotFound)
 }
 
 // getRootTree fetches the root tree of the repository.
@@ -48,7 +47,7 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash) (m
 	if err != nil {
 		c.logger.Debug("UploadPack error", "want", commitHash, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
-			return nil, errors.New("object not found")
+			return nil, ErrObjectNotFound
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
@@ -111,7 +110,7 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 	if err != nil {
 		c.logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
-			return nil, errors.New("object not found")
+			return nil, ErrObjectNotFound
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}

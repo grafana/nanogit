@@ -220,6 +220,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
+	// TODO: optimize this one
 	commit, err := c.getSingleObject(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
@@ -310,7 +311,7 @@ type ListCommitsOptions struct {
 //	    fmt.Printf("%s: %s\n", commit.Hash.String()[:8], commit.Message)
 //	}
 func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error) {
-
+	// TODO: optimize this one
 	// Set defaults for pagination
 	perPage := options.PerPage
 	if perPage <= 0 {
@@ -424,7 +425,7 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *Commit, path
 	// Compare with parent commit to see if path was affected
 	changes, err := c.CompareCommits(ctx, commit.Parent, commit.Hash)
 	if err != nil {
-		return false, fmt.Errorf("comparing commits: %w", err)
+		return false, fmt.Errorf("compare commits: %w", err)
 	}
 
 	// Check if any changes affect the specified path

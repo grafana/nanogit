@@ -29,6 +29,7 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
+	// TODO: optimize this one
 	obj, err := c.getSingleObject(ctx, blobID)
 	if err != nil {
 		return nil, fmt.Errorf("getting object: %w", err)
@@ -78,6 +79,7 @@ type Blob struct {
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
+	// TODO: optimize this one
 	if path == "" {
 		return nil, errors.New("path cannot be empty")
 	}
@@ -103,7 +105,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, fmt.Errorf("path component '%s' is not a directory", part)
+					return nil, ErrUnexpectedObjectType
 				}
 				currentHash = entry.Hash
 				found = true
@@ -131,12 +133,12 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
 			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, fmt.Errorf("'%s' is not a file", fileName)
+				return nil, ErrUnexpectedObjectType
 			}
 
 			return c.GetBlob(ctx, entry.Hash)
 		}
 	}
 
-	return nil, errors.New("file not found")
+	return nil, ErrObjectNotFound
 }

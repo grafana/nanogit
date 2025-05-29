@@ -10,12 +10,6 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-var (
-	// ErrRefNotFound is returned when a requested Git reference does not exist in the repository.
-	// This error is returned by GetRef when the specified reference name cannot be found.
-	ErrRefNotFound = errors.New("ref not found")
-)
-
 // Ref represents a Git reference (ref) in the repository.
 // A ref is a pointer to a specific commit in the repository's history.
 // Common reference types include branches (refs/heads/*), tags (refs/tags/*),
@@ -112,9 +106,8 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 //	} else {
 //	    fmt.Printf("main branch points to %s\n", ref.Hash.String())
 //	}
-//
-// TODO: Optimize to fetch only the requested reference instead of all references.
 func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
+	// TODO: Optimize to fetch only the requested reference instead of all references.
 	refs, err := c.ListRefs(ctx)
 	if err != nil {
 		return Ref{}, fmt.Errorf("list refs: %w", err)
@@ -126,7 +119,7 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 		}
 	}
 
-	return Ref{}, ErrRefNotFound
+	return Ref{}, ErrObjectNotFound
 }
 
 // CreateRef creates a new Git reference in the remote repository.
@@ -154,10 +147,10 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	_, err := c.GetRef(ctx, ref.Name)
 	switch {
-	case err != nil && !errors.Is(err, ErrRefNotFound):
+	case err != nil && !errors.Is(err, ErrObjectNotFound):
 		return fmt.Errorf("get ref: %w", err)
 	case err == nil:
-		return fmt.Errorf("ref %s already exists", ref.Name)
+		return fmt.Errorf("ref %s already exists: %w", ref.Name, ErrObjectAlreadyExists)
 	}
 
 	// Create and send the ref update request directly - Protocol v2 allows this
@@ -202,9 +195,10 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, ref.Name)
 	if err != nil {
-		if errors.Is(err, ErrRefNotFound) {
-			return fmt.Errorf("ref %s does not exist", ref.Name)
+		if errors.Is(err, ErrObjectNotFound) {
+			return err
 		}
+
 		return fmt.Errorf("get ref: %w", err)
 	}
 
@@ -247,8 +241,8 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, refName)
 	if err != nil {
-		if errors.Is(err, ErrRefNotFound) {
-			return fmt.Errorf("ref %s does not exist", refName)
+		if errors.Is(err, ErrObjectNotFound) {
+			return err
 		}
 		return fmt.Errorf("get ref: %w", err)
 	}

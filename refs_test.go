@@ -185,14 +185,14 @@ func TestGetRef(t *testing.T) {
 			}(),
 			refToGet:      "refs/heads/non-existent",
 			expectedRef:   Ref{},
-			expectedError: ErrRefNotFound,
+			expectedError: ErrObjectNotFound,
 		},
 		{
 			name:          "ls-refs request fails",
 			lsRefsResp:    "",
 			refToGet:      "refs/heads/master",
 			expectedRef:   Ref{},
-			expectedError: ErrRefNotFound, // Will get wrapped in "list refs:" error
+			expectedError: ErrObjectNotFound, // Will get wrapped in "list refs:" error
 			setupClient: func(c *httpClient) {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
