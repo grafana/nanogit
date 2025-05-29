@@ -32,17 +32,21 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	// TODO: optimize this one
 	obj, err := c.getSingleObject(ctx, blobID)
 	if err != nil {
-		return nil, fmt.Errorf("getting object: %w", err)
+		return nil, fmt.Errorf("get object: %w", err)
 	}
 
-	if obj.Type == protocol.ObjectTypeBlob && obj.Hash.Is(blobID) {
+	if obj.Type != protocol.ObjectTypeBlob {
+		return nil, NewUnexpectedObjectTypeError(blobID.String(), protocol.ObjectTypeBlob.String(), obj.Type.String())
+	}
+
+	if obj.Hash.Is(blobID) {
 		return &Blob{
 			Hash:    blobID,
 			Content: obj.Data,
 		}, nil
 	}
 
-	return nil, fmt.Errorf("blob not found: %s", blobID)
+	return nil, NewObjectNotFoundError(blobID.String())
 }
 
 // Blob represents a Git blob object, which stores the content of a file.
@@ -105,7 +109,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, ErrUnexpectedObjectType
+					return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeTree.String(), entry.Type.String())
 				}
 				currentHash = entry.Hash
 				found = true
@@ -114,7 +118,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		}
 
 		if !found {
-			return nil, fmt.Errorf("path component '%s' not found", part)
+			return nil, NewObjectNotFoundError(fmt.Sprintf("path component '%s'", part))
 		}
 	}
 
@@ -133,12 +137,12 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
 			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, ErrUnexpectedObjectType
+				return nil, NewUnexpectedObjectTypeError(entry.Hash.String(), protocol.ObjectTypeBlob.String(), entry.Type.String())
 			}
 
 			return c.GetBlob(ctx, entry.Hash)
 		}
 	}
 
-	return nil, ErrObjectNotFound
+	return nil, NewObjectNotFoundError(fmt.Sprintf("file '%s'", fileName))
 }

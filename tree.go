@@ -279,7 +279,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 					"attempts", maxRetries,
 					"total_requests", totalRequests,
 					"total_objects_fetched", totalObjectsFetched)
-				return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts (batch sizes: %d then %d): %w", hashStr, maxRetries, batchSize, retryBatchSize, ErrObjectNotFound)
+				return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts (batch sizes: %d then %d): %w", hashStr, maxRetries, batchSize, retryBatchSize, NewObjectNotFoundError(hashStr))
 			}
 
 			// Add missing objects to retries list if not already added
@@ -390,7 +390,7 @@ func (c *httpClient) findRootTree(targetHash hash.Hash, allObjects map[string]*p
 	// Find our target object in the response
 	obj, exists := allObjects[targetHash.String()]
 	if !exists {
-		return nil, hash.Zero, fmt.Errorf("object %s not found: %w", targetHash.String(), ErrObjectNotFound)
+		return nil, hash.Zero, fmt.Errorf("object %s not found: %w", targetHash.String(), NewObjectNotFoundError(targetHash.String()))
 	}
 
 	var tree *protocol.PackfileObject
@@ -417,7 +417,7 @@ func (c *httpClient) findRootTree(targetHash hash.Hash, allObjects map[string]*p
 			"tree_hash", treeHash.String(),
 			"tree_available", tree != nil)
 	} else {
-		return nil, hash.Zero, fmt.Errorf("object %s is not a commit: %w", targetHash.String(), ErrObjectNotFound)
+		return nil, hash.Zero, fmt.Errorf("object %s is not a commit: %w", targetHash.String(), NewUnexpectedObjectTypeError(targetHash.String(), "commit", obj.Type.String()))
 	}
 
 	return tree, treeHash, nil
@@ -631,7 +631,7 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, fmt.Errorf("path component '%s' is not a directory: %w", part, ErrUnexpectedObjectType)
+					return nil, fmt.Errorf("path component '%s' is not a directory: %w", part, NewUnexpectedObjectTypeError(entry.Hash.String(), "tree", entry.Type.String()))
 				}
 				currentHash = entry.Hash
 				found = true
@@ -640,7 +640,7 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 		}
 
 		if !found {
-			return nil, fmt.Errorf("path component '%s' not found: %w", part, ErrObjectNotFound)
+			return nil, fmt.Errorf("path component '%s' not found: %w", part, NewObjectNotFoundError(fmt.Sprintf("path component '%s'", part)))
 		}
 	}
 

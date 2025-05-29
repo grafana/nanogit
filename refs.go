@@ -119,7 +119,7 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 		}
 	}
 
-	return Ref{}, ErrObjectNotFound
+	return Ref{}, NewObjectNotFoundError(refName)
 }
 
 // CreateRef creates a new Git reference in the remote repository.
@@ -150,7 +150,7 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	case err != nil && !errors.Is(err, ErrObjectNotFound):
 		return fmt.Errorf("get ref: %w", err)
 	case err == nil:
-		return fmt.Errorf("ref %s already exists: %w", ref.Name, ErrObjectAlreadyExists)
+		return NewObjectAlreadyExistsError(ref.Name)
 	}
 
 	// Create and send the ref update request directly - Protocol v2 allows this

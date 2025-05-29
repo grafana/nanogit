@@ -128,8 +128,8 @@ type stagedWriter struct {
 //
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	if w.treeEntries[path] != nil {
-		return nil, ErrObjectAlreadyExists
+	if obj, ok := w.treeEntries[path]; ok {
+		return nil, NewObjectAlreadyExistsError(obj.Hash.String())
 	}
 
 	// Create the blob for the file content
@@ -167,7 +167,8 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
-		return nil, ErrObjectNotFound
+		// TODO: what to do with this?
+		return nil, NewObjectNotFoundError(path)
 	}
 
 	// Create the blob for the file content
@@ -211,11 +212,11 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
-		return nil, ErrObjectNotFound
+		return nil, NewObjectNotFoundError(path)
 	}
 
 	if w.treeEntries[path].Type != protocol.ObjectTypeBlob {
-		return nil, ErrUnexpectedObjectType
+		return nil, NewUnexpectedObjectTypeError(path, protocol.ObjectTypeBlob.String(), w.treeEntries[path].Type.String())
 	}
 	blobHash := w.treeEntries[path].Hash
 
@@ -254,11 +255,11 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
 	if w.treeEntries[path] == nil {
-		return nil, ErrObjectNotFound
+		return nil, NewObjectNotFoundError(path)
 	}
 
 	if w.treeEntries[path].Type != protocol.ObjectTypeTree {
-		return nil, ErrUnexpectedObjectType
+		return nil, NewUnexpectedObjectTypeError(path, protocol.ObjectTypeTree.String(), w.treeEntries[path].Type.String())
 	}
 	treeHash := w.treeEntries[path].Hash
 
@@ -418,7 +419,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 		// Check if not a tree
 		existingObj, exists := w.treeEntries[currentPath]
 		if exists && existingObj.Type != protocol.ObjectTypeTree {
-			return ErrUnexpectedObjectType
+			return NewUnexpectedObjectTypeError(currentPath, protocol.ObjectTypeTree.String(), existingObj.Type.String())
 		}
 
 		// Create new tree
@@ -522,7 +523,7 @@ func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current pro
 	}
 
 	if obj.Type != protocol.ObjectTypeTree {
-		return nil, ErrUnexpectedObjectType
+		return nil, NewUnexpectedObjectTypeError(obj.Hash.String(), protocol.ObjectTypeTree.String(), obj.Type.String())
 	}
 
 	// Create a new slice for the updated entries
@@ -591,11 +592,11 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		// Get the tree we need to modify
 		existingObj, exists := w.treeEntries[currentPath]
 		if !exists {
-			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, ErrObjectNotFound)
+			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, NewObjectNotFoundError(currentPath))
 		}
 
 		if existingObj.Type != protocol.ObjectTypeTree {
-			return fmt.Errorf("parent path is not a tree: %w", ErrUnexpectedObjectType)
+			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(currentPath, protocol.ObjectTypeTree.String(), existingObj.Type.String()))
 		}
 
 		// Get tree object from cache or fetch it
@@ -708,11 +709,11 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		// Get the tree we need to modify
 		existingObj, exists := w.treeEntries[currentPath]
 		if !exists {
-			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, ErrObjectNotFound)
+			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, NewObjectNotFoundError(currentPath))
 		}
 
 		if existingObj.Type != protocol.ObjectTypeTree {
-			return fmt.Errorf("parent path is not a tree: %w", ErrUnexpectedObjectType)
+			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(currentPath, "tree", existingObj.Type.String()))
 		}
 
 		// Get tree object from cache or fetch it
@@ -802,7 +803,7 @@ func (w *stagedWriter) removeTreeEntry(obj *protocol.PackfileObject, targetFileN
 	}
 
 	if obj.Type != protocol.ObjectTypeTree {
-		return nil, ErrUnexpectedObjectType
+		return nil, NewUnexpectedObjectTypeError(obj.Hash.String(), "tree", obj.Type.String())
 	}
 
 	// Create a new slice excluding the target entry

@@ -20,7 +20,7 @@ func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*prot
 		return obj, nil
 	}
 
-	return nil, fmt.Errorf("object %s not found: %w", want.String(), ErrObjectNotFound)
+	return nil, NewObjectNotFoundError(want.String())
 }
 
 // getRootTree fetches the root tree of the repository.
