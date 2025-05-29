@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
 	"github.com/stretchr/testify/assert"
@@ -161,6 +162,11 @@ func TestClient_Writer(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, exists)
 
+		// Verify tree does not exist before creating it
+		_, err = writer.GetTree(ctx, "dir")
+		require.NoError(t, err)
+		require.False(t, exists)
+
 		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
 		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
@@ -173,6 +179,26 @@ func TestClient_Writer(t *testing.T) {
 		exists, err = writer.BlobExists(ctx, "dir/subdir/file.txt")
 		require.NoError(t, err)
 		require.True(t, exists)
+
+		// Verify tree exists after creating it
+		tree, err := writer.GetTree(ctx, "dir")
+		require.NoError(t, err)
+		require.NotNil(t, tree)
+		require.Equal(t, 1, len(tree.Entries))
+		require.Equal(t, "subdir", tree.Entries[0].Name)
+		require.Equal(t, protocol.ObjectTypeTree, tree.Entries[0].Type)
+		require.Equal(t, uint32(0o40000), tree.Entries[0].Mode)
+		require.Equal(t, commit.Hash, tree.Entries[0].Hash)
+
+		// Verify tree for subdir
+		subdirTree, err := writer.GetTree(ctx, "dir/subdir")
+		require.NoError(t, err)
+		require.NotNil(t, subdirTree)
+		require.Equal(t, 1, len(subdirTree.Entries))
+		require.Equal(t, "file.txt", subdirTree.Entries[0].Name)
+		require.Equal(t, protocol.ObjectTypeBlob, subdirTree.Entries[0].Type)
+		require.Equal(t, uint32(0o100644), subdirTree.Entries[0].Mode)
+		require.Equal(t, commit.Hash, subdirTree.Entries[0].Hash)
 
 		logger.Info("Verifying using Git CLI")
 		local.Git(t, "pull")

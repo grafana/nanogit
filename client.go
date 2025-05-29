@@ -35,6 +35,9 @@ type StagedWriter interface {
 	// Returns the hash of the tree after deletion.
 	DeleteBlob(ctx context.Context, path string) (hash.Hash, error)
 
+	// GetTree gets the tree object at the given path.
+	GetTree(ctx context.Context, path string) (*Tree, error)
+
 	// DeleteTree stages the deletion of a directory and all its contents at the given path.
 	// Returns the hash of the deleted tree.
 	DeleteTree(ctx context.Context, path string) (hash.Hash, error)

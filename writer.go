@@ -258,6 +258,69 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 	return blobHash, nil
 }
 
+// GetTree retrieves the tree object at the specified path from the repository.
+// The tree represents a directory structure containing files and subdirectories.
+// The path must exist and must be a directory (tree), otherwise an error is returned.
+//
+// This operation retrieves the tree from memory if it has been staged,
+// or from the repository if it hasn't been modified.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - path: Directory path to retrieve
+//
+// Returns:
+//   - *Tree: The tree object containing directory entries
+//   - error: Error if the path doesn't exist, is not a tree, or retrieval fails
+//
+// Example:
+//
+//	tree, err := writer.GetTree(ctx, "src")
+//	if err != nil {
+//	    return fmt.Errorf("failed to get tree: %w", err)
+//	}
+//	for _, entry := range tree.Entries {
+//	    fmt.Printf("Found %s: %s\n", entry.Type, entry.Name)
+//	}
+func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) {
+	existing, ok := w.treeEntries[path]
+	if !ok {
+		return nil, NewPathNotFoundError(path)
+	}
+
+	if existing.Type != protocol.ObjectTypeTree {
+		return nil, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type)
+	}
+
+	// Get all entries that are direct children of this path
+	pathPrefix := path + "/"
+	var entries []TreeEntry
+
+	for entryPath, entry := range w.treeEntries {
+		if entryPath == path {
+			continue // Skip the tree itself
+		}
+
+		// Check if this is a direct child (no intermediate slashes)
+		if strings.HasPrefix(entryPath, pathPrefix) {
+			remainingPath := entryPath[len(pathPrefix):]
+			if !strings.Contains(remainingPath, "/") {
+				entries = append(entries, TreeEntry{
+					Name: remainingPath,
+					Type: entry.Type,
+					Hash: entry.Hash,
+					Mode: entry.Mode,
+				})
+			}
+		}
+	}
+
+	return &Tree{
+		Hash:    existing.Hash,
+		Entries: entries,
+	}, nil
+}
+
 // DeleteTree removes an entire directory tree at the specified path from the repository.
 // This operation recursively deletes all files and subdirectories within the specified path.
 // The path must exist and must be a directory (tree), otherwise an error is returned.
