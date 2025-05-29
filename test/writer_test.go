@@ -164,8 +164,10 @@ func TestClient_Writer(t *testing.T) {
 
 		// Verify tree does not exist before creating it
 		_, err = writer.GetTree(ctx, "dir")
+		var pathNotFoundErr *nanogit.PathNotFoundError
 		require.Error(t, err)
-		require.ErrorAs(t, err, &nanogit.PathNotFoundError{})
+		require.ErrorAs(t, err, &pathNotFoundErr)
+		assert.Equal(t, "dir", pathNotFoundErr.Path)
 
 		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
