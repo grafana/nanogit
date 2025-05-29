@@ -164,6 +164,12 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 	}
 
 	w.logger.Debug("created blob", "hash", blobHash.String())
+	w.treeEntries[path] = &FlatTreeEntry{
+		Path: path,
+		Hash: blobHash,
+		Type: protocol.ObjectTypeBlob,
+		Mode: 0o100644,
+	}
 
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
 		return nil, fmt.Errorf("add new blob to tree: %w", err)
@@ -544,6 +550,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Path: currentPath,
 				Hash: treeObj.Hash,
 				Type: protocol.ObjectTypeTree,
+				Mode: 0o40000,
 			}
 		} else {
 			// If tree exists, add our entries to it

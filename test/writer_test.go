@@ -171,11 +171,6 @@ func TestClient_Writer(t *testing.T) {
 
 		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
 		require.NoError(t, err)
-		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-		err = writer.Push(ctx)
-		require.NoError(t, err)
 
 		// Verify blob exists after creating it
 		exists, err = writer.BlobExists(ctx, "dir/subdir/file.txt")
@@ -190,7 +185,12 @@ func TestClient_Writer(t *testing.T) {
 		require.Equal(t, "subdir", tree.Entries[0].Name)
 		require.Equal(t, protocol.ObjectTypeTree, tree.Entries[0].Type)
 		require.Equal(t, uint32(0o40000), tree.Entries[0].Mode)
-		require.Equal(t, commit.Hash, tree.Entries[0].Hash)
+
+		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
+		require.NoError(t, err)
+		require.NotNil(t, commit)
+		err = writer.Push(ctx)
+		require.NoError(t, err)
 
 		// Verify tree for subdir
 		subdirTree, err := writer.GetTree(ctx, "dir/subdir")
@@ -200,7 +200,6 @@ func TestClient_Writer(t *testing.T) {
 		require.Equal(t, "file.txt", subdirTree.Entries[0].Name)
 		require.Equal(t, protocol.ObjectTypeBlob, subdirTree.Entries[0].Type)
 		require.Equal(t, uint32(0o100644), subdirTree.Entries[0].Mode)
-		require.Equal(t, commit.Hash, subdirTree.Entries[0].Hash)
 
 		logger.Info("Verifying using Git CLI")
 		local.Git(t, "pull")
