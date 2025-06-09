@@ -376,8 +376,7 @@ func (s *IntegrationTestSuite) TestUpdateBlob() {
 		defer cancel()
 
 		s.Logger.Info("Setting up remote repository")
-		remote, _ := s.CreateTestRepo()
-		local := remote.Local(t)
+		client, _, local := s.GitServer.TestRepo(t)
 
 		// Create and commit initial file
 		local.CreateFile(t, "initial.txt", "initial content")
@@ -385,7 +384,6 @@ func (s *IntegrationTestSuite) TestUpdateBlob() {
 		local.Git(t, "commit", "-m", "Initial commit")
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
-		client := remote.Client(t)
 		writer, _ := createWriterFromHead(ctx, t, client, local)
 
 		_, err := writer.UpdateBlob(ctx, "nonexistent.txt", []byte("should fail"))
@@ -546,16 +544,7 @@ func (s *IntegrationTestSuite) TestDeleteBlob() {
 		defer cancel()
 
 		s.Logger.Info("Setting up remote repository")
-		remote, _ := s.CreateTestRepo()
-		local := remote.Local(t)
-
-		// Create and commit initial file
-		local.CreateFile(t, "initial.txt", "initial content")
-		local.Git(t, "add", "initial.txt")
-		local.Git(t, "commit", "-m", "Initial commit")
-		local.Git(t, "push", "-u", "origin", "main", "--force")
-
-		client := remote.Client(t)
+		client, _, local := s.GitServer.TestRepo(t)
 		writer, _ := createWriterFromHead(ctx, t, client, local)
 
 		_, err := writer.DeleteBlob(ctx, "nonexistent.txt")
@@ -571,8 +560,7 @@ func (s *IntegrationTestSuite) TestDeleteBlob() {
 		defer cancel()
 
 		s.Logger.Info("Setting up remote repository")
-		remote, _ := s.CreateTestRepo()
-		local := remote.Local(t)
+		client, _, local := s.GitServer.TestRepo(t)
 
 		// Create and commit multiple files in same directory
 		local.CreateFile(t, "initial.txt", "initial content")
@@ -583,7 +571,6 @@ func (s *IntegrationTestSuite) TestDeleteBlob() {
 		local.Git(t, "commit", "-m", "Initial commit with shared directory")
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
-		client := remote.Client(t)
 		writer, _ := createWriterFromHead(ctx, t, client, local)
 
 		deletePath := "shared/tobedeleted.txt"
