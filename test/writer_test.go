@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration_test
 
 import (
@@ -21,6 +23,8 @@ type WriterTestSuite struct {
 
 // TestCreateBlobWithNewFile tests creating a blob with a new file
 func (s *WriterTestSuite) TestCreateBlobWithNewFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -120,6 +124,8 @@ func (s *WriterTestSuite) TestCreateBlobWithNewFile() {
 
 // TestCreateBlobWithNestedPath tests creating a blob with a nested path
 func (s *WriterTestSuite) TestCreateBlobWithNestedPath() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -242,6 +248,8 @@ func (s *WriterTestSuite) TestCreateBlobWithNestedPath() {
 
 // TestCreateBlobWithInvalidRef tests creating a blob with an invalid ref
 func (s *WriterTestSuite) TestCreateBlobWithInvalidRef() {
+	s.T().Parallel()
+
 	remote, _ := s.CreateTestRepo()
 	client := remote.Client(s.T())
 
@@ -255,6 +263,8 @@ func (s *WriterTestSuite) TestCreateBlobWithInvalidRef() {
 
 // TestUpdateBlobWithExistingFile tests updating a blob with an existing file
 func (s *WriterTestSuite) TestUpdateBlobWithExistingFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -340,6 +350,8 @@ func (s *WriterTestSuite) TestUpdateBlobWithExistingFile() {
 
 // TestUpdateBlobWithNestedFile tests updating a blob with a nested file
 func (s *WriterTestSuite) TestUpdateBlobWithNestedFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -421,6 +433,8 @@ func (s *WriterTestSuite) TestUpdateBlobWithNestedFile() {
 
 // TestUpdateBlobWithNonexistentFile tests updating a blob with a nonexistent file (should error)
 func (s *WriterTestSuite) TestUpdateBlobWithNonexistentFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -457,6 +471,8 @@ func (s *WriterTestSuite) TestUpdateBlobWithNonexistentFile() {
 
 // TestDeleteBlobWithExistingFile tests deleting an existing blob
 func (s *WriterTestSuite) TestDeleteBlobWithExistingFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -531,6 +547,8 @@ func (s *WriterTestSuite) TestDeleteBlobWithExistingFile() {
 
 // TestDeleteBlobWithNestedFile tests deleting a nested blob
 func (s *WriterTestSuite) TestDeleteBlobWithNestedFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -606,6 +624,8 @@ func (s *WriterTestSuite) TestDeleteBlobWithNestedFile() {
 
 // TestDeleteBlobWithNonexistentFile tests deleting a nonexistent blob (should error)
 func (s *WriterTestSuite) TestDeleteBlobWithNonexistentFile() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -642,6 +662,8 @@ func (s *WriterTestSuite) TestDeleteBlobWithNonexistentFile() {
 
 // TestDeleteBlobPreservesOtherFiles tests that deleting a blob preserves other files in the same directory
 func (s *WriterTestSuite) TestDeleteBlobPreservesOtherFiles() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
