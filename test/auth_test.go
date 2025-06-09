@@ -1,82 +1,88 @@
-//go:build integration
-
 package integration_test
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestClient_IsAuthorized(t *testing.T) {
-	logger := helpers.NewTestLogger(t)
-	logger.Info("Setting up remote repository")
-	gitServer := helpers.NewGitServer(t, logger)
-	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+// AuthTestSuite contains tests for client authorization functionality
+type AuthTestSuite struct {
+	helpers.IntegrationTestSuite
+}
 
-	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+// TestClient_IsAuthorized tests the authorization functionality
+func (s *AuthTestSuite) TestClient_IsAuthorized() {
+	s.Logger.Info("Setting up test repositories using shared Git server")
+	_, remote, _ := s.TestRepo()
+	user := remote.User
 
-	logger.Info("Creating and committing test file")
-	local.CreateFile(t, "test.txt", "test content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Initial commit")
+	s.Run("successful authorization", func() {
+		t := s.T()
+		t.Parallel()
+		s.Logger.ForSubtest(t)
 
-	logger.Info("Setting up main branch and pushing changes")
-	local.Git(t, "branch", "-M", "main")
-	local.Git(t, "push", "origin", "main", "--force")
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	t.Run("successful authorization", func(t *testing.T) {
-		logger.ForSubtest(t)
-
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-		require.NoError(t, err)
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(s.Logger))
+		s.NoError(err)
 		auth, err := client.IsAuthorized(ctx)
-		require.NoError(t, err)
-		assert.True(t, auth)
+		s.NoError(err)
+		s.True(auth)
 	})
 
-	t.Run("unauthorized access with wrong credentials", func(t *testing.T) {
-		logger.ForSubtest(t)
+	s.Run("unauthorized access with wrong credentials", func() {
+		t := s.T()
+		t.Parallel()
+		s.Logger.ForSubtest(t)
+
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
 
 		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
-		require.NoError(t, err)
+		s.NoError(err)
 		auth, err := unauthorizedClient.IsAuthorized(ctx)
-		require.NoError(t, err)
-		require.False(t, auth)
+		s.NoError(err)
+		s.False(auth)
 	})
 
-	t.Run("successful authorization with access token", func(t *testing.T) {
-		logger.ForSubtest(t)
+	s.Run("successful authorization with access token", func() {
+		t := s.T()
+		t.Parallel()
+		s.Logger.ForSubtest(t)
 
-		token := gitServer.GenerateUserToken(t, user.Username, user.Password)
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(logger))
-		require.NoError(t, err)
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
+
+		token := s.GitServer.GenerateUserToken(t, user.Username, user.Password)
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(s.Logger))
+		s.NoError(err)
 		auth, err := client.IsAuthorized(ctx)
-		require.NoError(t, err)
-		require.True(t, auth)
+		s.NoError(err)
+		s.True(auth)
 	})
 
-	t.Run("unauthorized access with invalid token", func(t *testing.T) {
-		logger.ForSubtest(t)
+	s.Run("unauthorized access with invalid token", func() {
+		t := s.T()
+		t.Parallel()
+		s.Logger.ForSubtest(t)
+
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
 
 		invalidToken := "token invalid-token"
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(logger))
-		require.NoError(t, err)
+		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(s.Logger))
+		s.NoError(err)
 		auth, err := client.IsAuthorized(ctx)
-		require.NoError(t, err)
-		require.False(t, auth)
+		s.NoError(err)
+		s.False(auth)
 	})
+}
+
+// TestAuthSuite runs the auth test suite
+func TestAuthSuite(t *testing.T) {
+	suite.Run(t, new(AuthTestSuite))
 }

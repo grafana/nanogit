@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -183,21 +184,34 @@ func (s *GitServer) GenerateUserToken(t *testing.T, username, password string) s
 // CreateRepo creates a new repository in the Gitea server for the specified user.
 // It returns both the public repository URL and an authenticated repository URL
 // that includes the user's credentials.
-func (s *GitServer) CreateRepo(t *testing.T, repoName string, username, password string) *RemoteRepo {
+func (s *GitServer) CreateRepo(t *testing.T, repoName string, user *User) *RemoteRepo {
 	// FIXME: can I create one with CLI instead?
-	s.logger.Logf("%s📦 Creating repository '%s' for user '%s'...%s", ColorBlue, repoName, username, ColorReset)
+	s.logger.Logf("%s📦 Creating repository '%s' for user '%s'...%s", ColorBlue, repoName, user.Username, ColorReset)
 	httpClient := http.Client{}
 	createRepoURL := fmt.Sprintf("http://%s:%s/api/v1/user/repos", s.Host, s.Port)
 	jsonData := []byte(fmt.Sprintf(`{"name":"%s"}`, repoName))
 	reqCreate, err := http.NewRequestWithContext(context.Background(), "POST", createRepoURL, bytes.NewBuffer(jsonData))
 	require.NoError(t, err)
 	reqCreate.Header.Set("Content-Type", "application/json")
-	reqCreate.SetBasicAuth(username, password)
+	reqCreate.SetBasicAuth(user.Username, user.Password)
 	resp, reqErr := httpClient.Do(reqCreate)
 	require.NoError(t, resp.Body.Close())
 	require.NoError(t, reqErr)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	s.logger.Logf("%s✅ Repository '%s' created successfully%s", ColorGreen, repoName, ColorReset)
-	return NewRemoteRepo(t, repoName, username, password, s.Host, s.Port)
+	return NewRemoteRepo(t, s.logger, repoName, user, s.Host, s.Port)
+}
+
+func (s *GitServer) TestRepo(t *testing.T) (nanogit.Client, *RemoteRepo, *LocalGitRepo) {
+	user := s.CreateUser(t)
+
+	var suffix uint32
+	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
+	require.NoError(t, err)
+	suffix = suffix % 10000
+
+	remote := s.CreateRepo(t, fmt.Sprintf("testrepo-%d", suffix), user)
+	client, local := remote.QuickInit(t)
+	return client, remote, local
 }

@@ -21,7 +21,7 @@ func TestClient_GetCommit(t *testing.T) {
 	logger := helpers.NewTestLogger(t)
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	// set up local repo
 	local := helpers.NewLocalGitRepo(t, logger)
@@ -121,7 +121,7 @@ func TestClient_CompareCommits(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
 	local := helpers.NewLocalGitRepo(t, logger)
@@ -246,11 +246,8 @@ func TestClient_ListCommits(t *testing.T) {
 		logger.ForSubtest(t)
 		gitServer := helpers.NewGitServer(t, logger)
 		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
+		remote := gitServer.CreateRepo(t, "testrepo", user)
+		local := remote.Local(t)
 		// Create several commits to test with
 		local.CreateFile(t, "file1.txt", "content 1")
 		local.Git(t, "add", "file1.txt")
@@ -270,6 +267,10 @@ func TestClient_ListCommits(t *testing.T) {
 		// Get the current HEAD commit
 		headHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 		require.NoError(t, err)
+
+		client := remote.Client(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
 
 		// Test basic listing without options
 		commits, err := client.ListCommits(ctx, headHash, nanogit.ListCommitsOptions{})
@@ -291,11 +292,8 @@ func TestClient_ListCommits(t *testing.T) {
 		logger.ForSubtest(t)
 		gitServer := helpers.NewGitServer(t, logger)
 		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
+		remote := gitServer.CreateRepo(t, "testrepo", user)
+		local := remote.Local(t)
 		// Create multiple commits
 		for i := 1; i <= 5; i++ {
 			local.CreateFile(t, fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
@@ -312,6 +310,10 @@ func TestClient_ListCommits(t *testing.T) {
 			PerPage: 2,
 			Page:    1,
 		}
+		client := remote.Client(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+
 		commits, err := client.ListCommits(ctx, headHash, options)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(commits))
@@ -332,7 +334,7 @@ func TestClient_ListCommits(t *testing.T) {
 		logger.ForSubtest(t)
 		gitServer := helpers.NewGitServer(t, logger)
 		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+		remote := gitServer.CreateRepo(t, "testrepo", user)
 		local := helpers.NewLocalGitRepo(t, logger)
 		client, _ := local.QuickInit(t, user, remote.AuthURL())
 		ctx := context.Background()
@@ -394,7 +396,7 @@ func TestClient_ListCommits(t *testing.T) {
 		logger.ForSubtest(t)
 		gitServer := helpers.NewGitServer(t, logger)
 		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+		remote := gitServer.CreateRepo(t, "testrepo", user)
 		local := helpers.NewLocalGitRepo(t, logger)
 		client, _ := local.QuickInit(t, user, remote.AuthURL())
 		ctx := context.Background()

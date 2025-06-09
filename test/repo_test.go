@@ -17,32 +17,12 @@ func TestClient_RepoExists(t *testing.T) {
 	logger := helpers.NewTestLogger(t)
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
-	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-
-	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
-
-	logger.Info("Creating and committing a test file")
-	local.CreateFile(t, "test.txt", "test content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Initial commit")
-
-	logger.Info("Creating and switching to main branch")
-	local.Git(t, "branch", "-M", "main")
-	local.Git(t, "push", "origin", "main", "--force")
-
+	client, remote, _ := gitServer.TestRepo(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	t.Run("existing repository", func(t *testing.T) {
 		logger.ForSubtest(t)
-
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-		require.NoError(t, err)
 
 		exists, err := client.RepoExists(ctx)
 		require.NoError(t, err)
@@ -52,7 +32,7 @@ func TestClient_RepoExists(t *testing.T) {
 	t.Run("non-existent repository", func(t *testing.T) {
 		logger.ForSubtest(t)
 
-		nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(user.Username, user.Password))
+		nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(remote.User.Username, remote.User.Password))
 		require.NoError(t, err)
 
 		exists, err := nonExistentClient.RepoExists(ctx)

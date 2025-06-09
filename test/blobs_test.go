@@ -18,15 +18,11 @@ func TestClient_Blobs(t *testing.T) {
 	logger := helpers.NewTestLogger(t)
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
-
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
@@ -43,9 +39,7 @@ func TestClient_Blobs(t *testing.T) {
 	require.NoError(t, err)
 
 	logger.Info("Creating client")
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	client := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -72,13 +66,10 @@ func TestClient_GetBlobByPath(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
@@ -93,9 +84,7 @@ func TestClient_GetBlobByPath(t *testing.T) {
 	logger.Info("Tracking current branch")
 	local.Git(t, "branch", "--set-upstream-to=origin/main", "main")
 
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	client := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -145,13 +134,10 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Creating nested directory structure with files")
 	local.CreateDirPath(t, "dir1/subdir1")
@@ -179,9 +165,7 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 	local.Git(t, "branch", "-M", "main")
 	local.Git(t, "push", "origin", "main", "--force")
 
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	client := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -250,7 +234,6 @@ func TestClient_GetBlobByPath_NestedDirectories(t *testing.T) {
 			logger.ForSubtest(t)
 
 			file, err := client.GetBlobByPath(ctx, commitHash, tt.path)
-
 			if tt.expectedErr != nil {
 				require.Error(t, err)
 				require.ErrorAs(t, err, &tt.expectedErr)

@@ -21,14 +21,9 @@ func TestClient_Refs(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	// Easy way to add remote with username and password without modifying the host configuration
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Committing something")
 	local.CreateFile(t, "test.txt", "test content")
@@ -49,9 +44,7 @@ func TestClient_Refs(t *testing.T) {
 	local.Git(t, "tag", "v1.0.0")
 	local.Git(t, "push", "origin", "v1.0.0", "--force")
 
-	gitClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	gitClient := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

@@ -23,7 +23,7 @@ func quickSetup(t *testing.T) (*helpers.TestLogger, *helpers.LocalGitRepo, nanog
 	logger.Info("Setting up remote and local repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 	local := helpers.NewLocalGitRepo(t, logger)
 	client, initCommitFile := local.QuickInit(t, user, remote.AuthURL())
 

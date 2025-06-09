@@ -20,13 +20,10 @@ func TestClient_GetFlatTree(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Creating a directory structure with files")
 	local.CreateDirPath(t, "dir1")
@@ -48,9 +45,7 @@ func TestClient_GetFlatTree(t *testing.T) {
 	commitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	client := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -132,13 +127,10 @@ func TestClient_GetTree(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Creating a directory structure with files")
 	local.CreateDirPath(t, "dir1")
@@ -160,9 +152,7 @@ func TestClient_GetTree(t *testing.T) {
 	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	client := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -225,13 +215,10 @@ func TestClient_GetTreeByPath(t *testing.T) {
 	logger.Info("Setting up remote repository")
 	gitServer := helpers.NewGitServer(t, logger)
 	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+	remote := gitServer.CreateRepo(t, "testrepo", user)
 
 	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+	local := remote.Local(t)
 
 	logger.Info("Creating a directory structure with files")
 	local.CreateDirPath(t, "dir1")
@@ -253,9 +240,7 @@ func TestClient_GetTreeByPath(t *testing.T) {
 	treeHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD^{tree}"))
 	require.NoError(t, err)
 
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
+	client := remote.Client(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
