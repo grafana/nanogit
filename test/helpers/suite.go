@@ -37,8 +37,6 @@ func (s *IntegrationTestSuite) TearDownSuite() {
 
 // SetupTest runs before each test method
 func (s *IntegrationTestSuite) SetupTest() {
-	// Update logger for the current test
-	s.Logger.ForSubtest(s.T())
 }
 
 // CreateTestRepo creates a fresh repository for a test with a unique name
