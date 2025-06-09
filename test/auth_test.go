@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration_test
 
 import (
@@ -20,9 +22,7 @@ func (s *AuthTestSuite) TestClient_IsAuthorized() {
 	user := remote.User
 
 	s.Run("successful authorization", func() {
-		t := s.T()
-		t.Parallel()
-		s.Logger.ForSubtest(t)
+		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -35,9 +35,7 @@ func (s *AuthTestSuite) TestClient_IsAuthorized() {
 	})
 
 	s.Run("unauthorized access with wrong credentials", func() {
-		t := s.T()
-		t.Parallel()
-		s.Logger.ForSubtest(t)
+		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -52,7 +50,6 @@ func (s *AuthTestSuite) TestClient_IsAuthorized() {
 	s.Run("successful authorization with access token", func() {
 		t := s.T()
 		t.Parallel()
-		s.Logger.ForSubtest(t)
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -66,9 +63,7 @@ func (s *AuthTestSuite) TestClient_IsAuthorized() {
 	})
 
 	s.Run("unauthorized access with invalid token", func() {
-		t := s.T()
-		t.Parallel()
-		s.Logger.ForSubtest(t)
+		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()

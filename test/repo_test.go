@@ -3,52 +3,65 @@
 package integration_test
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestClient_RepoExists(t *testing.T) {
-	logger := helpers.NewTestLogger(t)
-	logger.Info("Setting up remote repository")
-	gitServer := helpers.NewGitServer(t, logger)
-	client, remote, _ := gitServer.TestRepo(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+// RepoTestSuite contains tests for repository operations
+type RepoTestSuite struct {
+	helpers.IntegrationTestSuite
+}
 
-	t.Run("existing repository", func(t *testing.T) {
-		logger.ForSubtest(t)
+// TestClient_RepoExists tests repository existence functionality
+func (s *RepoTestSuite) TestClient_RepoExists() {
+	s.Logger.Info("Setting up test repositories using shared Git server")
+	client, remote, _ := s.TestRepo()
+
+	s.Run("existing repository", func() {
+		s.T().Parallel()
+
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
 
 		exists, err := client.RepoExists(ctx)
-		require.NoError(t, err)
-		assert.True(t, exists)
+		s.NoError(err)
+		s.True(exists)
 	})
 
-	t.Run("non-existent repository", func(t *testing.T) {
-		logger.ForSubtest(t)
+	s.Run("non-existent repository", func() {
+		s.T().Parallel()
+
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
 
 		nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(remote.User.Username, remote.User.Password))
-		require.NoError(t, err)
+		s.NoError(err)
 
 		exists, err := nonExistentClient.RepoExists(ctx)
-		require.NoError(t, err)
-		assert.False(t, exists)
+		s.NoError(err)
+		s.False(exists)
 	})
 
-	t.Run("unauthorized access", func(t *testing.T) {
-		logger.ForSubtest(t)
+	s.Run("unauthorized access", func() {
+		s.T().Parallel()
+
+		ctx, cancel := s.CreateContext(s.StandardTimeout())
+		defer cancel()
 
 		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
-		require.NoError(t, err)
+		s.NoError(err)
 
 		exists, err := unauthorizedClient.RepoExists(ctx)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "401 Unauthorized")
-		assert.False(t, exists)
+		s.Error(err)
+		s.Contains(err.Error(), "401 Unauthorized")
+		s.False(exists)
 	})
+}
+
+// TestRepoSuite runs the repo test suite
+func TestRepoSuite(t *testing.T) {
+	suite.Run(t, new(RepoTestSuite))
 }

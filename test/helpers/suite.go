@@ -22,7 +22,7 @@ type IntegrationTestSuite struct {
 
 // SetupSuite runs once before all tests in the suite
 func (s *IntegrationTestSuite) SetupSuite() {
-	s.Logger = NewTestLogger(s.T())
+	s.Logger = NewSuiteLogger(func() *testing.T { return s.T() })
 	s.Logger.Info("🚀 Setting up integration test suite with shared Git server")
 	s.GitServer = NewGitServer(s.T(), s.Logger)
 	s.Logger.Success("✅ Integration test suite setup complete")
