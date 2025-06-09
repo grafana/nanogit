@@ -54,7 +54,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	}
 
 	// CREATE BLOB OPERATIONS
-	s.Run("create blob with new file", func() {
+	s.Run("new file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -120,7 +120,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.NotEqual(newContent, otherContent)
 	})
 
-	s.Run("create blob with nested path", func() {
+	s.Run("nested", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -206,7 +206,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.NotEqual(nestedContent, otherContent)
 	})
 
-	s.Run("create blob with invalid ref", func() {
+	s.Run("invalid ref", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -221,7 +221,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	})
 
 	// UPDATE BLOB OPERATIONS
-	s.Run("update blob with existing file", func() {
+	s.Run("update file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -277,7 +277,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.NotEqual(updatedContent, otherContent)
 	})
 
-	s.Run("update blob with nested file", func() {
+	s.Run("update nested", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -330,7 +330,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.NotEqual(updatedContent, otherContent)
 	})
 
-	s.Run("update blob with nonexistent file", func() {
+	s.Run("update missing", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -354,7 +354,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	})
 
 	// DELETE BLOB OPERATIONS
-	s.Run("delete blob with existing file", func() {
+	s.Run("delete file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -406,7 +406,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		verifyCommitAuthorship(t, local)
 	})
 
-	s.Run("delete blob with nested file", func() {
+	s.Run("delete nested", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -459,7 +459,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		verifyCommitAuthorship(t, local)
 	})
 
-	s.Run("delete blob with nonexistent file", func() {
+	s.Run("delete missing", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -475,7 +475,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
 
-	s.Run("delete blob preserves other files in directory", func() {
+	s.Run("preserve others", func() {
 		t := s.T()
 		t.Parallel()
 
