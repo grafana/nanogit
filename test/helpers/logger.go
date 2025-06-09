@@ -3,19 +3,14 @@ package helpers
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
 type TestLogger struct {
 	getCurrentT func() *testing.T // Function to get current test context
-}
-
-// NewTestLogger creates a new TestLogger instance.
-func NewTestLogger(t *testing.T) *TestLogger {
-	return &TestLogger{
-		getCurrentT: func() *testing.T { return t },
-	}
+	mu          sync.Mutex        // Protects concurrent access to testing.T
 }
 
 // NewSuiteLogger creates a new TestLogger that automatically uses the current test context from a suite.
@@ -32,6 +27,8 @@ func (l *TestLogger) getCurrentTestContext() *testing.T {
 
 // Logf logs a message to the test output with colors and emojis.
 func (l *TestLogger) Logf(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.getCurrentTestContext().Logf(format, args...)
 }
 
@@ -62,6 +59,10 @@ func (l *TestLogger) Success(msg string, keysAndValues ...any) {
 
 // log is a helper method to log messages and store them in entries.
 func (l *TestLogger) log(level, msg string, args []any) {
+	// Protect concurrent access to testing.T
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	currentT := l.getCurrentTestContext()
 
 	// Format the message with key-value pairs
