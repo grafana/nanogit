@@ -3,20 +3,11 @@
 package integration_test
 
 import (
-	"testing"
-
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// RepoTestSuite contains tests for repository operations
-type RepoTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestClient_RepoExists tests repository existence functionality
-func (s *RepoTestSuite) TestClient_RepoExists() {
+func (s *IntegrationTestSuite) TestClient_RepoExists() {
 	s.Logger.Info("Setting up test repositories using shared Git server")
 	client, remote, _ := s.TestRepo()
 
@@ -59,9 +50,4 @@ func (s *RepoTestSuite) TestClient_RepoExists() {
 		s.Contains(err.Error(), "401 Unauthorized")
 		s.False(exists)
 	})
-}
-
-// TestRepoSuite runs the repo test suite
-func TestRepoSuite(t *testing.T) {
-	suite.Run(t, new(RepoTestSuite))
 }

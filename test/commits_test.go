@@ -4,23 +4,15 @@ package integration_test
 
 import (
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// CommitsTestSuite contains tests for commit operations
-type CommitsTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestGetCommit tests retrieving individual commits
-func (s *CommitsTestSuite) TestGetCommit() {
+func (s *IntegrationTestSuite) TestGetCommit() {
 	// Set up remote repo
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
@@ -139,7 +131,7 @@ func (s *CommitsTestSuite) TestGetCommit() {
 }
 
 // TestCompareCommits tests comparing commits to see changes
-func (s *CommitsTestSuite) TestCompareCommits() {
+func (s *IntegrationTestSuite) TestCompareCommits() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -253,7 +245,7 @@ func (s *CommitsTestSuite) TestCompareCommits() {
 }
 
 // TestListCommits tests listing commits with various options and filters
-func (s *CommitsTestSuite) TestListCommits() {
+func (s *IntegrationTestSuite) TestListCommits() {
 	s.Run("ListCommits basic functionality", func() {
 		s.T().Parallel()
 
@@ -454,9 +446,4 @@ func (s *CommitsTestSuite) TestListCommits() {
 		}
 		s.True(found, "Should find the new commit")
 	})
-}
-
-// TestCommitsTestSuite runs the commits test suite
-func TestCommitsTestSuite(t *testing.T) {
-	suite.Run(t, new(CommitsTestSuite))
 }

@@ -3,23 +3,14 @@
 package integration_test
 
 import (
-	"testing"
-
 	"errors"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// RefsTestSuite contains tests for Git reference operations
-type RefsTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestListRefs tests listing all references
-func (s *RefsTestSuite) TestListRefs() {
+func (s *IntegrationTestSuite) TestListRefs() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -59,7 +50,7 @@ func (s *RefsTestSuite) TestListRefs() {
 }
 
 // TestGetRef tests getting individual references
-func (s *RefsTestSuite) TestGetRef() {
+func (s *IntegrationTestSuite) TestGetRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -119,7 +110,7 @@ func (s *RefsTestSuite) TestGetRef() {
 }
 
 // TestCreateRef tests creating new references
-func (s *RefsTestSuite) TestCreateRef() {
+func (s *IntegrationTestSuite) TestCreateRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -171,7 +162,7 @@ func (s *RefsTestSuite) TestCreateRef() {
 }
 
 // TestUpdateRef tests updating existing references
-func (s *RefsTestSuite) TestUpdateRef() {
+func (s *IntegrationTestSuite) TestUpdateRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -218,7 +209,7 @@ func (s *RefsTestSuite) TestUpdateRef() {
 }
 
 // TestDeleteRef tests deleting references
-func (s *RefsTestSuite) TestDeleteRef() {
+func (s *IntegrationTestSuite) TestDeleteRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -286,7 +277,7 @@ func (s *RefsTestSuite) TestDeleteRef() {
 }
 
 // TestRefsIntegrationFlow tests a complete workflow of ref operations
-func (s *RefsTestSuite) TestRefsIntegrationFlow() {
+func (s *IntegrationTestSuite) TestRefsIntegrationFlow() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -352,9 +343,4 @@ func (s *RefsTestSuite) TestRefsIntegrationFlow() {
 	var notFoundErr *nanogit.RefNotFoundError
 	s.True(errors.As(err, &notFoundErr))
 	s.Equal(refName, notFoundErr.RefName)
-}
-
-// TestRefsTestSuite runs the refs test suite
-func TestRefsTestSuite(t *testing.T) {
-	suite.Run(t, new(RefsTestSuite))
 }

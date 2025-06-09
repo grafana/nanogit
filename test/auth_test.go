@@ -3,20 +3,11 @@
 package integration_test
 
 import (
-	"testing"
-
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// AuthTestSuite contains tests for client authorization functionality
-type AuthTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestClient_IsAuthorized tests the authorization functionality
-func (s *AuthTestSuite) TestClient_IsAuthorized() {
+func (s *IntegrationTestSuite) TestClient_IsAuthorized() {
 	s.Logger.Info("Setting up test repositories using shared Git server")
 	_, remote, _ := s.TestRepo()
 	user := remote.User
@@ -75,9 +66,4 @@ func (s *AuthTestSuite) TestClient_IsAuthorized() {
 		s.NoError(err)
 		s.False(auth)
 	})
-}
-
-// TestAuthSuite runs the auth test suite
-func TestAuthSuite(t *testing.T) {
-	suite.Run(t, new(AuthTestSuite))
 }

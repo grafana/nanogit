@@ -3,21 +3,12 @@
 package integration_test
 
 import (
-	"testing"
-
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// BlobsTestSuite contains tests for blob operations
-type BlobsTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestBasicBlobOperations tests basic blob operations like GetBlob
-func (s *BlobsTestSuite) TestBasicBlobOperations() {
+func (s *IntegrationTestSuite) TestBasicBlobOperations() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -68,7 +59,7 @@ func (s *BlobsTestSuite) TestBasicBlobOperations() {
 }
 
 // TestGetBlobByPath tests getting blobs by file paths
-func (s *BlobsTestSuite) TestGetBlobByPath() {
+func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -139,7 +130,7 @@ func (s *BlobsTestSuite) TestGetBlobByPath() {
 }
 
 // TestGetBlobByPathNestedDirectories tests GetBlobByPath with nested directory structures
-func (s *BlobsTestSuite) TestGetBlobByPathNestedDirectories() {
+func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -256,9 +247,4 @@ func (s *BlobsTestSuite) TestGetBlobByPathNestedDirectories() {
 			s.Equal(expectedHash, file.Hash)
 		})
 	}
-}
-
-// TestBlobsTestSuite runs the blobs test suite
-func TestBlobsTestSuite(t *testing.T) {
-	suite.Run(t, new(BlobsTestSuite))
 }

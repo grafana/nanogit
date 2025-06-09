@@ -3,22 +3,13 @@
 package integration_test
 
 import (
-	"testing"
-
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// TreeTestSuite contains tests for tree operations
-type TreeTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestGetFlatTree tests getting a flat tree structure with all entries including nested ones
-func (s *TreeTestSuite) TestGetFlatTree() {
+func (s *IntegrationTestSuite) TestGetFlatTree() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -133,7 +124,7 @@ func (s *TreeTestSuite) TestGetFlatTree() {
 }
 
 // TestGetTree tests getting a tree structure with only direct children
-func (s *TreeTestSuite) TestGetTree() {
+func (s *IntegrationTestSuite) TestGetTree() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -229,7 +220,7 @@ func (s *TreeTestSuite) TestGetTree() {
 }
 
 // TestGetTreeByPath tests getting trees by path with various scenarios
-func (s *TreeTestSuite) TestGetTreeByPath() {
+func (s *IntegrationTestSuite) TestGetTreeByPath() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())
@@ -349,9 +340,4 @@ func (s *TreeTestSuite) TestGetTreeByPath() {
 			tc.verifyFunc(tree)
 		})
 	}
-}
-
-// TestTreeTestSuite runs the tree test suite
-func TestTreeTestSuite(t *testing.T) {
-	suite.Run(t, new(TreeTestSuite))
 }

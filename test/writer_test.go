@@ -6,23 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/suite"
 )
 
-// WriterTestSuite contains tests for writer operations
-type WriterTestSuite struct {
-	helpers.IntegrationTestSuite
-}
-
 // TestCreateBlobWithNewFile tests creating a blob with a new file
-func (s *WriterTestSuite) TestCreateBlobWithNewFile() {
+func (s *IntegrationTestSuite) TestCreateBlobWithNewFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -123,7 +115,7 @@ func (s *WriterTestSuite) TestCreateBlobWithNewFile() {
 }
 
 // TestCreateBlobWithNestedPath tests creating a blob with a nested path
-func (s *WriterTestSuite) TestCreateBlobWithNestedPath() {
+func (s *IntegrationTestSuite) TestCreateBlobWithNestedPath() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -247,7 +239,7 @@ func (s *WriterTestSuite) TestCreateBlobWithNestedPath() {
 }
 
 // TestCreateBlobWithInvalidRef tests creating a blob with an invalid ref
-func (s *WriterTestSuite) TestCreateBlobWithInvalidRef() {
+func (s *IntegrationTestSuite) TestCreateBlobWithInvalidRef() {
 	s.T().Parallel()
 
 	remote, _ := s.CreateTestRepo()
@@ -262,7 +254,7 @@ func (s *WriterTestSuite) TestCreateBlobWithInvalidRef() {
 }
 
 // TestUpdateBlobWithExistingFile tests updating a blob with an existing file
-func (s *WriterTestSuite) TestUpdateBlobWithExistingFile() {
+func (s *IntegrationTestSuite) TestUpdateBlobWithExistingFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -349,7 +341,7 @@ func (s *WriterTestSuite) TestUpdateBlobWithExistingFile() {
 }
 
 // TestUpdateBlobWithNestedFile tests updating a blob with a nested file
-func (s *WriterTestSuite) TestUpdateBlobWithNestedFile() {
+func (s *IntegrationTestSuite) TestUpdateBlobWithNestedFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -432,7 +424,7 @@ func (s *WriterTestSuite) TestUpdateBlobWithNestedFile() {
 }
 
 // TestUpdateBlobWithNonexistentFile tests updating a blob with a nonexistent file (should error)
-func (s *WriterTestSuite) TestUpdateBlobWithNonexistentFile() {
+func (s *IntegrationTestSuite) TestUpdateBlobWithNonexistentFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -470,7 +462,7 @@ func (s *WriterTestSuite) TestUpdateBlobWithNonexistentFile() {
 }
 
 // TestDeleteBlobWithExistingFile tests deleting an existing blob
-func (s *WriterTestSuite) TestDeleteBlobWithExistingFile() {
+func (s *IntegrationTestSuite) TestDeleteBlobWithExistingFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -546,7 +538,7 @@ func (s *WriterTestSuite) TestDeleteBlobWithExistingFile() {
 }
 
 // TestDeleteBlobWithNestedFile tests deleting a nested blob
-func (s *WriterTestSuite) TestDeleteBlobWithNestedFile() {
+func (s *IntegrationTestSuite) TestDeleteBlobWithNestedFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -623,7 +615,7 @@ func (s *WriterTestSuite) TestDeleteBlobWithNestedFile() {
 }
 
 // TestDeleteBlobWithNonexistentFile tests deleting a nonexistent blob (should error)
-func (s *WriterTestSuite) TestDeleteBlobWithNonexistentFile() {
+func (s *IntegrationTestSuite) TestDeleteBlobWithNonexistentFile() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -661,7 +653,7 @@ func (s *WriterTestSuite) TestDeleteBlobWithNonexistentFile() {
 }
 
 // TestDeleteBlobPreservesOtherFiles tests that deleting a blob preserves other files in the same directory
-func (s *WriterTestSuite) TestDeleteBlobPreservesOtherFiles() {
+func (s *IntegrationTestSuite) TestDeleteBlobPreservesOtherFiles() {
 	s.T().Parallel()
 
 	s.Logger.Info("Setting up remote repository")
@@ -745,9 +737,6 @@ func (s *WriterTestSuite) TestDeleteBlobPreservesOtherFiles() {
 
 // The remaining complex tests (DeleteTree operations and multi-commit scenarios)
 // are candidates for future refactoring to suite methods. For now, we focus on the basic
-// blob operations that have been successfully converted to WriterTestSuite methods.
+// blob operations that have been successfully converted to IntegrationTestSuite methods.
 
-// TestWriterTestSuite runs the writer test suite
-func TestWriterTestSuite(t *testing.T) {
-	suite.Run(t, new(WriterTestSuite))
-}
+// TODO: add the preview scenarios complete one
