@@ -14,8 +14,8 @@ import (
 	"github.com/grafana/nanogit/test/helpers"
 )
 
-// TestCreateBlob tests creating blobs with different scenarios
-func (s *IntegrationTestSuite) TestCreateBlob() {
+// TestBlobOperations tests creating, updating, and deleting blobs with different scenarios
+func (s *IntegrationTestSuite) TestBlobOperations() {
 	// Common test fixtures
 	testAuthor := nanogit.Author{
 		Name:  "Test Author",
@@ -53,7 +53,8 @@ func (s *IntegrationTestSuite) TestCreateBlob() {
 		return writer, &currentHash
 	}
 
-	s.Run("with new file", func() {
+	// CREATE BLOB OPERATIONS
+	s.Run("create blob with new file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -119,7 +120,7 @@ func (s *IntegrationTestSuite) TestCreateBlob() {
 		s.NotEqual(newContent, otherContent)
 	})
 
-	s.Run("with nested path", func() {
+	s.Run("create blob with nested path", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -205,7 +206,7 @@ func (s *IntegrationTestSuite) TestCreateBlob() {
 		s.NotEqual(nestedContent, otherContent)
 	})
 
-	s.Run("with invalid ref", func() {
+	s.Run("create blob with invalid ref", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -218,48 +219,9 @@ func (s *IntegrationTestSuite) TestCreateBlob() {
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
-}
 
-// TestUpdateBlob tests updating blobs with different scenarios
-func (s *IntegrationTestSuite) TestUpdateBlob() {
-	// Common test fixtures
-	testAuthor := nanogit.Author{
-		Name:  "Test Author",
-		Email: "test@example.com",
-		Time:  time.Now(),
-	}
-	testCommitter := nanogit.Committer{
-		Name:  "Test Committer",
-		Email: "test@example.com",
-		Time:  time.Now(),
-	}
-
-	// Helper to verify author and committer in commit
-	verifyCommitAuthorship := func(t *testing.T, local *helpers.LocalGitRepo) {
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		s.Equal("Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		s.Equal("Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
-	}
-
-	// Helper to create writer from current HEAD
-	createWriterFromHead := func(ctx context.Context, t *testing.T, client nanogit.Client, local *helpers.LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		s.NoError(err)
-
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		writer, err := client.NewStagedWriter(ctx, ref)
-		s.NoError(err)
-
-		return writer, &currentHash
-	}
-
-	s.Run("with existing file", func() {
+	// UPDATE BLOB OPERATIONS
+	s.Run("update blob with existing file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -315,7 +277,7 @@ func (s *IntegrationTestSuite) TestUpdateBlob() {
 		s.NotEqual(updatedContent, otherContent)
 	})
 
-	s.Run("with nested file", func() {
+	s.Run("update blob with nested file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -368,7 +330,7 @@ func (s *IntegrationTestSuite) TestUpdateBlob() {
 		s.NotEqual(updatedContent, otherContent)
 	})
 
-	s.Run("with nonexistent file", func() {
+	s.Run("update blob with nonexistent file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -390,48 +352,9 @@ func (s *IntegrationTestSuite) TestUpdateBlob() {
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
-}
 
-// TestDeleteBlob tests deleting blobs with different scenarios
-func (s *IntegrationTestSuite) TestDeleteBlob() {
-	// Common test fixtures
-	testAuthor := nanogit.Author{
-		Name:  "Test Author",
-		Email: "test@example.com",
-		Time:  time.Now(),
-	}
-	testCommitter := nanogit.Committer{
-		Name:  "Test Committer",
-		Email: "test@example.com",
-		Time:  time.Now(),
-	}
-
-	// Helper to verify author and committer in commit
-	verifyCommitAuthorship := func(t *testing.T, local *helpers.LocalGitRepo) {
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		s.Equal("Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		s.Equal("Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
-	}
-
-	// Helper to create writer from current HEAD
-	createWriterFromHead := func(ctx context.Context, t *testing.T, client nanogit.Client, local *helpers.LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		s.NoError(err)
-
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		writer, err := client.NewStagedWriter(ctx, ref)
-		s.NoError(err)
-
-		return writer, &currentHash
-	}
-
-	s.Run("with existing file", func() {
+	// DELETE BLOB OPERATIONS
+	s.Run("delete blob with existing file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -483,7 +406,7 @@ func (s *IntegrationTestSuite) TestDeleteBlob() {
 		verifyCommitAuthorship(t, local)
 	})
 
-	s.Run("with nested file", func() {
+	s.Run("delete blob with nested file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -536,7 +459,7 @@ func (s *IntegrationTestSuite) TestDeleteBlob() {
 		verifyCommitAuthorship(t, local)
 	})
 
-	s.Run("with nonexistent file", func() {
+	s.Run("delete blob with nonexistent file", func() {
 		t := s.T()
 		t.Parallel()
 
@@ -552,7 +475,7 @@ func (s *IntegrationTestSuite) TestDeleteBlob() {
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
 
-	s.Run("preserves other files in directory", func() {
+	s.Run("delete blob preserves other files in directory", func() {
 		t := s.T()
 		t.Parallel()
 
