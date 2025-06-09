@@ -43,7 +43,6 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 	}
 
 	s.Run("successful flat tree retrieval", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -107,7 +106,6 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 	})
 
 	s.Run("non-existent hash", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -158,7 +156,6 @@ func (s *IntegrationTestSuite) TestGetTree() {
 	}
 
 	s.Run("successful tree retrieval", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -203,7 +200,6 @@ func (s *IntegrationTestSuite) TestGetTree() {
 	})
 
 	s.Run("non-existent hash", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -319,7 +315,6 @@ func (s *IntegrationTestSuite) TestGetTreeByPath() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			s.T().Parallel()
 
 			ctx, cancel := s.CreateContext(s.StandardTimeout())
 			defer cancel()

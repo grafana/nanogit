@@ -11,8 +11,6 @@ func (s *IntegrationTestSuite) TestIsAuthorized() {
 	user := remote.User
 
 	s.Run("successful authorization", func() {
-		s.T().Parallel()
-
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
 
@@ -24,8 +22,6 @@ func (s *IntegrationTestSuite) TestIsAuthorized() {
 	})
 
 	s.Run("unauthorized access with wrong credentials", func() {
-		s.T().Parallel()
-
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
 
@@ -38,7 +34,6 @@ func (s *IntegrationTestSuite) TestIsAuthorized() {
 
 	s.Run("successful authorization with access token", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -52,8 +47,6 @@ func (s *IntegrationTestSuite) TestIsAuthorized() {
 	})
 
 	s.Run("unauthorized access with invalid token", func() {
-		s.T().Parallel()
-
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
 

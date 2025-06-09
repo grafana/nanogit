@@ -56,7 +56,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// CREATE BLOB OPERATIONS
 	s.Run("new file", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -122,7 +121,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("nested", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -208,7 +206,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("invalid ref", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -223,7 +220,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// UPDATE BLOB OPERATIONS
 	s.Run("update file", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -279,7 +275,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("update nested", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -332,7 +327,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("update missing", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -356,7 +350,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// DELETE BLOB OPERATIONS
 	s.Run("delete file", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -408,7 +401,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("delete nested", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -461,7 +453,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("delete missing", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -477,7 +468,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("preserve others", func() {
 		t := s.T()
-		t.Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()

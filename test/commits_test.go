@@ -51,7 +51,6 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	user := remote.User
 
 	s.Run("initial commit", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -77,7 +76,6 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	})
 
 	s.Run("second commit", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -103,7 +101,6 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	})
 
 	s.Run("third commit", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -171,7 +168,6 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 	s.NoError(err)
 
 	s.Run("compare initial and modified commits", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -187,7 +183,6 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 	})
 
 	s.Run("compare modified and renamed commits", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -207,7 +202,6 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 	})
 
 	s.Run("compare renamed and modified commits in inverted direction", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -227,7 +221,6 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 	})
 
 	s.Run("compare modified and initial commits in inverted direction", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -245,7 +238,6 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 // TestListCommits tests listing commits with various options and filters
 func (s *IntegrationTestSuite) TestListCommits() {
 	s.Run("ListCommits basic functionality", func() {
-		s.T().Parallel()
 
 		remote, _ := s.CreateTestRepo()
 		local := remote.Local(s.T())
@@ -290,7 +282,6 @@ func (s *IntegrationTestSuite) TestListCommits() {
 	})
 
 	s.Run("ListCommits with pagination", func() {
-		s.T().Parallel()
 
 		remote, _ := s.CreateTestRepo()
 		local := remote.Local(s.T())
@@ -336,7 +327,6 @@ func (s *IntegrationTestSuite) TestListCommits() {
 	})
 
 	s.Run("ListCommits with path filter", func() {
-		s.T().Parallel()
 
 		remote, _ := s.CreateTestRepo()
 		local := remote.Local(s.T())
@@ -398,7 +388,6 @@ func (s *IntegrationTestSuite) TestListCommits() {
 	})
 
 	s.Run("ListCommits with time filters", func() {
-		s.T().Parallel()
 
 		remote, _ := s.CreateTestRepo()
 		local := remote.Local(s.T())

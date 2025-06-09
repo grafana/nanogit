@@ -29,7 +29,6 @@ func (s *IntegrationTestSuite) TestGetBlob() {
 	client := remote.Client(s.T())
 
 	s.Run("GetBlob with valid hash", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -42,7 +41,6 @@ func (s *IntegrationTestSuite) TestGetBlob() {
 	})
 
 	s.Run("GetBlob with non-existent hash", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -82,7 +80,6 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	s.NoError(err)
 
 	s.Run("GetBlobByPath with existing file", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -100,7 +97,6 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	})
 
 	s.Run("GetBlobByPath with non-existent file", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -114,7 +110,6 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	})
 
 	s.Run("GetBlobByPath with non-existent hash", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -223,7 +218,6 @@ func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			s.T().Parallel()
 
 			ctx, cancel := s.CreateContext(s.StandardTimeout())
 			defer cancel()

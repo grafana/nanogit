@@ -78,7 +78,6 @@ func (s *IntegrationTestSuite) TestGetRef() {
 	}
 
 	s.Run("existing refs", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -93,7 +92,6 @@ func (s *IntegrationTestSuite) TestGetRef() {
 	})
 
 	s.Run("non-existent ref", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -127,7 +125,6 @@ func (s *IntegrationTestSuite) TestCreateRef() {
 	client := remote.Client(s.T())
 
 	s.Run("create branch ref", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -143,7 +140,6 @@ func (s *IntegrationTestSuite) TestCreateRef() {
 	})
 
 	s.Run("create tag ref", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -226,7 +222,6 @@ func (s *IntegrationTestSuite) TestDeleteRef() {
 	client := remote.Client(s.T())
 
 	s.Run("delete branch ref", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -250,7 +245,6 @@ func (s *IntegrationTestSuite) TestDeleteRef() {
 	})
 
 	s.Run("delete tag ref", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()

@@ -10,7 +10,6 @@ func (s *IntegrationTestSuite) TestRepoExists() {
 	client, remote, _ := s.TestRepo()
 
 	s.Run("existing repository", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -21,7 +20,6 @@ func (s *IntegrationTestSuite) TestRepoExists() {
 	})
 
 	s.Run("non-existent repository", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
@@ -35,7 +33,6 @@ func (s *IntegrationTestSuite) TestRepoExists() {
 	})
 
 	s.Run("unauthorized access", func() {
-		s.T().Parallel()
 
 		ctx, cancel := s.CreateContext(s.StandardTimeout())
 		defer cancel()
