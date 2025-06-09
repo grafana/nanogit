@@ -8,7 +8,7 @@ import (
 )
 
 // TestBasicBlobOperations tests basic blob operations like GetBlob
-func (s *IntegrationTestSuite) TestBasicBlobOperations() {
+func (s *IntegrationTestSuite) TestGetBlob() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local(s.T())

@@ -7,7 +7,7 @@ import (
 )
 
 // TestClient_IsAuthorized tests the authorization functionality
-func (s *IntegrationTestSuite) TestClient_IsAuthorized() {
+func (s *IntegrationTestSuite) TestIsAuthorized() {
 	s.Logger.Info("Setting up test repositories using shared Git server")
 	_, remote, _ := s.TestRepo()
 	user := remote.User
