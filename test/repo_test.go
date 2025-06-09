@@ -5,7 +5,7 @@ import (
 )
 
 // TestClient_RepoExists tests repository existence functionality
-func (s *IntegrationTestSuite) TestClient_RepoExists() {
+func (s *IntegrationTestSuite) TestRepoExists() {
 	s.Logger.Info("Setting up test repositories using shared Git server")
 	client, remote, _ := s.TestRepo()
 
