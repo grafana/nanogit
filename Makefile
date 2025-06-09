@@ -12,10 +12,10 @@ lint:
 
 .PHONY: test-unit
 test-unit:
-	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 6 ./...
+	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 6 $(shell go list ./... | grep -v './test')
 
 .PHONY: test-integration
 test-integration:
-	go test -tags=integration -cover -race -parallel 6 ./test/...
+	go test -cover -race -parallel 6 ./test/... -run Integration
 
 test: test-unit test-integration
