@@ -1,6 +1,8 @@
 package integration_test
 
 import (
+	"context"
+
 	"github.com/grafana/nanogit"
 )
 
@@ -11,49 +13,35 @@ func (s *IntegrationTestSuite) TestIsAuthorized() {
 	user := remote.User
 
 	s.Run("successful authorization", func() {
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(s.Logger))
 		s.NoError(err)
-		auth, err := client.IsAuthorized(ctx)
+		auth, err := client.IsAuthorized(context.Background())
 		s.NoError(err)
 		s.True(auth)
 	})
 
 	s.Run("unauthorized access with wrong credentials", func() {
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
 		s.NoError(err)
-		auth, err := unauthorizedClient.IsAuthorized(ctx)
+		auth, err := unauthorizedClient.IsAuthorized(context.Background())
 		s.NoError(err)
 		s.False(auth)
 	})
 
 	s.Run("successful authorization with access token", func() {
-		t := s.T()
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
-		token := s.GitServer.GenerateUserToken(t, user.Username, user.Password)
+		token := s.GitServer.GenerateUserToken(s.T(), user.Username, user.Password)
 		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(s.Logger))
 		s.NoError(err)
-		auth, err := client.IsAuthorized(ctx)
+		auth, err := client.IsAuthorized(context.Background())
 		s.NoError(err)
 		s.True(auth)
 	})
 
 	s.Run("unauthorized access with invalid token", func() {
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		invalidToken := "token invalid-token"
 		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(s.Logger))
 		s.NoError(err)
-		auth, err := client.IsAuthorized(ctx)
+		auth, err := client.IsAuthorized(context.Background())
 		s.NoError(err)
 		s.False(auth)
 	})

@@ -1,107 +1,77 @@
 package integration_test
 
 import (
+	"context"
+
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-// TestBasicBlobOperations tests basic blob operations like GetBlob
+// TestGetBlob tests basic blob operations like GetBlob
 func (s *IntegrationTestSuite) TestGetBlob() {
 	s.Logger.Info("Setting up remote repository")
-	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	client, _, local := s.TestRepo()
 
 	s.Logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
-	local.CreateFile(s.T(), "test.txt", string(testContent))
-	local.Git(s.T(), "add", "test.txt")
+	local.CreateFile(s.T(), "blob.txt", string(testContent))
+	local.Git(s.T(), "add", "blob.txt")
 	local.Git(s.T(), "commit", "-m", "Initial commit")
-
-	s.Logger.Info("Setting up main branch and pushing changes")
-	local.Git(s.T(), "branch", "-M", "main")
 	local.Git(s.T(), "push", "origin", "main", "--force")
 
-	s.Logger.Info("Getting blob hash", "file", "test.txt")
-	blobHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:test.txt"))
+	s.Logger.Info("Getting blob hash", "file", "blob.txt")
+	blobHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:blob.txt"))
 	s.NoError(err)
 
-	s.Logger.Info("Creating client")
-	client := remote.Client(s.T())
-
 	s.Run("GetBlob with valid hash", func() {
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
-		s.Logger.Info("Testing GetBlob with valid hash", "hash", blobHash)
-		blob, err := client.GetBlob(ctx, blobHash)
+		s.Logger.Info("Testing GetBlob with valid hash", "hash", blobHash.String())
+		blob, err := client.GetBlob(context.Background(), blobHash)
 		s.NoError(err)
 		s.Equal(testContent, blob.Content)
 		s.Equal(blobHash, blob.Hash)
 	})
 
 	s.Run("GetBlob with non-existent hash", func() {
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Testing GetBlob with non-existent hash")
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 		s.NoError(err)
-		_, err = client.GetBlob(ctx, nonExistentHash)
+		_, err = client.GetBlob(context.Background(), nonExistentHash)
 		s.Error(err)
 		s.Contains(err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 	})
 }
 
-// TestGetBlobByPath tests getting blobs by file paths
+// TestGetBlobByPath tests getting blobs by file paths.
 func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	s.Logger.Info("Setting up remote repository")
-	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	client, _, local := s.TestRepo()
 
 	s.Logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
-	local.CreateFile(s.T(), "test.txt", string(testContent))
-	local.Git(s.T(), "add", "test.txt")
+	local.CreateFile(s.T(), "blob.txt", string(testContent))
+	local.Git(s.T(), "add", "blob.txt")
 	local.Git(s.T(), "commit", "-m", "Initial commit")
-
-	s.Logger.Info("Setting up main branch and pushing changes")
-	local.Git(s.T(), "branch", "-M", "main")
 	local.Git(s.T(), "push", "origin", "main", "--force")
-
-	s.Logger.Info("Tracking current branch")
-	local.Git(s.T(), "branch", "--set-upstream-to=origin/main", "main")
-
-	client := remote.Client(s.T())
 
 	s.Logger.Info("Getting the commit hash")
 	commitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
 	s.NoError(err)
 
 	s.Run("GetBlobByPath with existing file", func() {
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
-		file, err := client.GetBlobByPath(ctx, commitHash, "test.txt")
+		file, err := client.GetBlobByPath(context.Background(), commitHash, "blob.txt")
 		if err != nil {
-			s.T().Logf("Failed to get file with hash %s and path %s: %v", commitHash, "test.txt", err)
+			s.T().Logf("Failed to get file with hash %s and path %s: %v", commitHash, "blob.txt", err)
 		}
 		s.NoError(err)
 		s.Equal(testContent, file.Content)
 
-		fileHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:test.txt"))
+		fileHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:blob.txt"))
 		s.NoError(err)
 		s.Equal(fileHash, file.Hash)
 	})
 
 	s.Run("GetBlobByPath with non-existent file", func() {
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
-		_, err := client.GetBlobByPath(ctx, commitHash, "nonexistent.txt")
+		_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent.txt")
 		s.Error(err)
 		// Check for structured PathNotFoundError
 		var pathNotFoundErr *nanogit.PathNotFoundError
@@ -110,13 +80,9 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	})
 
 	s.Run("GetBlobByPath with non-existent hash", func() {
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 		s.NoError(err)
-		_, err = client.GetBlobByPath(ctx, nonExistentHash, "test.txt")
+		_, err = client.GetBlobByPath(context.Background(), nonExistentHash, "blob.txt")
 		s.Error(err)
 		s.Contains(err.Error(), "not our ref")
 	})
@@ -125,8 +91,7 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 // TestGetBlobByPathNestedDirectories tests GetBlobByPath with nested directory structures
 func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 	s.Logger.Info("Setting up remote repository")
-	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	client, _, local := s.TestRepo()
 
 	s.Logger.Info("Creating nested directory structure with files")
 	local.CreateDirPath(s.T(), "dir1/subdir1")
@@ -149,12 +114,7 @@ func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 	s.Logger.Info("Adding and committing all files")
 	local.Git(s.T(), "add", ".")
 	local.Git(s.T(), "commit", "-m", "Initial commit with nested structure")
-
-	s.Logger.Info("Setting up main branch and pushing changes")
-	local.Git(s.T(), "branch", "-M", "main")
 	local.Git(s.T(), "push", "origin", "main", "--force")
-
-	client := remote.Client(s.T())
 
 	s.Logger.Info("Getting the commit hash")
 	commitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
@@ -218,11 +178,7 @@ func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-
-			ctx, cancel := s.CreateContext(s.StandardTimeout())
-			defer cancel()
-
-			file, err := client.GetBlobByPath(ctx, commitHash, tt.path)
+			file, err := client.GetBlobByPath(context.Background(), commitHash, tt.path)
 			if tt.expectedErr != nil {
 				s.Error(err)
 				s.ErrorAs(err, &tt.expectedErr)

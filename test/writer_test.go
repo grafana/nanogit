@@ -57,48 +57,45 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("new file", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo(t)
 
-		writer, currentHash := createWriterFromHead(ctx, t, client, local)
+		writer, currentHash := createWriterFromHead(context.Background(), t, client, local)
 
 		newContent := []byte("new content")
 		fileName := "new.txt"
 		commitMsg := "Add new file"
 
 		// Verify empty state before creating blob
-		err := writer.Push(ctx)
+		err := writer.Push(context.Background())
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrNothingToPush)
 
-		_, err = writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		_, err = writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrNothingToCommit)
 
-		exists, err := writer.BlobExists(ctx, fileName)
+		exists, err := writer.BlobExists(context.Background(), fileName)
 		s.NoError(err)
 		s.False(exists)
 
 		// Create blob and commit
-		_, err = writer.CreateBlob(ctx, fileName, newContent)
+		_, err = writer.CreateBlob(context.Background(), fileName, newContent)
 		s.NoError(err)
 
-		exists, err = writer.BlobExists(ctx, fileName)
+		exists, err = writer.BlobExists(context.Background(), fileName)
 		s.NoError(err)
 		s.True(exists)
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results
-		local.Git(t, "pull")
+		local.Git(t, "pull", "origin", "main")
 		s.Equal(commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
 
 		content, err := os.ReadFile(filepath.Join(local.Path, fileName))
@@ -122,38 +119,35 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("nested", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo(t)
 
-		writer, currentHash := createWriterFromHead(ctx, t, client, local)
+		writer, currentHash := createWriterFromHead(context.Background(), t, client, local)
 		nestedContent := []byte("nested content")
 		nestedPath := "dir/subdir/file.txt"
 		commitMsg := "Add nested file"
 
 		// Verify nested path doesn't exist
-		exists, err := writer.BlobExists(ctx, nestedPath)
+		exists, err := writer.BlobExists(context.Background(), nestedPath)
 		s.NoError(err)
 		s.False(exists)
 
-		_, err = writer.GetTree(ctx, "dir")
+		_, err = writer.GetTree(context.Background(), "dir")
 		var pathNotFoundErr *nanogit.PathNotFoundError
 		s.Error(err)
 		s.ErrorAs(err, &pathNotFoundErr)
 		s.Equal("dir", pathNotFoundErr.Path)
 
 		// Create nested blob
-		_, err = writer.CreateBlob(ctx, nestedPath, nestedContent)
+		_, err = writer.CreateBlob(context.Background(), nestedPath, nestedContent)
 		s.NoError(err)
 
-		exists, err = writer.BlobExists(ctx, nestedPath)
+		exists, err = writer.BlobExists(context.Background(), nestedPath)
 		s.NoError(err)
 		s.True(exists)
 
 		// Verify tree structure created
-		tree, err := writer.GetTree(ctx, "dir")
+		tree, err := writer.GetTree(context.Background(), "dir")
 		s.NoError(err)
 		s.NotNil(tree)
 		s.Len(tree.Entries, 1)
@@ -161,7 +155,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.Equal(protocol.ObjectTypeTree, tree.Entries[0].Type)
 		s.Equal(uint32(0o40000), tree.Entries[0].Mode)
 
-		subdirTree, err := writer.GetTree(ctx, "dir/subdir")
+		subdirTree, err := writer.GetTree(context.Background(), "dir/subdir")
 		s.NoError(err)
 		s.NotNil(subdirTree)
 		s.Len(subdirTree.Entries, 1)
@@ -169,11 +163,11 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.Equal(protocol.ObjectTypeBlob, subdirTree.Entries[0].Type)
 		s.Equal(uint32(0o100644), subdirTree.Entries[0].Mode)
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results
@@ -207,12 +201,9 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("invalid ref", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		client, _, _ := s.GitServer.TestRepo(t)
 
-		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
+		_, err := client.NewStagedWriter(context.Background(), nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
@@ -220,9 +211,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// UPDATE BLOB OPERATIONS
 	s.Run("update file", func() {
 		t := s.T()
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
 
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
@@ -233,10 +221,11 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.CreateFile(t, "tobeupdated.txt", "original content")
 		local.Git(t, "add", ".")
 		local.Git(t, "commit", "-m", "Initial commit with files")
+		local.Git(t, "branch", "-M", "main")
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
 		client := remote.Client(t)
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
 		fileName := "tobeupdated.txt"
 		updatedContent := []byte("Updated content")
@@ -245,16 +234,16 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		// Verify blob hash before update
 		oldBlobHash := local.Git(t, "rev-parse", "HEAD:"+fileName)
 
-		blobHash, err := writer.UpdateBlob(ctx, fileName, updatedContent)
+		blobHash, err := writer.UpdateBlob(context.Background(), fileName, updatedContent)
 		s.NoError(err)
 		s.NotNil(blobHash)
 		s.NotEqual(oldBlobHash, blobHash.String())
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results
@@ -276,9 +265,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("update nested", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
 		local := remote.Local(t)
@@ -292,21 +278,21 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
 		client := remote.Client(t)
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
 		nestedPath := "dir/subdir/tobeupdated.txt"
 		updatedContent := []byte("Updated nested content")
 		commitMsg := "Update nested file"
 
-		blobHash, err := writer.UpdateBlob(ctx, nestedPath, updatedContent)
+		blobHash, err := writer.UpdateBlob(context.Background(), nestedPath, updatedContent)
 		s.NoError(err)
 		s.NotNil(blobHash)
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results
@@ -328,9 +314,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("update missing", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo(t)
 
@@ -340,9 +323,9 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.Git(t, "commit", "-m", "Initial commit")
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
-		_, err := writer.UpdateBlob(ctx, "nonexistent.txt", []byte("should fail"))
+		_, err := writer.UpdateBlob(context.Background(), "nonexistent.txt", []byte("should fail"))
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
@@ -350,9 +333,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// DELETE BLOB OPERATIONS
 	s.Run("delete file", func() {
 		t := s.T()
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
 
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
@@ -362,24 +342,25 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.CreateFile(t, "initial.txt", "initial content")
 		local.CreateFile(t, "tobedeleted.txt", "content to be deleted")
 		local.Git(t, "add", ".")
+		local.Git(t, "branch", "-M", "main")
 		local.Git(t, "commit", "-m", "Initial commit with files")
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
 		client := remote.Client(t)
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
 		fileName := "tobedeleted.txt"
 		commitMsg := "Delete file"
 
-		treeHash, err := writer.DeleteBlob(ctx, fileName)
+		treeHash, err := writer.DeleteBlob(context.Background(), fileName)
 		s.NoError(err)
 		s.NotNil(treeHash)
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results
@@ -402,9 +383,6 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("delete nested", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
 		local := remote.Local(t)
@@ -418,20 +396,20 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
 		client := remote.Client(t)
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
 		nestedPath := "dir/subdir/tobedeleted.txt"
 		commitMsg := "Delete nested file"
 
-		treeHash, err := writer.DeleteBlob(ctx, nestedPath)
+		treeHash, err := writer.DeleteBlob(context.Background(), nestedPath)
 		s.NoError(err)
 		s.NotNil(treeHash)
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results
@@ -454,23 +432,17 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	s.Run("delete missing", func() {
 		t := s.T()
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo(t)
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
-		_, err := writer.DeleteBlob(ctx, "nonexistent.txt")
+		_, err := writer.DeleteBlob(context.Background(), "nonexistent.txt")
 		s.Error(err)
 		s.ErrorIs(err, nanogit.ErrObjectNotFound)
 	})
 
 	s.Run("preserve others", func() {
 		t := s.T()
-
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
 
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo(t)
@@ -484,21 +456,21 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.Git(t, "commit", "-m", "Initial commit with shared directory")
 		local.Git(t, "push", "-u", "origin", "main", "--force")
 
-		writer, _ := createWriterFromHead(ctx, t, client, local)
+		writer, _ := createWriterFromHead(context.Background(), t, client, local)
 
 		deletePath := "shared/tobedeleted.txt"
 		preservePath := "shared/tobepreserved.txt"
 		commitMsg := "Delete one file from shared directory"
 
-		treeHash, err := writer.DeleteBlob(ctx, deletePath)
+		treeHash, err := writer.DeleteBlob(context.Background(), deletePath)
 		s.NoError(err)
 		s.NotNil(treeHash)
 
-		commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+		commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
 		s.NoError(err)
 		s.NotNil(commit)
 
-		err = writer.Push(ctx)
+		err = writer.Push(context.Background())
 		s.NoError(err)
 
 		// Verify results

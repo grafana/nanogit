@@ -1,6 +1,8 @@
 package integration_test
 
 import (
+	"context"
+
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -44,11 +46,8 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 
 	s.Run("successful flat tree retrieval", func() {
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Testing GetFlatTree")
-		tree, err := client.GetFlatTree(ctx, commitHash)
+		tree, err := client.GetFlatTree(context.Background(), commitHash)
 		s.NoError(err)
 		s.NotNil(tree)
 
@@ -107,13 +106,10 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 
 	s.Run("non-existent hash", func() {
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Testing GetFlatTree with non-existent hash")
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 		s.NoError(err)
-		_, err = client.GetFlatTree(ctx, nonExistentHash)
+		_, err = client.GetFlatTree(context.Background(), nonExistentHash)
 		s.Error(err)
 		s.Contains(err.Error(), "not our ref")
 	})
@@ -157,11 +153,8 @@ func (s *IntegrationTestSuite) TestGetTree() {
 
 	s.Run("successful tree retrieval", func() {
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Testing GetTree")
-		tree, err := client.GetTree(ctx, treeHash)
+		tree, err := client.GetTree(context.Background(), treeHash)
 		s.NoError(err)
 		s.NotNil(tree)
 
@@ -201,13 +194,10 @@ func (s *IntegrationTestSuite) TestGetTree() {
 
 	s.Run("non-existent hash", func() {
 
-		ctx, cancel := s.CreateContext(s.StandardTimeout())
-		defer cancel()
-
 		s.Logger.Info("Testing GetTree with non-existent hash")
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 		s.NoError(err)
-		_, err = client.GetTree(ctx, nonExistentHash)
+		_, err = client.GetTree(context.Background(), nonExistentHash)
 		s.Error(err)
 		s.Contains(err.Error(), "not our ref")
 	})
@@ -315,12 +305,7 @@ func (s *IntegrationTestSuite) TestGetTreeByPath() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-
-			ctx, cancel := s.CreateContext(s.StandardTimeout())
-			defer cancel()
-
-			tree, err := client.GetTreeByPath(ctx, treeHash, tc.path)
-
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, tc.path)
 			if tc.expectedError != nil {
 				s.Error(err)
 				s.ErrorAs(err, &tc.expectedError)
