@@ -2,6 +2,8 @@ package integration_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -98,7 +100,11 @@ var _ = Describe("Blobs", func() {
 			By("Verifying correct error type")
 			var pathNotFoundErr *nanogit.PathNotFoundError
 			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
-			Expect(err.(*nanogit.PathNotFoundError).Path).To(Equal("nonexistent.txt"))
+			if ok := errors.As(err, &pathNotFoundErr); ok {
+				Expect(pathNotFoundErr.Path).To(Equal("nonexistent.txt"))
+			} else {
+				Fail(fmt.Sprintf("Expected PathNotFoundError, got %T", err))
+			}
 		})
 
 		It("should fail to get blob by path with non-existent hash", func() {

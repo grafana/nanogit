@@ -2,6 +2,8 @@ package integration_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +13,10 @@ import (
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
+
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
 	. "github.com/onsi/gomega"
 )
 
@@ -131,7 +136,11 @@ var _ = Describe("Writer Operations", func() {
 			var pathNotFoundErr *nanogit.PathNotFoundError
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
-			Expect(err.(*nanogit.PathNotFoundError).Path).To(Equal("dir"))
+			if ok := errors.As(err, &pathNotFoundErr); ok {
+				Expect(pathNotFoundErr.Path).To(Equal("dir"))
+			} else {
+				Fail(fmt.Sprintf("Expected PathNotFoundError, got %T", err))
+			}
 
 			// Create nested blob
 			_, err = writer.CreateBlob(context.Background(), nestedPath, nestedContent)

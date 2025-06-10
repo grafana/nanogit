@@ -9,7 +9,10 @@ import (
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
+
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
 	. "github.com/onsi/gomega"
 )
 
