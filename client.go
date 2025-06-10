@@ -127,6 +127,7 @@ func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-upload-pack").String()
 
+	c.logger.Info("UploadPack", "url", u)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
 	if err != nil {
 		return nil, err
@@ -146,7 +147,14 @@ func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	return io.ReadAll(res.Body)
+	responseBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	c.logger.Info("UploadPack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u)
+
+	return responseBody, nil
 }
 
 // receivePack sends a POST request to the git-receive-pack endpoint.

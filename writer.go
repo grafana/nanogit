@@ -70,12 +70,11 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
 	return &stagedWriter{
-		httpClient: c,
-		ref:        ref,
-		writer:     writer,
-		lastCommit: commit,
-		lastTree:   treeObj,
-		// TODO: I think we only need one
+		httpClient:  c,
+		ref:         ref,
+		writer:      writer,
+		lastCommit:  commit,
+		lastTree:    treeObj,
 		treeCache:   cache,
 		treeEntries: entries,
 	}, nil
