@@ -82,7 +82,6 @@ type Blob struct {
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
-	// TODO: optimize this one
 	if path == "" {
 		return nil, errors.New("path cannot be empty")
 	}
