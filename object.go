@@ -10,19 +10,6 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
-	objects, err := c.getObjects(ctx, want)
-	if err != nil {
-		return nil, err
-	}
-
-	if obj, ok := objects[want.String()]; ok {
-		return obj, nil
-	}
-
-	return nil, NewObjectNotFoundError(want)
-}
-
 func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),

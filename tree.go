@@ -525,10 +525,6 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 		return nil, fmt.Errorf("get tree object: %w", err)
 	}
 
-	if tree.Type != protocol.ObjectTypeTree {
-		return nil, NewUnexpectedObjectTypeError(h, protocol.ObjectTypeTree, tree.Type)
-	}
-
 	// Convert PackfileTreeEntry to TreeEntry (direct children only)
 	entries := make([]TreeEntry, len(tree.Tree))
 	for i, entry := range tree.Tree {

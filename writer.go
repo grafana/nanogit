@@ -45,13 +45,9 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		return nil, fmt.Errorf("getting root tree: %w", err)
 	}
 
-	treeObj, err := c.getSingleObject(ctx, commit.Tree)
+	treeObj, err := c.getTree(ctx, commit.Tree)
 	if err != nil {
 		return nil, fmt.Errorf("getting tree object: %w", err)
-	}
-
-	if treeObj.Type != protocol.ObjectTypeTree {
-		return nil, errors.New("root is not a tree")
 	}
 
 	cache := make(map[string]*protocol.PackfileObject)
@@ -557,7 +553,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			if !ok {
 				w.logger.Info("fetch tree not found in cache", "path", currentPath, "hash", existingObj.Hash.String())
 				var err error
-				existingTree, err = w.getSingleObject(ctx, existingObj.Hash)
+				existingTree, err = w.getTree(ctx, existingObj.Hash)
 				if err != nil {
 					return fmt.Errorf("get existing tree %s: %w", currentPath, err)
 				}
@@ -708,7 +704,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		treeObj, ok := w.treeCache[existingObj.Hash.String()]
 		if !ok {
 			var err error
-			treeObj, err = w.getSingleObject(ctx, existingObj.Hash)
+			treeObj, err = w.getTree(ctx, existingObj.Hash)
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
@@ -825,7 +821,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		treeObj, ok := w.treeCache[existingObj.Hash.String()]
 		if !ok {
 			var err error
-			treeObj, err = w.getSingleObject(ctx, existingObj.Hash)
+			treeObj, err = w.getTree(ctx, existingObj.Hash)
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
