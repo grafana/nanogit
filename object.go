@@ -23,6 +23,87 @@ func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*prot
 	return nil, NewObjectNotFoundError(want)
 }
 
+func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	packs := []protocol.Pack{
+		protocol.PackLine("command=fetch\n"),
+		protocol.PackLine("object-format=sha1\n"),
+		protocol.SpecialPack(protocol.DelimeterPacket),
+		protocol.PackLine("no-progress\n"),
+		protocol.PackLine("filter blob:none\n"),
+		protocol.PackLine(fmt.Sprintf("want %s\n", want.String())),
+		protocol.PackLine(fmt.Sprintf("shallow %s\n", want.String())),
+		protocol.PackLine("deepen 1\n"),
+		protocol.PackLine("done\n"),
+	}
+
+	pkt, err := protocol.FormatPacks(packs...)
+	if err != nil {
+		return nil, fmt.Errorf("formatting packets: %w", err)
+	}
+
+	c.logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
+
+	out, err := c.uploadPack(ctx, pkt)
+	if err != nil {
+		c.logger.Debug("UploadPack error", "want", want, "error", err)
+		if strings.Contains(err.Error(), "not our ref") {
+			return nil, NewObjectNotFoundError(want)
+		}
+		return nil, fmt.Errorf("sending commands: %w", err)
+	}
+
+	c.logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
+
+	lines, _, err := protocol.ParsePack(out)
+	if err != nil {
+		c.logger.Debug("ParsePack error", "want", want, "error", err)
+		return nil, fmt.Errorf("parsing packet: %w", err)
+	}
+
+	c.logger.Debug("Parsed lines", "want", want, "lines", lines)
+
+	response, err := protocol.ParseFetchResponse(lines)
+	if err != nil {
+		c.logger.Debug("ParseFetchResponse error", "want", want, "error", err)
+		return nil, fmt.Errorf("parsing fetch response: %w", err)
+	}
+
+	objects := make(map[string]*protocol.PackfileObject)
+	for {
+		obj, err := response.Packfile.ReadObject()
+		if err != nil {
+			c.logger.Debug("ReadObject error", "want", want, "error", err)
+			break
+		}
+		if obj.Object == nil {
+			break
+		}
+
+		// Skip tree objects as they are included in the response
+		// despite requesting blob:none filter, since most Git servers
+		// don't support the tree:0 filter specification
+		if obj.Object.Type == protocol.ObjectTypeTree {
+			continue
+		}
+
+		if obj.Object.Type != protocol.ObjectTypeCommit {
+			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeCommit, obj.Object.Type)
+		}
+
+		objects[obj.Object.Hash.String()] = obj.Object
+	}
+
+	if len(objects) > 1 {
+		return nil, NewUnexpectedObjectCountError(1, objects)
+	}
+
+	if obj, ok := objects[want.String()]; ok {
+		return obj, nil
+	}
+
+	return nil, NewObjectNotFoundError(want)
+}
+
 func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
 	objects, err := c.getObjects(ctx, want)
 	if err != nil {
@@ -30,7 +111,7 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 	}
 
 	if len(objects) != 1 {
-		return nil, NewUnexpectedObjectCountError(1, len(objects))
+		return nil, NewUnexpectedObjectCountError(1, objects)
 	}
 
 	if obj, ok := objects[want.String()]; ok {

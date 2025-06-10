@@ -220,8 +220,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	// TODO: optimize this one
-	commit, err := c.getSingleObject(ctx, hash)
+	commit, err := c.getCommit(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
 	}

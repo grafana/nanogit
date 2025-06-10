@@ -2,7 +2,9 @@ package nanogit
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -80,10 +82,15 @@ func NewObjectAlreadyExistsError(objectID hash.Hash) *ObjectAlreadyExistsError {
 type UnexpectedObjectCountError struct {
 	ExpectedCount int
 	ActualCount   int
+	Objects       map[string]*protocol.PackfileObject
 }
 
 func (e *UnexpectedObjectCountError) Error() string {
-	return "unexpected object count: expected " + strconv.Itoa(e.ExpectedCount) + " but got " + strconv.Itoa(e.ActualCount)
+	objectNames := make([]string, 0, len(e.Objects))
+	for _, obj := range e.Objects {
+		objectNames = append(objectNames, fmt.Sprintf("%s/%s", obj.Type.String(), obj.Hash.String()))
+	}
+	return "unexpected object count: expected " + strconv.Itoa(e.ExpectedCount) + " but got " + strconv.Itoa(e.ActualCount) + " objects: " + strings.Join(objectNames, ", ")
 }
 
 // Unwrap enables errors.Is() compatibility with ErrUnexpectedObjectCount
@@ -92,10 +99,11 @@ func (e *UnexpectedObjectCountError) Unwrap() error {
 }
 
 // NewUnexpectedObjectCountError creates a new UnexpectedObjectCountError with the specified details.
-func NewUnexpectedObjectCountError(expectedCount, actualCount int) *UnexpectedObjectCountError {
+func NewUnexpectedObjectCountError(expectedCount int, objects map[string]*protocol.PackfileObject) *UnexpectedObjectCountError {
 	return &UnexpectedObjectCountError{
 		ExpectedCount: expectedCount,
-		ActualCount:   actualCount,
+		ActualCount:   len(objects),
+		Objects:       objects,
 	}
 }
 
