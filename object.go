@@ -74,13 +74,6 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects
 	// in the path. We must filter the response to extract only the requested tree.
 	if obj, ok := objects[want.String()]; ok {
-		expected := len(obj.Tree) + 1
-		// We got more objects than expected, which means we got recursive trees
-		// We don't care if we got less, as we got the wanted tree
-		if len(objects) > expected {
-			return nil, NewUnexpectedObjectCountError(expected, objects)
-		}
-
 		return obj, nil
 	}
 
