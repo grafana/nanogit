@@ -23,6 +23,23 @@ func (c *httpClient) getSingleObject(ctx context.Context, want hash.Hash) (*prot
 	return nil, NewObjectNotFoundError(want)
 }
 
+func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	objects, err := c.getObjects(ctx, want)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(objects) != 1 {
+		return nil, NewUnexpectedObjectCountError(1, len(objects))
+	}
+
+	if obj, ok := objects[want.String()]; ok {
+		return obj, nil
+	}
+
+	return nil, NewObjectNotFoundError(want)
+}
+
 // getRootTree fetches the root tree of the repository.
 func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash) (map[string]*protocol.PackfileObject, error) {
 	packs := []protocol.Pack{
