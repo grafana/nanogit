@@ -1,137 +1,318 @@
-//go:build integration
-
 package integration_test
 
 import (
 	"context"
-	"testing"
-	"time"
-
 	"errors"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	. "github.com/onsi/ginkgo/v2"
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	. "github.com/onsi/gomega"
 )
 
-func TestClient_Refs(t *testing.T) {
-	logger := helpers.NewTestLogger(t)
-	logger.Info("Setting up remote repository")
-	gitServer := helpers.NewGitServer(t, logger)
-	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+var _ = Describe("References", func() {
+	Context("ListRefs operations", func() {
+		var (
+			client      nanogit.Client
+			local       *helpers.LocalGitRepo
+			firstCommit hash.Hash
+		)
 
-	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	// Easy way to add remote with username and password without modifying the host configuration
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
 
-	logger.Info("Committing something")
-	local.CreateFile(t, "test.txt", "test content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Initial commit")
-	firstCommit, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
+			By("Getting initial commit hash")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
+			var err error
+			firstCommit, err = hash.FromHex(firstCommitStr)
+			Expect(err).NotTo(HaveOccurred())
 
-	logger.Info("Setting up main branch and pushing changes")
-	local.Git(t, "branch", "-M", "main")
-	local.Git(t, "push", "-u", "origin", "main", "--force")
+			By("Setting up branches and tags")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+			local.Git("branch", "test-branch")
+			local.Git("push", "origin", "test-branch", "--force")
+			local.Git("tag", "v1.0.0")
+			local.Git("push", "origin", "v1.0.0", "--force")
+		})
 
-	logger.Info("Creating test branch")
-	local.Git(t, "branch", "test-branch")
-	local.Git(t, "push", "origin", "test-branch", "--force")
+		It("should list all references", func() {
+			refs, err := client.ListRefs(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(refs).To(HaveLen(4), "should have 4 references")
 
-	logger.Info("Creating v1.0.0 tag")
-	local.Git(t, "tag", "v1.0.0")
-	local.Git(t, "push", "origin", "v1.0.0", "--force")
+			wantRefs := []nanogit.Ref{
+				{Name: "HEAD", Hash: firstCommit},
+				{Name: "refs/heads/main", Hash: firstCommit},
+				{Name: "refs/heads/test-branch", Hash: firstCommit},
+				{Name: "refs/tags/v1.0.0", Hash: firstCommit},
+			}
 
-	gitClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
+			Expect(refs).To(ConsistOf(wantRefs))
+		})
+	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	Context("GetRef operations", func() {
+		var (
+			client      nanogit.Client
+			local       *helpers.LocalGitRepo
+			firstCommit hash.Hash
+		)
 
-	refs, err := gitClient.ListRefs(ctx)
-	require.NoError(t, err, "ListRefs failed: %v", err)
-	require.Len(t, refs, 4, "should have 4 references")
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
 
-	wantRefs := []nanogit.Ref{
-		{Name: "HEAD", Hash: firstCommit},
-		{Name: "refs/heads/main", Hash: firstCommit},
-		{Name: "refs/heads/test-branch", Hash: firstCommit},
-		{Name: "refs/tags/v1.0.0", Hash: firstCommit},
-	}
+			By("Getting initial commit hash")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
+			var err error
+			firstCommit, err = hash.FromHex(firstCommitStr)
+			Expect(err).NotTo(HaveOccurred())
 
-	assert.ElementsMatch(t, wantRefs, refs)
+			By("Setting up branches and tags")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+			local.Git("branch", "test-branch")
+			local.Git("push", "origin", "test-branch", "--force")
+			local.Git("tag", "v1.0.0")
+			local.Git("push", "origin", "v1.0.0", "--force")
+		})
 
-	logger.Info("Getting refs one by one")
-	for _, ref := range wantRefs {
-		ref, err := gitClient.GetRef(ctx, ref.Name)
-		require.NoError(t, err, "GetRef failed: %v", err)
-		assert.Equal(t, ref.Name, ref.Name)
-		assert.Equal(t, firstCommit, ref.Hash)
-	}
+		It("should get existing refs", func() {
+			wantRefs := []nanogit.Ref{
+				{Name: "HEAD", Hash: firstCommit},
+				{Name: "refs/heads/main", Hash: firstCommit},
+				{Name: "refs/heads/test-branch", Hash: firstCommit},
+				{Name: "refs/tags/v1.0.0", Hash: firstCommit},
+			}
 
-	logger.Info("Getting ref with non-existent ref")
-	_, err = gitClient.GetRef(ctx, "refs/heads/non-existent")
-	var notFoundErr *nanogit.RefNotFoundError
-	require.True(t, errors.As(err, &notFoundErr))
-	require.Equal(t, "refs/heads/non-existent", notFoundErr.RefName)
+			By("Getting refs one by one")
+			for _, wantRef := range wantRefs {
+				ref, err := client.GetRef(context.Background(), wantRef.Name)
+				Expect(err).NotTo(HaveOccurred(), "GetRef failed for %s", wantRef.Name)
+				Expect(ref.Name).To(Equal(wantRef.Name))
+				Expect(ref.Hash).To(Equal(firstCommit))
+			}
+		})
 
-	logger.Info("Creating ref with new-branch")
-	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
-	require.NoError(t, err)
+		It("should return error for non-existent ref", func() {
+			_, err := client.GetRef(context.Background(), "refs/heads/non-existent")
 
-	logger.Info("Getting ref with new-branch")
-	ref, err := gitClient.GetRef(ctx, "refs/heads/new-branch")
-	require.NoError(t, err)
-	assert.Equal(t, firstCommit, ref.Hash)
+			var notFoundErr *nanogit.RefNotFoundError
+			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
+			Expect(notFoundErr.RefName).To(Equal("refs/heads/non-existent"))
+		})
+	})
 
-	logger.Info("Creating a new commit")
-	local.Git(t, "commit", "--allow-empty", "-m", "new commit")
-	newHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
-	local.Git(t, "push", "origin", "main", "--force")
+	Context("CreateRef operations", func() {
+		var (
+			client      nanogit.Client
+			local       *helpers.LocalGitRepo
+			firstCommit hash.Hash
+		)
 
-	logger.Info("Updating ref to point to new commit")
-	err = gitClient.UpdateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: newHash})
-	require.NoError(t, err)
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
 
-	logger.Info("Getting ref and verifying it points to new commit")
-	ref, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
-	require.NoError(t, err)
-	assert.Equal(t, newHash, ref.Hash)
+			By("Getting initial commit hash")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
+			var err error
+			firstCommit, err = hash.FromHex(firstCommitStr)
+			Expect(err).NotTo(HaveOccurred())
 
-	logger.Info("Deleting ref with new-branch")
-	err = gitClient.DeleteRef(ctx, "refs/heads/new-branch")
-	require.NoError(t, err)
+			By("Setting up main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+		})
 
-	logger.Info("Getting ref with new-branch should fail")
-	_, err = gitClient.GetRef(ctx, "refs/heads/new-branch")
-	var notFoundErr2 *nanogit.RefNotFoundError
-	require.True(t, errors.As(err, &notFoundErr2))
-	require.Equal(t, "refs/heads/new-branch", notFoundErr2.RefName)
+		It("should create branch ref", func() {
+			By("Creating new branch ref")
+			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
+			Expect(err).NotTo(HaveOccurred())
 
-	logger.Info("Creating tag with v2.0.0")
-	err = gitClient.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
-	require.NoError(t, err)
+			By("Verifying the created ref")
+			ref, err := client.GetRef(context.Background(), "refs/heads/new-branch")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Hash).To(Equal(firstCommit))
+		})
 
-	logger.Info("Getting ref with new tag")
-	ref, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
-	require.NoError(t, err)
-	assert.Equal(t, firstCommit, ref.Hash)
+		It("should create tag ref", func() {
+			By("Creating new tag ref")
+			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
+			Expect(err).NotTo(HaveOccurred())
 
-	logger.Info("Deleting tag with v2.0.0")
-	err = gitClient.DeleteRef(ctx, "refs/tags/v2.0.0")
-	require.NoError(t, err)
+			By("Verifying the created tag")
+			ref, err := client.GetRef(context.Background(), "refs/tags/v2.0.0")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Hash).To(Equal(firstCommit))
+		})
+	})
 
-	logger.Info("Getting ref with new tag should fail")
-	_, err = gitClient.GetRef(ctx, "refs/tags/v2.0.0")
-	var notFoundErr3 *nanogit.RefNotFoundError
-	require.True(t, errors.As(err, &notFoundErr3))
-	require.Equal(t, "refs/tags/v2.0.0", notFoundErr3.RefName)
-}
+	Context("UpdateRef operations", func() {
+		var (
+			client      nanogit.Client
+			local       *helpers.LocalGitRepo
+			firstCommit hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Getting initial commit hash")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
+			var err error
+			firstCommit, err = hash.FromHex(firstCommitStr)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Setting up main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+		})
+
+		It("should update existing ref", func() {
+			By("Creating ref for update test")
+			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/update-test", Hash: firstCommit})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating a new commit")
+			local.Git("commit", "--allow-empty", "-m", "new commit")
+			newHashStr := local.Git("rev-parse", "HEAD")
+			newHash, err := hash.FromHex(newHashStr)
+			Expect(err).NotTo(HaveOccurred())
+			local.Git("push", "origin", "main", "--force")
+
+			By("Updating ref to point to new commit")
+			err = client.UpdateRef(context.Background(), nanogit.Ref{Name: "refs/heads/update-test", Hash: newHash})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the update")
+			ref, err := client.GetRef(context.Background(), "refs/heads/update-test")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Hash).To(Equal(newHash))
+		})
+	})
+
+	Context("DeleteRef operations", func() {
+		var (
+			client      nanogit.Client
+			local       *helpers.LocalGitRepo
+			firstCommit hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Getting initial commit hash")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
+			var err error
+			firstCommit, err = hash.FromHex(firstCommitStr)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Setting up main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+		})
+
+		It("should delete branch ref", func() {
+			By("Creating ref for delete test")
+			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/delete-test", Hash: firstCommit})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Deleting the ref")
+			err = client.DeleteRef(context.Background(), "refs/heads/delete-test")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying ref is deleted")
+			_, err = client.GetRef(context.Background(), "refs/heads/delete-test")
+			var notFoundErr *nanogit.RefNotFoundError
+			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
+			Expect(notFoundErr.RefName).To(Equal("refs/heads/delete-test"))
+		})
+
+		It("should delete tag ref", func() {
+			By("Creating tag for delete test")
+			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/tags/delete-test", Hash: firstCommit})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Deleting the tag")
+			err = client.DeleteRef(context.Background(), "refs/tags/delete-test")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying tag is deleted")
+			_, err = client.GetRef(context.Background(), "refs/tags/delete-test")
+			var notFoundErr *nanogit.RefNotFoundError
+			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
+			Expect(notFoundErr.RefName).To(Equal("refs/tags/delete-test"))
+		})
+	})
+
+	Context("Integration workflow", func() {
+		var (
+			client      nanogit.Client
+			local       *helpers.LocalGitRepo
+			firstCommit hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Getting initial commit hash")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
+			var err error
+			firstCommit, err = hash.FromHex(firstCommitStr)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Setting up main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+		})
+
+		It("should complete full ref lifecycle", func() {
+			refName := "refs/heads/integration-flow"
+
+			By("Creating ref for integration flow")
+			err := client.CreateRef(context.Background(), nanogit.Ref{Name: refName, Hash: firstCommit})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting created ref")
+			ref, err := client.GetRef(context.Background(), refName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Hash).To(Equal(firstCommit))
+
+			By("Creating new commit for update")
+			local.Git("commit", "--allow-empty", "-m", "integration flow commit")
+			newHashStr := local.Git("rev-parse", "HEAD")
+			newHash, err := hash.FromHex(newHashStr)
+			Expect(err).NotTo(HaveOccurred())
+			local.Git("push", "origin", "main", "--force")
+
+			By("Updating ref to new commit")
+			err = client.UpdateRef(context.Background(), nanogit.Ref{Name: refName, Hash: newHash})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying ref update")
+			ref, err = client.GetRef(context.Background(), refName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Hash).To(Equal(newHash))
+
+			By("Deleting ref")
+			err = client.DeleteRef(context.Background(), refName)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying ref deletion")
+			_, err = client.GetRef(context.Background(), refName)
+			var notFoundErr *nanogit.RefNotFoundError
+			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
+			Expect(notFoundErr.RefName).To(Equal(refName))
+		})
+	})
+})

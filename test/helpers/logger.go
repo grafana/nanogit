@@ -3,44 +3,22 @@ package helpers
 import (
 	"fmt"
 	"strings"
-	"sync"
-	"testing"
+
+	"github.com/onsi/ginkgo/v2"
 )
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
-type TestLogger struct {
-	mu      sync.RWMutex
-	t       *testing.T
-	entries []struct {
-		level string
-		msg   string
-		args  []any
-	}
+// It uses Ginkgo's native logging capabilities for thread-safe output.
+type TestLogger struct{}
+
+// NewTestLogger creates a new TestLogger for Ginkgo tests.
+func NewTestLogger() *TestLogger {
+	return &TestLogger{}
 }
 
-// NewTestLogger creates a new TestLogger instance.
-func NewTestLogger(t *testing.T) *TestLogger {
-	return &TestLogger{
-		t: t,
-		entries: make([]struct {
-			level string
-			msg   string
-			args  []any
-		}, 0),
-	}
-}
-
-func (l *TestLogger) ForSubtest(t *testing.T) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.t = t
-}
-
-// Logf logs a message to the test output with colors and emojis.
+// Logf logs a message to the Ginkgo test output with colors and emojis.
 func (l *TestLogger) Logf(format string, args ...any) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	l.t.Logf(format, args...)
+	ginkgo.GinkgoWriter.Printf(format+"\n", args...)
 }
 
 // Debug implements nanogit.Logger.
@@ -68,10 +46,8 @@ func (l *TestLogger) Success(msg string, keysAndValues ...any) {
 	l.log("Success", msg, keysAndValues)
 }
 
-// log is a helper method to log messages and store them in entries.
+// log is a helper method to log messages with proper formatting.
 func (l *TestLogger) log(level, msg string, args []any) {
-	l.mu.RLock()
-
 	// Format the message with key-value pairs
 	formattedMsg := msg
 	if len(args) > 0 {
@@ -84,51 +60,17 @@ func (l *TestLogger) log(level, msg string, args []any) {
 		formattedMsg = fmt.Sprintf("%s (%s)", msg, strings.Join(pairs, ", "))
 	}
 
-	// Log to test output with colors and emojis
+	// Log to Ginkgo output with colors and emojis
 	switch level {
 	case "Debug":
-		l.t.Logf("%s🔍 [DEBUG] %s%s", ColorGray, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s🔍 [DEBUG] %s%s\n", ColorGray, formattedMsg, ColorReset)
 	case "Info":
-		l.t.Logf("%sℹ️  [INFO] %s%s", ColorBlue, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%sℹ️  [INFO] %s%s\n", ColorBlue, formattedMsg, ColorReset)
 	case "Warn":
-		l.t.Logf("%s⚠️  [WARN] %s%s", ColorYellow, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s⚠️  [WARN] %s%s\n", ColorYellow, formattedMsg, ColorReset)
 	case "Error":
-		l.t.Logf("%s❌ [ERROR] %s%s", ColorRed, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s❌ [ERROR] %s%s\n", ColorRed, formattedMsg, ColorReset)
 	case "Success":
-		l.t.Logf("%s✅ [SUCCESS] %s%s", ColorGreen, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s✅ [SUCCESS] %s%s\n", ColorGreen, formattedMsg, ColorReset)
 	}
-	l.mu.RUnlock()
-
-	// Store in entries
-	l.mu.Lock()
-	l.entries = append(l.entries, struct {
-		level string
-		msg   string
-		args  []any
-	}{level, msg, args})
-	l.mu.Unlock()
-}
-
-// GetEntries returns all logged entries.
-func (l *TestLogger) GetEntries() []struct {
-	level string
-	msg   string
-	args  []any
-} {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	return l.entries
-}
-
-// Clear clears all logged entries.
-func (l *TestLogger) Clear() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.entries = make([]struct {
-		level string
-		msg   string
-		args  []any
-	}, 0)
 }

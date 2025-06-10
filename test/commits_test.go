@@ -1,439 +1,445 @@
-//go:build integration
-
 package integration_test
 
 import (
 	"context"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	. "github.com/onsi/ginkgo/v2"
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	. "github.com/onsi/gomega"
 )
 
-func TestClient_GetCommit(t *testing.T) {
-	// set up remote repo
-	logger := helpers.NewTestLogger(t)
-	gitServer := helpers.NewGitServer(t, logger)
-	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
+var _ = Describe("Commits", func() {
+	Context("GetCommit operations", func() {
+		var (
+			client               nanogit.Client
+			local                *helpers.LocalGitRepo
+			user                 *helpers.User
+			initialCommitHash    hash.Hash
+			modifyFileCommitHash hash.Hash
+			renameCommitHash     hash.Hash
+		)
 
-	// set up local repo
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, user = QuickSetup()
 
-	// Create initial commit
-	local.CreateFile(t, "test.txt", "initial content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Initial commit")
-	initialCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
+			By("Getting initial commit hash")
+			var err error
+			initialCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
-	// Create second commit that modifies the file
-	local.CreateFile(t, "test.txt", "modified content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Modify file")
-	secondCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
+			By("Creating modify file commit")
+			local.UpdateFile("test.txt", "modified content")
+			local.Git("add", "test.txt")
+			local.Git("commit", "-m", "Modify file")
+			modifyFileCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
-	// Create third commit that renames the file
-	local.Git(t, "mv", "test.txt", "renamed.txt")
-	local.CreateFile(t, "new.txt", "modified content")
-	local.Git(t, "add", ".")
-	local.Git(t, "commit", "-m", "Rename and add files")
-	thirdCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
+			By("Creating rename file commit")
+			local.Git("mv", "test.txt", "renamed.txt")
+			local.CreateFile("renamed.txt", "modified content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Rename and add files")
+			renameCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
-	// Create and switch to main branch
-	local.Git(t, "branch", "-M", "main")
+			By("Pushing commits")
+			local.Git("push", "origin", "main", "--force")
+		})
 
-	// Push commit
-	local.Git(t, "push", "origin", "main", "--force")
+		It("should get initial commit details", func() {
+			commit, err := client.GetCommit(context.Background(), initialCommitHash)
+			Expect(err).NotTo(HaveOccurred())
 
-	// Create client and get commit
-	client, err := nanogit.NewHTTPClient(remote.AuthURL(), nanogit.WithBasicAuth(user.Username, user.Password))
-	require.NoError(t, err)
+			By("Verifying commit details")
+			Expect(commit.Hash).To(Equal(initialCommitHash))
+			Expect(commit.Parent).To(Equal(hash.Zero)) // First commit has no parent
+			Expect(commit.Author.Name).To(Equal(user.Username))
+			Expect(commit.Author.Email).To(Equal(user.Email))
+			Expect(commit.Author.Time).NotTo(BeZero())
 
-	commit, err := client.GetCommit(context.Background(), initialCommitHash)
-	require.NoError(t, err)
+			By("Checking that commit times are recent")
+			now := time.Now()
+			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+		})
 
-	// Verify commit details
-	require.Equal(t, initialCommitHash, commit.Hash)
-	require.Equal(t, hash.Zero, commit.Parent) // First commit has no parent
-	require.Equal(t, user.Username, commit.Author.Name)
-	require.Equal(t, user.Email, commit.Author.Email)
-	require.NotZero(t, commit.Author.Time)
-	require.Equal(t, user.Username, commit.Committer.Name)
-	require.Equal(t, user.Email, commit.Committer.Email)
-	require.NotZero(t, commit.Committer.Time)
-	require.Equal(t, "Initial commit", commit.Message)
+		It("should get modify file commit details", func() {
+			commit, err := client.GetCommit(context.Background(), modifyFileCommitHash)
+			Expect(err).NotTo(HaveOccurred())
 
-	// Check that commit times are recent (within 5 seconds)
-	now := time.Now()
-	require.InDelta(t, now.Unix(), commit.Committer.Time.Unix(), 5)
-	require.InDelta(t, now.Unix(), commit.Author.Time.Unix(), 5)
+			By("Verifying commit details")
+			Expect(commit.Hash).To(Equal(modifyFileCommitHash))
+			Expect(commit.Parent).To(Equal(initialCommitHash))
+			Expect(commit.Author.Name).To(Equal(user.Username))
+			Expect(commit.Author.Email).To(Equal(user.Email))
+			Expect(commit.Author.Time).NotTo(BeZero())
+			Expect(commit.Committer.Name).To(Equal(user.Username))
+			Expect(commit.Committer.Email).To(Equal(user.Email))
+			Expect(commit.Committer.Time).NotTo(BeZero())
+			Expect(commit.Message).To(Equal("Modify file"))
 
-	commit, err = client.GetCommit(context.Background(), secondCommitHash)
-	require.NoError(t, err)
+			By("Checking that commit times are recent")
+			now := time.Now()
+			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+		})
 
-	// Verify commit details
-	require.Equal(t, secondCommitHash, commit.Hash)
-	require.Equal(t, initialCommitHash, commit.Parent)
-	require.Equal(t, user.Username, commit.Author.Name)
-	require.Equal(t, user.Email, commit.Author.Email)
-	require.NotZero(t, commit.Author.Time)
-	require.Equal(t, user.Username, commit.Committer.Name)
-	require.Equal(t, user.Email, commit.Committer.Email)
-	require.NotZero(t, commit.Committer.Time)
-	require.Equal(t, "Modify file", commit.Message)
+		It("should get rename file commit details", func() {
+			commit, err := client.GetCommit(context.Background(), renameCommitHash)
+			Expect(err).NotTo(HaveOccurred())
 
-	// Check that commit times are recent (within 5 seconds)
-	require.InDelta(t, now.Unix(), commit.Committer.Time.Unix(), 5)
-	require.InDelta(t, now.Unix(), commit.Author.Time.Unix(), 5)
+			By("Verifying commit details")
+			Expect(commit.Parent).To(Equal(modifyFileCommitHash))
+			Expect(commit.Author.Name).To(Equal(user.Username))
+			Expect(commit.Author.Email).To(Equal(user.Email))
+			Expect(commit.Author.Time).NotTo(BeZero())
+			Expect(commit.Committer.Name).To(Equal(user.Username))
+			Expect(commit.Committer.Email).To(Equal(user.Email))
+			Expect(commit.Committer.Time).NotTo(BeZero())
+			Expect(commit.Message).To(Equal("Rename and add files"))
 
-	commit, err = client.GetCommit(context.Background(), thirdCommitHash)
-	require.NoError(t, err)
-
-	// Verify commit details
-	require.Equal(t, secondCommitHash, commit.Parent)
-	require.Equal(t, user.Username, commit.Author.Name)
-	require.Equal(t, user.Email, commit.Author.Email)
-	require.NotZero(t, commit.Author.Time)
-	require.Equal(t, user.Username, commit.Committer.Name)
-	require.Equal(t, user.Email, commit.Committer.Email)
-	require.NotZero(t, commit.Committer.Time)
-	require.Equal(t, "Rename and add files", commit.Message)
-
-	// Check that commit times are recent (within 5 seconds)
-	require.InDelta(t, now.Unix(), commit.Committer.Time.Unix(), 5)
-	require.InDelta(t, now.Unix(), commit.Author.Time.Unix(), 5)
-}
-
-func TestClient_CompareCommits(t *testing.T) {
-	logger := helpers.NewTestLogger(t)
-	logger.Info("Setting up remote repository")
-	gitServer := helpers.NewGitServer(t, logger)
-	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-
-	logger.Info("Setting up local repository")
-	local := helpers.NewLocalGitRepo(t, logger)
-	local.Git(t, "config", "user.name", user.Username)
-	local.Git(t, "config", "user.email", user.Email)
-	local.Git(t, "remote", "add", "origin", remote.AuthURL())
-
-	logger.Info("Creating initial commit with a file")
-	local.CreateFile(t, "test.txt", "initial content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Initial commit")
-	initialCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
-
-	logger.Info("Creating second commit that modifies the file")
-	local.CreateFile(t, "test.txt", "modified content")
-	local.Git(t, "add", "test.txt")
-	local.Git(t, "commit", "-m", "Modify file")
-	modifiedCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
-
-	logger.Info("Creating third commit that renames and adds files")
-	local.Git(t, "mv", "test.txt", "renamed.txt")
-	local.CreateFile(t, "new.txt", "modified content")
-	local.Git(t, "add", ".")
-	local.Git(t, "commit", "-m", "Rename and add files")
-	renamedCommitHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-	require.NoError(t, err)
-
-	logger.Info("Setting up main branch and pushing changes")
-	local.Git(t, "branch", "-M", "main")
-
-	logger.Info("Pushing all commits")
-	local.Git(t, "push", "origin", "main", "--force")
-
-	logger.Info("Debug output: print remote URL and commit hashes")
-	t.Logf("Remote URL: %s", remote.AuthURL())
-	t.Logf("Initial commit hash: %s", initialCommitHash)
-	t.Logf("Modified commit hash: %s", modifiedCommitHash)
-	t.Logf("Renamed commit hash: %s", renamedCommitHash)
-
-	logger.Info("Manually checking if the commit exists on the remote")
-	t.Log("Running git ls-remote to verify the commit")
-	local.Git(t, "ls-remote", remote.AuthURL())
-
-	logger.Info("Creating client")
-	client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	logger.Info("Getting the file hashes for verification")
-	initialFileHash, err := hash.FromHex(local.Git(t, "rev-parse", initialCommitHash.String()+":test.txt"))
-	require.NoError(t, err)
-	modifiedFileHash, err := hash.FromHex(local.Git(t, "rev-parse", modifiedCommitHash.String()+":test.txt"))
-	require.NoError(t, err)
-
-	t.Run("compare initial and modified commits", func(t *testing.T) {
-		logger.ForSubtest(t)
-
-		changes, err := client.CompareCommits(ctx, initialCommitHash, modifiedCommitHash)
-		require.NoError(t, err)
-		require.Len(t, changes, 1)
-		assert.Equal(t, "test.txt", changes[0].Path)
-		assert.Equal(t, protocol.FileStatusModified, changes[0].Status)
-
-		assert.Equal(t, initialFileHash, changes[0].OldHash)
-		assert.Equal(t, modifiedFileHash, changes[0].Hash)
+			By("Checking that commit times are recent")
+			now := time.Now()
+			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+		})
 	})
 
-	t.Run("compare modified and renamed commits", func(t *testing.T) {
-		logger.ForSubtest(t)
+	Context("CompareCommits operations", func() {
+		var (
+			client             nanogit.Client
+			local              *helpers.LocalGitRepo
+			initialCommitHash  hash.Hash
+			modifiedCommitHash hash.Hash
+			renamedCommitHash  hash.Hash
+			initialFileHash    hash.Hash
+			modifiedFileHash   hash.Hash
+		)
 
-		changes, err := client.CompareCommits(ctx, modifiedCommitHash, renamedCommitHash)
-		require.NoError(t, err)
-		require.Len(t, changes, 3)
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
 
-		assert.Equal(t, "new.txt", changes[0].Path)
-		assert.Equal(t, protocol.FileStatusAdded, changes[0].Status)
+			By("Creating initial commit with a file")
+			local.CreateFile("test.txt", "initial content")
+			local.Git("add", "test.txt")
+			local.Git("commit", "-m", "Initial commit")
+			var err error
+			initialCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
-		assert.Equal(t, "renamed.txt", changes[1].Path)
-		assert.Equal(t, protocol.FileStatusAdded, changes[1].Status)
+			By("Creating second commit that modifies the file")
+			local.CreateFile("test.txt", "modified content")
+			local.Git("add", "test.txt")
+			local.Git("commit", "-m", "Modify file")
+			modifiedCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
-		assert.Equal(t, "test.txt", changes[2].Path)
-		assert.Equal(t, protocol.FileStatusDeleted, changes[2].Status)
+			By("Creating third commit that renames and adds files")
+			local.Git("mv", "test.txt", "renamed.txt")
+			local.CreateFile("new.txt", "modified content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Rename and add files")
+			renamedCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Pushing all commits")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the file hashes for verification")
+			initialFileHash, err = hash.FromHex(local.Git("rev-parse", initialCommitHash.String()+":test.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			modifiedFileHash, err = hash.FromHex(local.Git("rev-parse", modifiedCommitHash.String()+":test.txt"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should compare initial and modified commits", func() {
+			changes, err := client.CompareCommits(context.Background(), initialCommitHash, modifiedCommitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(1))
+			Expect(changes[0].Path).To(Equal("test.txt"))
+			Expect(changes[0].Status).To(Equal(protocol.FileStatusModified))
+			Expect(changes[0].OldHash).To(Equal(initialFileHash))
+			Expect(changes[0].Hash).To(Equal(modifiedFileHash))
+		})
+
+		It("should compare modified and renamed commits", func() {
+			changes, err := client.CompareCommits(context.Background(), modifiedCommitHash, renamedCommitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(3))
+
+			Expect(changes[0].Path).To(Equal("new.txt"))
+			Expect(changes[0].Status).To(Equal(protocol.FileStatusAdded))
+
+			Expect(changes[1].Path).To(Equal("renamed.txt"))
+			Expect(changes[1].Status).To(Equal(protocol.FileStatusAdded))
+
+			Expect(changes[2].Path).To(Equal("test.txt"))
+			Expect(changes[2].Status).To(Equal(protocol.FileStatusDeleted))
+		})
+
+		It("should compare renamed and modified commits in inverted direction", func() {
+			changes, err := client.CompareCommits(context.Background(), renamedCommitHash, modifiedCommitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(3))
+
+			Expect(changes[0].Path).To(Equal("new.txt"))
+			Expect(changes[0].Status).To(Equal(protocol.FileStatusDeleted))
+
+			Expect(changes[1].Path).To(Equal("renamed.txt"))
+			Expect(changes[1].Status).To(Equal(protocol.FileStatusDeleted))
+
+			Expect(changes[2].Path).To(Equal("test.txt"))
+			Expect(changes[2].Status).To(Equal(protocol.FileStatusAdded))
+		})
+
+		It("should compare modified and initial commits in inverted direction", func() {
+			changes, err := client.CompareCommits(context.Background(), modifiedCommitHash, initialCommitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(1))
+			Expect(changes[0].Path).To(Equal("test.txt"))
+			Expect(changes[0].Status).To(Equal(protocol.FileStatusModified))
+			Expect(changes[0].OldHash).To(Equal(modifiedFileHash))
+			Expect(changes[0].Hash).To(Equal(initialFileHash))
+		})
 	})
 
-	t.Run("compare renamed and modified commits in inverted direction", func(t *testing.T) {
-		logger.ForSubtest(t)
+	Context("ListCommits operations", func() {
+		Context("basic functionality", func() {
+			var (
+				client   nanogit.Client
+				local    *helpers.LocalGitRepo
+				headHash hash.Hash
+			)
 
-		changes, err := client.CompareCommits(ctx, renamedCommitHash, modifiedCommitHash)
-		require.NoError(t, err)
-		require.Len(t, changes, 3)
+			BeforeEach(func() {
+				By("Setting up test repository")
+				client, _, local, _ = QuickSetup()
 
-		assert.Equal(t, "new.txt", changes[0].Path)
-		assert.Equal(t, protocol.FileStatusDeleted, changes[0].Status)
+				By("Creating several commits to test with")
+				local.CreateFile("file1.txt", "content 1")
+				local.Git("add", "file1.txt")
+				local.Git("commit", "-m", "Add file1")
+				local.Git("push", "-u", "origin", "main", "--force")
 
-		assert.Equal(t, "renamed.txt", changes[1].Path)
-		assert.Equal(t, protocol.FileStatusDeleted, changes[1].Status)
+				local.CreateFile("file2.txt", "content 2")
+				local.Git("add", "file2.txt")
+				local.Git("commit", "-m", "Add file2")
+				local.Git("push", "origin", "main")
 
-		assert.Equal(t, "test.txt", changes[2].Path)
-		assert.Equal(t, protocol.FileStatusAdded, changes[2].Status)
+				local.CreateFile("file3.txt", "content 3")
+				local.Git("add", "file3.txt")
+				local.Git("commit", "-m", "Add file3")
+				local.Git("push", "origin", "main")
+
+				By("Getting the current HEAD commit")
+				var err error
+				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should list commits without options", func() {
+				commits, err := client.ListCommits(context.Background(), headHash, nanogit.ListCommitsOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(commits)).To(BeNumerically(">=", 3), "Should have at least 3 commits")
+
+				By("Verifying commits are in reverse chronological order")
+				for i := 1; i < len(commits); i++ {
+					Expect(commits[i-1].Time().After(commits[i].Time()) || commits[i-1].Time().Equal(commits[i].Time())).To(BeTrue(),
+						"Commits should be in reverse chronological order")
+				}
+
+				By("Verifying the latest commit message")
+				Expect(commits[0].Message).To(Equal("Add file3"))
+			})
+		})
+
+		Context("pagination", func() {
+			var (
+				client   nanogit.Client
+				local    *helpers.LocalGitRepo
+				headHash hash.Hash
+			)
+
+			BeforeEach(func() {
+				By("Setting up test repository")
+				client, _, local, _ = QuickSetup()
+
+				By("Creating multiple commits")
+				for i := 1; i <= 5; i++ {
+					local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
+					local.Git("add", fmt.Sprintf("file%d.txt", i))
+					local.Git("commit", "-m", fmt.Sprintf("Add file%d", i))
+					if i == 1 {
+						local.Git("push", "-u", "origin", "main", "--force")
+					} else {
+						local.Git("push", "origin", "main")
+					}
+				}
+
+				var err error
+				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should support first page with 2 items per page", func() {
+				options := nanogit.ListCommitsOptions{
+					PerPage: 2,
+					Page:    1,
+				}
+
+				commits, err := client.ListCommits(context.Background(), headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commits).To(HaveLen(2))
+				Expect(commits[0].Message).To(Equal("Add file5"))
+				Expect(commits[1].Message).To(Equal("Add file4"))
+			})
+
+			It("should support second page", func() {
+				options := nanogit.ListCommitsOptions{
+					PerPage: 2,
+					Page:    2,
+				}
+
+				commits, err := client.ListCommits(context.Background(), headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commits).To(HaveLen(2))
+				Expect(commits[0].Message).To(Equal("Add file3"))
+				Expect(commits[1].Message).To(Equal("Add file2"))
+			})
+		})
+
+		Context("path filtering", func() {
+			var (
+				client   nanogit.Client
+				local    *helpers.LocalGitRepo
+				headHash hash.Hash
+			)
+
+			BeforeEach(func() {
+				By("Setting up test repository")
+				client, _, local, _ = QuickSetup()
+
+				By("Creating commits affecting different paths")
+				local.CreateDirPath("docs")
+				local.CreateFile("docs/readme.md", "readme content")
+				local.Git("add", "docs/readme.md")
+				local.Git("commit", "-m", "Add docs")
+				local.Git("branch", "-M", "main")
+				local.Git("push", "-u", "origin", "main", "--force")
+
+				local.CreateDirPath("src")
+				local.CreateFile("src/main.go", "main content")
+				local.Git("add", "src/main.go")
+				local.Git("commit", "-m", "Add main")
+				local.Git("push", "origin", "main")
+
+				local.CreateFile("docs/guide.md", "guide content")
+				local.Git("add", "docs/guide.md")
+				local.Git("commit", "-m", "Add guide")
+				local.Git("push", "origin", "main")
+
+				var err error
+				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should filter commits affecting docs directory", func() {
+				options := nanogit.ListCommitsOptions{
+					Path: "docs",
+				}
+				commits, err := client.ListCommits(context.Background(), headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Finding commits that affect docs directory")
+				found := 0
+				for _, commit := range commits {
+					if commit.Message == "Add docs" || commit.Message == "Add guide" {
+						found++
+					}
+				}
+				Expect(found).To(BeNumerically(">=", 2), "Should find commits affecting docs directory")
+			})
+
+			It("should filter commits affecting specific file", func() {
+				options := nanogit.ListCommitsOptions{
+					Path: "src/main.go",
+				}
+				commits, err := client.ListCommits(context.Background(), headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Finding the commit that added main.go")
+				found := 0
+				for _, commit := range commits {
+					if commit.Message == "Add main" {
+						found++
+					}
+				}
+				Expect(found).To(BeNumerically(">=", 1), "Should find commit affecting src/main.go")
+			})
+		})
+
+		Context("time filtering", func() {
+			var (
+				client   nanogit.Client
+				local    *helpers.LocalGitRepo
+				headHash hash.Hash
+				midTime  time.Time
+			)
+
+			BeforeEach(func() {
+				By("Setting up test repository")
+				client, _, local, _ = QuickSetup()
+
+				By("Creating first commit")
+				local.CreateFile("file1.txt", "content 1")
+				local.Git("add", "file1.txt")
+				local.Git("commit", "-m", "Old commit")
+				local.Git("branch", "-M", "main")
+				local.Git("push", "-u", "origin", "main", "--force")
+
+				By("Waiting and recording mid time")
+				time.Sleep(2 * time.Second)
+				midTime = time.Now()
+				time.Sleep(2 * time.Second)
+
+				By("Creating second commit")
+				local.CreateFile("file2.txt", "content 2")
+				local.Git("add", "file2.txt")
+				local.Git("commit", "-m", "New commit")
+				local.Git("push", "origin", "main")
+
+				var err error
+				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should filter commits since midTime", func() {
+				options := nanogit.ListCommitsOptions{
+					Since: midTime,
+				}
+				commits, err := client.ListCommits(context.Background(), headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Finding at least the new commit")
+				found := false
+				for _, commit := range commits {
+					if commit.Message == "New commit" {
+						found = true
+						Expect(commit.Time().After(midTime)).To(BeTrue(), "Commit should be after the since time")
+					}
+				}
+				Expect(found).To(BeTrue(), "Should find the new commit")
+			})
+		})
 	})
-
-	t.Run("compare modified and initial commits in inverted direction", func(t *testing.T) {
-		logger.ForSubtest(t)
-
-		changes, err := client.CompareCommits(ctx, modifiedCommitHash, initialCommitHash)
-		require.NoError(t, err)
-		require.Len(t, changes, 1)
-		assert.Equal(t, "test.txt", changes[0].Path)
-		assert.Equal(t, protocol.FileStatusModified, changes[0].Status)
-		assert.Equal(t, modifiedFileHash, changes[0].OldHash)
-		assert.Equal(t, initialFileHash, changes[0].Hash)
-	})
-}
-
-func TestClient_ListCommits(t *testing.T) {
-	t.Run("ListCommits basic functionality", func(t *testing.T) {
-		logger := helpers.NewTestLogger(t)
-		logger.ForSubtest(t)
-		gitServer := helpers.NewGitServer(t, logger)
-		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
-		// Create several commits to test with
-		local.CreateFile(t, "file1.txt", "content 1")
-		local.Git(t, "add", "file1.txt")
-		local.Git(t, "commit", "-m", "Add file1")
-		local.Git(t, "push")
-
-		local.CreateFile(t, "file2.txt", "content 2")
-		local.Git(t, "add", "file2.txt")
-		local.Git(t, "commit", "-m", "Add file2")
-		local.Git(t, "push")
-
-		local.CreateFile(t, "file3.txt", "content 3")
-		local.Git(t, "add", "file3.txt")
-		local.Git(t, "commit", "-m", "Add file3")
-		local.Git(t, "push")
-
-		// Get the current HEAD commit
-		headHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-
-		// Test basic listing without options
-		commits, err := client.ListCommits(ctx, headHash, nanogit.ListCommitsOptions{})
-		require.NoError(t, err)
-		assert.GreaterOrEqual(t, len(commits), 3, "Should have at least 3 commits")
-
-		// Verify commits are in reverse chronological order
-		for i := 1; i < len(commits); i++ {
-			assert.True(t, commits[i-1].Time().After(commits[i].Time()) || commits[i-1].Time().Equal(commits[i].Time()),
-				"Commits should be in reverse chronological order")
-		}
-
-		// Verify the latest commit message
-		assert.Equal(t, "Add file3", commits[0].Message)
-	})
-
-	t.Run("ListCommits with pagination", func(t *testing.T) {
-		logger := helpers.NewTestLogger(t)
-		logger.ForSubtest(t)
-		gitServer := helpers.NewGitServer(t, logger)
-		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
-		// Create multiple commits
-		for i := 1; i <= 5; i++ {
-			local.CreateFile(t, fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
-			local.Git(t, "add", fmt.Sprintf("file%d.txt", i))
-			local.Git(t, "commit", "-m", fmt.Sprintf("Add file%d", i))
-			local.Git(t, "push")
-		}
-
-		headHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-
-		// Test first page with 2 items per page
-		options := nanogit.ListCommitsOptions{
-			PerPage: 2,
-			Page:    1,
-		}
-		commits, err := client.ListCommits(ctx, headHash, options)
-		require.NoError(t, err)
-		assert.Equal(t, 2, len(commits))
-		assert.Equal(t, "Add file5", commits[0].Message)
-		assert.Equal(t, "Add file4", commits[1].Message)
-
-		// Test second page
-		options.Page = 2
-		commits, err = client.ListCommits(ctx, headHash, options)
-		require.NoError(t, err)
-		assert.Equal(t, 2, len(commits))
-		assert.Equal(t, "Add file3", commits[0].Message)
-		assert.Equal(t, "Add file2", commits[1].Message)
-	})
-
-	t.Run("ListCommits with path filter", func(t *testing.T) {
-		logger := helpers.NewTestLogger(t)
-		logger.ForSubtest(t)
-		gitServer := helpers.NewGitServer(t, logger)
-		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
-		// Create commits affecting different paths
-		local.CreateDirPath(t, "docs")
-		local.CreateFile(t, "docs/readme.md", "readme content")
-		local.Git(t, "add", "docs/readme.md")
-		local.Git(t, "commit", "-m", "Add docs")
-		local.Git(t, "push")
-
-		local.CreateDirPath(t, "src")
-		local.CreateFile(t, "src/main.go", "main content")
-		local.Git(t, "add", "src/main.go")
-		local.Git(t, "commit", "-m", "Add main")
-		local.Git(t, "push")
-
-		local.CreateFile(t, "docs/guide.md", "guide content")
-		local.Git(t, "add", "docs/guide.md")
-		local.Git(t, "commit", "-m", "Add guide")
-		local.Git(t, "push")
-
-		headHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-
-		// Filter commits affecting docs/ directory
-		options := nanogit.ListCommitsOptions{
-			Path: "docs",
-		}
-		commits, err := client.ListCommits(ctx, headHash, options)
-		require.NoError(t, err)
-
-		// Should find commits that affect docs directory
-		found := 0
-		for _, commit := range commits {
-			if commit.Message == "Add docs" || commit.Message == "Add guide" {
-				found++
-			}
-		}
-		assert.GreaterOrEqual(t, found, 2, "Should find commits affecting docs directory")
-
-		// Filter commits affecting specific file
-		options.Path = "src/main.go"
-		commits, err = client.ListCommits(ctx, headHash, options)
-		require.NoError(t, err)
-
-		// Should find the commit that added main.go
-		found = 0
-		for _, commit := range commits {
-			if commit.Message == "Add main" {
-				found++
-			}
-		}
-		assert.GreaterOrEqual(t, found, 1, "Should find commit affecting src/main.go")
-	})
-
-	t.Run("ListCommits with time filters", func(t *testing.T) {
-		logger := helpers.NewTestLogger(t)
-		logger.ForSubtest(t)
-		gitServer := helpers.NewGitServer(t, logger)
-		user := gitServer.CreateUser(t)
-		remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-		local := helpers.NewLocalGitRepo(t, logger)
-		client, _ := local.QuickInit(t, user, remote.AuthURL())
-		ctx := context.Background()
-
-		// Create first commit
-		local.CreateFile(t, "file1.txt", "content 1")
-		local.Git(t, "add", "file1.txt")
-		local.Git(t, "commit", "-m", "Old commit")
-		local.Git(t, "push")
-
-		// Wait a bit and record time
-		time.Sleep(2 * time.Second)
-		midTime := time.Now()
-		time.Sleep(2 * time.Second)
-
-		// Create second commit
-		local.CreateFile(t, "file2.txt", "content 2")
-		local.Git(t, "add", "file2.txt")
-		local.Git(t, "commit", "-m", "New commit")
-		local.Git(t, "push")
-
-		headHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-
-		// Filter commits since midTime (should get only the new commit)
-		options := nanogit.ListCommitsOptions{
-			Since: midTime,
-		}
-		commits, err := client.ListCommits(ctx, headHash, options)
-		require.NoError(t, err)
-
-		// Should find at least the new commit
-		found := false
-		for _, commit := range commits {
-			if commit.Message == "New commit" {
-				found = true
-				assert.True(t, commit.Time().After(midTime), "Commit should be after the since time")
-			}
-		}
-		assert.True(t, found, "Should find the new commit")
-	})
-}
+})

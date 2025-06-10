@@ -1,153 +1,52 @@
-//go:build integration
-
 package integration_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/test/helpers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	. "github.com/onsi/ginkgo/v2"
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	. "github.com/onsi/gomega"
 )
 
-func quickSetup(t *testing.T) (*helpers.TestLogger, *helpers.LocalGitRepo, nanogit.Client, string) {
-	logger := helpers.NewTestLogger(t)
-	logger.Info("Setting up remote and local repository")
-	gitServer := helpers.NewGitServer(t, logger)
-	user := gitServer.CreateUser(t)
-	remote := gitServer.CreateRepo(t, "testrepo", user.Username, user.Password)
-	local := helpers.NewLocalGitRepo(t, logger)
-	client, initCommitFile := local.QuickInit(t, user, remote.AuthURL())
-
-	return logger, local, client, initCommitFile
-}
-
-func TestClient_Writer(t *testing.T) {
-	t.Run("CreateBlob with new file", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-
-		logger.ForSubtest(t)
-
-		newContent := []byte("new content")
-		author := nanogit.Author{
+var _ = Describe("Writer Operations", func() {
+	var (
+		testAuthor = nanogit.Author{
 			Name:  "Test Author",
 			Email: "test@example.com",
 			Time:  time.Now(),
 		}
-		committer := nanogit.Committer{
+		testCommitter = nanogit.Committer{
 			Name:  "Test Committer",
 			Email: "test@example.com",
 			Time:  time.Now(),
 		}
+	)
 
-		logger.Info("Getting the current commit hash for the branch")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
+	// Helper to verify author and committer in commit
+	verifyCommitAuthorship := func(local *helpers.LocalGitRepo) {
+		commitAuthor := local.Git("log", "-1", "--pretty=%an <%ae>")
+		Expect(strings.TrimSpace(commitAuthor)).To(Equal("Test Author <test@example.com>"))
 
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
+		commitCommitter := local.Git("log", "-1", "--pretty=%cn <%ce>")
+		Expect(strings.TrimSpace(commitCommitter)).To(Equal("Test Committer <test@example.com>"))
+	}
 
-		// Verify nothing to push before creating blob
-		// TODO: make it a separate test
-		err = writer.Push(ctx)
-		require.Error(t, err)
-		require.ErrorIs(t, err, nanogit.ErrNothingToPush)
-
-		// Verify nothing to commit before creating blob
-		// TODO: make it a separate test
-		_, err = writer.Commit(ctx, "Add new file", author, committer)
-		require.Error(t, err)
-		require.ErrorIs(t, err, nanogit.ErrNothingToCommit)
-
-		// Verify blob exists before creating it
-		exists, err := writer.BlobExists(ctx, "new.txt")
-		require.NoError(t, err)
-		require.False(t, exists)
-
-		_, err = writer.CreateBlob(ctx, "new.txt", newContent)
-		require.NoError(t, err)
-		commit, err := writer.Commit(ctx, "Add new file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		// Verify blob exists after creating it
-		exists, err = writer.BlobExists(ctx, "new.txt")
-		require.NoError(t, err)
-		require.True(t, exists)
-
-		logger.Info("Pushing the commit")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("")
-		local.Git(t, "pull")
-		require.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
-
-		logger.Info("Verifying file content")
-		content, err := os.ReadFile(filepath.Join(local.Path, "new.txt"))
-		require.NoError(t, err)
-		require.Equal(t, newContent, content)
-
-		logger.Info("Verifying commit message")
-		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
-		require.Equal(t, "Add new file", strings.TrimSpace(commitMsg))
-
-		logger.Info("Verifying author")
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-
-		logger.Info("Verifying committer")
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
-
-		logger.Info("Verifying the ref was updated")
-		hashAfterCommit := local.Git(t, "rev-parse", "refs/heads/main")
-		require.NotEqual(t, currentHash.String(), hashAfterCommit)
-
-		logger.Info("Verifying file content")
-		content, err = os.ReadFile(filepath.Join(local.Path, "new.txt"))
-		require.NoError(t, err)
-		require.Equal(t, newContent, content)
-
-		logger.Info("Verifying the test file was not removed")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, newContent, otherContent)
-	})
-
-	t.Run("CreateBlob with nested path", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		nestedContent := []byte("nested content")
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Getting the current commit hash for the branch")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
+	// Helper to create writer from current HEAD
+	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *helpers.LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
+		currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+		Expect(err).NotTo(HaveOccurred())
 
 		ref := nanogit.Ref{
 			Name: "refs/heads/main",
@@ -155,1337 +54,1113 @@ func TestClient_Writer(t *testing.T) {
 		}
 
 		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
+		Expect(err).NotTo(HaveOccurred())
 
-		// Verify blob does not exist before creating it
-		exists, err := writer.BlobExists(ctx, "dir/subdir/file.txt")
-		require.NoError(t, err)
-		require.False(t, exists)
+		return writer, &currentHash
+	}
 
-		// Verify tree does not exist before creating it
-		_, err = writer.GetTree(ctx, "dir")
-		var pathNotFoundErr *nanogit.PathNotFoundError
-		require.Error(t, err)
-		require.ErrorAs(t, err, &pathNotFoundErr)
-		assert.Equal(t, "dir", pathNotFoundErr.Path)
+	Context("Create Blob Operations", func() {
+		It("should create a new file", func() {
+			client, _, local, _ := QuickSetup()
 
-		_, err = writer.CreateBlob(ctx, "dir/subdir/file.txt", nestedContent)
-		require.NoError(t, err)
+			writer, currentHash := createWriterFromHead(context.Background(), client, local)
 
-		// Verify blob exists after creating it
-		exists, err = writer.BlobExists(ctx, "dir/subdir/file.txt")
-		require.NoError(t, err)
-		require.True(t, exists)
+			newContent := []byte("new content")
+			fileName := "new.txt"
+			commitMsg := "Add new file"
 
-		// Verify tree exists after creating it
-		tree, err := writer.GetTree(ctx, "dir")
-		require.NoError(t, err)
-		require.NotNil(t, tree)
-		require.Equal(t, 1, len(tree.Entries))
-		require.Equal(t, "subdir", tree.Entries[0].Name)
-		require.Equal(t, protocol.ObjectTypeTree, tree.Entries[0].Type)
-		require.Equal(t, uint32(0o40000), tree.Entries[0].Mode)
+			// Verify empty state before creating blob
+			err := writer.Push(context.Background())
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToPush))
 
-		commit, err := writer.Commit(ctx, "Add nested file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-		err = writer.Push(ctx)
-		require.NoError(t, err)
+			_, err = writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToCommit))
 
-		// Verify tree for subdir
-		subdirTree, err := writer.GetTree(ctx, "dir/subdir")
-		require.NoError(t, err)
-		require.NotNil(t, subdirTree)
-		require.Equal(t, 1, len(subdirTree.Entries))
-		require.Equal(t, "file.txt", subdirTree.Entries[0].Name)
-		require.Equal(t, protocol.ObjectTypeBlob, subdirTree.Entries[0].Type)
-		require.Equal(t, uint32(0o100644), subdirTree.Entries[0].Mode)
+			exists, err := writer.BlobExists(context.Background(), fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
 
-		logger.Info("Verifying using Git CLI")
-		local.Git(t, "pull")
+			// Create blob and commit
+			_, err = writer.CreateBlob(context.Background(), fileName, newContent)
+			Expect(err).NotTo(HaveOccurred())
 
-		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "refs/heads/main"))
+			exists, err = writer.BlobExists(context.Background(), fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
 
-		logger.Info("Verifying directory structure")
-		dirInfo, err := os.Stat(filepath.Join(local.Path, "dir"))
-		require.NoError(t, err)
-		require.True(t, dirInfo.IsDir())
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
 
-		subdirInfo, err := os.Stat(filepath.Join(local.Path, "dir/subdir"))
-		require.NoError(t, err)
-		require.True(t, subdirInfo.IsDir())
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 
-		logger.Info("Verifying file content")
-		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/file.txt"))
-		require.NoError(t, err)
-		require.Equal(t, nestedContent, content)
+			// Verify results
+			local.Git("pull", "origin", "main")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "refs/heads/main")))
 
-		logger.Info("Verifying the test file was not removed")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, nestedContent, otherContent)
+			content, err := os.ReadFile(filepath.Join(local.Path, fileName))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(newContent))
 
-		logger.Info("Verifying author")
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
+			actualCommitMsg := local.Git("log", "-1", "--pretty=%B")
+			Expect(strings.TrimSpace(actualCommitMsg)).To(Equal(commitMsg))
 
-		logger.Info("Verifying committer")
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+			verifyCommitAuthorship(local)
 
-		logger.Info("Verifying the ref was updated")
-		hashAfterCommit := local.Git(t, "rev-parse", "refs/heads/main")
-		require.NotEqual(t, currentHash.String(), hashAfterCommit)
+			hashAfterCommit := local.Git("rev-parse", "refs/heads/main")
+			Expect(hashAfterCommit).NotTo(Equal(currentHash.String()))
+
+			// Verify initial file preserved
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(newContent))
+		})
+
+		It("should create a nested file", func() {
+			client, _, local, _ := QuickSetup()
+
+			writer, currentHash := createWriterFromHead(context.Background(), client, local)
+			nestedContent := []byte("nested content")
+			nestedPath := "dir/subdir/file.txt"
+			commitMsg := "Add nested file"
+
+			// Verify nested path doesn't exist
+			exists, err := writer.BlobExists(context.Background(), nestedPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+
+			_, err = writer.GetTree(context.Background(), "dir")
+			var pathNotFoundErr *nanogit.PathNotFoundError
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
+			if ok := errors.As(err, &pathNotFoundErr); ok {
+				Expect(pathNotFoundErr.Path).To(Equal("dir"))
+			} else {
+				Fail(fmt.Sprintf("Expected PathNotFoundError, got %T", err))
+			}
+
+			// Create nested blob
+			_, err = writer.CreateBlob(context.Background(), nestedPath, nestedContent)
+			Expect(err).NotTo(HaveOccurred())
+
+			exists, err = writer.BlobExists(context.Background(), nestedPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Verify tree structure created
+			tree, err := writer.GetTree(context.Background(), "dir")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
+			Expect(tree.Entries).To(HaveLen(1))
+			Expect(tree.Entries[0].Name).To(Equal("subdir"))
+			Expect(tree.Entries[0].Type).To(Equal(protocol.ObjectTypeTree))
+			Expect(tree.Entries[0].Mode).To(Equal(uint32(0o40000)))
+
+			subdirTree, err := writer.GetTree(context.Background(), "dir/subdir")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(subdirTree).NotTo(BeNil())
+			Expect(subdirTree.Entries).To(HaveLen(1))
+			Expect(subdirTree.Entries[0].Name).To(Equal("file.txt"))
+			Expect(subdirTree.Entries[0].Type).To(Equal(protocol.ObjectTypeBlob))
+			Expect(subdirTree.Entries[0].Mode).To(Equal(uint32(0o100644)))
+
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "refs/heads/main")))
+
+			// Verify directory structure
+			dirInfo, err := os.Stat(filepath.Join(local.Path, "dir"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dirInfo.IsDir()).To(BeTrue())
+
+			subdirInfo, err := os.Stat(filepath.Join(local.Path, "dir/subdir"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(subdirInfo.IsDir()).To(BeTrue())
+
+			content, err := os.ReadFile(filepath.Join(local.Path, nestedPath))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(nestedContent))
+
+			verifyCommitAuthorship(local)
+
+			hashAfterCommit := local.Git("rev-parse", "refs/heads/main")
+			Expect(hashAfterCommit).NotTo(Equal(currentHash.String()))
+
+			// Verify initial file preserved
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(nestedContent))
+		})
+
+		It("should handle invalid ref", func() {
+			client, _, _, _ := QuickSetup()
+
+			_, err := client.NewStagedWriter(context.Background(), nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
+		})
 	})
 
-	t.Run("CreateBlob with invalid ref", func(t *testing.T) {
-		logger, _, client, _ := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
+	Context("Update Blob Operations", func() {
+		It("should update an existing file", func() {
+			client, _, local, _ := QuickSetup()
 
-		_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
-		require.Error(t, err)
-		require.ErrorIs(t, err, nanogit.ErrObjectNotFound)
+			// Create and commit initial file plus file to be updated
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateFile("tobeupdated.txt", "original content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(context.Background(), client, local)
+
+			fileName := "tobeupdated.txt"
+			updatedContent := []byte("Updated content")
+			commitMsg := "Update test file"
+
+			// Verify blob hash before update
+			oldBlobHash := local.Git("rev-parse", "HEAD:"+fileName)
+
+			blobHash, err := writer.UpdateBlob(context.Background(), fileName, updatedContent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blobHash).NotTo(BeNil())
+			Expect(blobHash.String()).NotTo(Equal(oldBlobHash))
+
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
+
+			content, err := os.ReadFile(filepath.Join(local.Path, fileName))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(updatedContent))
+
+			verifyCommitAuthorship(local)
+
+			// Verify initial file was preserved
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "initial.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(updatedContent))
+		})
+
+		It("should update a nested file", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit initial file plus nested file to be updated
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/subdir/tobeupdated.txt", "original nested content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(context.Background(), client, local)
+
+			nestedPath := "dir/subdir/tobeupdated.txt"
+			updatedContent := []byte("Updated nested content")
+			commitMsg := "Update nested file"
+
+			blobHash, err := writer.UpdateBlob(context.Background(), nestedPath, updatedContent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blobHash).NotTo(BeNil())
+
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
+
+			content, err := os.ReadFile(filepath.Join(local.Path, nestedPath))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(updatedContent))
+
+			verifyCommitAuthorship(local)
+
+			// Verify initial file was preserved
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "initial.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(updatedContent))
+		})
+
+		It("should handle updating missing file", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit initial file
+			local.CreateFile("initial.txt", "initial content")
+			local.Git("add", "initial.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(context.Background(), client, local)
+
+			_, err := writer.UpdateBlob(context.Background(), "nonexistent.txt", []byte("should fail"))
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
+		})
 	})
 
-	t.Run("UpdateBlob with existing file", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
+	Context("Delete Blob Operations", func() {
+		It("should delete an existing file", func() {
+			client, _, local, _ := QuickSetup()
 
-		newContent := []byte("New file content")
-		local.CreateFile(t, "tobeupdated.txt", string(newContent))
+			// Create and commit initial files
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateFile("tobedeleted.txt", "content to be deleted")
+			local.Git("add", ".")
+			local.Git("branch", "-M", "main")
+			local.Git("commit", "-m", "Initial commit with files")
+			local.Git("push", "-u", "origin", "main", "--force")
 
-		logger.Info("Committing initial file")
-		local.Git(t, "add", "tobeupdated.txt")
-		local.Git(t, "commit", "-m", "Add file to be updated")
-		local.Git(t, "push")
+			writer, _ := createWriterFromHead(context.Background(), client, local)
 
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
+			fileName := "tobedeleted.txt"
+			commitMsg := "Delete file"
 
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
+			treeHash, err := writer.DeleteBlob(context.Background(), fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
 
-		logger.Info("Verifying blob hash before update")
-		oldBlobHash := local.Git(t, "rev-parse", "HEAD:tobeupdated.txt")
-		logger.Info("Old blob hash", "hash", oldBlobHash)
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
 
-		logger.Info("Updating file content")
-		updatedContent := []byte("Updated content")
-		blobHash, err := writer.UpdateBlob(ctx, "tobeupdated.txt", updatedContent)
-		require.NoError(t, err)
-		require.NotNil(t, blobHash)
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 
-		logger.Info("Blob hash changed", "old_hash", oldBlobHash, "new_hash", blobHash.String())
-		require.NotEqual(t, oldBlobHash, blobHash.String())
+			// Verify results
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
+			// Verify deleted file no longer exists
+			_, err = os.Stat(filepath.Join(local.Path, fileName))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
 
-		logger.Info("Committing changes", "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		commit, err := writer.Commit(ctx, "Update test file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-		logger.Info("Pushing changes", "blob_hash", blobHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		err = writer.Push(ctx)
-		require.NoError(t, err)
+			// Verify initial file was preserved
+			initialContent, err := os.ReadFile(filepath.Join(local.Path, "initial.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(initialContent).To(Equal([]byte("initial content")))
 
-		// Pull
-		logger.Info("Getting git status before pull")
-		local.Git(t, "fetch", "origin")
-		status := local.Git(t, "status")
-		logger.Info("Git status", "status", status)
-		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
+			verifyCommitAuthorship(local)
+		})
 
-		logger.Info("Checking repository state")
-		logger.Info("Current branch", "branch", local.Git(t, "branch", "--show-current"))
-		logger.Info("Remote tracking branch", "branch", local.Git(t, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
-		logger.Info("Local commit", "hash", local.Git(t, "rev-parse", "HEAD"))
-		logger.Info("Remote commit", "hash", local.Git(t, "rev-parse", "origin/main"))
+		It("should delete a nested file", func() {
+			client, _, local, _ := QuickSetup()
 
-		logger.Info("Checking for untracked files")
-		untracked := local.Git(t, "ls-files", "--others", "--exclude-standard")
-		logger.Info("Untracked files", "files", untracked)
-		require.Empty(t, untracked, "Found untracked files: %s", untracked)
+			// Create and commit initial files and nested file
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/subdir/tobedeleted.txt", "nested content to be deleted")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
-		logger.Info("Checking index state")
-		indexFiles := local.Git(t, "ls-files", "--stage")
-		logger.Info("Files in index", "files", indexFiles)
+			writer, _ := createWriterFromHead(context.Background(), client, local)
 
-		logger.Info("Logging repository contents before pull")
-		local.LogRepoContents(t)
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-		logger.Info("Logging repository contents after pull")
-		local.LogRepoContents(t)
+			nestedPath := "dir/subdir/tobedeleted.txt"
+			commitMsg := "Delete nested file"
 
-		// After pull
-		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
+			treeHash, err := writer.DeleteBlob(context.Background(), nestedPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
 
-		logger.Info("Verifying updated file content")
-		content, err := os.ReadFile(filepath.Join(local.Path, "tobeupdated.txt"))
-		require.NoError(t, err)
-		require.Equal(t, updatedContent, content)
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
 
-		logger.Info("Verifying author and committer")
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 
-		logger.Info("Verifying test file was preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, newContent, otherContent)
-	})
-	t.Run("UpdateBlob with nested file", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
+			// Verify results
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
-		logger.Info("Creating new file to be updated")
-		newContent := []byte("New file content")
-		local.CreateDirPath(t, "dir/subdir")
-		local.CreateFile(t, "dir/subdir/tobeupdated.txt", string(newContent))
+			// Verify nested file was deleted
+			_, err = os.Stat(filepath.Join(local.Path, nestedPath))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
 
-		logger.Info("Adding and committing the file to be updated")
-		local.Git(t, "add", "dir/subdir/tobeupdated.txt")
-		local.Git(t, "commit", "-m", "Add file to be updated")
-		local.Git(t, "push")
+			// Verify initial file was preserved
+			initialContent, err := os.ReadFile(filepath.Join(local.Path, "initial.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(initialContent).To(Equal([]byte("initial content")))
 
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
+			verifyCommitAuthorship(local)
+		})
 
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
+		It("should handle deleting missing file", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(context.Background(), client, local)
 
-		logger.Info("Updating nested file content")
-		updatedContent := []byte("Updated nested content")
-		blobHash, err := writer.UpdateBlob(ctx, "dir/subdir/tobeupdated.txt", updatedContent)
-		require.NoError(t, err)
-		require.NotNil(t, blobHash)
+			_, err := writer.DeleteBlob(context.Background(), "nonexistent.txt")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
+		})
 
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
+		It("should preserve other files when deleting from shared directory", func() {
+			client, _, local, _ := QuickSetup()
 
-		logger.Info("Committing changes", "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		commit, err := writer.Commit(ctx, "Update nested file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-		logger.Info("Pushing changes", "blob_hash", blobHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		err = writer.Push(ctx)
-		require.NoError(t, err)
+			// Create and commit multiple files in same directory
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateDirPath("shared")
+			local.CreateFile("shared/tobedeleted.txt", "content to be deleted")
+			local.CreateFile("shared/tobepreserved.txt", "content to be preserved")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with shared directory")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
-		// Pulling
-		logger.Info("Getting git status before pull")
-		local.Git(t, "fetch", "origin")
-		status := local.Git(t, "status")
-		logger.Info("Git status", "status")
-		require.Contains(t, status, "Your branch is behind 'origin/main' by 1 commit")
-		logger.Info("Checking for untracked files")
-		untracked := local.Git(t, "ls-files", "--others", "--exclude-standard")
-		require.Empty(t, untracked, "Found untracked files: %s", untracked)
+			writer, _ := createWriterFromHead(context.Background(), client, local)
 
-		logger.Info("Logging repository contents before pull")
-		local.LogRepoContents(t)
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-		logger.Info("Logging repository contents after pull")
-		local.LogRepoContents(t)
+			deletePath := "shared/tobedeleted.txt"
+			preservePath := "shared/tobepreserved.txt"
+			commitMsg := "Delete one file from shared directory"
 
-		// After pull
-		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
+			treeHash, err := writer.DeleteBlob(context.Background(), deletePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
 
-		logger.Info("Verifying file content was updated")
-		content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/tobeupdated.txt"))
-		require.NoError(t, err)
-		require.Equal(t, updatedContent, content)
+			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
 
-		logger.Info("Verifying test file was preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, newContent, otherContent)
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
 
-		logger.Info("Verifying author")
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-		logger.Info("Verifying committer")
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
+			// Verify results
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
+
+			// Verify deleted file no longer exists
+			_, err = os.Stat(filepath.Join(local.Path, deletePath))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			// Verify preserved file still exists in same directory
+			preservedContent, err := os.ReadFile(filepath.Join(local.Path, preservePath))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(preservedContent).To(Equal([]byte("content to be preserved")))
+
+			// Verify initial file was preserved
+			initialContent, err := os.ReadFile(filepath.Join(local.Path, "initial.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(initialContent).To(Equal([]byte("initial content")))
+
+			verifyCommitAuthorship(local)
+		})
 	})
 
-	t.Run("UpdateBlob with nonexistent file", func(t *testing.T) {
-		logger, _, client, _ := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
+	Context("Delete Tree Operations", func() {
+		It("should delete a tree structure containing files", func() {
+			client, _, local, _ := QuickSetup()
+			initCommitFile := "test.txt"
 
-		logger.Info("Getting current ref")
-		ref, err := client.GetRef(ctx, "refs/heads/main")
-		require.NoError(t, err)
+			By("Creating directory with files to be deleted")
+			dir1Content := []byte("Directory 1 file content")
+			file1Content := []byte("File 1 content")
+			file2Content := []byte("File 2 content")
+			local.CreateDirPath("toberemoved")
+			local.CreateFile("toberemoved/file1.txt", string(file1Content))
+			local.CreateFile("toberemoved/file2.txt", string(file2Content))
+			local.CreateFile("preserved.txt", string(dir1Content))
 
-		logger.Info("Creating a writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
+			By("Adding and committing the directory with files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add directory with files to be deleted")
+			local.Git("push")
 
-		logger.Info("Trying to update a nonexistent file")
-		_, err = writer.UpdateBlob(ctx, "nonexistent.txt", []byte("content"))
-		require.Error(t, err)
-		// Check for structured PathNotFoundError
-		var pathNotFoundErr *nanogit.PathNotFoundError
-		require.ErrorAs(t, err, &pathNotFoundErr)
-		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
+			By("Verifying directory and files exist before deletion")
+			_, err := os.Stat(filepath.Join(local.Path, "toberemoved"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting current ref")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			By("Creating ref writer")
+			writer, err := client.NewStagedWriter(context.Background(), ref)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Deleting the entire directory")
+			treeHash, err := writer.DeleteTree(context.Background(), "toberemoved")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			By("Committing directory deletion")
+			commit, err := writer.Commit(context.Background(), "Delete entire directory", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			By("Pushing changes")
+			err = writer.Push(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Pulling latest changes")
+			local.Git("pull")
+
+			By("Verifying commit hash")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
+
+			By("Verifying directory was completely deleted")
+			_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			logger.Info("Verifying all files in directory were deleted")
+			_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file1.txt"))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+			_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file2.txt"))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			By("Verifying other files were preserved")
+			preservedContent, err := os.ReadFile(filepath.Join(local.Path, "preserved.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(preservedContent).To(Equal(dir1Content))
+
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(file1Content))
+			Expect(otherContent).NotTo(Equal(file2Content))
+
+			By("Verifying commit message")
+			commitMsg := local.Git("log", "-1", "--pretty=%B")
+			Expect(strings.TrimSpace(commitMsg)).To(Equal("Delete entire directory"))
+		})
+
+		It("should delete a tree structure with nested directories", func() {
+			client, _, local, _ := QuickSetup()
+			ctx := context.Background()
+
+			logger.Info("Creating nested directory structure to be deleted")
+			preservedContent := []byte("Preserved content")
+			nested1Content := []byte("Nested 1 content")
+			nested2Content := []byte("Nested 2 content")
+			deepContent := []byte("Deep nested content")
+
+			local.CreateDirPath("toberemoved/subdir1")
+			local.CreateDirPath("toberemoved/subdir2/deep")
+			local.CreateFile("preserved.txt", string(preservedContent))
+			local.CreateFile("toberemoved/file.txt", string(nested1Content))
+			local.CreateFile("toberemoved/subdir1/nested.txt", string(nested2Content))
+			local.CreateFile("toberemoved/subdir2/deep/deep.txt", string(deepContent))
+
+			logger.Info("Adding and committing the nested directory structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add nested directory structure")
+			local.Git("push")
+
+			logger.Info("Getting current ref")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			logger.Info("Creating ref writer")
+			writer, err := client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Deleting the entire nested directory")
+			treeHash, err := writer.DeleteTree(ctx, "toberemoved")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			author := nanogit.Author{
+				Name:  "Test Author",
+				Email: "test@example.com",
+				Time:  time.Now(),
+			}
+			committer := nanogit.Committer{
+				Name:  "Test Committer",
+				Email: "test@example.com",
+				Time:  time.Now(),
+			}
+
+			logger.Info("Committing nested directory deletion")
+			commit, err := writer.Commit(ctx, "Delete nested directory structure", author, committer)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			logger.Info("Pushing changes")
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Pulling latest changes")
+			local.Git("pull")
+
+			logger.Info("Verifying entire directory structure was deleted")
+			_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			logger.Info("Verifying preserved file still exists")
+			content, err := os.ReadFile(filepath.Join(local.Path, "preserved.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(preservedContent))
+
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(nested1Content))
+		})
+
+		It("should fail to delete tree of missing directory", func() {
+			client, _, _, _ := QuickSetup()
+			ctx := context.Background()
+
+			logger.Info("Getting current ref")
+			ref, err := client.GetRef(ctx, "refs/heads/main")
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Creating a writer")
+			writer, err := client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Trying to delete a nonexistent directory")
+			_, err = writer.DeleteTree(ctx, "nonexistent")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(&nanogit.PathNotFoundError{Path: "nonexistent"}))
+		})
+
+		It("should fail to delete tree when path is a file", func() {
+			client, _, local, _ := QuickSetup()
+			ctx := context.Background()
+
+			logger.Info("Creating a file to test error case")
+			fileContent := []byte("This is a file, not a directory")
+			local.CreateFile("testfile.txt", string(fileContent))
+			local.Git("add", "testfile.txt")
+			local.Git("commit", "-m", "Add test file")
+			local.Git("push")
+
+			fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:testfile.txt"))
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Getting current ref")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			logger.Info("Creating a writer")
+			writer, err := client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Trying to delete a file as if it were a directory")
+			_, err = writer.DeleteTree(ctx, "testfile.txt")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(&nanogit.UnexpectedObjectTypeError{
+				ObjectID:     fileHash,
+				ExpectedType: protocol.ObjectTypeTree,
+				ActualType:   protocol.ObjectTypeBlob,
+			}))
+		})
+
+		It("should delete a tree structure with subdirectory only", func() {
+			client, _, local, _ := QuickSetup()
+			ctx := context.Background()
+
+			logger.Info("Creating parent directory with subdirectories")
+			parentFile := []byte("Parent file")
+			subdir1File := []byte("Subdirectory 1 file")
+			subdir2File := []byte("Subdirectory 2 file")
+
+			local.CreateDirPath("parent/subdir1")
+			local.CreateDirPath("parent/subdir2")
+			local.CreateFile("parent/parentfile.txt", string(parentFile))
+			local.CreateFile("parent/subdir1/file1.txt", string(subdir1File))
+			local.CreateFile("parent/subdir2/file2.txt", string(subdir2File))
+
+			By("Adding and committing the directory structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add parent with subdirectories")
+			local.Git("push")
+
+			logger.Info("Getting current ref")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			logger.Info("Creating ref writer")
+			writer, err := client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Deleting only subdir1, leaving subdir2 and parent")
+			treeHash, err := writer.DeleteTree(ctx, "parent/subdir1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			logger.Info("Committing subdirectory deletion")
+			commit, err := writer.Commit(ctx, "Delete only subdir1", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			logger.Info("Pushing changes")
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			logger.Info("Pulling latest changes")
+			local.Git("pull")
+
+			logger.Info("Verifying subdir1 was deleted")
+			_, err = os.Stat(filepath.Join(local.Path, "parent/subdir1"))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			logger.Info("Verifying parent directory still exists")
+			parentContent, err := os.ReadFile(filepath.Join(local.Path, "parent/parentfile.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(parentContent).To(Equal(parentFile))
+
+			logger.Info("Verifying subdir2 still exists")
+			subdir2Content, err := os.ReadFile(filepath.Join(local.Path, "parent/subdir2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(subdir2Content).To(Equal(subdir2File))
+
+			logger.Info("Verifying other files were preserved")
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).NotTo(Equal(subdir1File))
+		})
+
+		Context("Complex scenarios", func() {
+			It("should create multiple files in different directories with one commit", func() {
+				client, _, local, _ := QuickSetup()
+				ctx := context.Background()
+
+				logger.Info("Getting current ref")
+				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+				ref := nanogit.Ref{
+					Name: "refs/heads/main",
+					Hash: currentHash,
+				}
+
+				logger.Info("Creating staged writer")
+				writer, err := client.NewStagedWriter(ctx, ref)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create multiple files in the same directory
+				logger.Info("Creating multiple JSON files in config directory")
+				config1Content := []byte(`{"database": {"host": "localhost", "port": 5432}}`)
+				config2Content := []byte(`{"api": {"timeout": 30, "retries": 3}}`)
+				config3Content := []byte(`{"logging": {"level": "info", "output": "stdout"}}`)
+
+				_, err = writer.CreateBlob(ctx, "config/database.json", config1Content)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = writer.CreateBlob(ctx, "config/api.json", config2Content)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = writer.CreateBlob(ctx, "config/logging.json", config3Content)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create files in different subdirectories
+				logger.Info("Creating files in different subdirectories")
+				dataContent := []byte(`{"users": [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]}`)
+				schemaContent := []byte(`{"type": "object", "properties": {"name": {"type": "string"}}}`)
+
+				_, err = writer.CreateBlob(ctx, "data/users.json", dataContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				logger.Info("Committing all files")
+				commit, err := writer.Commit(ctx, "Add configuration and data files", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit).NotTo(BeNil())
+
+				logger.Info("Pushing changes")
+				err = writer.Push(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				logger.Info("Pulling and verifying")
+				local.Git("pull")
+
+				// Verify directory structure
+				logger.Info("Verifying directory structure")
+				configDir, err := os.Stat(filepath.Join(local.Path, "config"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(configDir.IsDir()).To(BeTrue())
+
+				dataDir, err := os.Stat(filepath.Join(local.Path, "data"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataDir.IsDir()).To(BeTrue())
+
+				schemasDir, err := os.Stat(filepath.Join(local.Path, "schemas"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(schemasDir.IsDir()).To(BeTrue())
+
+				// Verify all files exist with correct content
+				logger.Info("Verifying file contents")
+				content1, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(content1).To(Equal(config1Content))
+
+				content2, err := os.ReadFile(filepath.Join(local.Path, "config/api.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(content2).To(Equal(config2Content))
+
+				content3, err := os.ReadFile(filepath.Join(local.Path, "config/logging.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(content3).To(Equal(config3Content))
+
+				dataFileContent, err := os.ReadFile(filepath.Join(local.Path, "data/users.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataFileContent).To(Equal(dataContent))
+
+				schemaFileContent, err := os.ReadFile(filepath.Join(local.Path, "schemas/user.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(schemaFileContent).To(Equal(schemaContent))
+
+				// Verify original file is preserved
+				logger.Info("Verifying original file preserved")
+				originalContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(originalContent).NotTo(BeEmpty())
+
+				// Verify commit details
+				logger.Info("Verifying commit details")
+				finalHash := local.Git("rev-parse", "HEAD")
+				Expect(finalHash).To(Equal(commit.Hash.String()))
+
+				commitMsg := local.Git("log", "-1", "--pretty=%B")
+				Expect(commitMsg).To(Equal("Add configuration and data files"))
+			})
+
+			It("should create multiple files in different directories across multiple commits", func() {
+				client, _, local, _ := QuickSetup()
+				ctx := context.Background()
+
+				logger.Info("Getting current ref")
+				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+				ref := nanogit.Ref{
+					Name: "refs/heads/main",
+					Hash: currentHash,
+				}
+
+				logger.Info("Creating staged writer")
+				writer, err := client.NewStagedWriter(ctx, ref)
+				Expect(err).NotTo(HaveOccurred())
+
+				// First commit: Create config files
+				logger.Info("First commit: Creating configuration files")
+				dbConfigContent := []byte(`{"host": "localhost", "port": 5432, "database": "myapp"}`)
+				apiConfigContent := []byte(`{"baseUrl": "https://api.example.com", "timeout": 30}`)
+
+				_, err = writer.CreateBlob(ctx, "config/database.json", dbConfigContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = writer.CreateBlob(ctx, "config/api.json", apiConfigContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				commit1, err := writer.Commit(ctx, "Add database and API configuration", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit1).NotTo(BeNil())
+				logger.Info("First commit created", "hash", commit1.Hash.String())
+
+				// Second commit: Create documentation files
+				logger.Info("Second commit: Creating documentation files")
+				readmeContent := []byte(`# My Application\n\nThis is a sample application.`)
+				apiDocsContent := []byte(`# API Documentation\n\n## Endpoints\n\n- GET /users`)
+
+				_, err = writer.CreateBlob(ctx, "docs/README.md", readmeContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = writer.CreateBlob(ctx, "docs/api.md", apiDocsContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				commit2, err := writer.Commit(ctx, "Add documentation files", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit2).NotTo(BeNil())
+				logger.Info("Second commit created", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
+
+				// Third commit: Create test and data files
+				logger.Info("Third commit: Creating test and data files")
+				testDataContent := []byte(`{"testUsers": [{"id": 1, "name": "Test User"}]}`)
+				schemaContent := []byte(`{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object"}`)
+
+				_, err = writer.CreateBlob(ctx, "tests/data/users.json", testDataContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
+				Expect(err).NotTo(HaveOccurred())
+
+				commit3, err := writer.Commit(ctx, "Add test data and schema files", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit3).NotTo(BeNil())
+				logger.Info("Third commit created", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
+
+				// Verify commit chain before push
+				Expect(currentHash).To(Equal(commit1.Parent))
+				Expect(commit1.Hash).To(Equal(commit2.Parent))
+				Expect(commit2.Hash).To(Equal(commit3.Parent))
+
+				// Push all commits at once
+				logger.Info("Pushing all three commits")
+				err = writer.Push(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Pull and verify
+				logger.Info("Pulling changes")
+				local.Git("pull")
+
+				// Verify final commit hash
+				logger.Info("Verifying final commit hash")
+				finalHash := local.Git("rev-parse", "HEAD")
+				Expect(finalHash).To(Equal(commit3.Hash.String()))
+
+				// Verify all commits exist in history
+				logger.Info("Verifying commit history")
+				commitHistory := local.Git("log", "--oneline", "--format=%H %s")
+				logger.Info("Commit history", "history", commitHistory)
+
+				Expect(commitHistory).To(ContainSubstring(commit1.Hash.String()))
+				Expect(commitHistory).To(ContainSubstring(commit2.Hash.String()))
+				Expect(commitHistory).To(ContainSubstring(commit3.Hash.String()))
+
+				Expect(commitHistory).To(ContainSubstring("Add database and API configuration"))
+				Expect(commitHistory).To(ContainSubstring("Add documentation files"))
+				Expect(commitHistory).To(ContainSubstring("Add test data and schema files"))
+
+				// Verify directory structure
+				logger.Info("Verifying directory structure")
+				configDir, err := os.Stat(filepath.Join(local.Path, "config"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(configDir.IsDir()).To(BeTrue())
+
+				docsDir, err := os.Stat(filepath.Join(local.Path, "docs"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(docsDir.IsDir()).To(BeTrue())
+
+				testsDir, err := os.Stat(filepath.Join(local.Path, "tests"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(testsDir.IsDir()).To(BeTrue())
+
+				testDataDir, err := os.Stat(filepath.Join(local.Path, "tests/data"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(testDataDir.IsDir()).To(BeTrue())
+
+				schemasDir, err := os.Stat(filepath.Join(local.Path, "schemas"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(schemasDir.IsDir()).To(BeTrue())
+
+				// Verify all files exist with correct content
+				logger.Info("Verifying file contents")
+				dbConfig, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dbConfig).To(Equal(dbConfigContent))
+
+				apiConfig, err := os.ReadFile(filepath.Join(local.Path, "config/api.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apiConfig).To(Equal(apiConfigContent))
+
+				readme, err := os.ReadFile(filepath.Join(local.Path, "docs/README.md"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(readme).To(Equal(readmeContent))
+
+				apiDocs, err := os.ReadFile(filepath.Join(local.Path, "docs/api.md"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apiDocs).To(Equal(apiDocsContent))
+
+				testData, err := os.ReadFile(filepath.Join(local.Path, "tests/data/users.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(testData).To(Equal(testDataContent))
+
+				schema, err := os.ReadFile(filepath.Join(local.Path, "schemas/user.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(schema).To(Equal(schemaContent))
+
+				// Verify original file is preserved
+				logger.Info("Verifying original file preserved")
+				originalContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(originalContent).NotTo(BeEmpty())
+
+				// Verify individual commits show correct files
+				logger.Info("Verifying files in individual commits")
+				commit1Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit1.Hash.String()))
+				Expect(commit1Files).To(ContainSubstring("config/database.json"))
+				Expect(commit1Files).To(ContainSubstring("config/api.json"))
+				Expect(commit1Files).To(ContainSubstring("test.txt"))
+				Expect(commit1Files).NotTo(ContainSubstring("docs/README.md"))
+
+				commit2Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit2.Hash.String()))
+				Expect(commit2Files).To(ContainSubstring("config/database.json"))
+				Expect(commit2Files).To(ContainSubstring("config/api.json"))
+				Expect(commit2Files).To(ContainSubstring("docs/README.md"))
+				Expect(commit2Files).To(ContainSubstring("docs/api.md"))
+				Expect(commit2Files).To(ContainSubstring("test.txt"))
+				Expect(commit2Files).NotTo(ContainSubstring("tests/data/users.json"))
+
+				commit3Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit3.Hash.String()))
+				Expect(commit3Files).To(ContainSubstring("config/database.json"))
+				Expect(commit3Files).To(ContainSubstring("config/api.json"))
+				Expect(commit3Files).To(ContainSubstring("docs/README.md"))
+				Expect(commit3Files).To(ContainSubstring("docs/api.md"))
+				Expect(commit3Files).To(ContainSubstring("tests/data/users.json"))
+				Expect(commit3Files).To(ContainSubstring("schemas/user.json"))
+				Expect(commit3Files).To(ContainSubstring("test.txt"))
+			})
+
+			It("should create multiple commits and all be visible after push", func() {
+				client, _, local, _ := QuickSetup()
+				ctx := context.Background()
+
+				logger.Info("Getting current ref")
+				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+				Expect(err).NotTo(HaveOccurred())
+				ref := nanogit.Ref{
+					Name: "refs/heads/main",
+					Hash: currentHash,
+				}
+
+				logger.Info("Creating staged writer")
+				writer, err := client.NewStagedWriter(ctx, ref)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create first commit
+				logger.Info("Creating first file and commit")
+				_, err = writer.CreateBlob(ctx, "file1.txt", []byte("First file content"))
+				Expect(err).NotTo(HaveOccurred())
+				commit1, err := writer.Commit(ctx, "Add first file", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit1).NotTo(BeNil())
+				logger.Info("First commit", "hash", commit1.Hash.String())
+
+				// Create second commit
+				logger.Info("Creating second file and commit")
+				_, err = writer.CreateBlob(ctx, "file2.txt", []byte("Second file content"))
+				Expect(err).NotTo(HaveOccurred())
+				commit2, err := writer.Commit(ctx, "Add second file", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit2).NotTo(BeNil())
+				logger.Info("Second commit", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
+
+				// Create third commit
+				logger.Info("Creating third file and commit")
+				_, err = writer.CreateBlob(ctx, "file3.txt", []byte("Third file content"))
+				Expect(err).NotTo(HaveOccurred())
+				commit3, err := writer.Commit(ctx, "Add third file", testAuthor, testCommitter)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commit3).NotTo(BeNil())
+				logger.Info("Third commit", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
+
+				// Verify commit chain is correct
+				Expect(currentHash).To(Equal(commit1.Parent))
+				Expect(commit1.Hash).To(Equal(commit2.Parent))
+				Expect(commit2.Hash).To(Equal(commit3.Parent))
+
+				// Push all commits
+				logger.Info("Pushing all commits")
+				err = writer.Push(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Pull and verify
+				logger.Info("Pulling changes")
+				local.Git("pull")
+
+				// Verify final commit hash
+				logger.Info("Verifying final commit hash")
+				finalHash := local.Git("rev-parse", "HEAD")
+				Expect(finalHash).To(Equal(commit3.Hash.String()))
+
+				// Verify all three commits exist in history
+				logger.Info("Verifying commit history")
+				commitHistory := local.Git("log", "--oneline", "--format=%H %s")
+				logger.Info("Commit history", "history", commitHistory)
+
+				// Should contain all three commits
+				Expect(commitHistory).To(ContainSubstring(commit1.Hash.String()))
+				Expect(commitHistory).To(ContainSubstring(commit2.Hash.String()))
+				Expect(commitHistory).To(ContainSubstring(commit3.Hash.String()))
+
+				// Verify commit messages are correct
+				Expect(commitHistory).To(ContainSubstring("Add first file"))
+				Expect(commitHistory).To(ContainSubstring("Add second file"))
+				Expect(commitHistory).To(ContainSubstring("Add third file"))
+
+				// Verify all files exist
+				logger.Info("Verifying all files exist")
+				content1, err := os.ReadFile(filepath.Join(local.Path, "file1.txt"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(content1).To(Equal([]byte("First file content")))
+
+				content2, err := os.ReadFile(filepath.Join(local.Path, "file2.txt"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(content2).To(Equal([]byte("Second file content")))
+
+				content3, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(content3).To(Equal([]byte("Third file content")))
+
+				initCommitFile := "test.txt"
+				// Verify original file is preserved
+				otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(otherContent).NotTo(BeEmpty())
+
+				// Verify individual commits are reachable
+				logger.Info("Verifying individual commits are reachable")
+				commit1Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit1.Hash.String()))
+				Expect(commit1Files).To(ContainSubstring("file1.txt"))
+				Expect(commit1Files).To(ContainSubstring(initCommitFile))
+				Expect(commit1Files).NotTo(ContainSubstring("file2.txt"))
+				Expect(commit1Files).NotTo(ContainSubstring("file3.txt"))
+
+				commit2Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit2.Hash.String()))
+				Expect(commit2Files).To(ContainSubstring("file1.txt"))
+				Expect(commit2Files).To(ContainSubstring("file2.txt"))
+				Expect(commit2Files).To(ContainSubstring(initCommitFile))
+				Expect(commit2Files).NotTo(ContainSubstring("file3.txt"))
+
+				commit3Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit3.Hash.String()))
+				Expect(commit3Files).To(ContainSubstring("file1.txt"))
+				Expect(commit3Files).To(ContainSubstring("file2.txt"))
+				Expect(commit3Files).To(ContainSubstring("file3.txt"))
+				Expect(commit3Files).To(ContainSubstring(initCommitFile))
+			})
+		})
 	})
-
-	t.Run("DeleteBlob with existing file", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating a file to be deleted")
-		fileContent := []byte("File to be deleted")
-		local.CreateFile(t, "tobedeleted.txt", string(fileContent))
-
-		logger.Info("Adding and committing the file to be deleted")
-		local.Git(t, "add", "tobedeleted.txt")
-		local.Git(t, "commit", "-m", "Add file to be deleted")
-		local.Git(t, "push")
-
-		logger.Info("Verifying file exists before deletion")
-		_, err := os.Stat(filepath.Join(local.Path, "tobedeleted.txt"))
-		require.NoError(t, err)
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Deleting the file")
-		treeHash, err := writer.DeleteBlob(ctx, "tobedeleted.txt")
-		require.NoError(t, err)
-		require.NotNil(t, treeHash)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Committing deletion", "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		commit, err := writer.Commit(ctx, "Delete test file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes", "tree_hash", treeHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-
-		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
-
-		logger.Info("Verifying file was deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "tobedeleted.txt"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying other files were preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, fileContent, otherContent)
-
-		logger.Info("Verifying commit message")
-		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
-		require.Equal(t, "Delete test file", strings.TrimSpace(commitMsg))
-
-		logger.Info("Verifying author and committer")
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
-	})
-
-	t.Run("DeleteBlob with nested file", func(t *testing.T) {
-		logger, local, client, _ := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating nested file to be deleted")
-		nestedContent := []byte("Nested file to be deleted")
-		local.CreateDirPath(t, "dir/subdir")
-		local.CreateFile(t, "dir/subdir/tobedeleted.txt", string(nestedContent))
-
-		logger.Info("Adding and committing the nested file")
-		local.Git(t, "add", "dir/subdir/tobedeleted.txt")
-		local.Git(t, "commit", "-m", "Add nested file to be deleted")
-		local.Git(t, "push")
-
-		logger.Info("Verifying nested file exists before deletion")
-		_, err := os.Stat(filepath.Join(local.Path, "dir/subdir/tobedeleted.txt"))
-		require.NoError(t, err)
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Deleting the nested file")
-		treeHash, err := writer.DeleteBlob(ctx, "dir/subdir/tobedeleted.txt")
-		require.NoError(t, err)
-		require.NotNil(t, treeHash)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Committing deletion", "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		commit, err := writer.Commit(ctx, "Delete nested file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes", "tree_hash", treeHash.String(), "commit", commit.Hash.String(), "previous_commit", ref.Hash.String(), "ref", ref.Name)
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-
-		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
-
-		logger.Info("Verifying nested file was deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "dir/subdir/tobedeleted.txt"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying directory structure was removed")
-		_, err = os.Stat(filepath.Join(local.Path, "dir"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying commit message")
-		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
-		require.Equal(t, "Delete nested file", strings.TrimSpace(commitMsg))
-
-		logger.Info("Verifying author and committer")
-		commitAuthor := local.Git(t, "log", "-1", "--pretty=%an <%ae>")
-		require.Equal(t, "Test Author <test@example.com>", strings.TrimSpace(commitAuthor))
-		commitCommitter := local.Git(t, "log", "-1", "--pretty=%cn <%ce>")
-		require.Equal(t, "Test Committer <test@example.com>", strings.TrimSpace(commitCommitter))
-	})
-
-	t.Run("DeleteBlob with nonexistent file", func(t *testing.T) {
-		logger, _, client, _ := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Getting current ref")
-		ref, err := client.GetRef(ctx, "refs/heads/main")
-		require.NoError(t, err)
-
-		logger.Info("Creating a writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Trying to delete a nonexistent file")
-		_, err = writer.DeleteBlob(ctx, "nonexistent.txt")
-		require.Error(t, err)
-		// Check for structured PathNotFoundError
-		var pathNotFoundErr *nanogit.PathNotFoundError
-		require.ErrorAs(t, err, &pathNotFoundErr)
-		assert.Equal(t, "nonexistent.txt", pathNotFoundErr.Path)
-	})
-
-	t.Run("DeleteBlob preserves other files in same directory", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating multiple files in same directory")
-		file1Content := []byte("File 1 content")
-		file2Content := []byte("File 2 content")
-		local.CreateDirPath(t, "shared")
-		local.CreateFile(t, "shared/file1.txt", string(file1Content))
-		local.CreateFile(t, "shared/file2.txt", string(file2Content))
-
-		logger.Info("Adding and committing all files")
-		local.Git(t, "add", "shared/")
-		local.Git(t, "commit", "-m", "Add files to shared directory")
-		local.Git(t, "push")
-
-		logger.Info("Verifying both files exist before deletion")
-		_, err := os.Stat(filepath.Join(local.Path, "shared/file1.txt"))
-		require.NoError(t, err)
-		_, err = os.Stat(filepath.Join(local.Path, "shared/file2.txt"))
-		require.NoError(t, err)
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Deleting only file1.txt")
-		treeHash, err := writer.DeleteBlob(ctx, "shared/file1.txt")
-		require.NoError(t, err)
-		require.NotNil(t, treeHash)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Committing deletion")
-		commit, err := writer.Commit(ctx, "Delete file1.txt only", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-
-		logger.Info("Verifying file1.txt was deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "shared/file1.txt"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying file2.txt still exists")
-		content, err := os.ReadFile(filepath.Join(local.Path, "shared/file2.txt"))
-		require.NoError(t, err)
-		require.Equal(t, file2Content, content)
-
-		logger.Info("Verifying directory still exists")
-		dirInfo, err := os.Stat(filepath.Join(local.Path, "shared"))
-		require.NoError(t, err)
-		require.True(t, dirInfo.IsDir())
-
-		logger.Info("Verifying other files were preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, file1Content, otherContent)
-		require.NotEqual(t, file2Content, otherContent)
-	})
-
-	t.Run("DeleteTree with directory containing files", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating directory with files to be deleted")
-		dir1Content := []byte("Directory 1 file content")
-		file1Content := []byte("File 1 content")
-		file2Content := []byte("File 2 content")
-		local.CreateDirPath(t, "toberemoved")
-		local.CreateFile(t, "toberemoved/file1.txt", string(file1Content))
-		local.CreateFile(t, "toberemoved/file2.txt", string(file2Content))
-		local.CreateFile(t, "preserved.txt", string(dir1Content))
-
-		logger.Info("Adding and committing the directory with files")
-		local.Git(t, "add", ".")
-		local.Git(t, "commit", "-m", "Add directory with files to be deleted")
-		local.Git(t, "push")
-
-		logger.Info("Verifying directory and files exist before deletion")
-		_, err := os.Stat(filepath.Join(local.Path, "toberemoved"))
-		require.NoError(t, err)
-		_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file1.txt"))
-		require.NoError(t, err)
-		_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file2.txt"))
-		require.NoError(t, err)
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Deleting the entire directory")
-		treeHash, err := writer.DeleteTree(ctx, "toberemoved")
-		require.NoError(t, err)
-		require.NotNil(t, treeHash)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Committing directory deletion")
-		commit, err := writer.Commit(ctx, "Delete entire directory", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-
-		logger.Info("Verifying commit hash")
-		assert.Equal(t, commit.Hash.String(), local.Git(t, "rev-parse", "HEAD"))
-
-		logger.Info("Verifying directory was completely deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying all files in directory were deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file1.txt"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-		_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file2.txt"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying other files were preserved")
-		preservedContent, err := os.ReadFile(filepath.Join(local.Path, "preserved.txt"))
-		require.NoError(t, err)
-		require.Equal(t, dir1Content, preservedContent)
-
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, file1Content, otherContent)
-		require.NotEqual(t, file2Content, otherContent)
-
-		logger.Info("Verifying commit message")
-		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
-		require.Equal(t, "Delete entire directory", strings.TrimSpace(commitMsg))
-	})
-
-	t.Run("DeleteTree with nested directories", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating nested directory structure to be deleted")
-		preservedContent := []byte("Preserved content")
-		nested1Content := []byte("Nested 1 content")
-		nested2Content := []byte("Nested 2 content")
-		deepContent := []byte("Deep nested content")
-
-		local.CreateDirPath(t, "toberemoved/subdir1")
-		local.CreateDirPath(t, "toberemoved/subdir2/deep")
-		local.CreateFile(t, "preserved.txt", string(preservedContent))
-		local.CreateFile(t, "toberemoved/file.txt", string(nested1Content))
-		local.CreateFile(t, "toberemoved/subdir1/nested.txt", string(nested2Content))
-		local.CreateFile(t, "toberemoved/subdir2/deep/deep.txt", string(deepContent))
-
-		logger.Info("Adding and committing the nested directory structure")
-		local.Git(t, "add", ".")
-		local.Git(t, "commit", "-m", "Add nested directory structure")
-		local.Git(t, "push")
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Deleting the entire nested directory")
-		treeHash, err := writer.DeleteTree(ctx, "toberemoved")
-		require.NoError(t, err)
-		require.NotNil(t, treeHash)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Committing nested directory deletion")
-		commit, err := writer.Commit(ctx, "Delete nested directory structure", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-
-		logger.Info("Verifying entire directory structure was deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying preserved file still exists")
-		content, err := os.ReadFile(filepath.Join(local.Path, "preserved.txt"))
-		require.NoError(t, err)
-		require.Equal(t, preservedContent, content)
-
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, nested1Content, otherContent)
-	})
-
-	t.Run("DeleteTree with nonexistent directory", func(t *testing.T) {
-		logger, _, client, _ := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Getting current ref")
-		ref, err := client.GetRef(ctx, "refs/heads/main")
-		require.NoError(t, err)
-
-		logger.Info("Creating a writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Trying to delete a nonexistent directory")
-		_, err = writer.DeleteTree(ctx, "nonexistent")
-		require.Error(t, err)
-		// Check for structured PathNotFoundError
-		var pathNotFoundErr *nanogit.PathNotFoundError
-		require.ErrorAs(t, err, &pathNotFoundErr)
-		assert.Equal(t, "nonexistent", pathNotFoundErr.Path)
-	})
-
-	t.Run("DeleteTree with file instead of directory", func(t *testing.T) {
-		logger, local, client, _ := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating a file to test error case")
-		fileContent := []byte("This is a file, not a directory")
-		local.CreateFile(t, "testfile.txt", string(fileContent))
-		local.Git(t, "add", "testfile.txt")
-		local.Git(t, "commit", "-m", "Add test file")
-		local.Git(t, "push")
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating a writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Trying to delete a file as if it were a directory")
-		_, err = writer.DeleteTree(ctx, "testfile.txt")
-		require.Error(t, err)
-		// Check for structured UnexpectedObjectTypeError since we expected a tree but got a blob
-		var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
-		require.ErrorAs(t, err, &unexpectedTypeErr)
-		// Note: We need to import the protocol package to access ObjectType constants
-		// For now, we'll just verify it's an UnexpectedObjectTypeError
-		assert.NotNil(t, unexpectedTypeErr)
-	})
-
-	t.Run("DeleteTree with subdirectory only", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		logger.Info("Creating parent directory with subdirectories")
-		parentFile := []byte("Parent file")
-		subdir1File := []byte("Subdirectory 1 file")
-		subdir2File := []byte("Subdirectory 2 file")
-
-		local.CreateDirPath(t, "parent/subdir1")
-		local.CreateDirPath(t, "parent/subdir2")
-		local.CreateFile(t, "parent/parentfile.txt", string(parentFile))
-		local.CreateFile(t, "parent/subdir1/file1.txt", string(subdir1File))
-		local.CreateFile(t, "parent/subdir2/file2.txt", string(subdir2File))
-
-		logger.Info("Adding and committing the directory structure")
-		local.Git(t, "add", ".")
-		local.Git(t, "commit", "-m", "Add parent with subdirectories")
-		local.Git(t, "push")
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "refs/heads/main"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating ref writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		logger.Info("Deleting only subdir1, leaving subdir2 and parent")
-		treeHash, err := writer.DeleteTree(ctx, "parent/subdir1")
-		require.NoError(t, err)
-		require.NotNil(t, treeHash)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Committing subdirectory deletion")
-		commit, err := writer.Commit(ctx, "Delete only subdir1", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling latest changes")
-		local.Git(t, "pull")
-
-		logger.Info("Verifying subdir1 was deleted")
-		_, err = os.Stat(filepath.Join(local.Path, "parent/subdir1"))
-		require.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-
-		logger.Info("Verifying parent directory still exists")
-		parentContent, err := os.ReadFile(filepath.Join(local.Path, "parent/parentfile.txt"))
-		require.NoError(t, err)
-		require.Equal(t, parentFile, parentContent)
-
-		logger.Info("Verifying subdir2 still exists")
-		subdir2Content, err := os.ReadFile(filepath.Join(local.Path, "parent/subdir2/file2.txt"))
-		require.NoError(t, err)
-		require.Equal(t, subdir2File, subdir2Content)
-
-		logger.Info("Verifying other files were preserved")
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEqual(t, subdir1File, otherContent)
-	})
-
-	t.Run("CreateBlob multiple files in different directories with one commit", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating staged writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		// Create multiple files in the same directory
-		logger.Info("Creating multiple JSON files in config directory")
-		config1Content := []byte(`{"database": {"host": "localhost", "port": 5432}}`)
-		config2Content := []byte(`{"api": {"timeout": 30, "retries": 3}}`)
-		config3Content := []byte(`{"logging": {"level": "info", "output": "stdout"}}`)
-
-		_, err = writer.CreateBlob(ctx, "config/database.json", config1Content)
-		require.NoError(t, err)
-
-		_, err = writer.CreateBlob(ctx, "config/api.json", config2Content)
-		require.NoError(t, err)
-
-		_, err = writer.CreateBlob(ctx, "config/logging.json", config3Content)
-		require.NoError(t, err)
-
-		// Create files in different subdirectories
-		logger.Info("Creating files in different subdirectories")
-		dataContent := []byte(`{"users": [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]}`)
-		schemaContent := []byte(`{"type": "object", "properties": {"name": {"type": "string"}}}`)
-
-		_, err = writer.CreateBlob(ctx, "data/users.json", dataContent)
-		require.NoError(t, err)
-
-		_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
-		require.NoError(t, err)
-
-		logger.Info("Committing all files")
-		commit, err := writer.Commit(ctx, "Add configuration and data files", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit)
-
-		logger.Info("Pushing changes")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		logger.Info("Pulling and verifying")
-		local.Git(t, "pull")
-
-		// Verify directory structure
-		logger.Info("Verifying directory structure")
-		configDir, err := os.Stat(filepath.Join(local.Path, "config"))
-		require.NoError(t, err)
-		require.True(t, configDir.IsDir())
-
-		dataDir, err := os.Stat(filepath.Join(local.Path, "data"))
-		require.NoError(t, err)
-		require.True(t, dataDir.IsDir())
-
-		schemasDir, err := os.Stat(filepath.Join(local.Path, "schemas"))
-		require.NoError(t, err)
-		require.True(t, schemasDir.IsDir())
-
-		// Verify all files exist with correct content
-		logger.Info("Verifying file contents")
-		content1, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
-		require.NoError(t, err)
-		require.Equal(t, config1Content, content1)
-
-		content2, err := os.ReadFile(filepath.Join(local.Path, "config/api.json"))
-		require.NoError(t, err)
-		require.Equal(t, config2Content, content2)
-
-		content3, err := os.ReadFile(filepath.Join(local.Path, "config/logging.json"))
-		require.NoError(t, err)
-		require.Equal(t, config3Content, content3)
-
-		dataFileContent, err := os.ReadFile(filepath.Join(local.Path, "data/users.json"))
-		require.NoError(t, err)
-		require.Equal(t, dataContent, dataFileContent)
-
-		schemaFileContent, err := os.ReadFile(filepath.Join(local.Path, "schemas/user.json"))
-		require.NoError(t, err)
-		require.Equal(t, schemaContent, schemaFileContent)
-
-		// Verify original file is preserved
-		logger.Info("Verifying original file preserved")
-		originalContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEmpty(t, originalContent)
-
-		// Verify commit details
-		logger.Info("Verifying commit details")
-		finalHash := local.Git(t, "rev-parse", "HEAD")
-		require.Equal(t, commit.Hash.String(), finalHash)
-
-		commitMsg := local.Git(t, "log", "-1", "--pretty=%B")
-		require.Equal(t, "Add configuration and data files", strings.TrimSpace(commitMsg))
-	})
-
-	t.Run("CreateBlob multiple files in different directories across multiple commits", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating staged writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		// First commit: Create config files
-		logger.Info("First commit: Creating configuration files")
-		dbConfigContent := []byte(`{"host": "localhost", "port": 5432, "database": "myapp"}`)
-		apiConfigContent := []byte(`{"baseUrl": "https://api.example.com", "timeout": 30}`)
-
-		_, err = writer.CreateBlob(ctx, "config/database.json", dbConfigContent)
-		require.NoError(t, err)
-
-		_, err = writer.CreateBlob(ctx, "config/api.json", apiConfigContent)
-		require.NoError(t, err)
-
-		commit1, err := writer.Commit(ctx, "Add database and API configuration", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit1)
-		logger.Info("First commit created", "hash", commit1.Hash.String())
-
-		// Second commit: Create documentation files
-		logger.Info("Second commit: Creating documentation files")
-		readmeContent := []byte(`# My Application\n\nThis is a sample application.`)
-		apiDocsContent := []byte(`# API Documentation\n\n## Endpoints\n\n- GET /users`)
-
-		_, err = writer.CreateBlob(ctx, "docs/README.md", readmeContent)
-		require.NoError(t, err)
-
-		_, err = writer.CreateBlob(ctx, "docs/api.md", apiDocsContent)
-		require.NoError(t, err)
-
-		commit2, err := writer.Commit(ctx, "Add documentation files", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit2)
-		logger.Info("Second commit created", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
-
-		// Third commit: Create test and data files
-		logger.Info("Third commit: Creating test and data files")
-		testDataContent := []byte(`{"testUsers": [{"id": 1, "name": "Test User"}]}`)
-		schemaContent := []byte(`{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object"}`)
-
-		_, err = writer.CreateBlob(ctx, "tests/data/users.json", testDataContent)
-		require.NoError(t, err)
-
-		_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
-		require.NoError(t, err)
-
-		commit3, err := writer.Commit(ctx, "Add test data and schema files", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit3)
-		logger.Info("Third commit created", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
-
-		// Verify commit chain before push
-		require.Equal(t, currentHash, commit1.Parent, "First commit should have initial commit as parent")
-		require.Equal(t, commit1.Hash, commit2.Parent, "Second commit should have first commit as parent")
-		require.Equal(t, commit2.Hash, commit3.Parent, "Third commit should have second commit as parent")
-
-		// Push all commits at once
-		logger.Info("Pushing all three commits")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		// Pull and verify
-		logger.Info("Pulling changes")
-		local.Git(t, "pull")
-
-		// Verify final commit hash
-		logger.Info("Verifying final commit hash")
-		finalHash := local.Git(t, "rev-parse", "HEAD")
-		require.Equal(t, commit3.Hash.String(), finalHash, "HEAD should point to third commit")
-
-		// Verify all commits exist in history
-		logger.Info("Verifying commit history")
-		commitHistory := local.Git(t, "log", "--oneline", "--format=%H %s")
-		logger.Info("Commit history", "history", commitHistory)
-
-		require.Contains(t, commitHistory, commit1.Hash.String(), "First commit should be in history")
-		require.Contains(t, commitHistory, commit2.Hash.String(), "Second commit should be in history")
-		require.Contains(t, commitHistory, commit3.Hash.String(), "Third commit should be in history")
-
-		require.Contains(t, commitHistory, "Add database and API configuration", "First commit message should be in history")
-		require.Contains(t, commitHistory, "Add documentation files", "Second commit message should be in history")
-		require.Contains(t, commitHistory, "Add test data and schema files", "Third commit message should be in history")
-
-		// Verify directory structure
-		logger.Info("Verifying directory structure")
-		configDir, err := os.Stat(filepath.Join(local.Path, "config"))
-		require.NoError(t, err)
-		require.True(t, configDir.IsDir())
-
-		docsDir, err := os.Stat(filepath.Join(local.Path, "docs"))
-		require.NoError(t, err)
-		require.True(t, docsDir.IsDir())
-
-		testsDir, err := os.Stat(filepath.Join(local.Path, "tests"))
-		require.NoError(t, err)
-		require.True(t, testsDir.IsDir())
-
-		testDataDir, err := os.Stat(filepath.Join(local.Path, "tests/data"))
-		require.NoError(t, err)
-		require.True(t, testDataDir.IsDir())
-
-		schemasDir, err := os.Stat(filepath.Join(local.Path, "schemas"))
-		require.NoError(t, err)
-		require.True(t, schemasDir.IsDir())
-
-		// Verify all files exist with correct content
-		logger.Info("Verifying file contents")
-		dbConfig, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
-		require.NoError(t, err)
-		require.Equal(t, dbConfigContent, dbConfig)
-
-		apiConfig, err := os.ReadFile(filepath.Join(local.Path, "config/api.json"))
-		require.NoError(t, err)
-		require.Equal(t, apiConfigContent, apiConfig)
-
-		readme, err := os.ReadFile(filepath.Join(local.Path, "docs/README.md"))
-		require.NoError(t, err)
-		require.Equal(t, readmeContent, readme)
-
-		apiDocs, err := os.ReadFile(filepath.Join(local.Path, "docs/api.md"))
-		require.NoError(t, err)
-		require.Equal(t, apiDocsContent, apiDocs)
-
-		testData, err := os.ReadFile(filepath.Join(local.Path, "tests/data/users.json"))
-		require.NoError(t, err)
-		require.Equal(t, testDataContent, testData)
-
-		schema, err := os.ReadFile(filepath.Join(local.Path, "schemas/user.json"))
-		require.NoError(t, err)
-		require.Equal(t, schemaContent, schema)
-
-		// Verify original file is preserved
-		logger.Info("Verifying original file preserved")
-		originalContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEmpty(t, originalContent)
-
-		// Verify individual commits show correct files
-		logger.Info("Verifying files in individual commits")
-		commit1Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", "-r", commit1.Hash.String()))
-		require.Contains(t, commit1Files, "config/database.json")
-		require.Contains(t, commit1Files, "config/api.json")
-		require.Contains(t, commit1Files, initCommitFile)
-		require.NotContains(t, commit1Files, "docs/README.md")
-
-		commit2Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", "-r", commit2.Hash.String()))
-		require.Contains(t, commit2Files, "config/database.json")
-		require.Contains(t, commit2Files, "config/api.json")
-		require.Contains(t, commit2Files, "docs/README.md")
-		require.Contains(t, commit2Files, "docs/api.md")
-		require.Contains(t, commit2Files, initCommitFile)
-		require.NotContains(t, commit2Files, "tests/data/users.json")
-
-		commit3Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", "-r", commit3.Hash.String()))
-		require.Contains(t, commit3Files, "config/database.json")
-		require.Contains(t, commit3Files, "config/api.json")
-		require.Contains(t, commit3Files, "docs/README.md")
-		require.Contains(t, commit3Files, "docs/api.md")
-		require.Contains(t, commit3Files, "tests/data/users.json")
-		require.Contains(t, commit3Files, "schemas/user.json")
-		require.Contains(t, commit3Files, initCommitFile)
-	})
-
-	t.Run("Multiple commits should all be visible after push", func(t *testing.T) {
-		logger, local, client, initCommitFile := quickSetup(t)
-		ctx := context.Background()
-		logger.ForSubtest(t)
-
-		author := nanogit.Author{
-			Name:  "Test Author",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-		committer := nanogit.Committer{
-			Name:  "Test Committer",
-			Email: "test@example.com",
-			Time:  time.Now(),
-		}
-
-		logger.Info("Getting current ref")
-		currentHash, err := hash.FromHex(local.Git(t, "rev-parse", "HEAD"))
-		require.NoError(t, err)
-		ref := nanogit.Ref{
-			Name: "refs/heads/main",
-			Hash: currentHash,
-		}
-
-		logger.Info("Creating staged writer")
-		writer, err := client.NewStagedWriter(ctx, ref)
-		require.NoError(t, err)
-
-		// Create first commit
-		logger.Info("Creating first file and commit")
-		_, err = writer.CreateBlob(ctx, "file1.txt", []byte("First file content"))
-		require.NoError(t, err)
-		commit1, err := writer.Commit(ctx, "Add first file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit1)
-		logger.Info("First commit", "hash", commit1.Hash.String())
-
-		// Create second commit
-		logger.Info("Creating second file and commit")
-		_, err = writer.CreateBlob(ctx, "file2.txt", []byte("Second file content"))
-		require.NoError(t, err)
-		commit2, err := writer.Commit(ctx, "Add second file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit2)
-		logger.Info("Second commit", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
-
-		// Create third commit
-		logger.Info("Creating third file and commit")
-		_, err = writer.CreateBlob(ctx, "file3.txt", []byte("Third file content"))
-		require.NoError(t, err)
-		commit3, err := writer.Commit(ctx, "Add third file", author, committer)
-		require.NoError(t, err)
-		require.NotNil(t, commit3)
-		logger.Info("Third commit", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
-
-		// Verify commit chain is correct
-		require.Equal(t, currentHash, commit1.Parent, "First commit should have initial commit as parent")
-		require.Equal(t, commit1.Hash, commit2.Parent, "Second commit should have first commit as parent")
-		require.Equal(t, commit2.Hash, commit3.Parent, "Third commit should have second commit as parent")
-
-		// Push all commits
-		logger.Info("Pushing all commits")
-		err = writer.Push(ctx)
-		require.NoError(t, err)
-
-		// Pull and verify
-		logger.Info("Pulling changes")
-		local.Git(t, "pull")
-
-		// Verify final commit hash
-		logger.Info("Verifying final commit hash")
-		finalHash := local.Git(t, "rev-parse", "HEAD")
-		require.Equal(t, commit3.Hash.String(), finalHash, "HEAD should point to third commit")
-
-		// Verify all three commits exist in history
-		logger.Info("Verifying commit history")
-		commitHistory := local.Git(t, "log", "--oneline", "--format=%H %s")
-		logger.Info("Commit history", "history", commitHistory)
-
-		// Should contain all three commits
-		require.Contains(t, commitHistory, commit1.Hash.String(), "First commit should be in history")
-		require.Contains(t, commitHistory, commit2.Hash.String(), "Second commit should be in history")
-		require.Contains(t, commitHistory, commit3.Hash.String(), "Third commit should be in history")
-
-		// Verify commit messages are correct
-		require.Contains(t, commitHistory, "Add first file", "First commit message should be in history")
-		require.Contains(t, commitHistory, "Add second file", "Second commit message should be in history")
-		require.Contains(t, commitHistory, "Add third file", "Third commit message should be in history")
-
-		// Verify all files exist
-		logger.Info("Verifying all files exist")
-		content1, err := os.ReadFile(filepath.Join(local.Path, "file1.txt"))
-		require.NoError(t, err)
-		require.Equal(t, []byte("First file content"), content1)
-
-		content2, err := os.ReadFile(filepath.Join(local.Path, "file2.txt"))
-		require.NoError(t, err)
-		require.Equal(t, []byte("Second file content"), content2)
-
-		content3, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
-		require.NoError(t, err)
-		require.Equal(t, []byte("Third file content"), content3)
-
-		// Verify original file is preserved
-		otherContent, err := os.ReadFile(filepath.Join(local.Path, initCommitFile))
-		require.NoError(t, err)
-		require.NotEmpty(t, otherContent)
-
-		// Verify individual commits are reachable
-		logger.Info("Verifying individual commits are reachable")
-		commit1Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", commit1.Hash.String()))
-		require.Contains(t, commit1Files, "file1.txt")
-		require.Contains(t, commit1Files, initCommitFile)
-		require.NotContains(t, commit1Files, "file2.txt")
-		require.NotContains(t, commit1Files, "file3.txt")
-
-		commit2Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", commit2.Hash.String()))
-		require.Contains(t, commit2Files, "file1.txt")
-		require.Contains(t, commit2Files, "file2.txt")
-		require.Contains(t, commit2Files, initCommitFile)
-		require.NotContains(t, commit2Files, "file3.txt")
-
-		commit3Files := strings.TrimSpace(local.Git(t, "ls-tree", "--name-only", commit3.Hash.String()))
-		require.Contains(t, commit3Files, "file1.txt")
-		require.Contains(t, commit3Files, "file2.txt")
-		require.Contains(t, commit3Files, "file3.txt")
-		require.Contains(t, commit3Files, initCommitFile)
-	})
-}
+})

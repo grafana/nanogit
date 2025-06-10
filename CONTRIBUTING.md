@@ -80,12 +80,12 @@ If you have a suggestion for a new feature or enhancement, please include as muc
 
 ### Testing
 
-We use Go's built-in testing framework with [testify](https://github.com/stretchr/testify) for assertions. To run the tests:
+We use Go's built-in testing framework with [testify](https://github.com/stretchr/testify) for unit tests and [Ginkgo](https://onsi.github.io/ginkgo/) with [Gomega](https://onsi.github.io/gomega/) for integration tests. To run the tests:
 
 ```bash
 make test # run all tests
 make test-unit # run only unit tests
-make test-integration # run only integration tests
+make test-integration # run only integration tests (requires Docker)
 ```
 
 #### Unit Tests
@@ -109,41 +109,110 @@ func TestSomething(t *testing.T) {
 
 #### Integration Tests
 
-Integration tests are located in the `integration` directory and use [testcontainers-go](https://golang.testcontainers.org/) to manage test dependencies. We use Gitea as our test Git server, running in a Docker container. 
+Integration tests are located in the `test/` directory and use [Ginkgo](https://onsi.github.io/ginkgo/) as the testing framework with [Gomega](https://onsi.github.io/gomega/) for assertions. We migrated from testify to Ginkgo for integration tests due to several key advantages:
 
-Key features:
-- Tests run in isolated containers
-- Automatic container lifecycle management
-- Real Git server for testing using [Gitea](https://gitea.io/) in a Docker container
-- Parallel test execution support
+**Why We Use Ginkgo for Integration Tests:**
 
-Integration tests use the Git CLI to set up test repositories and perform Git operations. This ensures we test against real Git behavior and verify our protocol implementation matches the official specification.
-Example structure:
+1. **Better Parallel Support**: Ginkgo has native, robust parallel test execution that doesn't suffer from the race conditions we encountered with testify's `t.Parallel()`
+2. **Shared Resource Management**: Built-in `BeforeSuite`/`AfterSuite` hooks allow us to efficiently share expensive resources like Docker containers across all tests
+3. **Thread-Safe Logging**: Ginkgo's `GinkgoWriter` eliminates data races that occurred when multiple goroutines tried to write to `testing.T` simultaneously
+4. **Better Test Organization**: Ginkgo's `Describe`/`Context`/`It` structure provides clearer test hierarchy and better readability
+5. **Focused/Pending Tests**: Easy test filtering and skipping with `--focus` and `--skip` flags
+6. **Rich Reporting**: Better test output with timing, progress indicators, and failure details
+
+**Key Features:**
+- Tests use a shared Git server container (Gitea) for better performance and isolation
+- Automatic container lifecycle management with proper cleanup
+- Thread-safe test infrastructure that eliminates data races
+- Parallel test execution support without race conditions
+- Uses `test/helpers/` for shared test utilities
+- Real Git server testing using [Gitea](https://gitea.io/) in a Docker container
+
+**Test Structure:**
 ```bash
-$
-client/
-├── integration/
-│   ├── helpers/        # test utilities for integration tests
-│   └── refs_test.go    # integration tests for refs
+testginkgo/
+├── helpers/
+│   ├── gitserver.go          # Gitea container management
+│   ├── remoterepo.go         # Remote repository helpers
+│   ├── localrepo.go          # Local repository helpers
+│   └── logger.go             # Thread-safe logging
+├── integration_suite_test.go # Main test suite with shared setup
+├── auth_test.go             # Authentication integration tests
+├── refs_test.go             # Reference operation tests
+├── writer_test.go           # Writer operation tests
+└── ...                      # Other integration test files
 ```
-To run integration tests:
+
+**Example Ginkgo Test:**
+```go
+import (
+    . "github.com/onsi/ginkgo/v2"
+    . "github.com/onsi/gomega"
+)
+
+var _ = Describe("Feature", func() {
+    Context("when condition is met", func() {
+        It("should behave correctly", func() {
+            // Setup
+            client, _, local, _ := QuickSetup()
+            
+            // Test
+            result, err := client.SomeOperation(context.Background())
+            
+            // Assertions
+            Expect(err).NotTo(HaveOccurred())
+            Expect(result).To(Equal(expected))
+        })
+    })
+})
+```
+
+**Running Integration Tests:**
+
+To run all integration tests:
 ```bash
 make test-integration
 ```
 
-Note: Integration tests require Docker to be running on your machine.
+To run specific tests:
+```bash
+cd test && ginkgo --focus="Authentication"
+```
+
+To run tests with verbose output:
+```bash
+cd test && ginkgo -v
+```
+
+To run tests in parallel:
+```bash
+cd test && ginkgo -p
+```
+
+**Note**: Integration tests require Docker to be running on your machine.
+
+#### Legacy Integration Tests
+
+The old `test/` directory contains legacy integration tests using testify. These are being phased out in favor of the new Ginkgo-based tests in `test/`. The legacy tests suffered from:
+- Race conditions when using `t.Parallel()`
+- Data races in logging system with testcontainers
+- Difficulty in sharing expensive resources like Docker containers
+- Less readable test organization
 
 #### Writing Tests
 
-1. Unit tests should be fast and not require external dependencies
-2. Integration tests should be in the `integration` directory
-3. Use testify's `assert` and `require` packages. We prefer the use of `require`.
+1. **Unit tests** should be fast and not require external dependencies
+2. **Integration tests** should be in the `test/` directory using Ginkgo
+3. Use testify's `assert` and `require` packages for unit tests, and Gomega matchers for integration tests
 4. Follow Go's testing best practices
 5. Add appropriate test coverage
+6. Use `QuickSetup()` helper for integration tests that need a basic repository setup
 
 For more information:
 - [Go Testing Documentation](https://pkg.go.dev/testing)
 - [Testify Documentation](https://pkg.go.dev/github.com/stretchr/testify)
+- [Ginkgo Documentation](https://onsi.github.io/ginkgo/)
+- [Gomega Documentation](https://onsi.github.io/gomega/)
 - [Testcontainers-go Documentation](https://golang.testcontainers.org/)
 - [Gitea Documentation](https://docs.gitea.io/)
 

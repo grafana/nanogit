@@ -5,10 +5,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/stretchr/testify/require"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	//lint:ignore ST1001 dot-imports
+	. "github.com/onsi/gomega"
 )
 
 // LocalGitRepo represents a local Git repository used for testing.
@@ -22,42 +25,51 @@ type LocalGitRepo struct {
 // NewLocalGitRepo creates a new LocalGitRepo instance with a temporary directory
 // as its path. The temporary directory is automatically cleaned up when the test
 // completes.
-func NewLocalGitRepo(t *testing.T, logger *TestLogger) *LocalGitRepo {
-	p := t.TempDir()
-	t.Cleanup(func() {
+func NewLocalGitRepo(logger *TestLogger) *LocalGitRepo {
+	p := ginkgo.GinkgoT().TempDir()
+	ginkgo.DeferCleanup(func() {
 		logger.Info("📦 [LOCAL] 🧹 Cleaning up local repository", "path", p)
-		require.NoError(t, os.RemoveAll(p))
+		Expect(os.RemoveAll(p)).NotTo(HaveOccurred())
 	})
 
 	logger.Info("📦 [LOCAL] 📁 Creating new local repository at %s", p)
 	r := &LocalGitRepo{Path: p, logger: logger}
-	r.Git(t, "init")
+	r.Git("init")
 	logger.Success("📦 [LOCAL] Local repository initialized successfully")
 	return r
 }
 
 // CreateDirPath creates a directory path in the repository.
 // It creates all necessary parent directories if they don't exist.
-func (r *LocalGitRepo) CreateDirPath(t *testing.T, dirpath string) {
+func (r *LocalGitRepo) CreateDirPath(dirpath string) {
 	r.logger.Info("📦 [LOCAL] 📁 Creating directory path '%s' in repository", dirpath)
 	err := os.MkdirAll(filepath.Join(r.Path, dirpath), 0755)
-	require.NoError(t, err)
+	Expect(err).NotTo(HaveOccurred())
 	r.logger.Success("📦 [LOCAL] Directory path '%s' created successfully", dirpath)
 }
 
 // CreateFile creates a new file in the repository with the specified filename
 // and content. The file is created with read/write permissions for the owner only.
-func (r *LocalGitRepo) CreateFile(t *testing.T, filename, content string) {
+func (r *LocalGitRepo) CreateFile(filename, content string) {
 	r.logger.Info("📦 [LOCAL] 📝 Creating file '%s' in repository", filename)
 	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
-	require.NoError(t, err)
+	Expect(err).NotTo(HaveOccurred())
 	r.logger.Success("📦 [LOCAL] 📝 File '%s' created successfully", filename)
+}
+
+// UpdateFile updates an existing file in the repository with new content.
+// The file must exist before calling this method.
+func (r *LocalGitRepo) UpdateFile(filename, content string) {
+	r.logger.Info("📦 [LOCAL] 📝 Updating file '%s' in repository", filename)
+	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
+	Expect(err).NotTo(HaveOccurred())
+	r.logger.Success("📦 [LOCAL] 📝 File '%s' updated successfully", filename)
 }
 
 // Git executes a Git command in the repository directory.
 // It logs the command being executed and its output for debugging purposes.
 // The command is executed with GIT_TERMINAL_PROMPT=0 to prevent interactive prompts.
-func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
+func (r *LocalGitRepo) Git(args ...string) string {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Path
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_TRACE_PACKET=1")
@@ -86,7 +98,7 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 			}
 		}
 		r.logger.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorRed, ColorPurple, ColorReset)
-		require.NoError(t, err, "git command failed: %s\nOutput: %s", cmdStr, output)
+		Expect(err).NotTo(HaveOccurred(), "git command failed: %s\nOutput: %s", cmdStr, output)
 	} else if len(output) > 0 {
 		// Add output to the same box
 		r.logger.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorCyan, ColorPurple, ColorReset)
@@ -104,36 +116,36 @@ func (r *LocalGitRepo) Git(t *testing.T, args ...string) string {
 	return strings.TrimSpace(string(output))
 }
 
-func (r *LocalGitRepo) QuickInit(t *testing.T, user *User, remoteURL string) (client nanogit.Client, fileName string) {
+func (r *LocalGitRepo) QuickInit(user *User, remoteURL string) (client nanogit.Client, fileName string) {
 	r.logger.Info("📦 [LOCAL] Setting up local repository")
-	r.Git(t, "config", "user.name", user.Username)
-	r.Git(t, "config", "user.email", user.Email)
-	r.Git(t, "remote", "add", "origin", remoteURL)
+	r.Git("config", "user.name", user.Username)
+	r.Git("config", "user.email", user.Email)
+	r.Git("remote", "add", "origin", remoteURL)
 
 	r.logger.Info("📦 [LOCAL] Creating and committing test file")
 	testContent := []byte("test content")
-	r.CreateFile(t, "test.txt", string(testContent))
-	r.Git(t, "add", "test.txt")
-	r.Git(t, "commit", "-m", "Initial commit")
+	r.CreateFile("test.txt", string(testContent))
+	r.Git("add", "test.txt")
+	r.Git("commit", "-m", "Initial commit")
 
 	r.logger.Info("📦 [LOCAL] Setting up main branch and pushing changes")
-	r.Git(t, "branch", "-M", "main")
-	r.Git(t, "push", "origin", "main", "--force")
+	r.Git("branch", "-M", "main")
+	r.Git("push", "origin", "main", "--force")
 
 	r.logger.Info("📦 [LOCAL] Tracking current branch")
-	r.Git(t, "branch", "--set-upstream-to=origin/main", "main")
+	r.Git("branch", "--set-upstream-to=origin/main", "main")
 
 	client, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password))
-	require.NoError(t, err)
+	Expect(err).NotTo(HaveOccurred())
 	return client, "test.txt"
 }
 
-func (r *LocalGitRepo) LogRepoContents(t *testing.T) {
+func (r *LocalGitRepo) LogRepoContents() {
 	r.logger.Info("📦 [LOCAL] Repository contents:")
 	var printDir func(path string, indent string)
 	printDir = func(path string, indent string) {
 		files, err := os.ReadDir(path)
-		require.NoError(t, err)
+		Expect(err).NotTo(HaveOccurred())
 		for _, file := range files {
 			fullPath := filepath.Join(path, file.Name())
 			if file.IsDir() {
