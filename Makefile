@@ -7,6 +7,9 @@ fmt:
 	go run golang.org/x/tools/cmd/goimports@v0.27.0 -w .
 
 .PHONY: lint
+
+lint-staticcheck: 
+	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
 lint:
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run
 

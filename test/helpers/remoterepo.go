@@ -5,6 +5,7 @@ import (
 
 	"github.com/grafana/nanogit"
 	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
+	//lint:ignore ST1001 dot-imports
 	. "github.com/onsi/gomega"
 )
 
