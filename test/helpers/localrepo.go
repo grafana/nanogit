@@ -55,6 +55,15 @@ func (r *LocalGitRepo) CreateFile(filename, content string) {
 	r.logger.Success("📦 [LOCAL] 📝 File '%s' created successfully", filename)
 }
 
+// UpdateFile updates an existing file in the repository with new content.
+// The file must exist before calling this method.
+func (r *LocalGitRepo) UpdateFile(filename, content string) {
+	r.logger.Info("📦 [LOCAL] 📝 Updating file '%s' in repository", filename)
+	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
+	require.NoError(r.currentTest(), err)
+	r.logger.Success("📦 [LOCAL] 📝 File '%s' updated successfully", filename)
+}
+
 // Git executes a Git command in the repository directory.
 // It logs the command being executed and its output for debugging purposes.
 // The command is executed with GIT_TERMINAL_PROMPT=0 to prevent interactive prompts.

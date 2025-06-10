@@ -19,26 +19,18 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	initialCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
-	// Create create file commit
-	s.Logger.Info("Creating create file commit")
-	local.CreateFile("new.txt", "initial content")
-	local.Git("add", "new.txt")
-	local.Git("commit", "-m", "Initial commit")
-	createFileCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
-	s.NoError(err)
-
 	// Create second commit that modifies the file
 	s.Logger.Info("Creating modify file commit")
-	local.CreateFile("new.txt", "modified content")
-	local.Git("add", "new.txt")
+	local.UpdateFile("test.txt", "modified content")
+	local.Git("add", "test.txt")
 	local.Git("commit", "-m", "Modify file")
 	modifyFileCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	// Create third commit that renames the file
 	s.Logger.Info("Creating rename file commit")
-	local.Git("mv", "new.txt", "renamed.txt")
-	local.CreateFile("new.txt", "modified content")
+	local.Git("mv", "test.txt", "renamed.txt")
+	local.CreateFile("renamed.txt", "modified content")
 	local.Git("add", ".")
 	local.Git("commit", "-m", "Rename and add files")
 	renameCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
@@ -66,36 +58,13 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 		s.InDelta(now.Unix(), commit.Author.Time.Unix(), 5)
 	})
 
-	s.Run("create file commit", func() {
-		commit, err := client.GetCommit(context.Background(), createFileCommitHash)
-		s.NoError(err)
-
-		// Verify commit details
-		s.Equal(createFileCommitHash, commit.Hash)
-		s.Equal(initialCommitHash, commit.Parent) // First commit has no parent
-		s.Equal(user.Username, commit.Author.Name)
-		s.Equal(user.Email, commit.Author.Email)
-		s.NotZero(commit.Author.Time)
-		s.Equal(user.Username, commit.Committer.Name)
-		s.Equal(user.Email, commit.Committer.Email)
-		s.NotZero(commit.Committer.Time)
-		s.Equal("Initial commit", commit.Message)
-
-		// Check that commit times are recent (within 5 seconds)
-		now := time.Now()
-		s.InDelta(now.Unix(), commit.Committer.Time.Unix(), 5)
-		s.InDelta(now.Unix(), commit.Author.Time.Unix(), 5)
-	})
-
 	s.Run("modify file commit", func() {
-		s.T().Skip("Skipping modify file commit test")
-
 		commit, err := client.GetCommit(context.Background(), modifyFileCommitHash)
 		s.NoError(err)
 
 		// Verify commit details
 		s.Equal(modifyFileCommitHash, commit.Hash)
-		s.Equal(createFileCommitHash, commit.Parent)
+		s.Equal(initialCommitHash, commit.Parent)
 		s.Equal(user.Username, commit.Author.Name)
 		s.Equal(user.Email, commit.Author.Email)
 		s.NotZero(commit.Author.Time)
