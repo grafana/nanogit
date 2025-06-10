@@ -14,13 +14,13 @@ func (s *IntegrationTestSuite) TestGetBlob() {
 
 	s.Logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
-	local.CreateFile(s.T(), "blob.txt", string(testContent))
-	local.Git(s.T(), "add", "blob.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.CreateFile("blob.txt", string(testContent))
+	local.Git("add", "blob.txt")
+	local.Git("commit", "-m", "Initial commit")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting blob hash", "file", "blob.txt")
-	blobHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:blob.txt"))
+	blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
 	s.NoError(err)
 
 	s.Run("GetBlob with valid hash", func() {
@@ -48,13 +48,13 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 
 	s.Logger.Info("Creating and committing test file")
 	testContent := []byte("test content")
-	local.CreateFile(s.T(), "blob.txt", string(testContent))
-	local.Git(s.T(), "add", "blob.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.CreateFile("blob.txt", string(testContent))
+	local.Git("add", "blob.txt")
+	local.Git("commit", "-m", "Initial commit")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting the commit hash")
-	commitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	s.Run("GetBlobByPath with existing file", func() {
@@ -65,7 +65,7 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 		s.NoError(err)
 		s.Equal(testContent, file.Content)
 
-		fileHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:blob.txt"))
+		fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
 		s.NoError(err)
 		s.Equal(fileHash, file.Hash)
 	})
@@ -94,30 +94,30 @@ func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 	client, _, local := s.TestRepo()
 
 	s.Logger.Info("Creating nested directory structure with files")
-	local.CreateDirPath(s.T(), "dir1/subdir1")
-	local.CreateDirPath(s.T(), "dir1/subdir2")
-	local.CreateDirPath(s.T(), "dir2")
+	local.CreateDirPath("dir1/subdir1")
+	local.CreateDirPath("dir1/subdir2")
+	local.CreateDirPath("dir2")
 
 	// Create files at various levels
 	rootContent := []byte("root file content")
-	local.CreateFile(s.T(), "root.txt", string(rootContent))
+	local.CreateFile("root.txt", string(rootContent))
 
 	dir1Content := []byte("dir1 file content")
-	local.CreateFile(s.T(), "dir1/file1.txt", string(dir1Content))
+	local.CreateFile("dir1/file1.txt", string(dir1Content))
 
 	nestedContent := []byte("deeply nested content")
-	local.CreateFile(s.T(), "dir1/subdir1/nested.txt", string(nestedContent))
+	local.CreateFile("dir1/subdir1/nested.txt", string(nestedContent))
 
 	dir2Content := []byte("dir2 file content")
-	local.CreateFile(s.T(), "dir2/file2.txt", string(dir2Content))
+	local.CreateFile("dir2/file2.txt", string(dir2Content))
 
 	s.Logger.Info("Adding and committing all files")
-	local.Git(s.T(), "add", ".")
-	local.Git(s.T(), "commit", "-m", "Initial commit with nested structure")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("add", ".")
+	local.Git("commit", "-m", "Initial commit with nested structure")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting the commit hash")
-	commitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	tests := []struct {
@@ -190,7 +190,7 @@ func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 			s.Equal(tt.expected, file.Content)
 
 			// Verify the hash matches what Git CLI returns
-			expectedHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD:"+tt.path))
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:"+tt.path))
 			s.NoError(err)
 			s.Equal(expectedHash, file.Hash)
 		})

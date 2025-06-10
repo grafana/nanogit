@@ -16,36 +16,36 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	s.Logger.Info("Setting up remote repository")
 	client, remote, local := s.TestRepo()
 
-	initialCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	initialCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	// Create create file commit
 	s.Logger.Info("Creating create file commit")
-	local.CreateFile(s.T(), "new.txt", "initial content")
-	local.Git(s.T(), "add", "new.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	createFileCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	local.CreateFile("new.txt", "initial content")
+	local.Git("add", "new.txt")
+	local.Git("commit", "-m", "Initial commit")
+	createFileCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	// Create second commit that modifies the file
 	s.Logger.Info("Creating modify file commit")
-	local.CreateFile(s.T(), "new.txt", "modified content")
-	local.Git(s.T(), "add", "new.txt")
-	local.Git(s.T(), "commit", "-m", "Modify file")
-	modifyFileCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	local.CreateFile("new.txt", "modified content")
+	local.Git("add", "new.txt")
+	local.Git("commit", "-m", "Modify file")
+	modifyFileCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	// Create third commit that renames the file
 	s.Logger.Info("Creating rename file commit")
-	local.Git(s.T(), "mv", "new.txt", "renamed.txt")
-	local.CreateFile(s.T(), "new.txt", "modified content")
-	local.Git(s.T(), "add", ".")
-	local.Git(s.T(), "commit", "-m", "Rename and add files")
-	renameCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	local.Git("mv", "new.txt", "renamed.txt")
+	local.CreateFile("new.txt", "modified content")
+	local.Git("add", ".")
+	local.Git("commit", "-m", "Rename and add files")
+	renameCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	// Push commit
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("push", "origin", "main", "--force")
 
 	user := remote.User
 
@@ -137,34 +137,34 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 	client, _, local := s.TestRepo()
 
 	s.Logger.Info("Creating initial commit with a file")
-	local.CreateFile(s.T(), "test.txt", "initial content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	initialCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	local.CreateFile("test.txt", "initial content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	initialCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	s.Logger.Info("Creating second commit that modifies the file")
-	local.CreateFile(s.T(), "test.txt", "modified content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Modify file")
-	modifiedCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	local.CreateFile("test.txt", "modified content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Modify file")
+	modifiedCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	s.Logger.Info("Creating third commit that renames and adds files")
-	local.Git(s.T(), "mv", "test.txt", "renamed.txt")
-	local.CreateFile(s.T(), "new.txt", "modified content")
-	local.Git(s.T(), "add", ".")
-	local.Git(s.T(), "commit", "-m", "Rename and add files")
-	renamedCommitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	local.Git("mv", "test.txt", "renamed.txt")
+	local.CreateFile("new.txt", "modified content")
+	local.Git("add", ".")
+	local.Git("commit", "-m", "Rename and add files")
+	renamedCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
 	s.Logger.Info("Pushing all commits")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting the file hashes for verification")
-	initialFileHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", initialCommitHash.String()+":test.txt"))
+	initialFileHash, err := hash.FromHex(local.Git("rev-parse", initialCommitHash.String()+":test.txt"))
 	s.NoError(err)
-	modifiedFileHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", modifiedCommitHash.String()+":test.txt"))
+	modifiedFileHash, err := hash.FromHex(local.Git("rev-parse", modifiedCommitHash.String()+":test.txt"))
 	s.NoError(err)
 
 	s.Run("compare initial and modified commits", func() {
@@ -226,23 +226,23 @@ func (s *IntegrationTestSuite) TestListCommits() {
 		client, _, local := s.TestRepo()
 
 		// Create several commits to test with
-		local.CreateFile(s.T(), "file1.txt", "content 1")
-		local.Git(s.T(), "add", "file1.txt")
-		local.Git(s.T(), "commit", "-m", "Add file1")
-		local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+		local.CreateFile("file1.txt", "content 1")
+		local.Git("add", "file1.txt")
+		local.Git("commit", "-m", "Add file1")
+		local.Git("push", "-u", "origin", "main", "--force")
 
-		local.CreateFile(s.T(), "file2.txt", "content 2")
-		local.Git(s.T(), "add", "file2.txt")
-		local.Git(s.T(), "commit", "-m", "Add file2")
-		local.Git(s.T(), "push", "origin", "main")
+		local.CreateFile("file2.txt", "content 2")
+		local.Git("add", "file2.txt")
+		local.Git("commit", "-m", "Add file2")
+		local.Git("push", "origin", "main")
 
-		local.CreateFile(s.T(), "file3.txt", "content 3")
-		local.Git(s.T(), "add", "file3.txt")
-		local.Git(s.T(), "commit", "-m", "Add file3")
-		local.Git(s.T(), "push", "origin", "main")
+		local.CreateFile("file3.txt", "content 3")
+		local.Git("add", "file3.txt")
+		local.Git("commit", "-m", "Add file3")
+		local.Git("push", "origin", "main")
 
 		// Get the current HEAD commit
-		headHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+		headHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		s.NoError(err)
 
 		// Test basic listing without options
@@ -265,17 +265,17 @@ func (s *IntegrationTestSuite) TestListCommits() {
 
 		// Create multiple commits
 		for i := 1; i <= 5; i++ {
-			local.CreateFile(s.T(), fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
-			local.Git(s.T(), "add", fmt.Sprintf("file%d.txt", i))
-			local.Git(s.T(), "commit", "-m", fmt.Sprintf("Add file%d", i))
+			local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
+			local.Git("add", fmt.Sprintf("file%d.txt", i))
+			local.Git("commit", "-m", fmt.Sprintf("Add file%d", i))
 			if i == 1 {
-				local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+				local.Git("push", "-u", "origin", "main", "--force")
 			} else {
-				local.Git(s.T(), "push", "origin", "main")
+				local.Git("push", "origin", "main")
 			}
 		}
 
-		headHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+		headHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		s.NoError(err)
 
 		// Test first page with 2 items per page
@@ -304,25 +304,25 @@ func (s *IntegrationTestSuite) TestListCommits() {
 		client, _, local := s.TestRepo()
 
 		// Create commits affecting different paths
-		local.CreateDirPath(s.T(), "docs")
-		local.CreateFile(s.T(), "docs/readme.md", "readme content")
-		local.Git(s.T(), "add", "docs/readme.md")
-		local.Git(s.T(), "commit", "-m", "Add docs")
-		local.Git(s.T(), "branch", "-M", "main")
-		local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+		local.CreateDirPath("docs")
+		local.CreateFile("docs/readme.md", "readme content")
+		local.Git("add", "docs/readme.md")
+		local.Git("commit", "-m", "Add docs")
+		local.Git("branch", "-M", "main")
+		local.Git("push", "-u", "origin", "main", "--force")
 
-		local.CreateDirPath(s.T(), "src")
-		local.CreateFile(s.T(), "src/main.go", "main content")
-		local.Git(s.T(), "add", "src/main.go")
-		local.Git(s.T(), "commit", "-m", "Add main")
-		local.Git(s.T(), "push", "origin", "main")
+		local.CreateDirPath("src")
+		local.CreateFile("src/main.go", "main content")
+		local.Git("add", "src/main.go")
+		local.Git("commit", "-m", "Add main")
+		local.Git("push", "origin", "main")
 
-		local.CreateFile(s.T(), "docs/guide.md", "guide content")
-		local.Git(s.T(), "add", "docs/guide.md")
-		local.Git(s.T(), "commit", "-m", "Add guide")
-		local.Git(s.T(), "push", "origin", "main")
+		local.CreateFile("docs/guide.md", "guide content")
+		local.Git("add", "docs/guide.md")
+		local.Git("commit", "-m", "Add guide")
+		local.Git("push", "origin", "main")
 
-		headHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+		headHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		s.NoError(err)
 
 		// Filter commits affecting docs/ directory
@@ -360,11 +360,11 @@ func (s *IntegrationTestSuite) TestListCommits() {
 		client, _, local := s.TestRepo()
 
 		// Create first commit
-		local.CreateFile(s.T(), "file1.txt", "content 1")
-		local.Git(s.T(), "add", "file1.txt")
-		local.Git(s.T(), "commit", "-m", "Old commit")
-		local.Git(s.T(), "branch", "-M", "main")
-		local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+		local.CreateFile("file1.txt", "content 1")
+		local.Git("add", "file1.txt")
+		local.Git("commit", "-m", "Old commit")
+		local.Git("branch", "-M", "main")
+		local.Git("push", "-u", "origin", "main", "--force")
 
 		// Wait a bit and record time
 		time.Sleep(2 * time.Second)
@@ -372,12 +372,12 @@ func (s *IntegrationTestSuite) TestListCommits() {
 		time.Sleep(2 * time.Second)
 
 		// Create second commit
-		local.CreateFile(s.T(), "file2.txt", "content 2")
-		local.Git(s.T(), "add", "file2.txt")
-		local.Git(s.T(), "commit", "-m", "New commit")
-		local.Git(s.T(), "push", "origin", "main")
+		local.CreateFile("file2.txt", "content 2")
+		local.Git("add", "file2.txt")
+		local.Git("commit", "-m", "New commit")
+		local.Git("push", "origin", "main")
 
-		headHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+		headHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		s.NoError(err)
 
 		// Filter commits since midTime (should get only the new commit)

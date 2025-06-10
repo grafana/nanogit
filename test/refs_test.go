@@ -12,25 +12,25 @@ import (
 func (s *IntegrationTestSuite) TestListRefs() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	// Create initial commit and set up refs
-	local.CreateFile(s.T(), "test.txt", "test content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	firstCommitStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.CreateFile("test.txt", "test content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	firstCommitStr := local.Git("rev-parse", "HEAD")
 	firstCommit, err := hash.FromHex(firstCommitStr)
 	s.NoError(err)
 
 	// Set up branches and tags
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "-u", "origin", "main", "--force")
-	local.Git(s.T(), "branch", "test-branch")
-	local.Git(s.T(), "push", "origin", "test-branch", "--force")
-	local.Git(s.T(), "tag", "v1.0.0")
-	local.Git(s.T(), "push", "origin", "v1.0.0", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "-u", "origin", "main", "--force")
+	local.Git("branch", "test-branch")
+	local.Git("push", "origin", "test-branch", "--force")
+	local.Git("tag", "v1.0.0")
+	local.Git("push", "origin", "v1.0.0", "--force")
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 	refs, err := client.ListRefs(context.Background())
 	s.NoError(err, "ListRefs failed")
 	s.Len(refs, 4, "should have 4 references")
@@ -49,25 +49,25 @@ func (s *IntegrationTestSuite) TestListRefs() {
 func (s *IntegrationTestSuite) TestGetRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	// Create initial commit and set up refs
-	local.CreateFile(s.T(), "test.txt", "test content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	firstCommitStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.CreateFile("test.txt", "test content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	firstCommitStr := local.Git("rev-parse", "HEAD")
 	firstCommit, err := hash.FromHex(firstCommitStr)
 	s.NoError(err)
 
 	// Set up branches and tags
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "-u", "origin", "main", "--force")
-	local.Git(s.T(), "branch", "test-branch")
-	local.Git(s.T(), "push", "origin", "test-branch", "--force")
-	local.Git(s.T(), "tag", "v1.0.0")
-	local.Git(s.T(), "push", "origin", "v1.0.0", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "-u", "origin", "main", "--force")
+	local.Git("branch", "test-branch")
+	local.Git("push", "origin", "test-branch", "--force")
+	local.Git("tag", "v1.0.0")
+	local.Git("push", "origin", "v1.0.0", "--force")
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 	wantRefs := []nanogit.Ref{
 		{Name: "HEAD", Hash: firstCommit},
 		{Name: "refs/heads/main", Hash: firstCommit},
@@ -99,20 +99,20 @@ func (s *IntegrationTestSuite) TestGetRef() {
 func (s *IntegrationTestSuite) TestCreateRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	// Create initial commit
-	local.CreateFile(s.T(), "test.txt", "test content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	firstCommitStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.CreateFile("test.txt", "test content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	firstCommitStr := local.Git("rev-parse", "HEAD")
 	firstCommit, err := hash.FromHex(firstCommitStr)
 	s.NoError(err)
 
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "-u", "origin", "main", "--force")
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	s.Run("create branch ref", func() {
 		s.Logger.Info("Creating ref with new-branch")
@@ -141,20 +141,20 @@ func (s *IntegrationTestSuite) TestCreateRef() {
 func (s *IntegrationTestSuite) TestUpdateRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	// Create initial commit
-	local.CreateFile(s.T(), "test.txt", "test content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	firstCommitStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.CreateFile("test.txt", "test content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	firstCommitStr := local.Git("rev-parse", "HEAD")
 	firstCommit, err := hash.FromHex(firstCommitStr)
 	s.NoError(err)
 
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "-u", "origin", "main", "--force")
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	// First create a ref to update
 	s.Logger.Info("Creating ref for update test")
@@ -163,11 +163,11 @@ func (s *IntegrationTestSuite) TestUpdateRef() {
 
 	// Create a new commit to update to
 	s.Logger.Info("Creating a new commit")
-	local.Git(s.T(), "commit", "--allow-empty", "-m", "new commit")
-	newHashStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.Git("commit", "--allow-empty", "-m", "new commit")
+	newHashStr := local.Git("rev-parse", "HEAD")
 	newHash, err := hash.FromHex(newHashStr)
 	s.NoError(err)
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("push", "origin", "main", "--force")
 
 	// Update the ref
 	s.Logger.Info("Updating ref to point to new commit")
@@ -185,20 +185,20 @@ func (s *IntegrationTestSuite) TestUpdateRef() {
 func (s *IntegrationTestSuite) TestDeleteRef() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	// Create initial commit
-	local.CreateFile(s.T(), "test.txt", "test content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	firstCommitStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.CreateFile("test.txt", "test content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	firstCommitStr := local.Git("rev-parse", "HEAD")
 	firstCommit, err := hash.FromHex(firstCommitStr)
 	s.NoError(err)
 
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "-u", "origin", "main", "--force")
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	s.Run("delete branch ref", func() {
 		// Create a ref to delete
@@ -243,20 +243,20 @@ func (s *IntegrationTestSuite) TestDeleteRef() {
 func (s *IntegrationTestSuite) TestRefsIntegrationFlow() {
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	// Create initial commit
-	local.CreateFile(s.T(), "test.txt", "test content")
-	local.Git(s.T(), "add", "test.txt")
-	local.Git(s.T(), "commit", "-m", "Initial commit")
-	firstCommitStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.CreateFile("test.txt", "test content")
+	local.Git("add", "test.txt")
+	local.Git("commit", "-m", "Initial commit")
+	firstCommitStr := local.Git("rev-parse", "HEAD")
 	firstCommit, err := hash.FromHex(firstCommitStr)
 	s.NoError(err)
 
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "-u", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "-u", "origin", "main", "--force")
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	// This test validates the complete flow without parallel sub-tests
 	// since it needs sequential operations
@@ -276,11 +276,11 @@ func (s *IntegrationTestSuite) TestRefsIntegrationFlow() {
 
 	// 3. Create new commit and update ref
 	s.Logger.Info("Creating new commit for update")
-	local.Git(s.T(), "commit", "--allow-empty", "-m", "integration flow commit")
-	newHashStr := local.Git(s.T(), "rev-parse", "HEAD")
+	local.Git("commit", "--allow-empty", "-m", "integration flow commit")
+	newHashStr := local.Git("rev-parse", "HEAD")
 	newHash, err := hash.FromHex(newHashStr)
 	s.NoError(err)
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Updating ref to new commit")
 	err = client.UpdateRef(context.Background(), nanogit.Ref{Name: refName, Hash: newHash})

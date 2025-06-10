@@ -12,33 +12,33 @@ import (
 func (s *IntegrationTestSuite) TestGetFlatTree() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	s.Logger.Info("Creating a directory structure with files")
-	local.CreateDirPath(s.T(), "dir1")
-	local.CreateDirPath(s.T(), "dir2")
-	local.CreateFile(s.T(), "dir1/file1.txt", "content1")
-	local.CreateFile(s.T(), "dir1/file2.txt", "content2")
-	local.CreateFile(s.T(), "dir2/file3.txt", "content3")
-	local.CreateFile(s.T(), "root.txt", "root content")
+	local.CreateDirPath("dir1")
+	local.CreateDirPath("dir2")
+	local.CreateFile("dir1/file1.txt", "content1")
+	local.CreateFile("dir1/file2.txt", "content2")
+	local.CreateFile("dir2/file3.txt", "content3")
+	local.CreateFile("root.txt", "root content")
 
 	s.Logger.Info("Adding and committing the files")
-	local.Git(s.T(), "add", ".")
-	local.Git(s.T(), "commit", "-m", "Initial commit with tree structure")
+	local.Git("add", ".")
+	local.Git("commit", "-m", "Initial commit with tree structure")
 
 	s.Logger.Info("Creating and switching to main branch")
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting the commit hash")
-	commitHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD"))
+	commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 	s.NoError(err)
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	s.Logger.Info("Helper to get the hash for a given path (file or directory)")
 	getHash := func(path string) hash.Hash {
-		out := local.Git(s.T(), "rev-parse", "HEAD:"+path)
+		out := local.Git("rev-parse", "HEAD:"+path)
 		h, err := hash.FromHex(out)
 		s.NoError(err)
 		return h
@@ -119,33 +119,33 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 func (s *IntegrationTestSuite) TestGetTree() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	s.Logger.Info("Creating a directory structure with files")
-	local.CreateDirPath(s.T(), "dir1")
-	local.CreateDirPath(s.T(), "dir2")
-	local.CreateFile(s.T(), "dir1/file1.txt", "content1")
-	local.CreateFile(s.T(), "dir1/file2.txt", "content2")
-	local.CreateFile(s.T(), "dir2/file3.txt", "content3")
-	local.CreateFile(s.T(), "root.txt", "root content")
+	local.CreateDirPath("dir1")
+	local.CreateDirPath("dir2")
+	local.CreateFile("dir1/file1.txt", "content1")
+	local.CreateFile("dir1/file2.txt", "content2")
+	local.CreateFile("dir2/file3.txt", "content3")
+	local.CreateFile("root.txt", "root content")
 
 	s.Logger.Info("Adding and committing the files")
-	local.Git(s.T(), "add", ".")
-	local.Git(s.T(), "commit", "-m", "Initial commit with tree structure")
+	local.Git("add", ".")
+	local.Git("commit", "-m", "Initial commit with tree structure")
 
 	s.Logger.Info("Creating and switching to main branch")
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting the tree hash")
-	treeHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD^{tree}"))
+	treeHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 	s.NoError(err)
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	s.Logger.Info("Helper to get the hash for a given path (file or directory)")
 	getHash := func(path string) hash.Hash {
-		out := local.Git(s.T(), "rev-parse", "HEAD:"+path)
+		out := local.Git("rev-parse", "HEAD:"+path)
 		h, err := hash.FromHex(out)
 		s.NoError(err)
 		return h
@@ -207,33 +207,33 @@ func (s *IntegrationTestSuite) TestGetTree() {
 func (s *IntegrationTestSuite) TestGetTreeByPath() {
 	s.Logger.Info("Setting up remote repository")
 	remote, _ := s.CreateTestRepo()
-	local := remote.Local(s.T())
+	local := remote.Local()
 
 	s.Logger.Info("Creating a directory structure with files")
-	local.CreateDirPath(s.T(), "dir1")
-	local.CreateDirPath(s.T(), "dir2")
-	local.CreateFile(s.T(), "dir1/file1.txt", "content1")
-	local.CreateFile(s.T(), "dir1/file2.txt", "content2")
-	local.CreateFile(s.T(), "dir2/file3.txt", "content3")
-	local.CreateFile(s.T(), "root.txt", "root content")
+	local.CreateDirPath("dir1")
+	local.CreateDirPath("dir2")
+	local.CreateFile("dir1/file1.txt", "content1")
+	local.CreateFile("dir1/file2.txt", "content2")
+	local.CreateFile("dir2/file3.txt", "content3")
+	local.CreateFile("root.txt", "root content")
 
 	s.Logger.Info("Adding and committing the files")
-	local.Git(s.T(), "add", ".")
-	local.Git(s.T(), "commit", "-m", "Initial commit with tree structure")
+	local.Git("add", ".")
+	local.Git("commit", "-m", "Initial commit with tree structure")
 
 	s.Logger.Info("Creating and switching to main branch")
-	local.Git(s.T(), "branch", "-M", "main")
-	local.Git(s.T(), "push", "origin", "main", "--force")
+	local.Git("branch", "-M", "main")
+	local.Git("push", "origin", "main", "--force")
 
 	s.Logger.Info("Getting the tree hash")
-	treeHash, err := hash.FromHex(local.Git(s.T(), "rev-parse", "HEAD^{tree}"))
+	treeHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 	s.NoError(err)
 
-	client := remote.Client(s.T())
+	client := remote.Client()
 
 	s.Logger.Info("Helper to get the hash for a given path (file or directory)")
 	getHash := func(path string) hash.Hash {
-		out := local.Git(s.T(), "rev-parse", "HEAD:"+path)
+		out := local.Git("rev-parse", "HEAD:"+path)
 		h, err := hash.FromHex(out)
 		s.NoError(err)
 		return h

@@ -23,7 +23,7 @@ type IntegrationTestSuite struct {
 func (s *IntegrationTestSuite) SetupSuite() {
 	s.Logger = helpers.NewSuiteLogger(func() *testing.T { return s.T() })
 	s.Logger.Info("🚀 Setting up integration test suite with shared Git server")
-	s.GitServer = helpers.NewGitServer(s.T(), s.Logger)
+	s.GitServer = helpers.NewGitServer(func() *testing.T { return s.T() }, s.Logger)
 	s.Logger.Success("✅ Integration test suite setup complete")
 }
 
@@ -40,7 +40,7 @@ func (s *IntegrationTestSuite) SetupTest() {
 
 // CreateTestRepo creates a fresh repository for a test with a unique name
 func (s *IntegrationTestSuite) CreateTestRepo() (*helpers.RemoteRepo, *helpers.User) {
-	user := s.GitServer.CreateUser(s.T())
+	user := s.GitServer.CreateUser()
 
 	// Generate unique repo name
 	var suffix uint32
@@ -49,14 +49,14 @@ func (s *IntegrationTestSuite) CreateTestRepo() (*helpers.RemoteRepo, *helpers.U
 	suffix = suffix % 10000
 
 	repoName := fmt.Sprintf("testrepo-%d", suffix)
-	remote := s.GitServer.CreateRepo(s.T(), repoName, user)
+	remote := s.GitServer.CreateRepo(repoName, user)
 
 	return remote, user
 }
 
 // TestRepo is a convenience method that creates a test repo and returns client, remote, and local
 func (s *IntegrationTestSuite) TestRepo() (nanogit.Client, *helpers.RemoteRepo, *helpers.LocalGitRepo) {
-	return s.GitServer.TestRepo(s.T())
+	return s.GitServer.TestRepo()
 }
 
 // Require returns a require.Assertions instance for the current test

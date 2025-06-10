@@ -29,7 +29,7 @@ func (s *IntegrationTestSuite) TestIsAuthorized() {
 	})
 
 	s.Run("successful authorization with access token", func() {
-		token := s.GitServer.GenerateUserToken(s.T(), user.Username, user.Password)
+		token := s.GitServer.GenerateUserToken(user.Username, user.Password)
 		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(s.Logger))
 		s.NoError(err)
 		auth, err := client.IsAuthorized(context.Background())
