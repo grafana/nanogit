@@ -193,7 +193,7 @@ cd test && ginkgo -p
 
 #### Legacy Integration Tests
 
-The old `test/` directory contains legacy integration tests using testify. These are being phased out in favor of the new Ginkgo-based tests in `testginkgo/`. The legacy tests suffered from:
+The old `test/` directory contains legacy integration tests using testify. These are being phased out in favor of the new Ginkgo-based tests in `test/`. The legacy tests suffered from:
 - Race conditions when using `t.Parallel()`
 - Data races in logging system with testcontainers
 - Difficulty in sharing expensive resources like Docker containers
@@ -202,7 +202,7 @@ The old `test/` directory contains legacy integration tests using testify. These
 #### Writing Tests
 
 1. **Unit tests** should be fast and not require external dependencies
-2. **Integration tests** should be in the `testginkgo/` directory using Ginkgo
+2. **Integration tests** should be in the `test/` directory using Ginkgo
 3. Use testify's `assert` and `require` packages for unit tests, and Gomega matchers for integration tests
 4. Follow Go's testing best practices
 5. Add appropriate test coverage

@@ -220,14 +220,8 @@ func (s *GitServer) TestRepo() (nanogit.Client, *RemoteRepo, *LocalGitRepo) {
 	suffix = suffix % 10000
 
 	remote := s.CreateRepo(fmt.Sprintf("testrepo-%d", suffix), user)
-	client, local := remote.QuickInit()
-	return client, remote, local
-}
+	local := NewLocalGitRepo(s.logger)
+	client, _ := local.QuickInit(user, remote.AuthURL())
 
-// NewGitServerWithLogger is a convenience function that creates both a TestLogger
-// and GitServer together for easy test setup.
-func NewGitServerWithLogger() (*TestLogger, *GitServer) {
-	logger := NewTestLogger()
-	server := NewGitServer(logger)
-	return logger, server
+	return client, remote, local
 }
