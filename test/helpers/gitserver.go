@@ -9,11 +9,11 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -23,7 +23,13 @@ type containerLogger struct {
 }
 
 func (l *containerLogger) Accept(log testcontainers.Log) {
-	content := string(log.Content)
+	content := strings.TrimSpace(string(log.Content))
+
+	// Skip empty logs
+	if content == "" {
+		return
+	}
+
 	// Add emojis and colors based on log level/content
 	switch {
 	case strings.Contains(content, "401 Unauthorized"):
@@ -55,11 +61,10 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 // It provides methods to manage users, repositories, and server operations
 // for testing purposes.
 type GitServer struct {
-	Host        string                   // Host address of the Gitea server
-	Port        string                   // Port number the server is running on
-	container   testcontainers.Container // The container running the Gitea server
-	logger      *TestLogger
-	currentTest func() *testing.T
+	Host      string                   // Host address of the Gitea server
+	Port      string                   // Port number the server is running on
+	container testcontainers.Container // The container running the Gitea server
+	logger    *TestLogger
 }
 
 // NewGitServer creates and initializes a new Gitea server instance in a container.
@@ -70,7 +75,7 @@ type GitServer struct {
 // - Pre-configured admin user
 // - Disabled SSH and mailer
 // Returns a GitServer instance ready for testing.
-func NewGitServer(currentTest func() *testing.T, logger *TestLogger) *GitServer {
+func NewGitServer(logger *TestLogger) *GitServer {
 	ctx := context.Background()
 
 	containerLogger := &containerLogger{logger}
@@ -104,25 +109,24 @@ func NewGitServer(currentTest func() *testing.T, logger *TestLogger) *GitServer 
 		ContainerRequest: req,
 		Started:          true,
 	})
-	require.NoError(currentTest(), err)
-	currentTest().Cleanup(func() {
-		currentTest().Logf("%s🧹 Cleaning up Gitea server container...%s", ColorYellow, ColorReset)
-		require.NoError(currentTest(), container.Terminate(ctx))
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(func() {
+		logger.Logf("%s🧹 Cleaning up Gitea server container...%s", ColorYellow, ColorReset)
+		Expect(container.Terminate(ctx)).To(Succeed())
 	})
 
 	host, err := container.Host(ctx)
-	require.NoError(currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	port, err := container.MappedPort(ctx, "3000")
-	require.NoError(currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 
 	logger.Logf("%s✅ Gitea server ready at http://%s:%s%s", ColorGreen, host, port.Port(), ColorReset)
 
 	return &GitServer{
-		Host:        host,
-		Port:        port.Port(),
-		container:   container,
-		logger:      logger,
-		currentTest: currentTest,
+		Host:      host,
+		Port:      port.Port(),
+		container: container,
+		logger:    logger,
 	}
 }
 
@@ -131,7 +135,7 @@ func NewGitServer(currentTest func() *testing.T, logger *TestLogger) *GitServer 
 func (s *GitServer) CreateUser() *User {
 	var suffix uint32
 	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	suffix = suffix % 10000
 
 	user := &User{
@@ -144,11 +148,11 @@ func (s *GitServer) CreateUser() *User {
 		"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
 	})
 
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	execOutput, err := io.ReadAll(reader)
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	s.logger.Logf("%s📋 User creation output: %s%s", ColorCyan, string(execOutput), ColorReset)
-	require.Equal(s.currentTest(), 0, execResult)
+	Expect(execResult).To(Equal(0))
 
 	s.logger.Logf("%s✅ Test user '%s' created successfully%s", ColorGreen, user.Username, ColorReset)
 	return user
@@ -161,22 +165,22 @@ func (s *GitServer) GenerateUserToken(username, password string) string {
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
 		"su", "git", "-c", fmt.Sprintf("gitea admin user generate-access-token --username %s --scopes all", username),
 	})
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	execOutput, err := io.ReadAll(reader)
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	s.logger.Logf("%s📋 Token generation output: %s%s", ColorCyan, string(execOutput), ColorReset)
-	require.Equal(s.currentTest(), 0, execResult)
+	Expect(execResult).To(Equal(0))
 
 	// Extract token from output - it's the last line
 	lines := strings.Split(strings.TrimSpace(string(execOutput)), "\n")
-	require.NotEmpty(s.currentTest(), lines, "expected token output")
+	Expect(lines).NotTo(BeEmpty(), "expected token output")
 	tokenLine := strings.TrimSpace(lines[len(lines)-1])
-	require.NotEmpty(s.currentTest(), tokenLine, "expected non-empty token")
+	Expect(tokenLine).NotTo(BeEmpty(), "expected non-empty token")
 
 	chunks := strings.Split(tokenLine, " ")
-	require.NotEmpty(s.currentTest(), chunks, "expected chunks")
+	Expect(chunks).NotTo(BeEmpty(), "expected chunks")
 	token := chunks[len(chunks)-1]
-	require.NotEmpty(s.currentTest(), token, "expected non-empty token")
+	Expect(token).NotTo(BeEmpty(), "expected non-empty token")
 	token = "token " + token
 
 	s.logger.Logf("%s✅ Access token generated successfully for user '%s'%s (%s)", ColorGreen, username, ColorReset, token)
@@ -193,16 +197,16 @@ func (s *GitServer) CreateRepo(repoName string, user *User) *RemoteRepo {
 	createRepoURL := fmt.Sprintf("http://%s:%s/api/v1/user/repos", s.Host, s.Port)
 	jsonData := []byte(fmt.Sprintf(`{"name":"%s"}`, repoName))
 	reqCreate, err := http.NewRequestWithContext(context.Background(), "POST", createRepoURL, bytes.NewBuffer(jsonData))
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	reqCreate.Header.Set("Content-Type", "application/json")
 	reqCreate.SetBasicAuth(user.Username, user.Password)
 	resp, reqErr := httpClient.Do(reqCreate)
-	require.NoError(s.currentTest(), resp.Body.Close())
-	require.NoError(s.currentTest(), reqErr)
-	require.Equal(s.currentTest(), http.StatusCreated, resp.StatusCode)
+	Expect(resp.Body.Close()).To(Succeed())
+	Expect(reqErr).NotTo(HaveOccurred())
+	Expect(resp.StatusCode).To(Equal(http.StatusCreated))
 
 	s.logger.Logf("%s✅ Repository '%s' created successfully%s", ColorGreen, repoName, ColorReset)
-	return NewRemoteRepo(s.currentTest, s.logger, repoName, user, s.Host, s.Port)
+	return NewRemoteRepo(s.logger, repoName, user, s.Host, s.Port)
 }
 
 func (s *GitServer) TestRepo() (nanogit.Client, *RemoteRepo, *LocalGitRepo) {
@@ -210,10 +214,18 @@ func (s *GitServer) TestRepo() (nanogit.Client, *RemoteRepo, *LocalGitRepo) {
 
 	var suffix uint32
 	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
-	require.NoError(s.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	suffix = suffix % 10000
 
 	remote := s.CreateRepo(fmt.Sprintf("testrepo-%d", suffix), user)
 	client, local := remote.QuickInit()
 	return client, remote, local
+}
+
+// NewGitServerWithLogger is a convenience function that creates both a TestLogger
+// and GitServer together for easy test setup.
+func NewGitServerWithLogger() (*TestLogger, *GitServer) {
+	logger := NewTestLogger()
+	server := NewGitServer(logger)
+	return logger, server
 }

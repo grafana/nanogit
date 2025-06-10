@@ -4,53 +4,70 @@ import (
 	"context"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/test/helpers"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// TestClient_IsAuthorized tests the authorization functionality
-func (s *IntegrationTestSuite) TestIsAuthorized() {
-	s.Logger.Info("Setting up test repositories using shared Git server")
-	_, remote, _ := s.TestRepo()
-	user := remote.User
+var _ = Describe("Authorization", func() {
+	var (
+		remote    *helpers.RemoteRepo
+		user      *helpers.User
+		remoteURL string
+	)
 
-	s.Run("successful authorization", func() {
-		s.T().Parallel()
-
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(s.Logger))
-		s.NoError(err)
-		auth, err := client.IsAuthorized(context.Background())
-		s.NoError(err)
-		s.True(auth)
+	BeforeEach(func() {
+		By("Setting up test repository using shared Git server")
+		_, remote, _, user = QuickSetup()
+		remoteURL = remote.URL()
 	})
 
-	s.Run("unauthorized access with wrong credentials", func() {
-		s.T().Parallel()
+	It("should successfully authorize with basic auth", func() {
+		By("Creating client with correct basic auth credentials")
+		authClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+		Expect(err).NotTo(HaveOccurred())
 
-		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
-		s.NoError(err)
+		By("Checking authorization")
+		auth, err := authClient.IsAuthorized(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(auth).To(BeTrue())
+	})
+
+	It("should fail authorization with wrong credentials", func() {
+		By("Creating client with incorrect credentials")
+		unauthorizedClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth("wronguser", "wrongpass"))
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking authorization should fail")
 		auth, err := unauthorizedClient.IsAuthorized(context.Background())
-		s.NoError(err)
-		s.False(auth)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(auth).To(BeFalse())
 	})
 
-	s.Run("successful authorization with access token", func() {
-		s.T().Parallel()
+	It("should successfully authorize with access token", func() {
+		By("Generating access token for user")
+		token := gitServer.GenerateUserToken(user.Username, user.Password)
+		Expect(token).NotTo(BeEmpty())
 
-		token := s.GitServer.GenerateUserToken(user.Username, user.Password)
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(token), nanogit.WithLogger(s.Logger))
-		s.NoError(err)
-		auth, err := client.IsAuthorized(context.Background())
-		s.NoError(err)
-		s.True(auth)
+		By("Creating client with access token")
+		tokenClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(token), nanogit.WithLogger(logger))
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking authorization")
+		auth, err := tokenClient.IsAuthorized(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(auth).To(BeTrue())
 	})
 
-	s.Run("unauthorized access with invalid token", func() {
-		s.T().Parallel()
-
+	It("should fail authorization with invalid token", func() {
+		By("Creating client with invalid token")
 		invalidToken := "token invalid-token"
-		client, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(s.Logger))
-		s.NoError(err)
-		auth, err := client.IsAuthorized(context.Background())
-		s.NoError(err)
-		s.False(auth)
+		invalidClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(logger))
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking authorization should fail")
+		auth, err := invalidClient.IsAuthorized(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(auth).To(BeFalse())
 	})
-}
+})

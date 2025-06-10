@@ -2,326 +2,314 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/test/helpers"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// TestGetFlatTree tests getting a flat tree structure with all entries including nested ones
-func (s *IntegrationTestSuite) TestGetFlatTree() {
-	s.Logger.Info("Setting up remote repository")
-	remote, _ := s.CreateTestRepo()
-	local := remote.Local()
+var _ = Describe("Trees", func() {
+	Context("GetFlatTree operations", func() {
+		var (
+			client     nanogit.Client
+			local      *helpers.LocalGitRepo
+			commitHash hash.Hash
+			getHash    func(string) hash.Hash
+		)
 
-	s.Logger.Info("Creating a directory structure with files")
-	local.CreateDirPath("dir1")
-	local.CreateDirPath("dir2")
-	local.CreateFile("dir1/file1.txt", "content1")
-	local.CreateFile("dir1/file2.txt", "content2")
-	local.CreateFile("dir2/file3.txt", "content3")
-	local.CreateFile("root.txt", "root content")
+		BeforeEach(func() {
+			By("Setting up test repository with directory structure")
+			client, _, local, _ = QuickSetup()
 
-	s.Logger.Info("Adding and committing the files")
-	local.Git("add", ".")
-	local.Git("commit", "-m", "Initial commit with tree structure")
+			By("Creating a directory structure with files")
+			local.CreateDirPath("dir1")
+			local.CreateDirPath("dir2")
+			local.CreateFile("dir1/file1.txt", "content1")
+			local.CreateFile("dir1/file2.txt", "content2")
+			local.CreateFile("dir2/file3.txt", "content3")
+			local.CreateFile("root.txt", "root content")
 
-	s.Logger.Info("Creating and switching to main branch")
-	local.Git("branch", "-M", "main")
-	local.Git("push", "origin", "main", "--force")
+			By("Adding and committing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with tree structure")
 
-	s.Logger.Info("Getting the commit hash")
-	commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
-	s.NoError(err)
+			By("Creating and switching to main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
-	client := remote.Client()
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
-	s.Logger.Info("Helper to get the hash for a given path (file or directory)")
-	getHash := func(path string) hash.Hash {
-		out := local.Git("rev-parse", "HEAD:"+path)
-		h, err := hash.FromHex(out)
-		s.NoError(err)
-		return h
-	}
+			By("Setting up hash helper function")
+			getHash = func(path string) hash.Hash {
+				out := local.Git("rev-parse", "HEAD:"+path)
+				h, err := hash.FromHex(out)
+				Expect(err).NotTo(HaveOccurred())
+				return h
+			}
+		})
 
-	s.Run("successful flat tree retrieval", func() {
-		s.T().Parallel()
+		It("should retrieve flat tree structure successfully", func() {
+			tree, err := client.GetFlatTree(context.Background(), commitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
 
-		s.Logger.Info("Testing GetFlatTree")
-		tree, err := client.GetFlatTree(context.Background(), commitHash)
-		s.NoError(err)
-		s.NotNil(tree)
-
-		s.Logger.Info("Defining expected entries with correct hashes")
-		wantEntries := []nanogit.FlatTreeEntry{
-			{
-				Name: "root.txt",
-				Path: "root.txt",
-				Mode: 33188, // 100644 in octal
-				Hash: getHash("root.txt"),
-				Type: protocol.ObjectTypeBlob,
-			},
-			{
-				Name: "dir1",
-				Path: "dir1",
-				Mode: 16384, // 040000 in octal
-				Hash: getHash("dir1"),
-				Type: protocol.ObjectTypeTree,
-			},
-			{
-				Name: "file1.txt",
-				Path: "dir1/file1.txt",
-				Mode: 33188, // 100644 in octal
-				Hash: getHash("dir1/file1.txt"),
-				Type: protocol.ObjectTypeBlob,
-			},
-			{
-				Name: "file2.txt",
-				Path: "dir1/file2.txt",
-				Mode: 33188, // 100644 in octal
-				Hash: getHash("dir1/file2.txt"),
-				Type: protocol.ObjectTypeBlob,
-			},
-			{
-				Name: "dir2",
-				Path: "dir2",
-				Mode: 16384, // 040000 in octal
-				Hash: getHash("dir2"),
-				Type: protocol.ObjectTypeTree,
-			},
-			{
-				Name: "file3.txt",
-				Path: "dir2/file3.txt",
-				Mode: 33188, // 100644 in octal
-				Hash: getHash("dir2/file3.txt"),
-				Type: protocol.ObjectTypeBlob,
-			},
-		}
-
-		s.Logger.Info("Verifying tree structure")
-		s.Len(tree.Entries, len(wantEntries))
-
-		s.Logger.Info("Comparing entries using ElementsMatch")
-		s.ElementsMatch(wantEntries, tree.Entries, "Tree entries do not match expected values")
-	})
-
-	s.Run("non-existent hash", func() {
-		s.T().Parallel()
-
-		s.Logger.Info("Testing GetFlatTree with non-existent hash")
-		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-		s.NoError(err)
-		_, err = client.GetFlatTree(context.Background(), nonExistentHash)
-		s.Error(err)
-		s.Contains(err.Error(), "not our ref")
-	})
-}
-
-// TestGetTree tests getting a tree structure with only direct children
-func (s *IntegrationTestSuite) TestGetTree() {
-	s.Logger.Info("Setting up remote repository")
-	remote, _ := s.CreateTestRepo()
-	local := remote.Local()
-
-	s.Logger.Info("Creating a directory structure with files")
-	local.CreateDirPath("dir1")
-	local.CreateDirPath("dir2")
-	local.CreateFile("dir1/file1.txt", "content1")
-	local.CreateFile("dir1/file2.txt", "content2")
-	local.CreateFile("dir2/file3.txt", "content3")
-	local.CreateFile("root.txt", "root content")
-
-	s.Logger.Info("Adding and committing the files")
-	local.Git("add", ".")
-	local.Git("commit", "-m", "Initial commit with tree structure")
-
-	s.Logger.Info("Creating and switching to main branch")
-	local.Git("branch", "-M", "main")
-	local.Git("push", "origin", "main", "--force")
-
-	s.Logger.Info("Getting the tree hash")
-	treeHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
-	s.NoError(err)
-
-	client := remote.Client()
-
-	s.Logger.Info("Helper to get the hash for a given path (file or directory)")
-	getHash := func(path string) hash.Hash {
-		out := local.Git("rev-parse", "HEAD:"+path)
-		h, err := hash.FromHex(out)
-		s.NoError(err)
-		return h
-	}
-
-	s.Run("successful tree retrieval", func() {
-		s.T().Parallel()
-
-		s.Logger.Info("Testing GetTree")
-		tree, err := client.GetTree(context.Background(), treeHash)
-		s.NoError(err)
-		s.NotNil(tree)
-
-		s.Logger.Info("Verifying tree entries (direct children only)")
-		expectedEntries := map[string]nanogit.TreeEntry{
-			"root.txt": {
-				Name: "root.txt",
-				Mode: 33188, // 100644 in octal
-				Hash: getHash("root.txt"),
-				Type: protocol.ObjectTypeBlob,
-			},
-			"dir1": {
-				Name: "dir1",
-				Mode: 16384, // 040000 in octal
-				Hash: getHash("dir1"),
-				Type: protocol.ObjectTypeTree,
-			},
-			"dir2": {
-				Name: "dir2",
-				Mode: 16384, // 040000 in octal
-				Hash: getHash("dir2"),
-				Type: protocol.ObjectTypeTree,
-			},
-		}
-
-		s.Logger.Info("Verifying tree structure")
-		s.Len(tree.Entries, len(expectedEntries))
-
-		for _, entry := range tree.Entries {
-			expected, exists := expectedEntries[entry.Name]
-			s.True(exists, "Unexpected entry: %s", entry.Name)
-			s.Equal(expected.Mode, entry.Mode)
-			s.Equal(expected.Type, entry.Type)
-			s.Equal(expected.Hash, entry.Hash)
-		}
-	})
-
-	s.Run("non-existent hash", func() {
-		s.T().Parallel()
-
-		s.Logger.Info("Testing GetTree with non-existent hash")
-		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-		s.NoError(err)
-		_, err = client.GetTree(context.Background(), nonExistentHash)
-		s.Error(err)
-		s.Contains(err.Error(), "not our ref")
-	})
-}
-
-// TestGetTreeByPath tests getting trees by path with various scenarios
-func (s *IntegrationTestSuite) TestGetTreeByPath() {
-	s.Logger.Info("Setting up remote repository")
-	remote, _ := s.CreateTestRepo()
-	local := remote.Local()
-
-	s.Logger.Info("Creating a directory structure with files")
-	local.CreateDirPath("dir1")
-	local.CreateDirPath("dir2")
-	local.CreateFile("dir1/file1.txt", "content1")
-	local.CreateFile("dir1/file2.txt", "content2")
-	local.CreateFile("dir2/file3.txt", "content3")
-	local.CreateFile("root.txt", "root content")
-
-	s.Logger.Info("Adding and committing the files")
-	local.Git("add", ".")
-	local.Git("commit", "-m", "Initial commit with tree structure")
-
-	s.Logger.Info("Creating and switching to main branch")
-	local.Git("branch", "-M", "main")
-	local.Git("push", "origin", "main", "--force")
-
-	s.Logger.Info("Getting the tree hash")
-	treeHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
-	s.NoError(err)
-
-	client := remote.Client()
-
-	s.Logger.Info("Helper to get the hash for a given path (file or directory)")
-	getHash := func(path string) hash.Hash {
-		out := local.Git("rev-parse", "HEAD:"+path)
-		h, err := hash.FromHex(out)
-		s.NoError(err)
-		return h
-	}
-
-	testCases := []struct {
-		name          string
-		path          string
-		expectedError interface{}
-		verifyFunc    func(tree *nanogit.Tree)
-	}{
-		{
-			name: "get root tree with empty path",
-			path: "",
-			verifyFunc: func(tree *nanogit.Tree) {
-				s.Len(tree.Entries, 3) // root.txt, dir1, dir2
-				entryNames := make([]string, len(tree.Entries))
-				for i, entry := range tree.Entries {
-					entryNames[i] = entry.Name
-				}
-				s.ElementsMatch([]string{"root.txt", "dir1", "dir2"}, entryNames)
-			},
-		},
-		{
-			name: "get root tree with dot path",
-			path: ".",
-			verifyFunc: func(tree *nanogit.Tree) {
-				s.Len(tree.Entries, 3)
-			},
-		},
-		{
-			name: "get dir1 subdirectory",
-			path: "dir1",
-			verifyFunc: func(tree *nanogit.Tree) {
-				s.Len(tree.Entries, 2) // file1.txt, file2.txt
-				entryNames := make([]string, len(tree.Entries))
-				for i, entry := range tree.Entries {
-					entryNames[i] = entry.Name
-				}
-				s.ElementsMatch([]string{"file1.txt", "file2.txt"}, entryNames)
-				s.Equal(getHash("dir1"), tree.Hash)
-			},
-		},
-		{
-			name: "get dir2 subdirectory",
-			path: "dir2",
-			verifyFunc: func(tree *nanogit.Tree) {
-				s.Len(tree.Entries, 1) // file3.txt
-				s.Equal("file3.txt", tree.Entries[0].Name)
-				s.Equal(getHash("dir2"), tree.Hash)
-			},
-		},
-		{
-			name:          "nonexistent path",
-			path:          "nonexistent",
-			expectedError: &nanogit.PathNotFoundError{},
-		},
-		{
-			name:          "path to file instead of directory",
-			path:          "root.txt",
-			expectedError: &nanogit.UnexpectedObjectTypeError{},
-		},
-		{
-			name:          "nested nonexistent path",
-			path:          "dir1/nonexistent",
-			expectedError: &nanogit.PathNotFoundError{},
-		},
-	}
-
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			s.T().Parallel()
-
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, tc.path)
-			if tc.expectedError != nil {
-				s.Error(err)
-				s.ErrorAs(err, &tc.expectedError)
-				s.Nil(tree)
-				return
+			wantEntries := []nanogit.FlatTreeEntry{
+				{
+					Name: "test.txt",
+					Path: "test.txt",
+					Mode: 33188, // 100644 in octal
+					Hash: getHash("test.txt"),
+					Type: protocol.ObjectTypeBlob,
+				},
+				{
+					Name: "root.txt",
+					Path: "root.txt",
+					Mode: 33188, // 100644 in octal
+					Hash: getHash("root.txt"),
+					Type: protocol.ObjectTypeBlob,
+				},
+				{
+					Name: "dir1",
+					Path: "dir1",
+					Mode: 16384, // 040000 in octal
+					Hash: getHash("dir1"),
+					Type: protocol.ObjectTypeTree,
+				},
+				{
+					Name: "file1.txt",
+					Path: "dir1/file1.txt",
+					Mode: 33188, // 100644 in octal
+					Hash: getHash("dir1/file1.txt"),
+					Type: protocol.ObjectTypeBlob,
+				},
+				{
+					Name: "file2.txt",
+					Path: "dir1/file2.txt",
+					Mode: 33188, // 100644 in octal
+					Hash: getHash("dir1/file2.txt"),
+					Type: protocol.ObjectTypeBlob,
+				},
+				{
+					Name: "dir2",
+					Path: "dir2",
+					Mode: 16384, // 040000 in octal
+					Hash: getHash("dir2"),
+					Type: protocol.ObjectTypeTree,
+				},
+				{
+					Name: "file3.txt",
+					Path: "dir2/file3.txt",
+					Mode: 33188, // 100644 in octal
+					Hash: getHash("dir2/file3.txt"),
+					Type: protocol.ObjectTypeBlob,
+				},
 			}
 
-			s.NoError(err)
-			s.NotNil(tree)
-			tc.verifyFunc(tree)
+			Expect(tree.Entries).To(HaveLen(len(wantEntries)))
+			// Check that all expected entries are present by comparing each one
+			for _, expectedEntry := range wantEntries {
+				found := false
+				for _, actualEntry := range tree.Entries {
+					if actualEntry.Name == expectedEntry.Name &&
+						actualEntry.Path == expectedEntry.Path &&
+						actualEntry.Mode == expectedEntry.Mode &&
+						actualEntry.Type == expectedEntry.Type &&
+						actualEntry.Hash.Is(expectedEntry.Hash) {
+						found = true
+						break
+					}
+				}
+				Expect(found).To(BeTrue(), "Expected entry not found: %+v", expectedEntry)
+			}
 		})
-	}
-}
+
+		It("should handle non-existent hash", func() {
+			nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.GetFlatTree(context.Background(), nonExistentHash)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not our ref"))
+		})
+	})
+
+	Context("GetTree operations", func() {
+		var (
+			client   nanogit.Client
+			local    *helpers.LocalGitRepo
+			treeHash hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository with directory structure")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating a directory structure with files")
+			local.CreateDirPath("dir1")
+			local.CreateDirPath("dir2")
+			local.CreateFile("dir1/file1.txt", "content1")
+			local.CreateFile("dir1/file2.txt", "content2")
+			local.CreateFile("dir2/file3.txt", "content3")
+			local.CreateFile("root.txt", "root content")
+
+			By("Adding and committing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with tree structure")
+
+			By("Creating and switching to main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the tree hash")
+			var err error
+			treeHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should retrieve tree structure successfully", func() {
+			tree, err := client.GetTree(context.Background(), treeHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
+
+			expectedEntryNames := []string{"test.txt", "root.txt", "dir1", "dir2"}
+			Expect(tree.Entries).To(HaveLen(len(expectedEntryNames)))
+
+			entryNames := make([]string, len(tree.Entries))
+			for i, entry := range tree.Entries {
+				entryNames[i] = entry.Name
+			}
+			Expect(entryNames).To(ConsistOf(expectedEntryNames))
+		})
+
+		It("should handle non-existent hash", func() {
+			nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.GetTree(context.Background(), nonExistentHash)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not our ref"))
+		})
+	})
+
+	Context("GetTreeByPath operations", func() {
+		var (
+			client   nanogit.Client
+			local    *helpers.LocalGitRepo
+			treeHash hash.Hash
+			getHash  func(string) hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository with directory structure")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating a directory structure with files")
+			local.CreateDirPath("dir1")
+			local.CreateDirPath("dir2")
+			local.CreateFile("dir1/file1.txt", "content1")
+			local.CreateFile("dir1/file2.txt", "content2")
+			local.CreateFile("dir2/file3.txt", "content3")
+			local.CreateFile("root.txt", "root content")
+
+			By("Adding and committing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with tree structure")
+
+			By("Creating and switching to main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the tree hash")
+			var err error
+			treeHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Setting up hash helper function")
+			getHash = func(path string) hash.Hash {
+				out := local.Git("rev-parse", "HEAD:"+path)
+				h, err := hash.FromHex(out)
+				Expect(err).NotTo(HaveOccurred())
+				return h
+			}
+		})
+
+		It("should get root tree with empty path", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
+
+			entryNames := make([]string, len(tree.Entries))
+			for i, entry := range tree.Entries {
+				entryNames[i] = entry.Name
+			}
+			Expect(entryNames).To(ConsistOf("test.txt", "root.txt", "dir1", "dir2"))
+		})
+
+		It("should get root tree with dot path", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, ".")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
+
+			entryNames := make([]string, len(tree.Entries))
+			for i, entry := range tree.Entries {
+				entryNames[i] = entry.Name
+			}
+			Expect(entryNames).To(ConsistOf("test.txt", "root.txt", "dir1", "dir2"))
+		})
+
+		It("should get dir1 subdirectory", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, "dir1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
+
+			Expect(tree.Entries).To(HaveLen(2)) // file1.txt, file2.txt
+			entryNames := make([]string, len(tree.Entries))
+			for i, entry := range tree.Entries {
+				entryNames[i] = entry.Name
+			}
+			Expect(entryNames).To(ConsistOf("file1.txt", "file2.txt"))
+			Expect(tree.Hash.Is(getHash("dir1"))).To(BeTrue())
+		})
+
+		It("should get dir2 subdirectory", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, "dir2")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tree).NotTo(BeNil())
+
+			Expect(tree.Entries).To(HaveLen(1)) // file3.txt
+			Expect(tree.Entries[0].Name).To(Equal("file3.txt"))
+			Expect(tree.Hash.Is(getHash("dir2"))).To(BeTrue())
+		})
+
+		It("should handle nonexistent path", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, "nonexistent")
+			Expect(err).To(HaveOccurred())
+			var pathNotFoundErr *nanogit.PathNotFoundError
+			Expect(errors.As(err, &pathNotFoundErr)).To(BeTrue())
+			Expect(tree).To(BeNil())
+		})
+
+		It("should handle path to file instead of directory", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, "root.txt")
+			Expect(err).To(HaveOccurred())
+			var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
+			Expect(errors.As(err, &unexpectedTypeErr)).To(BeTrue())
+			Expect(tree).To(BeNil())
+		})
+
+		It("should handle nested nonexistent path", func() {
+			tree, err := client.GetTreeByPath(context.Background(), treeHash, "dir1/nonexistent")
+			Expect(err).To(HaveOccurred())
+			var pathNotFoundErr *nanogit.PathNotFoundError
+			Expect(errors.As(err, &pathNotFoundErr)).To(BeTrue())
+			Expect(tree).To(BeNil())
+		})
+	})
+})

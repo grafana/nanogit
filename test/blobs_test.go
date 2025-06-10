@@ -5,206 +5,214 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/test/helpers"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// TestGetBlob tests basic blob operations like GetBlob
-func (s *IntegrationTestSuite) TestGetBlob() {
-	s.Logger.Info("Setting up remote repository")
-	client, _, local := s.TestRepo()
+var _ = Describe("Blobs", func() {
+	Context("GetBlob operations", func() {
+		var (
+			client nanogit.Client
+			local  *helpers.LocalGitRepo
+		)
 
-	s.Logger.Info("Creating and committing test file")
-	testContent := []byte("test content")
-	local.CreateFile("blob.txt", string(testContent))
-	local.Git("add", "blob.txt")
-	local.Git("commit", "-m", "Initial commit")
-	local.Git("push", "origin", "main", "--force")
-
-	s.Logger.Info("Getting blob hash", "file", "blob.txt")
-	blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
-	s.NoError(err)
-
-	s.Run("GetBlob with valid hash", func() {
-		s.T().Parallel()
-
-		s.Logger.Info("Testing GetBlob with valid hash", "hash", blobHash.String())
-		blob, err := client.GetBlob(context.Background(), blobHash)
-		s.NoError(err)
-		s.Equal(testContent, blob.Content)
-		s.Equal(blobHash, blob.Hash)
-	})
-
-	s.Run("GetBlob with non-existent hash", func() {
-		s.T().Parallel()
-
-		s.Logger.Info("Testing GetBlob with non-existent hash")
-		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-		s.NoError(err)
-		_, err = client.GetBlob(context.Background(), nonExistentHash)
-		s.Error(err)
-		s.Contains(err.Error(), "not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-	})
-}
-
-// TestGetBlobByPath tests getting blobs by file paths.
-func (s *IntegrationTestSuite) TestGetBlobByPath() {
-	s.Logger.Info("Setting up remote repository")
-	client, _, local := s.TestRepo()
-
-	s.Logger.Info("Creating and committing test file")
-	testContent := []byte("test content")
-	local.CreateFile("blob.txt", string(testContent))
-	local.Git("add", "blob.txt")
-	local.Git("commit", "-m", "Initial commit")
-	local.Git("push", "origin", "main", "--force")
-
-	s.Logger.Info("Getting the commit hash")
-	commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
-	s.NoError(err)
-
-	s.Run("GetBlobByPath with existing file", func() {
-		s.T().Parallel()
-
-		file, err := client.GetBlobByPath(context.Background(), commitHash, "blob.txt")
-		if err != nil {
-			s.T().Logf("Failed to get file with hash %s and path %s: %v", commitHash, "blob.txt", err)
-		}
-		s.NoError(err)
-		s.Equal(testContent, file.Content)
-
-		fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
-		s.NoError(err)
-		s.Equal(fileHash, file.Hash)
-	})
-
-	s.Run("GetBlobByPath with non-existent file", func() {
-		s.T().Parallel()
-
-		_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent.txt")
-		s.Error(err)
-		// Check for structured PathNotFoundError
-		var pathNotFoundErr *nanogit.PathNotFoundError
-		s.ErrorAs(err, &pathNotFoundErr)
-		s.Equal("nonexistent.txt", pathNotFoundErr.Path)
-	})
-
-	s.Run("GetBlobByPath with non-existent hash", func() {
-		s.T().Parallel()
-
-		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
-		s.NoError(err)
-		_, err = client.GetBlobByPath(context.Background(), nonExistentHash, "blob.txt")
-		s.Error(err)
-		s.Contains(err.Error(), "not our ref")
-	})
-}
-
-// TestGetBlobByPathNestedDirectories tests GetBlobByPath with nested directory structures
-func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
-	s.Logger.Info("Setting up remote repository")
-	client, _, local := s.TestRepo()
-
-	s.Logger.Info("Creating nested directory structure with files")
-	local.CreateDirPath("dir1/subdir1")
-	local.CreateDirPath("dir1/subdir2")
-	local.CreateDirPath("dir2")
-
-	// Create files at various levels
-	rootContent := []byte("root file content")
-	local.CreateFile("root.txt", string(rootContent))
-
-	dir1Content := []byte("dir1 file content")
-	local.CreateFile("dir1/file1.txt", string(dir1Content))
-
-	nestedContent := []byte("deeply nested content")
-	local.CreateFile("dir1/subdir1/nested.txt", string(nestedContent))
-
-	dir2Content := []byte("dir2 file content")
-	local.CreateFile("dir2/file2.txt", string(dir2Content))
-
-	s.Logger.Info("Adding and committing all files")
-	local.Git("add", ".")
-	local.Git("commit", "-m", "Initial commit with nested structure")
-	local.Git("push", "origin", "main", "--force")
-
-	s.Logger.Info("Getting the commit hash")
-	commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
-	s.NoError(err)
-
-	tests := []struct {
-		name        string
-		path        string
-		expected    []byte
-		expectedErr interface{}
-	}{
-		{
-			name:        "root file",
-			path:        "root.txt",
-			expected:    rootContent,
-			expectedErr: nil,
-		},
-		{
-			name:        "file in first level directory",
-			path:        "dir1/file1.txt",
-			expected:    dir1Content,
-			expectedErr: nil,
-		},
-		{
-			name:        "deeply nested file",
-			path:        "dir1/subdir1/nested.txt",
-			expected:    nestedContent,
-			expectedErr: nil,
-		},
-		{
-			name:        "file in different directory",
-			path:        "dir2/file2.txt",
-			expected:    dir2Content,
-			expectedErr: nil,
-		},
-		{
-			name:        "nonexistent file in existing directory",
-			path:        "dir1/nonexistent.txt",
-			expected:    nil,
-			expectedErr: &nanogit.PathNotFoundError{},
-		},
-		{
-			name:        "file in nonexistent directory",
-			path:        "nonexistent/file.txt",
-			expected:    nil,
-			expectedErr: &nanogit.PathNotFoundError{},
-		},
-		{
-			name:        "empty path",
-			path:        "",
-			expected:    nil,
-			expectedErr: &nanogit.PathNotFoundError{},
-		},
-		{
-			name:        "path pointing to directory instead of file",
-			path:        "dir1",
-			expected:    nil,
-			expectedErr: &nanogit.UnexpectedObjectTypeError{},
-		},
-	}
-
-	for _, tt := range tests {
-		s.Run(tt.name, func() {
-			s.T().Parallel()
-
-			file, err := client.GetBlobByPath(context.Background(), commitHash, tt.path)
-			if tt.expectedErr != nil {
-				s.Error(err)
-				s.ErrorAs(err, &tt.expectedErr)
-				s.Nil(file)
-				return
-			}
-
-			s.NoError(err, "Failed to get file for path: %s", tt.path)
-			s.Equal(tt.expected, file.Content)
-
-			// Verify the hash matches what Git CLI returns
-			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:"+tt.path))
-			s.NoError(err)
-			s.Equal(expectedHash, file.Hash)
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
 		})
-	}
-}
+
+		It("should get blob with valid hash", func() {
+			By("Creating and committing test file")
+			testContent := []byte("test content")
+			local.CreateFile("blob.txt", string(testContent))
+			local.Git("add", "blob.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting blob hash")
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Testing GetBlob with valid hash")
+			blob, err := client.GetBlob(context.Background(), blobHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blob.Content).To(Equal(testContent))
+			Expect(blob.Hash).To(Equal(blobHash))
+		})
+
+		It("should fail to get blob with non-existent hash", func() {
+			By("Testing GetBlob with non-existent hash")
+			nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.GetBlob(context.Background(), nonExistentHash)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0"))
+		})
+	})
+
+	Context("GetBlobByPath operations", func() {
+		var (
+			client     nanogit.Client
+			local      *helpers.LocalGitRepo
+			commitHash hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating and committing test file")
+			testContent := []byte("test content")
+			local.CreateFile("blob.txt", string(testContent))
+			local.Git("add", "blob.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should get blob by path with existing file", func() {
+			testContent := []byte("test content")
+
+			By("Getting blob by path")
+			file, err := client.GetBlobByPath(context.Background(), commitHash, "blob.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Content).To(Equal(testContent))
+
+			By("Verifying hash matches Git CLI")
+			fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Hash).To(Equal(fileHash))
+		})
+
+		It("should fail to get blob by path with non-existent file", func() {
+			By("Attempting to get non-existent file")
+			_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent.txt")
+			Expect(err).To(HaveOccurred())
+
+			By("Verifying correct error type")
+			var pathNotFoundErr *nanogit.PathNotFoundError
+			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
+			Expect(err.(*nanogit.PathNotFoundError).Path).To(Equal("nonexistent.txt"))
+		})
+
+		It("should fail to get blob by path with non-existent hash", func() {
+			By("Testing with non-existent commit hash")
+			nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.GetBlobByPath(context.Background(), nonExistentHash, "blob.txt")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not our ref"))
+		})
+	})
+
+	Context("GetBlobByPath with nested directories", func() {
+		var (
+			client     nanogit.Client
+			local      *helpers.LocalGitRepo
+			commitHash hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating nested directory structure with files")
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir1/subdir2")
+			local.CreateDirPath("dir2")
+
+			// Create files at various levels
+			local.CreateFile("root.txt", "root file content")
+			local.CreateFile("dir1/file1.txt", "dir1 file content")
+			local.CreateFile("dir1/subdir1/nested.txt", "deeply nested content")
+			local.CreateFile("dir2/file2.txt", "dir2 file content")
+
+			By("Adding and committing all files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested structure")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should get root file", func() {
+			file, err := client.GetBlobByPath(context.Background(), commitHash, "root.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(file.Content)).To(Equal("root file content"))
+
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:root.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Hash).To(Equal(expectedHash))
+		})
+
+		It("should get file in first level directory", func() {
+			file, err := client.GetBlobByPath(context.Background(), commitHash, "dir1/file1.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(file.Content)).To(Equal("dir1 file content"))
+
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir1/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Hash).To(Equal(expectedHash))
+		})
+
+		It("should get deeply nested file", func() {
+			file, err := client.GetBlobByPath(context.Background(), commitHash, "dir1/subdir1/nested.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(file.Content)).To(Equal("deeply nested content"))
+
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir1/subdir1/nested.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Hash).To(Equal(expectedHash))
+		})
+
+		It("should get file in different directory", func() {
+			file, err := client.GetBlobByPath(context.Background(), commitHash, "dir2/file2.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(file.Content)).To(Equal("dir2 file content"))
+
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Hash).To(Equal(expectedHash))
+		})
+
+		It("should fail with nonexistent file in existing directory", func() {
+			_, err := client.GetBlobByPath(context.Background(), commitHash, "dir1/nonexistent.txt")
+			Expect(err).To(HaveOccurred())
+
+			var pathNotFoundErr *nanogit.PathNotFoundError
+			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
+		})
+
+		It("should fail with file in nonexistent directory", func() {
+			_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent/file.txt")
+			Expect(err).To(HaveOccurred())
+
+			var pathNotFoundErr *nanogit.PathNotFoundError
+			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
+		})
+
+		It("should fail with empty path", func() {
+			_, err := client.GetBlobByPath(context.Background(), commitHash, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("path cannot be empty"))
+		})
+
+		It("should fail when path points to directory instead of file", func() {
+			_, err := client.GetBlobByPath(context.Background(), commitHash, "dir1")
+			Expect(err).To(HaveOccurred())
+
+			var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
+			Expect(err).To(BeAssignableToTypeOf(unexpectedTypeErr))
+		})
+	})
+})

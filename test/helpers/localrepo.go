@@ -5,33 +5,32 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/stretchr/testify/require"
+	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 // LocalGitRepo represents a local Git repository used for testing.
 // It provides methods to initialize, modify, and manage a Git repository
 // in a temporary directory.
 type LocalGitRepo struct {
-	logger      *TestLogger
-	Path        string // Path to the local Git repository
-	currentTest func() *testing.T
+	logger *TestLogger
+	Path   string // Path to the local Git repository
 }
 
 // NewLocalGitRepo creates a new LocalGitRepo instance with a temporary directory
 // as its path. The temporary directory is automatically cleaned up when the test
 // completes.
-func NewLocalGitRepo(currentTest func() *testing.T, logger *TestLogger) *LocalGitRepo {
-	p := currentTest().TempDir()
-	currentTest().Cleanup(func() {
+func NewLocalGitRepo(logger *TestLogger) *LocalGitRepo {
+	p := ginkgo.GinkgoT().TempDir()
+	ginkgo.DeferCleanup(func() {
 		logger.Info("📦 [LOCAL] 🧹 Cleaning up local repository", "path", p)
-		require.NoError(currentTest(), os.RemoveAll(p))
+		Expect(os.RemoveAll(p)).NotTo(HaveOccurred())
 	})
 
 	logger.Info("📦 [LOCAL] 📁 Creating new local repository at %s", p)
-	r := &LocalGitRepo{Path: p, logger: logger, currentTest: currentTest}
+	r := &LocalGitRepo{Path: p, logger: logger}
 	r.Git("init")
 	logger.Success("📦 [LOCAL] Local repository initialized successfully")
 	return r
@@ -42,7 +41,7 @@ func NewLocalGitRepo(currentTest func() *testing.T, logger *TestLogger) *LocalGi
 func (r *LocalGitRepo) CreateDirPath(dirpath string) {
 	r.logger.Info("📦 [LOCAL] 📁 Creating directory path '%s' in repository", dirpath)
 	err := os.MkdirAll(filepath.Join(r.Path, dirpath), 0755)
-	require.NoError(r.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	r.logger.Success("📦 [LOCAL] Directory path '%s' created successfully", dirpath)
 }
 
@@ -51,7 +50,7 @@ func (r *LocalGitRepo) CreateDirPath(dirpath string) {
 func (r *LocalGitRepo) CreateFile(filename, content string) {
 	r.logger.Info("📦 [LOCAL] 📝 Creating file '%s' in repository", filename)
 	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
-	require.NoError(r.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	r.logger.Success("📦 [LOCAL] 📝 File '%s' created successfully", filename)
 }
 
@@ -60,7 +59,7 @@ func (r *LocalGitRepo) CreateFile(filename, content string) {
 func (r *LocalGitRepo) UpdateFile(filename, content string) {
 	r.logger.Info("📦 [LOCAL] 📝 Updating file '%s' in repository", filename)
 	err := os.WriteFile(filepath.Join(r.Path, filename), []byte(content), 0600)
-	require.NoError(r.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	r.logger.Success("📦 [LOCAL] 📝 File '%s' updated successfully", filename)
 }
 
@@ -96,7 +95,7 @@ func (r *LocalGitRepo) Git(args ...string) string {
 			}
 		}
 		r.logger.Logf("%s📦 [LOCAL] %s└─────────────────────────────────────────────┘%s", ColorRed, ColorPurple, ColorReset)
-		require.NoError(r.currentTest(), err, "git command failed: %s\nOutput: %s", cmdStr, output)
+		Expect(err).NotTo(HaveOccurred(), "git command failed: %s\nOutput: %s", cmdStr, output)
 	} else if len(output) > 0 {
 		// Add output to the same box
 		r.logger.Logf("%s📦 [LOCAL] %s├─────────────────────────────────────────────┤%s", ColorCyan, ColorPurple, ColorReset)
@@ -134,7 +133,7 @@ func (r *LocalGitRepo) QuickInit(user *User, remoteURL string) (client nanogit.C
 	r.Git("branch", "--set-upstream-to=origin/main", "main")
 
 	client, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password))
-	require.NoError(r.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	return client, "test.txt"
 }
 
@@ -143,7 +142,7 @@ func (r *LocalGitRepo) LogRepoContents() {
 	var printDir func(path string, indent string)
 	printDir = func(path string, indent string) {
 		files, err := os.ReadDir(path)
-		require.NoError(r.currentTest(), err)
+		Expect(err).NotTo(HaveOccurred())
 		for _, file := range files {
 			fullPath := filepath.Join(path, file.Name())
 			if file.IsDir() {

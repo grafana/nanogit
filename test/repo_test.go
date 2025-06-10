@@ -4,40 +4,48 @@ import (
 	"context"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/test/helpers"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// TestClient_RepoExists tests repository existence functionality
-func (s *IntegrationTestSuite) TestRepoExists() {
-	client, remote, _ := s.TestRepo()
+var _ = Describe("Repository", func() {
+	Context("RepoExists functionality", func() {
+		var (
+			client nanogit.Client
+			remote *helpers.RemoteRepo
+		)
 
-	s.Run("existing repository", func() {
-		s.T().Parallel()
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, remote, _, _ = QuickSetup()
+		})
 
-		exists, err := client.RepoExists(context.Background())
-		s.NoError(err)
-		s.True(exists)
+		It("should confirm existence of existing repository", func() {
+			exists, err := client.RepoExists(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+		})
+
+		It("should handle non-existent repository", func() {
+			By("Creating client for non-existent repository")
+			nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(remote.User.Username, remote.User.Password))
+			Expect(err).NotTo(HaveOccurred())
+
+			exists, err := nonExistentClient.RepoExists(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("should handle unauthorized access", func() {
+			By("Creating client with wrong credentials")
+			unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
+			Expect(err).NotTo(HaveOccurred())
+
+			exists, err := unauthorizedClient.RepoExists(context.Background())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("401 Unauthorized"))
+			Expect(exists).To(BeFalse())
+		})
 	})
-
-	s.Run("non-existent repository", func() {
-		s.T().Parallel()
-
-		nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(remote.User.Username, remote.User.Password))
-		s.NoError(err)
-
-		exists, err := nonExistentClient.RepoExists(context.Background())
-		s.NoError(err)
-		s.False(exists)
-	})
-
-	s.Run("unauthorized access", func() {
-		s.T().Parallel()
-
-		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
-		s.NoError(err)
-
-		exists, err := unauthorizedClient.RepoExists(context.Background())
-		s.Error(err)
-		s.Contains(err.Error(), "401 Unauthorized")
-		s.False(exists)
-	})
-}
+})

@@ -3,33 +3,22 @@ package helpers
 import (
 	"fmt"
 	"strings"
-	"sync"
-	"testing"
+
+	"github.com/onsi/ginkgo/v2"
 )
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
-type TestLogger struct {
-	getCurrentT func() *testing.T // Function to get current test context
-	mu          sync.Mutex        // Protects concurrent access to testing.T
+// It uses Ginkgo's native logging capabilities for thread-safe output.
+type TestLogger struct{}
+
+// NewTestLogger creates a new TestLogger for Ginkgo tests.
+func NewTestLogger() *TestLogger {
+	return &TestLogger{}
 }
 
-// NewSuiteLogger creates a new TestLogger that automatically uses the current test context from a suite.
-func NewSuiteLogger(getCurrentT func() *testing.T) *TestLogger {
-	return &TestLogger{
-		getCurrentT: getCurrentT,
-	}
-}
-
-// getCurrentTestContext returns the current test context, either from the function or the stored t
-func (l *TestLogger) getCurrentTestContext() *testing.T {
-	return l.getCurrentT()
-}
-
-// Logf logs a message to the test output with colors and emojis.
+// Logf logs a message to the Ginkgo test output with colors and emojis.
 func (l *TestLogger) Logf(format string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.getCurrentTestContext().Logf(format, args...)
+	ginkgo.GinkgoWriter.Printf(format+"\n", args...)
 }
 
 // Debug implements nanogit.Logger.
@@ -57,14 +46,8 @@ func (l *TestLogger) Success(msg string, keysAndValues ...any) {
 	l.log("Success", msg, keysAndValues)
 }
 
-// log is a helper method to log messages and store them in entries.
+// log is a helper method to log messages with proper formatting.
 func (l *TestLogger) log(level, msg string, args []any) {
-	// Protect concurrent access to testing.T
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	currentT := l.getCurrentTestContext()
-
 	// Format the message with key-value pairs
 	formattedMsg := msg
 	if len(args) > 0 {
@@ -77,17 +60,17 @@ func (l *TestLogger) log(level, msg string, args []any) {
 		formattedMsg = fmt.Sprintf("%s (%s)", msg, strings.Join(pairs, ", "))
 	}
 
-	// Log to test output with colors and emojis
+	// Log to Ginkgo output with colors and emojis
 	switch level {
 	case "Debug":
-		currentT.Logf("%s🔍 [DEBUG] %s%s", ColorGray, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s🔍 [DEBUG] %s%s\n", ColorGray, formattedMsg, ColorReset)
 	case "Info":
-		currentT.Logf("%sℹ️  [INFO] %s%s", ColorBlue, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%sℹ️  [INFO] %s%s\n", ColorBlue, formattedMsg, ColorReset)
 	case "Warn":
-		currentT.Logf("%s⚠️  [WARN] %s%s", ColorYellow, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s⚠️  [WARN] %s%s\n", ColorYellow, formattedMsg, ColorReset)
 	case "Error":
-		currentT.Logf("%s❌ [ERROR] %s%s", ColorRed, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s❌ [ERROR] %s%s\n", ColorRed, formattedMsg, ColorReset)
 	case "Success":
-		currentT.Logf("%s✅ [SUCCESS] %s%s", ColorGreen, formattedMsg, ColorReset)
+		ginkgo.GinkgoWriter.Printf("%s✅ [SUCCESS] %s%s\n", ColorGreen, formattedMsg, ColorReset)
 	}
 }

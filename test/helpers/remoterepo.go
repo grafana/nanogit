@@ -2,29 +2,26 @@ package helpers
 
 import (
 	"fmt"
-	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/gomega"
 )
 
 type RemoteRepo struct {
-	RepoName    string
-	User        *User
-	Host        string
-	Port        string
-	logger      *TestLogger
-	currentTest func() *testing.T
+	RepoName string
+	User     *User
+	Host     string
+	Port     string
+	logger   *TestLogger
 }
 
-func NewRemoteRepo(currentTest func() *testing.T, logger *TestLogger, repoName string, user *User, host, port string) *RemoteRepo {
+func NewRemoteRepo(logger *TestLogger, repoName string, user *User, host, port string) *RemoteRepo {
 	return &RemoteRepo{
-		logger:      logger,
-		currentTest: currentTest,
-		RepoName:    repoName,
-		User:        user,
-		Host:        host,
-		Port:        port,
+		logger:   logger,
+		RepoName: repoName,
+		User:     user,
+		Host:     host,
+		Port:     port,
 	}
 }
 
@@ -38,12 +35,12 @@ func (r *RemoteRepo) AuthURL() string {
 
 func (r *RemoteRepo) Client() nanogit.Client {
 	client, err := nanogit.NewHTTPClient(r.URL(), nanogit.WithBasicAuth(r.User.Username, r.User.Password), nanogit.WithLogger(r.logger))
-	require.NoError(r.currentTest(), err)
+	Expect(err).NotTo(HaveOccurred())
 	return client
 }
 
 func (r *RemoteRepo) Local() *LocalGitRepo {
-	local := NewLocalGitRepo(r.currentTest, r.logger)
+	local := NewLocalGitRepo(r.logger)
 	local.Git("config", "user.name", r.User.Username)
 	local.Git("config", "user.email", r.User.Email)
 	local.Git("remote", "add", "origin", r.AuthURL())
@@ -51,7 +48,7 @@ func (r *RemoteRepo) Local() *LocalGitRepo {
 }
 
 func (r *RemoteRepo) QuickInit() (nanogit.Client, *LocalGitRepo) {
-	local := NewLocalGitRepo(r.currentTest, r.logger)
+	local := NewLocalGitRepo(r.logger)
 	client, _ := local.QuickInit(r.User, r.AuthURL())
 	return client, local
 }
