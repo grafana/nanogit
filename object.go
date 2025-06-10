@@ -156,9 +156,9 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 			break
 		}
 
-		// Skip tree objects as they are included in the response
-		// despite requesting blob:none filter, since most Git servers
-		// don't support the tree:0 filter specification
+		// Skip tree objects that are included in the response despite the blob:none filter.
+		// Most Git servers don't support tree:0 filter specification, so we may receive
+		// recursive tree objects that we need to filter out.
 		if obj.Object.Type == protocol.ObjectTypeTree {
 			continue
 		}
@@ -170,6 +170,7 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 		objects[obj.Object.Hash.String()] = obj.Object
 	}
 
+	// we got more commits than expected
 	if len(objects) > 1 {
 		return nil, NewUnexpectedObjectCountError(1, objects)
 	}
