@@ -29,8 +29,7 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
-	// TODO: optimize this one
-	obj, err := c.getSingleObject(ctx, blobID)
+	obj, err := c.getBlob(ctx, blobID)
 	if err != nil {
 		return nil, fmt.Errorf("get object: %w", err)
 	}
@@ -83,7 +82,6 @@ type Blob struct {
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
-	// TODO: optimize this one
 	if path == "" {
 		return nil, errors.New("path cannot be empty")
 	}

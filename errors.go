@@ -2,6 +2,9 @@ package nanogit
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -27,6 +30,10 @@ var (
 	// ErrNothingToCommit is returned when attempting to commit but no changes have been staged.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrNothingToCommit = errors.New("nothing to commit")
+
+	// ErrUnexpectedObjectCount is returned when the number of objects returned by the server is unexpected.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrUnexpectedObjectCount = errors.New("unexpected object count")
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
@@ -68,6 +75,35 @@ func (e *ObjectAlreadyExistsError) Unwrap() error {
 func NewObjectAlreadyExistsError(objectID hash.Hash) *ObjectAlreadyExistsError {
 	return &ObjectAlreadyExistsError{
 		ObjectID: objectID,
+	}
+}
+
+// UnexpectedObjectCountError provides structured information about a Git object with an unexpected count.
+type UnexpectedObjectCountError struct {
+	ExpectedCount int
+	ActualCount   int
+	Objects       map[string]*protocol.PackfileObject
+}
+
+func (e *UnexpectedObjectCountError) Error() string {
+	objectNames := make([]string, 0, len(e.Objects))
+	for _, obj := range e.Objects {
+		objectNames = append(objectNames, fmt.Sprintf("%s/%s", obj.Type.String(), obj.Hash.String()))
+	}
+	return "unexpected object count: expected " + strconv.Itoa(e.ExpectedCount) + " but got " + strconv.Itoa(e.ActualCount) + " objects: " + strings.Join(objectNames, ", ")
+}
+
+// Unwrap enables errors.Is() compatibility with ErrUnexpectedObjectCount
+func (e *UnexpectedObjectCountError) Unwrap() error {
+	return ErrUnexpectedObjectCount
+}
+
+// NewUnexpectedObjectCountError creates a new UnexpectedObjectCountError with the specified details.
+func NewUnexpectedObjectCountError(expectedCount int, objects map[string]*protocol.PackfileObject) *UnexpectedObjectCountError {
+	return &UnexpectedObjectCountError{
+		ExpectedCount: expectedCount,
+		ActualCount:   len(objects),
+		Objects:       objects,
 	}
 }
 

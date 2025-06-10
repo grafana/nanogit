@@ -2,7 +2,6 @@ package nanogit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -504,7 +503,7 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects map[string]*prot
 //
 // Parameters:
 //   - ctx: Context for the operation
-//   - h: Hash of either a tree object or commit object
+//   - h: Hash of either a tree object
 //
 // Returns:
 //   - *Tree: Tree object containing direct children only
@@ -521,30 +520,9 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects map[string]*prot
 //	    }
 //	}
 func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
-	// TODO: optimize this one
-	obj, err := c.getSingleObject(ctx, h)
+	tree, err := c.getTree(ctx, h)
 	if err != nil {
-		return nil, fmt.Errorf("getting object: %w", err)
-	}
-
-	var tree *protocol.PackfileObject
-	if obj.Type == protocol.ObjectTypeCommit && obj.Hash.Is(h) {
-		// If it's a commit, get the tree hash from it
-		treeHash, err := hash.FromHex(obj.Commit.Tree.String())
-		if err != nil {
-			return nil, fmt.Errorf("parsing tree hash: %w", err)
-		}
-
-		treeObj, err := c.getSingleObject(ctx, treeHash)
-		if err != nil {
-			return nil, fmt.Errorf("getting tree: %w", err)
-		}
-		tree = treeObj
-		h = treeHash
-	} else if obj.Type == protocol.ObjectTypeTree && obj.Hash.Is(h) {
-		tree = obj
-	} else {
-		return nil, errors.New("not found")
+		return nil, fmt.Errorf("get tree object: %w", err)
 	}
 
 	// Convert PackfileTreeEntry to TreeEntry (direct children only)
@@ -604,7 +582,6 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 //	    fmt.Printf("%s\n", entry.Name)
 //	}
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
-	// TODO: optimize this one
 	if path == "" || path == "." {
 		// Return the root tree
 		return c.GetTree(ctx, rootHash)
