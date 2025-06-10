@@ -56,9 +56,9 @@ var _ = Describe("Blobs", func() {
 
 	Context("GetBlobByPath operations", func() {
 		var (
-			client     nanogit.Client
-			local      *helpers.LocalGitRepo
-			commitHash hash.Hash
+			client   nanogit.Client
+			local    *helpers.LocalGitRepo
+			rootHash hash.Hash
 		)
 
 		BeforeEach(func() {
@@ -74,7 +74,7 @@ var _ = Describe("Blobs", func() {
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			rootHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -82,7 +82,7 @@ var _ = Describe("Blobs", func() {
 			testContent := []byte("test content")
 
 			By("Getting blob by path")
-			file, err := client.GetBlobByPath(context.Background(), commitHash, "blob.txt")
+			file, err := client.GetBlobByPath(context.Background(), rootHash, "blob.txt")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(file.Content).To(Equal(testContent))
 
@@ -94,7 +94,7 @@ var _ = Describe("Blobs", func() {
 
 		It("should fail to get blob by path with non-existent file", func() {
 			By("Attempting to get non-existent file")
-			_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent.txt")
+			_, err := client.GetBlobByPath(context.Background(), rootHash, "nonexistent.txt")
 			Expect(err).To(HaveOccurred())
 
 			By("Verifying correct error type")
@@ -120,9 +120,9 @@ var _ = Describe("Blobs", func() {
 
 	Context("GetBlobByPath with nested directories", func() {
 		var (
-			client     nanogit.Client
-			local      *helpers.LocalGitRepo
-			commitHash hash.Hash
+			client   nanogit.Client
+			local    *helpers.LocalGitRepo
+			rootHash hash.Hash
 		)
 
 		BeforeEach(func() {
@@ -147,12 +147,12 @@ var _ = Describe("Blobs", func() {
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			rootHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should get root file", func() {
-			file, err := client.GetBlobByPath(context.Background(), commitHash, "root.txt")
+			file, err := client.GetBlobByPath(context.Background(), rootHash, "root.txt")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("root file content"))
 
@@ -162,7 +162,7 @@ var _ = Describe("Blobs", func() {
 		})
 
 		It("should get file in first level directory", func() {
-			file, err := client.GetBlobByPath(context.Background(), commitHash, "dir1/file1.txt")
+			file, err := client.GetBlobByPath(context.Background(), rootHash, "dir1/file1.txt")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("dir1 file content"))
 
@@ -172,7 +172,7 @@ var _ = Describe("Blobs", func() {
 		})
 
 		It("should get deeply nested file", func() {
-			file, err := client.GetBlobByPath(context.Background(), commitHash, "dir1/subdir1/nested.txt")
+			file, err := client.GetBlobByPath(context.Background(), rootHash, "dir1/subdir1/nested.txt")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("deeply nested content"))
 
@@ -182,7 +182,7 @@ var _ = Describe("Blobs", func() {
 		})
 
 		It("should get file in different directory", func() {
-			file, err := client.GetBlobByPath(context.Background(), commitHash, "dir2/file2.txt")
+			file, err := client.GetBlobByPath(context.Background(), rootHash, "dir2/file2.txt")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("dir2 file content"))
 
@@ -192,7 +192,7 @@ var _ = Describe("Blobs", func() {
 		})
 
 		It("should fail with nonexistent file in existing directory", func() {
-			_, err := client.GetBlobByPath(context.Background(), commitHash, "dir1/nonexistent.txt")
+			_, err := client.GetBlobByPath(context.Background(), rootHash, "dir1/nonexistent.txt")
 			Expect(err).To(HaveOccurred())
 
 			var pathNotFoundErr *nanogit.PathNotFoundError
@@ -200,7 +200,7 @@ var _ = Describe("Blobs", func() {
 		})
 
 		It("should fail with file in nonexistent directory", func() {
-			_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent/file.txt")
+			_, err := client.GetBlobByPath(context.Background(), rootHash, "nonexistent/file.txt")
 			Expect(err).To(HaveOccurred())
 
 			var pathNotFoundErr *nanogit.PathNotFoundError
@@ -208,13 +208,13 @@ var _ = Describe("Blobs", func() {
 		})
 
 		It("should fail with empty path", func() {
-			_, err := client.GetBlobByPath(context.Background(), commitHash, "")
+			_, err := client.GetBlobByPath(context.Background(), rootHash, "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("path cannot be empty"))
 		})
 
 		It("should fail when path points to directory instead of file", func() {
-			_, err := client.GetBlobByPath(context.Background(), commitHash, "dir1")
+			_, err := client.GetBlobByPath(context.Background(), rootHash, "dir1")
 			Expect(err).To(HaveOccurred())
 
 			var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
