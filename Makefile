@@ -16,6 +16,6 @@ test-unit:
 
 .PHONY: test-integration
 test-integration:
-	go run github.com/onsi/ginkgo/v2/ginkgo -r --race --randomize-all --randomize-suites --fail-on-pending --procs=6 ./test
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --race --randomize-all --randomize-suites --fail-on-pending -p ./test
 
 test: test-unit test-integration
