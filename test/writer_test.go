@@ -273,6 +273,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.CreateFile("dir/subdir/tobeupdated.txt", "original nested content")
 		local.Git("add", ".")
 		local.Git("commit", "-m", "Initial commit with nested file")
+		local.Git("branch", "-M", "main")
 		local.Git("push", "-u", "origin", "main", "--force")
 
 		client := remote.Client()
@@ -389,6 +390,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.CreateFile("dir/subdir/tobedeleted.txt", "nested content to be deleted")
 		local.Git("add", ".")
 		local.Git("commit", "-m", "Initial commit with nested file")
+		local.Git("branch", "-M", "main")
 		local.Git("push", "-u", "origin", "main", "--force")
 
 		client := remote.Client()
@@ -446,6 +448,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		local.CreateFile("shared/tobepreserved.txt", "content to be preserved")
 		local.Git("add", ".")
 		local.Git("commit", "-m", "Initial commit with shared directory")
+		local.Git("branch", "-M", "main")
 		local.Git("push", "-u", "origin", "main", "--force")
 
 		writer, _ := createWriterFromHead(context.Background(), client, local)
