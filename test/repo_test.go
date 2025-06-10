@@ -11,12 +11,16 @@ func (s *IntegrationTestSuite) TestRepoExists() {
 	client, remote, _ := s.TestRepo()
 
 	s.Run("existing repository", func() {
+		s.T().Parallel()
+
 		exists, err := client.RepoExists(context.Background())
 		s.NoError(err)
 		s.True(exists)
 	})
 
 	s.Run("non-existent repository", func() {
+		s.T().Parallel()
+
 		nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(remote.User.Username, remote.User.Password))
 		s.NoError(err)
 
@@ -26,6 +30,8 @@ func (s *IntegrationTestSuite) TestRepoExists() {
 	})
 
 	s.Run("unauthorized access", func() {
+		s.T().Parallel()
+
 		unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
 		s.NoError(err)
 

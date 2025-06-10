@@ -24,6 +24,8 @@ func (s *IntegrationTestSuite) TestGetBlob() {
 	s.NoError(err)
 
 	s.Run("GetBlob with valid hash", func() {
+		s.T().Parallel()
+
 		s.Logger.Info("Testing GetBlob with valid hash", "hash", blobHash.String())
 		blob, err := client.GetBlob(context.Background(), blobHash)
 		s.NoError(err)
@@ -32,6 +34,8 @@ func (s *IntegrationTestSuite) TestGetBlob() {
 	})
 
 	s.Run("GetBlob with non-existent hash", func() {
+		s.T().Parallel()
+
 		s.Logger.Info("Testing GetBlob with non-existent hash")
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 		s.NoError(err)
@@ -58,6 +62,8 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	s.NoError(err)
 
 	s.Run("GetBlobByPath with existing file", func() {
+		s.T().Parallel()
+
 		file, err := client.GetBlobByPath(context.Background(), commitHash, "blob.txt")
 		if err != nil {
 			s.T().Logf("Failed to get file with hash %s and path %s: %v", commitHash, "blob.txt", err)
@@ -71,6 +77,8 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	})
 
 	s.Run("GetBlobByPath with non-existent file", func() {
+		s.T().Parallel()
+
 		_, err := client.GetBlobByPath(context.Background(), commitHash, "nonexistent.txt")
 		s.Error(err)
 		// Check for structured PathNotFoundError
@@ -80,6 +88,8 @@ func (s *IntegrationTestSuite) TestGetBlobByPath() {
 	})
 
 	s.Run("GetBlobByPath with non-existent hash", func() {
+		s.T().Parallel()
+
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 		s.NoError(err)
 		_, err = client.GetBlobByPath(context.Background(), nonExistentHash, "blob.txt")
@@ -178,6 +188,8 @@ func (s *IntegrationTestSuite) TestGetBlobByPathNestedDirectories() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
+			s.T().Parallel()
+
 			file, err := client.GetBlobByPath(context.Background(), commitHash, tt.path)
 			if tt.expectedErr != nil {
 				s.Error(err)

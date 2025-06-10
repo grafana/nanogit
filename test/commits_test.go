@@ -42,6 +42,8 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	user := remote.User
 
 	s.Run("initial commit", func() {
+		s.T().Parallel()
+
 		commit, err := client.GetCommit(context.Background(), initialCommitHash)
 		s.NoError(err)
 
@@ -59,6 +61,8 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	})
 
 	s.Run("modify file commit", func() {
+		s.T().Parallel()
+
 		commit, err := client.GetCommit(context.Background(), modifyFileCommitHash)
 		s.NoError(err)
 
@@ -80,6 +84,8 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 	})
 
 	s.Run("rename file commit", func() {
+		s.T().Parallel()
+
 		commit, err := client.GetCommit(context.Background(), renameCommitHash)
 		s.NoError(err)
 
@@ -102,6 +108,8 @@ func (s *IntegrationTestSuite) TestGetCommit() {
 
 // TestCompareCommits tests comparing commits to see changes
 func (s *IntegrationTestSuite) TestCompareCommits() {
+	s.T().Parallel()
+
 	s.Logger.Info("Setting up remote repository")
 	client, _, local := s.TestRepo()
 
@@ -191,6 +199,7 @@ func (s *IntegrationTestSuite) TestCompareCommits() {
 // TestListCommits tests listing commits with various options and filters
 func (s *IntegrationTestSuite) TestListCommits() {
 	s.Run("ListCommits basic functionality", func() {
+		s.T().Parallel()
 
 		client, _, local := s.TestRepo()
 
@@ -230,6 +239,8 @@ func (s *IntegrationTestSuite) TestListCommits() {
 	})
 
 	s.Run("ListCommits with pagination", func() {
+		s.T().Parallel()
+
 		client, _, local := s.TestRepo()
 
 		// Create multiple commits
@@ -269,6 +280,7 @@ func (s *IntegrationTestSuite) TestListCommits() {
 	})
 
 	s.Run("ListCommits with path filter", func() {
+		s.T().Parallel()
 
 		client, _, local := s.TestRepo()
 
@@ -326,6 +338,8 @@ func (s *IntegrationTestSuite) TestListCommits() {
 	})
 
 	s.Run("ListCommits with time filters", func() {
+		s.T().Parallel()
+
 		client, _, local := s.TestRepo()
 
 		// Create first commit

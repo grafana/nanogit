@@ -10,6 +10,8 @@ import (
 
 // TestListRefs tests listing all references
 func (s *IntegrationTestSuite) TestListRefs() {
+	s.T().Parallel()
+
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local()
@@ -47,6 +49,8 @@ func (s *IntegrationTestSuite) TestListRefs() {
 
 // TestGetRef tests getting individual references
 func (s *IntegrationTestSuite) TestGetRef() {
+	s.T().Parallel()
+
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local()
@@ -76,6 +80,8 @@ func (s *IntegrationTestSuite) TestGetRef() {
 	}
 
 	s.Run("existing refs", func() {
+		s.T().Parallel()
+
 		s.Logger.Info("Getting refs one by one")
 		for _, wantRef := range wantRefs {
 			ref, err := client.GetRef(context.Background(), wantRef.Name)
@@ -86,6 +92,8 @@ func (s *IntegrationTestSuite) TestGetRef() {
 	})
 
 	s.Run("non-existent ref", func() {
+		s.T().Parallel()
+
 		s.Logger.Info("Getting ref with non-existent ref")
 		_, err := client.GetRef(context.Background(), "refs/heads/non-existent")
 
@@ -115,6 +123,8 @@ func (s *IntegrationTestSuite) TestCreateRef() {
 	client := remote.Client()
 
 	s.Run("create branch ref", func() {
+		s.T().Parallel()
+
 		s.Logger.Info("Creating ref with new-branch")
 		err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
 		s.NoError(err)
@@ -126,6 +136,8 @@ func (s *IntegrationTestSuite) TestCreateRef() {
 	})
 
 	s.Run("create tag ref", func() {
+		s.T().Parallel()
+
 		s.Logger.Info("Creating tag with v2.0.0")
 		err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
 		s.NoError(err)
@@ -139,6 +151,8 @@ func (s *IntegrationTestSuite) TestCreateRef() {
 
 // TestUpdateRef tests updating existing references
 func (s *IntegrationTestSuite) TestUpdateRef() {
+	s.T().Parallel()
+
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local()
@@ -201,6 +215,8 @@ func (s *IntegrationTestSuite) TestDeleteRef() {
 	client := remote.Client()
 
 	s.Run("delete branch ref", func() {
+		s.T().Parallel()
+
 		// Create a ref to delete
 		s.Logger.Info("Creating ref for delete test")
 		err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/delete-test", Hash: firstCommit})
@@ -220,6 +236,8 @@ func (s *IntegrationTestSuite) TestDeleteRef() {
 	})
 
 	s.Run("delete tag ref", func() {
+		s.T().Parallel()
+
 		// Create a tag to delete
 		s.Logger.Info("Creating tag for delete test")
 		err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/tags/delete-test", Hash: firstCommit})
@@ -241,6 +259,8 @@ func (s *IntegrationTestSuite) TestDeleteRef() {
 
 // TestRefsIntegrationFlow tests a complete workflow of ref operations
 func (s *IntegrationTestSuite) TestRefsIntegrationFlow() {
+	s.T().Parallel()
+
 	// Get fresh repository with initial setup
 	remote, _ := s.CreateTestRepo()
 	local := remote.Local()

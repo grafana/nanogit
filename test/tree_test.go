@@ -45,6 +45,7 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 	}
 
 	s.Run("successful flat tree retrieval", func() {
+		s.T().Parallel()
 
 		s.Logger.Info("Testing GetFlatTree")
 		tree, err := client.GetFlatTree(context.Background(), commitHash)
@@ -105,6 +106,7 @@ func (s *IntegrationTestSuite) TestGetFlatTree() {
 	})
 
 	s.Run("non-existent hash", func() {
+		s.T().Parallel()
 
 		s.Logger.Info("Testing GetFlatTree with non-existent hash")
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
@@ -152,6 +154,7 @@ func (s *IntegrationTestSuite) TestGetTree() {
 	}
 
 	s.Run("successful tree retrieval", func() {
+		s.T().Parallel()
 
 		s.Logger.Info("Testing GetTree")
 		tree, err := client.GetTree(context.Background(), treeHash)
@@ -193,6 +196,7 @@ func (s *IntegrationTestSuite) TestGetTree() {
 	})
 
 	s.Run("non-existent hash", func() {
+		s.T().Parallel()
 
 		s.Logger.Info("Testing GetTree with non-existent hash")
 		nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
@@ -305,6 +309,8 @@ func (s *IntegrationTestSuite) TestGetTreeByPath() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			s.T().Parallel()
+
 			tree, err := client.GetTreeByPath(context.Background(), treeHash, tc.path)
 			if tc.expectedError != nil {
 				s.Error(err)

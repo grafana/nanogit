@@ -56,6 +56,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// CREATE BLOB OPERATIONS
 	s.Run("new file", func() {
 		t := s.T()
+		t.Parallel()
 
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo()
@@ -118,6 +119,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("nested", func() {
 		t := s.T()
+		t.Parallel()
 
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo()
@@ -209,6 +211,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// UPDATE BLOB OPERATIONS
 	s.Run("update file", func() {
 		t := s.T()
+		t.Parallel()
 
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
@@ -262,6 +265,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("update nested", func() {
 		t := s.T()
+		t.Parallel()
 
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
@@ -330,6 +334,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	// DELETE BLOB OPERATIONS
 	s.Run("delete file", func() {
 		t := s.T()
+		t.Parallel()
 
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
@@ -379,6 +384,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 
 	s.Run("delete nested", func() {
 		t := s.T()
+		t.Parallel()
 
 		s.Logger.Info("Setting up remote repository")
 		remote, _ := s.CreateTestRepo()
@@ -428,6 +434,9 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	})
 
 	s.Run("delete missing", func() {
+		t := s.T()
+		t.Parallel()
+
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo()
 		writer, _ := createWriterFromHead(context.Background(), client, local)
@@ -438,6 +447,9 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 	})
 
 	s.Run("preserve others", func() {
+		t := s.T()
+		t.Parallel()
+
 		s.Logger.Info("Setting up remote repository")
 		client, _, local := s.GitServer.TestRepo()
 
@@ -487,7 +499,7 @@ func (s *IntegrationTestSuite) TestBlobOperations() {
 		s.NoError(err)
 		s.Equal([]byte("initial content"), initialContent)
 
-		verifyCommitAuthorship(s.T(), local)
+		verifyCommitAuthorship(t, local)
 	})
 }
 
