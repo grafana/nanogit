@@ -23,6 +23,17 @@ func FromHex(hs string) (Hash, error) {
 	return Hash(b), err
 }
 
+// MustFromHex is like FromHex but panics if the hex string is invalid.
+// It is intended for use in tests and other situations where the hex string
+// is known to be valid.
+func MustFromHex(hs string) Hash {
+	h, err := FromHex(hs)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
 func (h Hash) String() string {
 	return hex.EncodeToString(h)
 }
