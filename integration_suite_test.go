@@ -5,7 +5,6 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/internal/testhelpers"
-	helpers "github.com/grafana/nanogit/internal/testhelpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,8 +28,8 @@ func TestIntegrationSuite(t *testing.T) {
 var _ = BeforeSuite(func() {
 	By("Setting up shared Git server for integration tests")
 
-	logger = helpers.NewTestLogger()
-	gitServer = helpers.NewGitServer(logger)
+	logger = testhelpers.NewTestLogger()
+	gitServer = testhelpers.NewGitServer(logger)
 	logger.Success("🚀 Integration test suite setup complete")
 	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
 })
