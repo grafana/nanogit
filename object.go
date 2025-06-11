@@ -10,7 +10,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[string]*protocol.PackfileObject, error) {
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -69,6 +69,19 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object
+	}
+
+	if len(objects) == 0 {
+		return nil, NewObjectNotFoundError(want)
+	}
+
+	return objects, nil
+}
+
+func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	objects, err := c.getTreeObjects(ctx, want)
+	if err != nil {
+		return nil, fmt.Errorf("getting tree objects: %w", err)
 	}
 
 	// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects
@@ -242,8 +255,13 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 	return nil, NewObjectNotFoundError(want)
 }
 
+type getCommitTreeOptions struct {
+	deepen  int
+	shallow bool
+}
+
 // getRootTree fetches the root tree of the repository.
-func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash) (map[string]*protocol.PackfileObject, error) {
+func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, opts getCommitTreeOptions) (map[string]*protocol.PackfileObject, error) {
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -251,9 +269,17 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash) (m
 		protocol.PackLine("no-progress\n"),
 		protocol.PackLine("filter blob:none\n"),
 		protocol.PackLine(fmt.Sprintf("want %s\n", commitHash.String())),
-		protocol.PackLine(fmt.Sprintf("shallow %s\n", commitHash.String())),
-		protocol.PackLine("done\n"),
 	}
+
+	if opts.shallow {
+		packs = append(packs, protocol.PackLine(fmt.Sprintf("shallow %s\n", commitHash.String())))
+	}
+
+	if opts.deepen > 0 {
+		packs = append(packs, protocol.PackLine(fmt.Sprintf("deepen %d\n", opts.deepen)))
+	}
+
+	packs = append(packs, protocol.PackLine("done\n"))
 
 	pkt, err := protocol.FormatPacks(packs...)
 	if err != nil {
