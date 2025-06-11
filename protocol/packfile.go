@@ -405,6 +405,7 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 type PackfileWriter struct {
 	// Objects that will be written to the packfile
 	objects map[string]PackfileObject
+	// TODO: add unit test that we should not write the same object twice
 
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash

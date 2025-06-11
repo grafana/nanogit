@@ -28,7 +28,7 @@ func TestIntegrationSuite(t *testing.T) {
 var _ = BeforeSuite(func() {
 	By("Setting up shared Git server for integration tests")
 
-	logger = testhelpers.NewTestLogger()
+	logger = testhelpers.NewTestLogger(GinkgoWriter.Printf)
 	gitServer = testhelpers.NewGitServer(logger)
 	logger.Success("🚀 Integration test suite setup complete")
 	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +27,7 @@ func TestProviders(t *testing.T) {
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
 		nanogit.WithBasicAuth("git", os.Getenv("TEST_TOKEN")),
+		nanogit.WithLogger(testhelpers.NewTestLogger(t.Logf)),
 	)
 	require.NoError(t, err)
 	auth, err := client.IsAuthorized(context.Background())
@@ -224,7 +226,7 @@ func TestProviders(t *testing.T) {
 	require.Equal(t, commit.Hash, commits[2].Hash)
 
 	// List only last N commits for path
-
+	// add a couple of commits in between
 	_, err = writer.CreateBlob(context.Background(), "a/b/c/test2.txt", []byte("test content 2"))
 	require.NoError(t, err)
 	_, err = writer.Commit(context.Background(), "Add test file 2", author, committer)
