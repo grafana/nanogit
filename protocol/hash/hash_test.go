@@ -153,3 +153,40 @@ func TestHash_Is(t *testing.T) {
 		})
 	}
 }
+
+func TestMustFromHex(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		want      Hash
+		wantPanic bool
+	}{
+		{
+			name:      "valid hex string",
+			input:     "0123456789abcdef",
+			want:      Hash{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef},
+			wantPanic: false,
+		},
+		{
+			name:      "invalid hex string",
+			input:     "invalid",
+			want:      Zero,
+			wantPanic: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt // capture range variable
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if tt.wantPanic {
+				require.Panics(t, func() {
+					MustFromHex(tt.input)
+				})
+				return
+			}
+			got := MustFromHex(tt.input)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
