@@ -172,11 +172,11 @@ jobs:
         env:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
-          REPO_NAME: ${{ vars.GH_REPO_NAME }}
+          TEST_REPO: ${{ vars.GH_REPO_NAME }}
           TEST_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
         run: |
-          if [ -z "$REPO_NAME" ] || [ -z "$TEST_TOKEN" ]; then
-            echo "Skipping provider tests: REPO_NAME or TEST_TOKEN not set"
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN not set"
             exit 0
           fi
           make test-providers
