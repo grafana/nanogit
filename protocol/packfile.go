@@ -404,7 +404,8 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 // It maintains state about the objects being written and handles the packfile format.
 type PackfileWriter struct {
 	// Objects that will be written to the packfile
-	objects []PackfileObject
+	objects map[string]PackfileObject
+
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
 	// Buffer to store the final packfile
@@ -414,7 +415,7 @@ type PackfileWriter struct {
 // NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm.
 func NewPackfileWriter(algo crypto.Hash) *PackfileWriter {
 	return &PackfileWriter{
-		objects: make([]PackfileObject, 0),
+		objects: make(map[string]PackfileObject),
 		algo:    algo,
 	}
 }
@@ -433,7 +434,7 @@ func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
 	}
 	obj.Hash = h
 
-	w.objects = append(w.objects, obj)
+	w.objects[h.String()] = obj
 	return h, nil
 }
 
@@ -478,7 +479,7 @@ func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObj
 
 // AddObject adds an object to the packfile.
 func (w *PackfileWriter) AddObject(obj PackfileObject) {
-	w.objects = append(w.objects, obj)
+	w.objects[obj.Hash.String()] = obj
 }
 
 // HasObjects returns true if the writer has any objects staged for writing.
@@ -527,7 +528,7 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 	}
 	obj.Hash = h
 
-	w.objects = append(w.objects, obj)
+	w.objects[h.String()] = obj
 	return h, nil
 }
 

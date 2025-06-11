@@ -176,7 +176,7 @@ func TestProviders(t *testing.T) {
 
 	blobHash, err = writer.UpdateBlob(context.Background(), "a/b/c/test.txt", []byte("updated content"))
 	require.NoError(t, err)
-	_, err = writer.Commit(context.Background(), "Update test file", author, committer)
+	updateCommit, err := writer.Commit(context.Background(), "Update test file", author, committer)
 	require.NoError(t, err)
 	err = writer.Push(context.Background())
 	require.NoError(t, err)
@@ -199,11 +199,53 @@ func TestProviders(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, deleteCommit.Hash, branchRef.Hash)
 
-	// TODO: Skip this does not work as expected for Github
-	// commits, err := client.ListCommits(context.Background(), commit.Parent, nanogit.ListCommitsOptions{
-	// 	Path: "a/b/c/test.txt",
-	// })
-	// require.NoError(t, err)
-	// require.Len(t, commits, 1)
-	// require.Equal(t, commits[0].Hash, commit.Hash)
+	// List commits without options
+	commits, err := client.ListCommits(context.Background(), deleteCommit.Hash, nanogit.ListCommitsOptions{})
+	require.NoError(t, err)
+	require.Len(t, commits, 4)
+	require.Equal(t, deleteCommit.Hash, commits[0].Hash)
+	require.Equal(t, "Delete test file", commits[0].Message)
+	require.Equal(t, updateCommit.Hash, commits[1].Hash)
+	require.Equal(t, "Update test file", commits[1].Message)
+	require.Equal(t, commit.Hash, commits[2].Hash)
+	require.Equal(t, "Add test file", commits[2].Message)
+	require.Equal(t, commit.Parent, commits[3].Hash)
+
+	// List commits with path filter
+	commits, err = client.ListCommits(context.Background(), deleteCommit.Hash, nanogit.ListCommitsOptions{
+		Path: "a/b/c/test.txt",
+	})
+	require.NoError(t, err)
+	require.Len(t, commits, 3)
+	require.Equal(t, deleteCommit.Hash, commits[0].Hash)
+	require.Equal(t, "Delete test file", commits[0].Message)
+	require.Equal(t, updateCommit.Hash, commits[1].Hash)
+	require.Equal(t, "Update test file", commits[1].Message)
+	require.Equal(t, commit.Hash, commits[2].Hash)
+
+	// List only last N commits for path
+
+	_, err = writer.CreateBlob(context.Background(), "a/b/c/test2.txt", []byte("test content 2"))
+	require.NoError(t, err)
+	_, err = writer.Commit(context.Background(), "Add test file 2", author, committer)
+	require.NoError(t, err)
+
+	_, err = writer.CreateBlob(context.Background(), "a/b/c/test3.txt", []byte("test content 3"))
+	require.NoError(t, err)
+	lastCommit, err := writer.Commit(context.Background(), "Add test file 3", author, committer)
+	require.NoError(t, err)
+	err = writer.Push(context.Background())
+	require.NoError(t, err)
+
+	commits, err = client.ListCommits(context.Background(), lastCommit.Hash, nanogit.ListCommitsOptions{
+		PerPage: 2,
+		Page:    1,
+		Path:    "a/b/c/test.txt",
+	})
+	require.NoError(t, err)
+	require.Len(t, commits, 2)
+	require.Equal(t, deleteCommit.Hash, commits[0].Hash)
+	require.Equal(t, "Delete test file", commits[0].Message)
+	require.Equal(t, updateCommit.Hash, commits[1].Hash)
+	require.Equal(t, "Update test file", commits[1].Message)
 }
