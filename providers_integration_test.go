@@ -19,6 +19,10 @@ func TestProviders(t *testing.T) {
 		t.Skip("Skipping testproviders suite in short mode")
 	}
 
+	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" {
+		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN not set")
+	}
+
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Test Providers Suite")
 }
@@ -27,17 +31,11 @@ var _ = Describe("Providers", func() {
 	var client nanogit.Client
 
 	BeforeEach(func() {
-		By("Getting credentials from environment")
-		repo := os.Getenv("TEST_REPO")
-		token := os.Getenv("TEST_TOKEN")
-		Expect(repo).NotTo(BeEmpty(), "TEST_REPO environment variable must be set")
-		Expect(token).NotTo(BeEmpty(), "TEST_TOKEN environment variable must be set")
-
-		By("Creating GitHub client")
+		By("Creating client")
 		var err error
 		client, err = nanogit.NewHTTPClient(
-			fmt.Sprintf("https://github.com/%s.git", repo),
-			nanogit.WithBasicAuth("git", token),
+			os.Getenv("TEST_REPO"),
+			nanogit.WithBasicAuth("git", os.Getenv("TEST_TOKEN")),
 			nanogit.WithLogger(testhelpers.NewTestLogger()),
 		)
 		Expect(err).NotTo(HaveOccurred())
