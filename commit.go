@@ -366,7 +366,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		allObjects.AddMap(objects)
 		commit, exists := allObjects.Get(currentHash)
 		if !exists || commit.Type != protocol.ObjectTypeCommit {
-			return nil, fmt.Errorf("commit %s not found", currentHash.String())
+			return nil, fmt.Errorf("queued commit %s not found", currentHash.String())
 		}
 
 		// Apply filters
@@ -493,7 +493,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		allObjects.AddMap(objects)
 		commit, exists = allObjects.Get(commitHash)
 		if !exists {
-			return hash.Zero, fmt.Errorf("commit %s not found", commitHash.String())
+			return hash.Zero, fmt.Errorf("commit %s not found after fetching", commitHash.String())
 		}
 	}
 
