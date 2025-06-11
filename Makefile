@@ -21,6 +21,10 @@ test-unit:
 test-integration:
 	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p -focus "Integration"
 
+.PHONY: test-providers
+test-providers:
+	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p -focus "Providers"
+
 test: test-unit test-integration
 
 test-coverage:

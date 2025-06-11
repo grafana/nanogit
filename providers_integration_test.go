@@ -1,9 +1,10 @@
-package testproviders_test
+package nanogit_test
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"testing"
 	"time"
 
 	"github.com/grafana/nanogit"
@@ -13,15 +14,24 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Github", func() {
+func TestProviders(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping testproviders suite in short mode")
+	}
+
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Test Providers Suite")
+}
+
+var _ = Describe("Providers", func() {
 	var client nanogit.Client
 
 	BeforeEach(func() {
-		By("Getting GitHub credentials from environment")
-		repo := os.Getenv("GITHUB_TEST_REPO")
-		token := os.Getenv("GITHUB_TEST_TOKEN")
-		Expect(repo).NotTo(BeEmpty(), "GITHUB_TEST_REPO environment variable must be set")
-		Expect(token).NotTo(BeEmpty(), "GITHUB_TEST_TOKEN environment variable must be set")
+		By("Getting credentials from environment")
+		repo := os.Getenv("TEST_REPO")
+		token := os.Getenv("TEST_TOKEN")
+		Expect(repo).NotTo(BeEmpty(), "TEST_REPO environment variable must be set")
+		Expect(token).NotTo(BeEmpty(), "TEST_TOKEN environment variable must be set")
 
 		By("Creating GitHub client")
 		var err error
@@ -54,6 +64,7 @@ var _ = Describe("Github", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(func() {
+			By("Deleting branch")
 			err = client.DeleteRef(context.Background(), "refs/heads/"+branchName)
 			Expect(err).NotTo(HaveOccurred())
 			refs, err := client.ListRefs(context.Background())
@@ -63,6 +74,7 @@ var _ = Describe("Github", func() {
 			}))
 		})
 
+		By("Listing refs")
 		refs, err := client.ListRefs(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(refs).To(ContainElement(nanogit.Ref{
@@ -75,9 +87,11 @@ var _ = Describe("Github", func() {
 			Hash: mainRef.Hash,
 		}))
 
+		By("Getting branch ref")
 		branchRef, err := client.GetRef(context.Background(), "refs/heads/"+branchName)
 		Expect(err).NotTo(HaveOccurred())
 
+		By("Creating staged writer")
 		writer, err := client.NewStagedWriter(context.Background(), branchRef)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -91,35 +105,62 @@ var _ = Describe("Github", func() {
 			Email: "john.doe@example.com",
 			Time:  time.Now(),
 		}
-		// Delete everything in the root tree
+
+		By("Deleting everything")
 		_, err = writer.DeleteTree(context.Background(), "")
 		Expect(err).NotTo(HaveOccurred())
 		_, err = writer.Commit(context.Background(), "Delete everything", author, committer)
 		Expect(err).NotTo(HaveOccurred())
 
+		By("Creating blob")
+		exists, err = writer.BlobExists(context.Background(), "a/b/c/test.txt")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(exists).To(BeFalse())
+		_, err = writer.GetTree(context.Background(), "a/b/c")
+		Expect(err).To(HaveOccurred())
+
 		blobHash, err := writer.CreateBlob(context.Background(), "a/b/c/test.txt", []byte("test content"))
 		Expect(err).NotTo(HaveOccurred())
+
+		tree, err := writer.GetTree(context.Background(), "a/b/c")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tree.Entries).To(HaveLen(1))
+
+		exists, err = writer.BlobExists(context.Background(), "a/b/c/test.txt")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(exists).To(BeTrue())
+
 		commit, err := writer.Commit(context.Background(), "Add test file", author, committer)
 		Expect(err).NotTo(HaveOccurred())
+
+		By("Pushing changes")
 		err = writer.Push(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 
+		By("Getting branch ref")
 		branchRef, err = client.GetRef(context.Background(), "refs/heads/"+branchName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(branchRef.Hash).To(Equal(commit.Hash))
 
+		By("Getting commit")
 		commit, err = client.GetCommit(context.Background(), commit.Hash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(commit.Message).To(Equal("Add test file"))
 
+		By("Getting blob by hash")
 		createdBlob, err := client.GetBlob(context.Background(), blobHash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(createdBlob.Content)).To(Equal("test content"))
 
+		By("Getting blob by path")
 		createdBlobByPath, err := client.GetBlobByPath(context.Background(), commit.Tree, "a/b/c/test.txt")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(createdBlobByPath.Content)).To(Equal("test content"))
 
+		By("Comparing commits")
+		// TODO: add check for other types of modifications and more commits in between
+		// TODO: create a more complex tree
+		// TODO: validate more fields
 		compareCommits, err := client.CompareCommits(context.Background(), commit.Parent, commit.Hash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(compareCommits).To(HaveLen(4))
@@ -132,8 +173,8 @@ var _ = Describe("Github", func() {
 		Expect(compareCommits[3].Path).To(Equal("a/b/c/test.txt"))
 		Expect(compareCommits[3].Status).To(Equal(protocol.FileStatusAdded))
 
-		// TODO: not working with Github
-		flatTree, err := client.GetFlatTree(context.Background(), commit.Tree)
+		By("Getting flat tree")
+		flatTree, err := client.GetFlatTree(context.Background(), commit.Hash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(flatTree.Entries).To(HaveLen(4))
 		Expect(flatTree.Entries[0].Path).To(Equal("a"))
@@ -145,6 +186,60 @@ var _ = Describe("Github", func() {
 		Expect(flatTree.Entries[3].Path).To(Equal("a/b/c/test.txt"))
 		Expect(flatTree.Entries[3].Type).To(Equal(protocol.ObjectTypeBlob))
 		Expect(flatTree.Entries[3].Hash).To(Equal(blobHash))
+
+		By("Getting tree by hash")
+		tree, err = client.GetTree(context.Background(), flatTree.Entries[2].Hash)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tree.Hash).To(Equal(flatTree.Entries[2].Hash))
+		Expect(tree.Entries).To(HaveLen(1))
+		Expect(tree.Entries[0].Name).To(Equal("test.txt"))
+		Expect(tree.Entries[0].Type).To(Equal(protocol.ObjectTypeBlob))
+		Expect(tree.Entries[0].Hash).To(Equal(blobHash))
+
+		By("Getting tree by path")
+		treeByPath, err := client.GetTreeByPath(context.Background(), commit.Tree, "a/b/c")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(treeByPath.Hash).To(Equal(flatTree.Entries[2].Hash))
+		Expect(treeByPath.Entries).To(HaveLen(1))
+		Expect(treeByPath.Entries[0].Name).To(Equal("test.txt"))
+		Expect(treeByPath.Entries[0].Type).To(Equal(protocol.ObjectTypeBlob))
+		Expect(treeByPath.Entries[0].Hash).To(Equal(blobHash))
+
+		By("Getting tree by path")
+		treeByPath, err = writer.GetTree(context.Background(), "a/b/c")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(treeByPath.Hash).To(Equal(flatTree.Entries[2].Hash))
+		Expect(treeByPath.Entries).To(HaveLen(1))
+		Expect(treeByPath.Entries[0].Name).To(Equal("test.txt"))
+		Expect(treeByPath.Entries[0].Type).To(Equal(protocol.ObjectTypeBlob))
+		Expect(treeByPath.Entries[0].Hash).To(Equal(blobHash))
+
+		By("Updating blob")
+		blobHash, err = writer.UpdateBlob(context.Background(), "a/b/c/test.txt", []byte("updated content"))
+		Expect(err).NotTo(HaveOccurred())
+		_, err = writer.Commit(context.Background(), "Update test file", author, committer)
+		Expect(err).NotTo(HaveOccurred())
+		err = writer.Push(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+		blob, err := client.GetBlob(context.Background(), blobHash)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(blob.Content)).To(Equal("updated content"))
+
+		By("Deleting blob")
+		_, err = writer.DeleteBlob(context.Background(), "a/b/c/test.txt")
+		Expect(err).NotTo(HaveOccurred())
+
+		deleteCommit, err := writer.Commit(context.Background(), "Delete test file", author, committer)
+		Expect(err).NotTo(HaveOccurred())
+		err = writer.Push(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = client.GetBlobByPath(context.Background(), deleteCommit.Tree, "a/b/c/test.txt")
+		Expect(err).To(HaveOccurred())
+
+		branchRef, err = client.GetRef(context.Background(), "refs/heads/"+branchName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(branchRef.Hash).To(Equal(deleteCommit.Hash))
 
 		// TODO: Skip this does not work as expected for Github
 		// commits, err := client.ListCommits(context.Background(), commit.Parent, nanogit.ListCommitsOptions{

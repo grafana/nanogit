@@ -364,6 +364,7 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 			Type: protocol.ObjectTypeTree,
 			Mode: 0o40000,
 		}
+		w.lastTree = &emptyTree
 
 		return emptyHash, nil
 	}
@@ -505,6 +506,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 
 	// Reset things to accumulate things for next push
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1)
+	w.ref.Hash = w.lastCommit.Hash
 
 	return nil
 }
