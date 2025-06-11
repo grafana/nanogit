@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -71,7 +72,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		writer:      writer,
 		lastCommit:  commit,
 		lastTree:    treeObj,
-		treeCache:   cache,
+		objStorage:  storage.NewInMemoryStorage(),
 		treeEntries: entries,
 	}, nil
 }
@@ -98,7 +99,7 @@ type stagedWriter struct {
 	// Root tree object from last commit
 	lastTree *protocol.PackfileObject
 	// Cache of fetched tree objects
-	treeCache map[string]*protocol.PackfileObject
+	objStorage PackfileStorage
 	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
 }
@@ -540,7 +541,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Hash:     treeObj.Hash.String(),
 			}
 
-			w.treeCache[treeObj.Hash.String()] = &treeObj
+			w.objStorage.Add(&treeObj)
 			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
 				Hash: treeObj.Hash,
@@ -549,7 +550,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			}
 		} else {
 			// If tree exists, add our entries to it
-			existingTree, ok := w.treeCache[existingObj.Hash.String()]
+			existingTree, ok := w.objStorage.Get(existingObj.Hash)
 			if !ok {
 				w.logger.Info("fetch tree not found in cache", "path", currentPath, "hash", existingObj.Hash.String())
 				var err error
@@ -557,7 +558,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				if err != nil {
 					return fmt.Errorf("get existing tree %s: %w", currentPath, err)
 				}
-				w.treeCache[existingObj.Hash.String()] = existingTree
+				w.objStorage.Add(existingTree)
 				w.logger.Info("tree object found in remote", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
 			} else {
 				w.logger.Debug("tree object found in cache", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
@@ -575,7 +576,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Hash:     newObj.Hash.String(),
 			}
 
-			w.treeCache[newObj.Hash.String()] = newObj
+			w.objStorage.Add(newObj)
 			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
 				Hash: newObj.Hash,
@@ -592,7 +593,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 
 		w.writer.AddObject(newRoot)
 		w.lastTree = &newRoot
-		w.treeCache[newRoot.Hash.String()] = &newRoot
+		w.objStorage.Add(&newRoot)
 
 		return nil
 	}
@@ -601,7 +602,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	if err != nil {
 		return fmt.Errorf("update root tree: %w", err)
 	}
-	w.treeCache[newRootObj.Hash.String()] = newRootObj
+	w.objStorage.Add(newRootObj)
 	w.lastTree = newRootObj
 
 	return nil
@@ -678,7 +679,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("remove file from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
-		w.treeCache[newRootObj.Hash.String()] = newRootObj
+		w.objStorage.Add(newRootObj)
 		w.logger.Debug("removed file from root", "file", fileName, "new_root_hash", newRootObj.Hash.String())
 		return nil
 	}
@@ -701,14 +702,14 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		}
 
 		// Get tree object from cache or fetch it
-		treeObj, ok := w.treeCache[existingObj.Hash.String()]
+		treeObj, ok := w.objStorage.Get(existingObj.Hash)
 		if !ok {
 			var err error
 			treeObj, err = w.getTree(ctx, existingObj.Hash)
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
-			w.treeCache[existingObj.Hash.String()] = treeObj
+			w.objStorage.Add(treeObj)
 		}
 
 		var newObj *protocol.PackfileObject
@@ -740,7 +741,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		updatedChildHash = newObj.Hash
 
 		// Update our references
-		w.treeCache[newObj.Hash.String()] = newObj
+		w.objStorage.Add(newObj)
 		w.treeEntries[currentPath] = &FlatTreeEntry{
 			Path: currentPath,
 			Hash: newObj.Hash,
@@ -762,7 +763,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 	}
 
 	w.lastTree = newRootObj
-	w.treeCache[newRootObj.Hash.String()] = newRootObj
+	w.objStorage.Add(newRootObj)
 	w.logger.Debug("updated root tree", "dir", rootDirName, "dir_hash", updatedChildHash.String(), "new_root_hash", newRootObj.Hash.String())
 
 	return nil
@@ -795,7 +796,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("remove directory from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
-		w.treeCache[newRootObj.Hash.String()] = newRootObj
+		w.objStorage.Add(newRootObj)
 		w.logger.Debug("removed directory from root", "dir", dirName, "new_root_hash", newRootObj.Hash.String())
 		return nil
 	}
@@ -818,14 +819,14 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		}
 
 		// Get tree object from cache or fetch it
-		treeObj, ok := w.treeCache[existingObj.Hash.String()]
+		treeObj, ok := w.objStorage.Get(existingObj.Hash)
 		if !ok {
 			var err error
 			treeObj, err = w.getTree(ctx, existingObj.Hash)
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
-			w.treeCache[existingObj.Hash.String()] = treeObj
+			w.objStorage.Add(treeObj)
 		}
 
 		var newObj *protocol.PackfileObject
@@ -857,7 +858,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		updatedChildHash = newObj.Hash
 
 		// Update our references
-		w.treeCache[newObj.Hash.String()] = newObj
+		w.objStorage.Add(newObj)
 		w.treeEntries[currentPath] = &FlatTreeEntry{
 			Path: currentPath,
 			Hash: newObj.Hash,
@@ -879,7 +880,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 	}
 
 	w.lastTree = newRootObj
-	w.treeCache[newRootObj.Hash.String()] = newRootObj
+	w.objStorage.Add(newRootObj)
 	w.logger.Debug("updated root tree", "dir", rootDirName, "dir_hash", updatedChildHash.String(), "new_root_hash", newRootObj.Hash.String())
 
 	return nil
