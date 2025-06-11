@@ -31,6 +31,17 @@ func (s InMemoryStorage) Add(objs ...*protocol.PackfileObject) {
 	}
 }
 
+// TODO: This is a temporary function to add a map of objects to the storage.
+func (s InMemoryStorage) AddMap(objs map[string]*protocol.PackfileObject) {
+	for _, obj := range objs {
+		s[obj.Hash.String()] = obj
+	}
+}
+
 func (s InMemoryStorage) Delete(key hash.Hash) {
 	delete(s, key.String())
+}
+
+func (s InMemoryStorage) Len() int {
+	return len(s)
 }

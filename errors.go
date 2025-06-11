@@ -82,7 +82,7 @@ func NewObjectAlreadyExistsError(objectID hash.Hash) *ObjectAlreadyExistsError {
 type UnexpectedObjectCountError struct {
 	ExpectedCount int
 	ActualCount   int
-	Objects       map[string]*protocol.PackfileObject
+	Objects       []*protocol.PackfileObject
 }
 
 func (e *UnexpectedObjectCountError) Error() string {
@@ -99,7 +99,7 @@ func (e *UnexpectedObjectCountError) Unwrap() error {
 }
 
 // NewUnexpectedObjectCountError creates a new UnexpectedObjectCountError with the specified details.
-func NewUnexpectedObjectCountError(expectedCount int, objects map[string]*protocol.PackfileObject) *UnexpectedObjectCountError {
+func NewUnexpectedObjectCountError(expectedCount int, objects []*protocol.PackfileObject) *UnexpectedObjectCountError {
 	return &UnexpectedObjectCountError{
 		ExpectedCount: expectedCount,
 		ActualCount:   len(objects),
