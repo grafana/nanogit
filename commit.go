@@ -356,7 +356,8 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 
 		// Get the commit object
 		objects, err := c.getCommitTree(ctx, currentHash, getCommitTreeOptions{
-			deepen: perPage,
+			// shallow: true,
+			// deepen:  perPage,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("getting commit %s: %w", currentHash.String(), err)
@@ -568,7 +569,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			allObjects.AddMap(objs)
 			nextTree, exists = allObjects.Get(entryHash)
 			if !exists {
-				return hash.Zero, fmt.Errorf("tree %s not found", entryHash.String())
+				return hash.Zero, NewObjectNotFoundError(entryHash)
 			}
 		}
 
