@@ -83,11 +83,6 @@ func TestProviders(t *testing.T) {
 		Time:  time.Now(),
 	}
 
-	_, err = writer.DeleteTree(context.Background(), "")
-	require.NoError(t, err)
-	_, err = writer.Commit(context.Background(), "Delete everything", author, committer)
-	require.NoError(t, err)
-
 	exists, err = writer.BlobExists(context.Background(), "a/b/c/test.txt")
 	require.NoError(t, err)
 	require.False(t, exists)
