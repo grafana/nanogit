@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -220,11 +221,19 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	commit, err := c.getCommit(ctx, hash)
+	obj, err := c.getCommit(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
 	}
+	commit, err := packfileObjectToCommit(obj)
+	if err != nil {
+		return nil, fmt.Errorf("converting packfile object to commit: %w", err)
+	}
 
+	return commit, nil
+}
+
+func packfileObjectToCommit(commit *protocol.PackfileObject) (*Commit, error) {
 	if commit.Type != protocol.ObjectTypeCommit {
 		return nil, errors.New("commit is not a commit")
 	}
@@ -329,11 +338,13 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 	skip := (page - 1) * perPage
 	collect := perPage
 
-	var commits []Commit
+	var commitObjs []*protocol.PackfileObject
 	visited := make(map[string]bool)
 	queue := []hash.Hash{startCommit}
 
-	for len(queue) > 0 && len(commits) < skip+collect {
+	allObjects := storage.NewInMemoryStorage()
+
+	for len(queue) > 0 && len(commitObjs) < skip+collect {
 		currentHash := queue[0]
 		queue = queue[1:]
 
@@ -344,50 +355,76 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		commit, err := c.GetCommit(ctx, currentHash)
+		objects, err := c.getCommitTree(ctx, currentHash)
 		if err != nil {
 			return nil, fmt.Errorf("getting commit %s: %w", currentHash.String(), err)
 		}
 
+		allObjects.AddMap(objects)
+		commit, exists := allObjects.Get(currentHash)
+		if !exists || commit.Type != protocol.ObjectTypeCommit {
+			return nil, fmt.Errorf("commit %s not found", currentHash.String())
+		}
+
 		// Apply filters
-		if !c.commitMatchesFilters(ctx, commit, &options) {
+		matches, err := c.commitMatchesFilters(ctx, commit, &options)
+		if err != nil {
+			return nil, fmt.Errorf("check commit filters: %w", err)
+		}
+
+		if !matches {
 			// Add parent to queue for continued traversal
-			if !commit.Parent.Is(hash.Zero) {
-				queue = append(queue, commit.Parent)
+			// TODO: handle merge commits
+			if !commit.Commit.Parent.Is(hash.Zero) {
+				queue = append(queue, commit.Commit.Parent)
 			}
 			continue
 		}
 
 		// Add to results
-		commits = append(commits, *commit)
+		commitObjs = append(commitObjs, commit)
 
 		// Continue with parent commit
-		if !commit.Parent.Is(hash.Zero) {
-			queue = append(queue, commit.Parent)
+		// TODO: handle merge commits
+		if !commit.Commit.Parent.Is(hash.Zero) {
+			queue = append(queue, commit.Commit.Parent)
 		}
 	}
 
 	// Apply pagination
-	if skip >= len(commits) {
+	if skip >= len(commitObjs) {
 		return []Commit{}, nil
 	}
 
-	end := skip + collect
-	if end > len(commits) {
-		end = len(commits)
+	// Convert to Commit objects
+	end := min(skip+collect, len(commitObjs))
+	commits := make([]Commit, 0, end-skip)
+	for _, obj := range commitObjs[skip:end] {
+		commit, err := packfileObjectToCommit(obj)
+		if err != nil {
+			return nil, fmt.Errorf("converting packfile object to commit: %w", err)
+		}
+		commits = append(commits, *commit)
 	}
 
-	return commits[skip:end], nil
+	return commits, nil
 }
 
 // commitMatchesFilters checks if a commit matches the specified filters.
-func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *Commit, options *ListCommitsOptions) bool {
-	// Check time filters
-	if !options.Since.IsZero() && commit.Time().Before(options.Since) {
-		return false
+func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions) (bool, error) {
+	commitTime, err := commit.Commit.Author.Time()
+	if err != nil {
+		c.logger.Debug("error parsing commit time", "commit", commit.Hash.String(), "error", err.Error())
+		return false, fmt.Errorf("parsing commit time: %w", err)
 	}
-	if !options.Until.IsZero() && commit.Time().After(options.Until) {
-		return false
+
+	// Check time filters
+	if !options.Since.IsZero() && commitTime.Before(options.Since) {
+		return false, nil
+	}
+
+	if !options.Until.IsZero() && commitTime.After(options.Until) {
+		return false, nil
 	}
 
 	// Check path filter
@@ -395,34 +432,35 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *Commit, o
 		affected, err := c.commitAffectsPath(ctx, commit, options.Path)
 		if err != nil {
 			// Log error but don't fail the entire operation
-			c.logger.Debug("error checking if commit affects path", "commit", commit.Hash.String(), "path", options.Path, "error", err.Error())
-			return false
+			// TODO: should we handle this differently?
+			c.logger.Error("error checking if commit affects path", "commit", commit.Hash.String(), "path", options.Path, "error", err.Error())
+			return false, nil
 		}
 		if !affected {
-			return false
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }
 
 // commitAffectsPath checks if a commit affects the specified path by comparing
 // it with its parent commit.
-func (c *httpClient) commitAffectsPath(ctx context.Context, commit *Commit, path string) (bool, error) {
+func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.PackfileObject, path string) (bool, error) {
 	// For the initial commit (no parent), check if the path exists
-	if commit.Parent.Is(hash.Zero) {
+	if commit.Commit.Parent.Is(hash.Zero) {
 		// Check if path exists in this commit's tree (as blob or tree)
-		_, err := c.GetBlobByPath(ctx, commit.Tree, path)
+		_, err := c.GetBlobByPath(ctx, commit.Commit.Tree, path)
 		if err == nil {
 			return true, nil
 		}
 		// Try as a tree path
-		_, err = c.GetTreeByPath(ctx, commit.Tree, path)
+		_, err = c.GetTreeByPath(ctx, commit.Commit.Tree, path)
 		return err == nil, nil
 	}
 
 	// Compare with parent commit to see if path was affected
-	changes, err := c.CompareCommits(ctx, commit.Parent, commit.Hash)
+	changes, err := c.CompareCommits(ctx, commit.Commit.Parent, commit.Hash)
 	if err != nil {
 		return false, fmt.Errorf("compare commits: %w", err)
 	}
