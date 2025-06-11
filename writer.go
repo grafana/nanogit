@@ -51,8 +51,8 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
 
-	cache := make(map[string]*protocol.PackfileObject)
-	cache[treeObj.Hash.String()] = treeObj
+	objStorage := storage.NewInMemoryStorage()
+	objStorage.Add(treeObj)
 
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
@@ -72,7 +72,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		writer:      writer,
 		lastCommit:  commit,
 		lastTree:    treeObj,
-		objStorage:  storage.NewInMemoryStorage(),
+		objStorage:  objStorage,
 		treeEntries: entries,
 	}, nil
 }
@@ -344,6 +344,30 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 //
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
+	if path == "" {
+		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
+		if err != nil {
+			return nil, fmt.Errorf("create empty tree: %w", err)
+		}
+
+		emptyTree := protocol.PackfileObject{
+			Hash: emptyHash,
+			Type: protocol.ObjectTypeTree,
+			Tree: []protocol.PackfileTreeEntry{},
+		}
+
+		w.writer.AddObject(emptyTree)
+		w.objStorage.Add(&emptyTree)
+		w.treeEntries[""] = &FlatTreeEntry{
+			Path: "",
+			Hash: emptyHash,
+			Type: protocol.ObjectTypeTree,
+			Mode: 0o40000,
+		}
+
+		return emptyHash, nil
+	}
+
 	existing, ok := w.treeEntries[path]
 	if !ok {
 		return nil, NewPathNotFoundError(path)
