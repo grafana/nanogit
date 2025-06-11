@@ -147,8 +147,8 @@ jobs:
         run: make test-integration
 
   test-github-provider:
-    name: Integration Tests
-    if: github.event_name == 'push' && github.repository == 'grafana/nanogit'
+    name: GitHub Provider Tests
+    if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
