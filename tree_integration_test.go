@@ -1,13 +1,13 @@
-package integration_test
+package nanogit_test
 
 import (
 	"context"
 	"errors"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,7 +17,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree operations", func() {
 		var (
 			client     nanogit.Client
-			local      *helpers.LocalGitRepo
+			local      *testhelpers.LocalGitRepo
 			commitHash hash.Hash
 			getHash    func(string) hash.Hash
 		)
@@ -144,7 +144,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTree operations", func() {
 		var (
 			client   nanogit.Client
-			local    *helpers.LocalGitRepo
+			local    *testhelpers.LocalGitRepo
 			treeHash hash.Hash
 		)
 
@@ -202,7 +202,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTreeByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *helpers.LocalGitRepo
+			local    *testhelpers.LocalGitRepo
 			treeHash hash.Hash
 			getHash  func(string) hash.Hash
 		)

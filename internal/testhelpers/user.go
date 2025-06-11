@@ -1,4 +1,4 @@
-package helpers
+package testhelpers
 
 type User struct {
 	Username string

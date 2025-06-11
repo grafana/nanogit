@@ -125,7 +125,7 @@ Integration tests are located in the `test/` directory and use [Ginkgo](https://
 - Automatic container lifecycle management with proper cleanup
 - Thread-safe test infrastructure that eliminates data races
 - Parallel test execution support without race conditions
-- Uses `test/helpers/` for shared test utilities
+- Uses `internal/testhelpers/` for shared test utilities
 - Real Git server testing using [Gitea](https://gitea.io/) in a Docker container
 
 **Test Structure:**

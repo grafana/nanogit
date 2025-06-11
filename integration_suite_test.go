@@ -1,10 +1,11 @@
-package integration_test
+package nanogit_test
 
 import (
 	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/test/helpers"
+	"github.com/grafana/nanogit/internal/testhelpers"
+	helpers "github.com/grafana/nanogit/internal/testhelpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -12,11 +13,15 @@ import (
 
 // Shared test infrastructure
 var (
-	gitServer *helpers.GitServer
-	logger    *helpers.TestLogger
+	gitServer *testhelpers.GitServer
+	logger    *testhelpers.TestLogger
 )
 
 func TestIntegrationSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration tests in short mode")
+	}
+
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Integration Suite")
 }
@@ -37,7 +42,7 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *helpers.RemoteRepo, *helpers.LocalGitRepo, *helpers.User) {
+func QuickSetup() (nanogit.Client, *testhelpers.RemoteRepo, *testhelpers.LocalGitRepo, *testhelpers.User) {
 	client, remote, local := gitServer.TestRepo()
 	return client, remote, local, remote.User
 }

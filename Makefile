@@ -15,10 +15,13 @@ lint:
 
 .PHONY: test-unit
 test-unit:
-	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 6 $(shell go list ./... | grep -v './test')
+	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 6 --short ./...
 
 .PHONY: test-integration
 test-integration:
-	go run github.com/onsi/ginkgo/v2/ginkgo -r --race --randomize-all --randomize-suites --fail-on-pending -p ./test
+	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p -focus "Integration"
 
 test: test-unit test-integration
+
+test-coverage:
+	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p --coverprofile=coverage.txt --covermode=atomic --coverpkg=./...

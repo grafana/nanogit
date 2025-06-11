@@ -1,4 +1,4 @@
-package integration_test
+package nanogit_test
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,8 +18,8 @@ var _ = Describe("Commits", func() {
 	Context("GetCommit operations", func() {
 		var (
 			client               nanogit.Client
-			local                *helpers.LocalGitRepo
-			user                 *helpers.User
+			local                *testhelpers.LocalGitRepo
+			user                 *testhelpers.User
 			initialCommitHash    hash.Hash
 			modifyFileCommitHash hash.Hash
 			renameCommitHash     hash.Hash
@@ -115,7 +115,7 @@ var _ = Describe("Commits", func() {
 	Context("CompareCommits operations", func() {
 		var (
 			client             nanogit.Client
-			local              *helpers.LocalGitRepo
+			local              *testhelpers.LocalGitRepo
 			initialCommitHash  hash.Hash
 			modifiedCommitHash hash.Hash
 			renamedCommitHash  hash.Hash
@@ -215,7 +215,7 @@ var _ = Describe("Commits", func() {
 		Context("basic functionality", func() {
 			var (
 				client   nanogit.Client
-				local    *helpers.LocalGitRepo
+				local    *testhelpers.LocalGitRepo
 				headHash hash.Hash
 			)
 
@@ -264,7 +264,7 @@ var _ = Describe("Commits", func() {
 		Context("pagination", func() {
 			var (
 				client   nanogit.Client
-				local    *helpers.LocalGitRepo
+				local    *testhelpers.LocalGitRepo
 				headHash hash.Hash
 			)
 
@@ -319,7 +319,7 @@ var _ = Describe("Commits", func() {
 		Context("path filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *helpers.LocalGitRepo
+				local    *testhelpers.LocalGitRepo
 				headHash hash.Hash
 			)
 
@@ -389,7 +389,7 @@ var _ = Describe("Commits", func() {
 		Context("time filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *helpers.LocalGitRepo
+				local    *testhelpers.LocalGitRepo
 				headHash hash.Hash
 				midTime  time.Time
 			)

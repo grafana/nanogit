@@ -1,4 +1,4 @@
-package integration_test
+package nanogit_test
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/test/helpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -16,7 +16,7 @@ var _ = Describe("Blobs", func() {
 	Context("GetBlob operations", func() {
 		var (
 			client nanogit.Client
-			local  *helpers.LocalGitRepo
+			local  *testhelpers.LocalGitRepo
 		)
 
 		BeforeEach(func() {
@@ -57,7 +57,7 @@ var _ = Describe("Blobs", func() {
 	Context("GetBlobByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *helpers.LocalGitRepo
+			local    *testhelpers.LocalGitRepo
 			rootHash hash.Hash
 		)
 
@@ -121,7 +121,7 @@ var _ = Describe("Blobs", func() {
 	Context("GetBlobByPath with nested directories", func() {
 		var (
 			client   nanogit.Client
-			local    *helpers.LocalGitRepo
+			local    *testhelpers.LocalGitRepo
 			rootHash hash.Hash
 		)
 
