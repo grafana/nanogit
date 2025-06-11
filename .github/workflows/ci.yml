@@ -85,6 +85,33 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
         run: make test-unit
+
+  test-coverage:
+    name: Unit Tests Coverage
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go mod vendor
+      - name: Run tests with coverage
+        env:
+          CGO_ENABLED: 1
+          GOFLAGS: -mod=vendor
+        run: make test-coverage
       - name: Upload coverage
         uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
         with:

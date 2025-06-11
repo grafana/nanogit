@@ -1,10 +1,10 @@
-package integration_test
+package nanogit_test
 
 import (
 	"context"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/test/helpers"
+	"github.com/grafana/nanogit/internal/testhelpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -12,8 +12,8 @@ import (
 
 var _ = Describe("Authorization", func() {
 	var (
-		remote    *helpers.RemoteRepo
-		user      *helpers.User
+		remote    *testhelpers.RemoteRepo
+		user      *testhelpers.User
 		remoteURL string
 	)
 

@@ -107,9 +107,11 @@ func TestSomething(t *testing.T) {
 }
 ```
 
+**Note**: unit tests in the root package include `unit` to distinguish them from integration test ones (e.g. `client_unit_test.go`).
+
 #### Integration Tests
 
-Integration tests are located in the `test/` directory and use [Ginkgo](https://onsi.github.io/ginkgo/) as the testing framework with [Gomega](https://onsi.github.io/gomega/) for assertions. We migrated from testify to Ginkgo for integration tests due to several key advantages:
+Integration tests are located in the root directory and use [Ginkgo](https://onsi.github.io/ginkgo/) as the testing framework with [Gomega](https://onsi.github.io/gomega/) for assertions. We migrated from testify to Ginkgo for integration tests due to several key advantages:
 
 **Why We Use Ginkgo for Integration Tests:**
 
@@ -125,22 +127,22 @@ Integration tests are located in the `test/` directory and use [Ginkgo](https://
 - Automatic container lifecycle management with proper cleanup
 - Thread-safe test infrastructure that eliminates data races
 - Parallel test execution support without race conditions
-- Uses `test/helpers/` for shared test utilities
+- Uses `internal/testhelpers/` for shared test utilities
 - Real Git server testing using [Gitea](https://gitea.io/) in a Docker container
 
 **Test Structure:**
 ```bash
-testginkgo/
-├── helpers/
+internal/
+├── testhelpers/
 │   ├── gitserver.go          # Gitea container management
 │   ├── remoterepo.go         # Remote repository helpers
 │   ├── localrepo.go          # Local repository helpers
 │   └── logger.go             # Thread-safe logging
-├── integration_suite_test.go # Main test suite with shared setup
-├── auth_test.go             # Authentication integration tests
-├── refs_test.go             # Reference operation tests
-├── writer_test.go           # Writer operation tests
-└── ...                      # Other integration test files
+| integration_suite_test.go # Main test suite with shared setup
+| auth_integration_test.go             # Authentication integration tests
+| refs_integration_test.go             # Reference operation tests
+| writer_integration_test.go           # Writer operation tests
+| ...                      # Other integration test files
 ```
 
 **Example Ginkgo Test:**
@@ -176,28 +178,20 @@ make test-integration
 
 To run specific tests:
 ```bash
-cd test && ginkgo --focus="Authentication"
+ginkgo --focus="Authentication"
 ```
 
 To run tests with verbose output:
 ```bash
-cd test && ginkgo -v
+ginkgo -v
 ```
 
 To run tests in parallel:
 ```bash
-cd test && ginkgo -p
+ginkgo -p
 ```
 
 **Note**: Integration tests require Docker to be running on your machine.
-
-#### Legacy Integration Tests
-
-The old `test/` directory contains legacy integration tests using testify. These are being phased out in favor of the new Ginkgo-based tests in `test/`. The legacy tests suffered from:
-- Race conditions when using `t.Parallel()`
-- Data races in logging system with testcontainers
-- Difficulty in sharing expensive resources like Docker containers
-- Less readable test organization
 
 #### Writing Tests
 

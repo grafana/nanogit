@@ -1,10 +1,10 @@
-package integration_test
+package nanogit_test
 
 import (
 	"context"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/test/helpers"
+	"github.com/grafana/nanogit/internal/testhelpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -14,7 +14,7 @@ var _ = Describe("Repository", func() {
 	Context("RepoExists functionality", func() {
 		var (
 			client nanogit.Client
-			remote *helpers.RemoteRepo
+			remote *testhelpers.RemoteRepo
 		)
 
 		BeforeEach(func() {
