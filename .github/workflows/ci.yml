@@ -168,7 +168,7 @@ jobs:
             ${{ runner.os }}-go-
       - name: Sync vendor directory
         run: go mod vendor
-      - name: Run integration tests
+      - name: Run provider tests
         env:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor

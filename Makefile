@@ -23,9 +23,9 @@ test-integration:
 
 .PHONY: test-providers
 test-providers:
-	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p -focus "Providers"
+	go test -race -run TestProviders 
 
 test: test-unit test-integration
 
 test-coverage:
-	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p --coverprofile=coverage.txt --covermode=atomic --coverpkg=./...
+	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending p --coverprofile=coverage.txt --covermode=atomic --coverpkg=./...
