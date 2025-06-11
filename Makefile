@@ -15,7 +15,7 @@ lint:
 
 .PHONY: test-unit
 test-unit:
-	go test -coverprofile=coverage.txt -covermode=atomic -race -parallel 6 --short ./...
+	go test -race -parallel 6 --short ./...
 
 .PHONY: test-integration
 test-integration:
