@@ -355,7 +355,9 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		objects, err := c.getCommitTree(ctx, currentHash)
+		objects, err := c.getCommitTree(ctx, currentHash, getCommitTreeOptions{
+			deepen: perPage,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("getting commit %s: %w", currentHash.String(), err)
 		}
@@ -449,7 +451,7 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.
 func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.PackfileObject, path string, allObjects PackfileStorage) (bool, error) {
 	// For the initial commit (no parent), check if the path exists
 	if commit.Commit.Parent.Is(hash.Zero) {
-		parentHash, err := c.hashForPath(ctx, commit.Commit.Parent, path, allObjects)
+		parentHash, err := c.hashForPath(ctx, commit.Hash, path, allObjects)
 		if err != nil {
 			return false, fmt.Errorf("hash for path: %w", err)
 		}
@@ -480,8 +482,9 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
 	commit, exists := allObjects.Get(commitHash)
 	if !exists {
-		// TODO: add option for deepen
-		objects, err := c.getCommitTree(ctx, commitHash)
+		objects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
+			shallow: true,
+		})
 		if err != nil {
 			return hash.Zero, fmt.Errorf("getting commit: %w", err)
 		}

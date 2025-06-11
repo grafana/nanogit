@@ -114,10 +114,21 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 
 	allObjects := storage.NewInMemoryStorage()
 	totalRequests++
-	// TODO: I would probably have to block it to be with a tree hash
-	initialObjects, err := c.getCommitTree(ctx, commitHash)
+	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
+		deepen:  1,
+		shallow: true,
+	})
 	if err != nil {
 		return nil, hash.Zero, fmt.Errorf("get commit tree: %w", err)
+	}
+
+	commitObj, exists := initialObjects[commitHash.String()]
+	if !exists {
+		return nil, hash.Zero, NewObjectNotFoundError(commitHash)
+	}
+
+	if commitObj.Type != protocol.ObjectTypeCommit {
+		return nil, hash.Zero, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
 	}
 
 	allObjects.AddMap(initialObjects)
