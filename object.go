@@ -10,7 +10,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[string]*protocol.PackfileObject, error) {
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -69,6 +69,19 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object
+	}
+
+	if len(objects) == 0 {
+		return nil, NewObjectNotFoundError(want)
+	}
+
+	return objects, nil
+}
+
+func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	objects, err := c.getTreeObjects(ctx, want)
+	if err != nil {
+		return nil, fmt.Errorf("getting tree objects: %w", err)
 	}
 
 	// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects

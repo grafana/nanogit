@@ -374,6 +374,7 @@ var _ = Describe("Commits", func() {
 				}
 				commits, err := client.ListCommits(context.Background(), headHash, options)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(commits).To(HaveLen(1))
 
 				By("Finding the commit that added main.go")
 				found := 0

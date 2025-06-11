@@ -367,7 +367,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		}
 
 		// Apply filters
-		matches, err := c.commitMatchesFilters(ctx, commit, &options)
+		matches, err := c.commitMatchesFilters(ctx, commit, &options, allObjects)
 		if err != nil {
 			return nil, fmt.Errorf("check commit filters: %w", err)
 		}
@@ -411,7 +411,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 }
 
 // commitMatchesFilters checks if a commit matches the specified filters.
-func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions) (bool, error) {
+func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions, allObjects PackfileStorage) (bool, error) {
 	commitTime, err := commit.Commit.Author.Time()
 	if err != nil {
 		c.logger.Debug("error parsing commit time", "commit", commit.Hash.String(), "error", err.Error())
@@ -429,7 +429,7 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.
 
 	// Check path filter
 	if options.Path != "" {
-		affected, err := c.commitAffectsPath(ctx, commit, options.Path)
+		affected, err := c.commitAffectsPath(ctx, commit, options.Path, allObjects)
 		if err != nil {
 			// Log error but don't fail the entire operation
 			// TODO: should we handle this differently?
@@ -444,33 +444,137 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.
 	return true, nil
 }
 
-// commitAffectsPath checks if a commit affects the specified path by comparing
-// it with its parent commit.
-func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.PackfileObject, path string) (bool, error) {
+// commitAffectsPath checks if a commit affects the specified path by comparing with the hash of that path in the parent commit.
+// TODO: make it work for merge commits
+func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.PackfileObject, path string, allObjects PackfileStorage) (bool, error) {
 	// For the initial commit (no parent), check if the path exists
 	if commit.Commit.Parent.Is(hash.Zero) {
-		// Check if path exists in this commit's tree (as blob or tree)
-		_, err := c.GetBlobByPath(ctx, commit.Commit.Tree, path)
-		if err == nil {
-			return true, nil
+		parentHash, err := c.hashForPath(ctx, commit.Commit.Parent, path, allObjects)
+		if err != nil {
+			return false, fmt.Errorf("hash for path: %w", err)
 		}
-		// Try as a tree path
-		_, err = c.GetTreeByPath(ctx, commit.Commit.Tree, path)
-		return err == nil, nil
+
+		return !parentHash.Is(hash.Zero), nil
 	}
 
-	// Compare with parent commit to see if path was affected
-	changes, err := c.CompareCommits(ctx, commit.Commit.Parent, commit.Hash)
+	pathHashParent, err := c.hashForPath(ctx, commit.Commit.Parent, path, allObjects)
 	if err != nil {
-		return false, fmt.Errorf("compare commits: %w", err)
+		return false, fmt.Errorf("hash for path: %w", err)
 	}
 
-	// Check if any changes affect the specified path
-	for _, change := range changes {
-		if change.Path == path || strings.HasPrefix(change.Path, path+"/") {
-			return true, nil
+	pathHashCommit, err := c.hashForPath(ctx, commit.Hash, path, allObjects)
+	if err != nil {
+		return false, fmt.Errorf("hash for path: %w", err)
+	}
+
+	return !pathHashParent.Is(pathHashCommit), nil
+}
+
+// walkPathToTreeHash walks the path to find the tree hash
+// if the object is not in the storage, it will be fetched.
+// All objects returned by the client will be added to the storage.
+// If the object is not found, hash.Zero will be returned.
+// If the object is a tree, the hash of the tree will be returned.
+// If the object is a blob, the hash of the blob will be returned.
+// Otherwise, return an error.
+func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
+	commit, exists := allObjects.Get(commitHash)
+	if !exists {
+		// TODO: add option for deepen
+		objects, err := c.getCommitTree(ctx, commitHash)
+		if err != nil {
+			return hash.Zero, fmt.Errorf("getting commit: %w", err)
+		}
+
+		allObjects.AddMap(objects)
+		commit, exists = allObjects.Get(commitHash)
+		if !exists {
+			return hash.Zero, fmt.Errorf("commit %s not found", commitHash.String())
 		}
 	}
 
-	return false, nil
+	c.logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
+	treeHash := commit.Commit.Tree
+	tree, exists := allObjects.Get(treeHash)
+	if !exists {
+		objs, err := c.getTreeObjects(ctx, treeHash)
+		if err != nil {
+			return hash.Zero, fmt.Errorf("getting tree: %w", err)
+		}
+
+		allObjects.AddMap(objs)
+		tree, exists = allObjects.Get(treeHash)
+		if !exists {
+			return hash.Zero, fmt.Errorf("tree %s not found", treeHash.String())
+		}
+	}
+
+	if tree.Type != protocol.ObjectTypeTree {
+		return hash.Zero, fmt.Errorf("object %s is not a tree", treeHash.String())
+	}
+
+	// If path is empty, return the tree hash
+	if path == "" {
+		return treeHash, nil
+	}
+
+	// Split path into components
+	components := strings.Split(path, "/")
+	currentTree := tree
+
+	// Walk through each path component
+	for i, component := range components {
+		component = strings.TrimSpace(component)
+		if component == "" {
+			return hash.Zero, errors.New("path component is empty")
+		}
+
+		// Find the entry in the current tree
+		var found bool
+		var entryHash hash.Hash
+		for _, entry := range currentTree.Tree {
+			if entry.FileName == component {
+				found = true
+				var err error
+				entryHash, err = hash.FromHex(entry.Hash)
+				if err != nil {
+					return hash.Zero, fmt.Errorf("parsing hash: %w", err)
+				}
+
+				break
+			}
+		}
+
+		if !found {
+			return hash.Zero, nil
+		}
+
+		// If this is the last component, return its hash
+		if i == len(components)-1 {
+			return entryHash, nil
+		}
+
+		// Otherwise, get the next tree
+		nextTree, exists := allObjects.Get(entryHash)
+		if !exists {
+			objs, err := c.getTreeObjects(ctx, entryHash)
+			if err != nil {
+				return hash.Zero, fmt.Errorf("getting tree: %w", err)
+			}
+
+			allObjects.AddMap(objs)
+			nextTree, exists = allObjects.Get(entryHash)
+			if !exists {
+				return hash.Zero, fmt.Errorf("tree %s not found", entryHash.String())
+			}
+		}
+
+		if nextTree.Type != protocol.ObjectTypeTree {
+			return hash.Zero, fmt.Errorf("path component %s is not a tree", component)
+		}
+
+		currentTree = nextTree
+	}
+
+	return hash.Zero, nil
 }
