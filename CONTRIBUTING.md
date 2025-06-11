@@ -193,6 +193,23 @@ ginkgo -p
 
 **Note**: Integration tests require Docker to be running on your machine.
 
+#### Provider Tests
+
+Provider tests validate nanogit's compatibility with various Git hosting services (GitHub, GitLab, etc.) by executing real-world workflows. These end-to-end tests ensure the client library functions correctly with actual Git providers, catching any significant integration issues or breaking changes.
+
+These tests require specific environment variables to be set:
+- `TEST_REPO`: The URL of the test repository
+- `TEST_TOKEN`: Authentication token for the repository
+
+To run provider tests:
+```bash
+export TEST_REPO=https://github.com/grafana/nanogit-test.git
+export TEST_TOKEN=<SOMETOKEN>
+make test-providers
+```
+Our CI pipeline includes provider tests against GitHub using the [grafana/nanogit-test](https://github.com/grafana/nanogit-test.git) repository.
+
+
 #### Writing Tests
 
 1. **Unit tests** should be fast and not require external dependencies
