@@ -117,6 +117,15 @@ func (c *httpClient) addDefaultHeaders(req *http.Request) {
 	}
 }
 
+func (c *httpClient) getLogger(ctx context.Context) Logger {
+	logger := getContextLogger(ctx)
+	if logger != nil {
+		return logger
+	}
+
+	return c.logger
+}
+
 // uploadPack sends a POST request to the git-upload-pack endpoint.
 // This endpoint is used to fetch objects and refs from the remote repository.
 func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error) {
@@ -126,7 +135,9 @@ func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-upload-pack").String()
 
-	c.logger.Info("UploadPack", "url", u, "requestBody", string(data))
+	logger := c.getLogger(ctx)
+
+	logger.Info("UploadPack", "url", u, "requestBody", string(data))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
 	if err != nil {
 		return nil, err
@@ -151,7 +162,7 @@ func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error
 		return nil, err
 	}
 
-	c.logger.Info("UploadPack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u)
+	logger.Info("UploadPack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u)
 
 	return responseBody, nil
 }
@@ -164,7 +175,8 @@ func (c *httpClient) receivePack(ctx context.Context, data []byte) ([]byte, erro
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
-	c.logger.Info("GitReceivePack", "url", u.String())
+	logger := c.getLogger(ctx)
+	logger.Info("GitReceivePack", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
 	if err != nil {
@@ -191,7 +203,7 @@ func (c *httpClient) receivePack(ctx context.Context, data []byte) ([]byte, erro
 		return nil, err
 	}
 
-	c.logger.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
+	logger.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
 
 	return responseBody, nil
 }
@@ -208,7 +220,8 @@ func (c *httpClient) smartInfo(ctx context.Context, service string) ([]byte, err
 	query.Set("service", service)
 	u.RawQuery = query.Encode()
 
-	c.logger.Info("SmartInfo", "url", u.String())
+	logger := c.getLogger(ctx)
+	logger.Info("SmartInfo", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -232,7 +245,7 @@ func (c *httpClient) smartInfo(ctx context.Context, service string) ([]byte, err
 		return nil, err
 	}
 
-	c.logger.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
+	logger.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
 
 	return body, nil
 }

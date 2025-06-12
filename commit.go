@@ -414,9 +414,10 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 
 // commitMatchesFilters checks if a commit matches the specified filters.
 func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions, allObjects PackfileStorage) (bool, error) {
+	logger := c.getLogger(ctx)
 	commitTime, err := commit.Commit.Author.Time()
 	if err != nil {
-		c.logger.Debug("error parsing commit time", "commit", commit.Hash.String(), "error", err.Error())
+		logger.Debug("error parsing commit time", "commit", commit.Hash.String(), "error", err.Error())
 		return false, fmt.Errorf("parsing commit time: %w", err)
 	}
 
@@ -435,7 +436,7 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.
 		if err != nil {
 			// Log error but don't fail the entire operation
 			// TODO: should we handle this differently?
-			c.logger.Error("error checking if commit affects path", "commit", commit.Hash.String(), "path", options.Path, "error", err.Error())
+			logger.Error("error checking if commit affects path", "commit", commit.Hash.String(), "path", options.Path, "error", err.Error())
 			return false, nil
 		}
 		if !affected {
@@ -496,7 +497,8 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		}
 	}
 
-	c.logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
+	logger := c.getLogger(ctx)
+	logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
 	treeHash := commit.Commit.Tree
 	tree, exists := allObjects.Get(treeHash)
 	if !exists {
