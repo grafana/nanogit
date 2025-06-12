@@ -9,11 +9,15 @@ import (
 
 // TestLogger implements the nanogit.Logger interface for testing purposes.
 // It uses Ginkgo's native logging capabilities for thread-safe output.
-type TestLogger struct{}
+type TestLogger struct {
+	logf func(format string, args ...any)
+}
 
 // NewTestLogger creates a new TestLogger for Ginkgo tests.
-func NewTestLogger() *TestLogger {
-	return &TestLogger{}
+func NewTestLogger(logf func(format string, args ...any)) *TestLogger {
+	return &TestLogger{
+		logf: logf,
+	}
 }
 
 // Logf logs a message to the Ginkgo test output with colors and emojis.
@@ -63,14 +67,14 @@ func (l *TestLogger) log(level, msg string, args []any) {
 	// Log to Ginkgo output with colors and emojis
 	switch level {
 	case "Debug":
-		ginkgo.GinkgoWriter.Printf("%s🔍 [DEBUG] %s%s\n", ColorGray, formattedMsg, ColorReset)
+		l.logf("%s🔍 [DEBUG] %s%s\n", ColorGray, formattedMsg, ColorReset)
 	case "Info":
-		ginkgo.GinkgoWriter.Printf("%sℹ️  [INFO] %s%s\n", ColorBlue, formattedMsg, ColorReset)
+		l.logf("%sℹ️  [INFO] %s%s\n", ColorBlue, formattedMsg, ColorReset)
 	case "Warn":
-		ginkgo.GinkgoWriter.Printf("%s⚠️  [WARN] %s%s\n", ColorYellow, formattedMsg, ColorReset)
+		l.logf("%s⚠️  [WARN] %s%s\n", ColorYellow, formattedMsg, ColorReset)
 	case "Error":
-		ginkgo.GinkgoWriter.Printf("%s❌ [ERROR] %s%s\n", ColorRed, formattedMsg, ColorReset)
+		l.logf("%s❌ [ERROR] %s%s\n", ColorRed, formattedMsg, ColorReset)
 	case "Success":
-		ginkgo.GinkgoWriter.Printf("%s✅ [SUCCESS] %s%s\n", ColorGreen, formattedMsg, ColorReset)
+		l.logf("%s✅ [SUCCESS] %s%s\n", ColorGreen, formattedMsg, ColorReset)
 	}
 }

@@ -359,7 +359,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 			deepen: perPage,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("getting commit %s: %w", currentHash.String(), err)
+			return nil, fmt.Errorf("getting commit %s in queue: %w", currentHash.String(), err)
 		}
 
 		allObjects.AddMap(objects)
@@ -486,7 +486,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			shallow: true,
 		})
 		if err != nil {
-			return hash.Zero, fmt.Errorf("getting commit: %w", err)
+			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
 		}
 
 		allObjects.AddMap(objects)
