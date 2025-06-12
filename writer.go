@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -41,11 +40,9 @@ import (
 //	// Push to remote
 //	return writer.Push(ctx)
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
-	objStorage := c.packfileStorage
-	if objStorage == nil {
-		objStorage = storage.NewInMemoryStorage(ctx)
-		ctx = WithPackfileStorageFromContext(ctx, objStorage)
-	}
+	// Ensure storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, objStorage := c.ensurePackfileStorage(ctx)
 
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {

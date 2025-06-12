@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -117,11 +116,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	var totalRequests int
 	var totalObjectsFetched int
 
-	allObjects := c.packfileStorage
-	if allObjects == nil {
-		allObjects = storage.NewInMemoryStorage(ctx)
-		ctx = WithPackfileStorageFromContext(ctx, allObjects)
-	}
+	ctx, allObjects := c.ensurePackfileStorage(ctx)
 
 	totalRequests++
 	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
