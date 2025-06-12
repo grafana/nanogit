@@ -127,7 +127,7 @@ func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-upload-pack").String()
 
-	c.logger.Info("UploadPack", "url", u)
+	c.logger.Info("UploadPack", "url", u, "requestBody", string(data))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
 	if err != nil {
 		return nil, err
@@ -277,7 +277,6 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	}
 
 	u.Path = strings.TrimRight(u.Path, "/")
-	u.Path = strings.TrimSuffix(u.Path, ".git")
 
 	c := &httpClient{
 		base:   u,
