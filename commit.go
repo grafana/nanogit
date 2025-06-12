@@ -223,17 +223,58 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	    return err
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
-func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	obj, err := c.getCommit(ctx, hash)
-	if err != nil {
-		return nil, fmt.Errorf("getting commit: %w", err)
-	}
-	commit, err := packfileObjectToCommit(obj)
-	if err != nil {
-		return nil, fmt.Errorf("converting packfile object to commit: %w", err)
+func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(commitHash); ok {
+			return packfileObjectToCommit(obj)
+		}
 	}
 
-	return commit, nil
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{commitHash},
+		Deepen:       1,
+		Shallow:      true,
+		Done:         true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetching commit objects: %w", err)
+	}
+
+	if len(objects) == 0 {
+		return nil, NewObjectNotFoundError(commitHash)
+	}
+
+	var foundObj *protocol.PackfileObject
+	for _, obj := range objects {
+		// Skip tree objects that are included in the response despite the blob:none filter.
+		// Most Git servers don't support tree:0 filter specification, so we may receive
+		// recursive tree objects that we need to filter out.
+		if obj.Type == protocol.ObjectTypeTree {
+			continue
+		}
+
+		if obj.Type != protocol.ObjectTypeCommit {
+			return nil, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+		}
+
+		// we got more commits than expected
+		if foundObj != nil {
+			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
+		}
+
+		if obj.Hash.Is(commitHash) {
+			foundObj = obj
+		}
+	}
+
+	if foundObj == nil {
+		return nil, NewObjectNotFoundError(commitHash)
+	}
+
+	return packfileObjectToCommit(foundObj)
 }
 
 func packfileObjectToCommit(commit *protocol.PackfileObject) (*Commit, error) {
@@ -360,8 +401,12 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		objects, err := c.getCommitTree(ctx, currentHash, getCommitTreeOptions{
-			deepen: perPage,
+		objects, err := c.fetch(ctx, fetchOptions{
+			NoProgress:   true,
+			NoBlobFilter: true,
+			Want:         []hash.Hash{currentHash},
+			Deepen:       perPage,
+			Done:         true,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("getting commit %s in queue: %w", currentHash.String(), err)
@@ -491,9 +536,14 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
 	commit, ok := allObjects.Get(commitHash)
 	if !ok {
-		objects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
-			shallow: true,
+		objects, err := c.fetch(ctx, fetchOptions{
+			NoProgress:   true,
+			NoBlobFilter: true,
+			Want:         []hash.Hash{commitHash},
+			Shallow:      true,
+			Done:         true,
 		})
+
 		if err != nil {
 			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
 		}
@@ -511,25 +561,9 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	logger := c.getLogger(ctx)
 	logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
 	treeHash := commit.Commit.Tree
-	tree, ok := allObjects.Get(treeHash)
-	if !ok {
-		objs, err := c.getTreeObjects(ctx, treeHash)
-		if err != nil {
-			return hash.Zero, fmt.Errorf("getting tree: %w", err)
-		}
-
-		// Try to find it in the objects we got but if not, get it from the storage
-		tree, ok = objs[treeHash.String()]
-		if !ok || tree.Type != protocol.ObjectTypeTree {
-			tree, ok = allObjects.Get(treeHash)
-			if !ok || tree.Type != protocol.ObjectTypeTree {
-				return hash.Zero, fmt.Errorf("tree %s not found", treeHash.String())
-			}
-		}
-	}
-
-	if tree.Type != protocol.ObjectTypeTree {
-		return hash.Zero, fmt.Errorf("object %s is not a tree", treeHash.String())
+	tree, err := c.GetTree(ctx, treeHash)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("getting tree: %w", err)
 	}
 
 	// If path is empty, return the tree hash
@@ -551,15 +585,10 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		// Find the entry in the current tree
 		var found bool
 		var entryHash hash.Hash
-		for _, entry := range currentTree.Tree {
-			if entry.FileName == component {
+		for _, entry := range currentTree.Entries {
+			if entry.Name == component {
 				found = true
-				var err error
-				entryHash, err = hash.FromHex(entry.Hash)
-				if err != nil {
-					return hash.Zero, fmt.Errorf("parsing hash: %w", err)
-				}
-
+				entryHash = entry.Hash
 				break
 			}
 		}
@@ -574,25 +603,9 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		}
 
 		// Otherwise, get the next tree
-		nextTree, ok := allObjects.Get(entryHash)
-		if !ok {
-			objs, err := c.getTreeObjects(ctx, entryHash)
-			if err != nil {
-				return hash.Zero, fmt.Errorf("getting tree: %w", err)
-			}
-
-			// Try to find it in the objects we got but if not, get it from the storage again
-			nextTree, ok := objs[entryHash.String()]
-			if !ok || nextTree.Type != protocol.ObjectTypeTree {
-				nextTree, ok = allObjects.Get(entryHash)
-				if !ok || nextTree.Type != protocol.ObjectTypeTree {
-					return hash.Zero, fmt.Errorf("tree %s not found", entryHash.String())
-				}
-			}
-		}
-
-		if nextTree.Type != protocol.ObjectTypeTree {
-			return hash.Zero, fmt.Errorf("path component %s is not a tree", component)
+		nextTree, err := c.GetTree(ctx, entryHash)
+		if err != nil {
+			return hash.Zero, fmt.Errorf("getting tree: %w", err)
 		}
 
 		currentTree = nextTree

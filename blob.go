@@ -29,20 +29,46 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
-	obj, err := c.getBlob(ctx, blobID)
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(blobID); ok {
+			return &Blob{
+				Hash:    blobID,
+				Content: obj.Data,
+			}, nil
+		}
+	}
+
+	// TODO: do we want a fetch one?
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoProgress: true,
+		Want:       []hash.Hash{blobID},
+		Done:       true,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("get object: %w", err)
+		return nil, fmt.Errorf("fetching blob objects: %w", err)
 	}
 
-	// FIXME: where to check for the type? here or in getBlob?
-	if obj.Type != protocol.ObjectTypeBlob {
-		return nil, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
+	var foundObj *protocol.PackfileObject
+	for _, obj := range objects {
+		if obj.Type != protocol.ObjectTypeBlob {
+			return nil, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
+		}
+
+		// we got more blobs than expected
+		if foundObj != nil {
+			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
+		}
+
+		if obj.Hash.Is(blobID) {
+			foundObj = obj
+		}
 	}
 
-	if obj.Hash.Is(blobID) {
+	if foundObj != nil {
 		return &Blob{
 			Hash:    blobID,
-			Content: obj.Data,
+			Content: foundObj.Data,
 		}, nil
 	}
 

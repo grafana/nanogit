@@ -43,42 +43,14 @@ type Ref struct {
 //	    fmt.Printf("%s -> %s\n", ref.Name, ref.Hash.String())
 //	}
 func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
-	// Send the ls-refs command directly - Protocol v2 allows this without needing
-	// a separate capability advertisement request
-	pkt, err := protocol.FormatPacks(
-		protocol.PackLine("command=ls-refs\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.FlushPacket,
-	)
+	lines, err := c.lsRefs(ctx, lsRefsOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("format ls-refs command: %w", err)
-	}
-
-	refsData, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		return nil, fmt.Errorf("send ls-refs command: %w", err)
+		return nil, fmt.Errorf("list refs: %w", err)
 	}
 
 	refs := make([]Ref, 0)
-	lines, _, err := protocol.ParsePack(refsData)
-	if err != nil {
-		return nil, fmt.Errorf("parse refs response: %w", err)
-	}
-
 	for _, line := range lines {
-		ref, h, err := protocol.ParseRefLine(line)
-		if err != nil {
-			return nil, fmt.Errorf("parse ref line: %w", err)
-		}
-
-		parsedHash, err := hash.FromHex(h)
-		if err != nil {
-			return nil, fmt.Errorf("parse ref hash: %w", err)
-		}
-
-		if ref != "" {
-			refs = append(refs, Ref{Name: ref, Hash: parsedHash})
-		}
+		refs = append(refs, Ref{Name: line.RefName, Hash: line.Hash})
 	}
 
 	return refs, nil
@@ -107,46 +79,25 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 //	    fmt.Printf("main branch points to %s\n", ref.Hash.String())
 //	}
 func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
-	// Send the ls-refs command directly - Protocol v2 allows this without needing
-	// a separate capability advertisement request
-	pkt, err := protocol.FormatPacks(
-		protocol.PackLine("command=ls-refs\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.DelimeterPacket,
-		protocol.PackLine(fmt.Sprintf("ref-prefix %s\n", refName)),
-		protocol.FlushPacket,
-	)
+	lines, err := c.lsRefs(ctx, lsRefsOptions{Prefix: refName})
 	if err != nil {
-		return Ref{}, fmt.Errorf("format ls-refs command: %w", err)
+		return Ref{}, fmt.Errorf("list refs: %w", err)
 	}
 
-	refsData, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		return Ref{}, fmt.Errorf("send ls-refs command: %w", err)
+	if len(lines) == 0 {
+		return Ref{}, NewRefNotFoundError(refName)
 	}
 
-	lines, _, err := protocol.ParsePack(refsData)
-	if err != nil {
-		return Ref{}, fmt.Errorf("parse refs response: %w", err)
+	if len(lines) > 1 {
+		return Ref{}, fmt.Errorf("multiple refs found for %s", refName)
 	}
 
-	for _, line := range lines {
-		ref, h, err := protocol.ParseRefLine(line)
-		if err != nil {
-			return Ref{}, fmt.Errorf("parse ref line: %w", err)
-		}
-
-		parsedHash, err := hash.FromHex(h)
-		if err != nil {
-			return Ref{}, fmt.Errorf("parse ref hash: %w", err)
-		}
-
-		if ref == refName {
-			return Ref{Name: ref, Hash: parsedHash}, nil
-		}
+	refLine := lines[0]
+	if refLine.RefName != refName {
+		return Ref{}, NewRefNotFoundError(refName)
 	}
 
-	return Ref{}, NewRefNotFoundError(refName)
+	return Ref{Name: refLine.RefName, Hash: refLine.Hash}, nil
 }
 
 // CreateRef creates a new Git reference in the remote repository.
