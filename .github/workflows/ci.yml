@@ -173,13 +173,15 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
+          TEST_USER: ${{ secrets.GH_REPO_USER }}
           TEST_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
         run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN not set"
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
             exit 0
           fi
           make test-providers
+
   test-gitlab-provider:
     name: GitLab Provider Tests
     if: github.repository == 'grafana/nanogit'
@@ -207,10 +209,46 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
+          TEST_USER: ${{ secrets.GITLAB_REPO_USER }}
           TEST_TOKEN: ${{ secrets.GITLAB_REPO_TOKEN }}
         run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN not set"
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
+            exit 0
+          fi
+          make test-providers
+  test-bitbucket-provider:
+    name: Bitbucket Provider Tests
+    if: github.repository == 'grafana/nanogit'
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go mod vendor
+      - name: Run provider tests
+        env:
+          CGO_ENABLED: 1
+          GOFLAGS: -mod=vendor
+          TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
+          TEST_USER: ${{ secrets.BITBUCKET_REPO_USER }}
+          TEST_TOKEN: ${{ secrets.BITBUCKET_REPO_TOKEN }}
+        run: |
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
             exit 0
           fi
           make test-providers

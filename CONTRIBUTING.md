@@ -204,11 +204,14 @@ These tests require specific environment variables to be set:
 To run provider tests:
 ```bash
 export TEST_REPO=https://github.com/grafana/nanogit-test.git
+export TEST_USER=git
 export TEST_TOKEN=<SOMETOKEN>
 make test-providers
 ```
-Our CI pipeline includes provider tests against GitHub using the [grafana/nanogit-test](https://github.com/grafana/nanogit-test.git) repository.
-
+Our CI pipeline includes provider tests against: 
+- GitHub using [grafana/nanogit-test](https://github.com/grafana/nanogit-test.git).
+- Gitlab using [grafana/nanogit-test](https://gitlab.com/grafana7281924/nanogit-test.git).
+- Bitbucket using [grafana/nanogit-test](https://bitbucket.org/nanogit-test/nanogit-test)
 
 #### Writing Tests
 
