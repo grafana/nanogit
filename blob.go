@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -90,10 +89,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 
 	// Add in-memory storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	if c.packfileStorage == nil {
-		storage := storage.NewInMemoryStorage(ctx)
-		ctx = WithPackfileStorageFromContext(ctx, storage)
-	}
+	ctx, _ = c.ensurePackfileStorage(ctx)
 
 	// Split the path into parts
 	parts := strings.Split(path, "/")
