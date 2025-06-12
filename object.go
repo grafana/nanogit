@@ -65,7 +65,7 @@ func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[st
 			break
 		}
 
-		if ctxStorage := GetPackfileStorageFromContext(ctx); ctxStorage != nil {
+		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
 			ctxStorage.Add(obj.Object)
 		}
 
@@ -160,7 +160,7 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 			break
 		}
 
-		if ctxStorage := GetPackfileStorageFromContext(ctx); ctxStorage != nil {
+		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
 			ctxStorage.Add(obj.Object)
 		}
 
@@ -257,7 +257,7 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 			break
 		}
 
-		if ctxStorage := GetPackfileStorageFromContext(ctx); ctxStorage != nil {
+		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
 			ctxStorage.Add(obj.Object)
 		}
 
@@ -357,7 +357,7 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 			break
 		}
 
-		if ctxStorage := GetPackfileStorageFromContext(ctx); ctxStorage != nil {
+		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
 			ctxStorage.Add(obj.Object)
 		}
 
@@ -430,7 +430,7 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 			break
 		}
 
-		if ctxStorage := GetPackfileStorageFromContext(ctx); ctxStorage != nil {
+		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
 			ctxStorage.Add(obj.Object)
 		}
 

@@ -23,8 +23,8 @@ func WithPackfileStorageFromContext(ctx context.Context, storage PackfileStorage
 	return context.WithValue(ctx, packfileStorageKey{}, storage)
 }
 
-// GetPackfileStorageFromContext gets the packfile storage from the context.
-func GetPackfileStorageFromContext(ctx context.Context) PackfileStorage {
+// getPackfileStorageFromContext gets the packfile storage from the context.
+func getPackfileStorageFromContext(ctx context.Context) PackfileStorage {
 	storage, ok := ctx.Value(packfileStorageKey{}).(PackfileStorage)
 	if !ok {
 		return nil
