@@ -34,6 +34,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 		return nil, fmt.Errorf("get object: %w", err)
 	}
 
+	// FIXME: where to check for the type? here or in getBlob?
 	if obj.Type != protocol.ObjectTypeBlob {
 		return nil, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
 	}
@@ -86,6 +87,10 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		return nil, errors.New("path cannot be empty")
 	}
 
+	// Add in-memory storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, _ = c.ensurePackfileStorage(ctx)
+
 	// Split the path into parts
 	parts := strings.Split(path, "/")
 	currentHash := rootHash
@@ -109,6 +114,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 				if entry.Type != protocol.ObjectTypeTree {
 					return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeTree, entry.Type)
 				}
+
 				currentHash = entry.Hash
 				found = true
 				break

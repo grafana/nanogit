@@ -93,6 +93,26 @@ commit, err := writer.Commit(ctx, "Add feature and update docs", author, committ
 writer.Push(ctx)
 ```
 
+## Storage and Caching
+
+nanogit offers a flexible storage system for managing Git objects with multiple implementation options. Git objects (commits, trees, blobs) are immutable by design - once created, their content and hash remain constant. This immutability enables efficient caching and sharing of objects across repositories. Local caching of these objects is crucial for performance as it reduces network requests and speeds up common operations like diffing, merging, and history traversal.
+
+### In-Memory Storage
+The default implementation uses an in-memory cache for Git objects, optimized for:
+- Stateless operations requiring minimal resource footprint
+- Temporary caching during Git operations
+- High-performance read/write operations
+
+### Custom Storage Implementations
+
+The storage system is built with extensibility in mind through a well-defined interface. This allows you to:
+- Implement custom storage backends (Redis, disk, etc.)
+- Optimize storage for specific use cases
+- Scale storage independently of the Git operations
+- Persist Git objects across service restarts
+
+To implement a custom storage backend, simply implement the `PackfileStorage` interface and configure it using `WithPackfileStorage()`.
+
 ## Testing
 
 nanogit includes generated mocks for easy unit testing. The mocks are generated using [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) and provide comprehensive test doubles for both the `Client` and `StagedWriter` interfaces.

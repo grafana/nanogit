@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -41,6 +40,10 @@ import (
 //	// Push to remote
 //	return writer.Push(ctx)
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
+	// Ensure storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, objStorage := c.ensurePackfileStorage(ctx)
+
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
@@ -50,9 +53,6 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	if err != nil {
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
-
-	objStorage := storage.NewInMemoryStorage()
-	objStorage.Add(treeObj)
 
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
@@ -589,7 +589,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				if err != nil {
 					return fmt.Errorf("get existing tree %s: %w", currentPath, err)
 				}
-				w.objStorage.Add(existingTree)
 				logger.Info("tree object found in remote", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
 			} else {
 				logger.Debug("tree object found in cache", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
@@ -633,7 +632,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	if err != nil {
 		return fmt.Errorf("update root tree: %w", err)
 	}
-	w.objStorage.Add(newRootObj)
 	w.lastTree = newRootObj
 
 	return nil
@@ -741,7 +739,6 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
-			w.objStorage.Add(treeObj)
 		}
 
 		var newObj *protocol.PackfileObject
@@ -859,7 +856,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
-			w.objStorage.Add(treeObj)
 		}
 
 		var newObj *protocol.PackfileObject

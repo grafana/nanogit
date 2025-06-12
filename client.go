@@ -100,6 +100,8 @@ type httpClient struct {
 	basicAuth *struct{ Username, Password string }
 	// Token-based authentication header
 	tokenAuth *string
+	// Packfile storage
+	packfileStorage PackfileStorage
 }
 
 // addDefaultHeaders adds the default headers to the request.

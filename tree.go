@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -97,6 +96,10 @@ type Tree struct {
 //	    fmt.Printf("%s (%s)\n", entry.Path, entry.Type)
 //	}
 func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*FlatTree, error) {
+	// Ensure storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, _ = c.ensurePackfileStorage(ctx)
+
 	allTreeObjects, treeHash, err := c.fetchAllTreeObjects(ctx, commitHash)
 	if err != nil {
 		return nil, err
@@ -113,7 +116,8 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	var totalRequests int
 	var totalObjectsFetched int
 
-	allObjects := storage.NewInMemoryStorage()
+	ctx, allObjects := c.ensurePackfileStorage(ctx)
+
 	totalRequests++
 	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
 		deepen:  1,
@@ -132,7 +136,6 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		return nil, hash.Zero, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
 	}
 
-	allObjects.AddMap(initialObjects)
 	totalObjectsFetched = len(initialObjects)
 
 	// Debug: analyze what types of objects we got
@@ -343,8 +346,6 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 		if processedTrees[obj.Hash.String()] {
 			continue
 		}
-
-		allObjects.Add(obj)
 	}
 
 	for _, obj := range objects {
@@ -546,9 +547,19 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 		return nil, fmt.Errorf("get tree object: %w", err)
 	}
 
+	return packfileObjectToTree(tree)
+}
+
+// packfileObjectToTree converts a packfile object to a tree object.
+// It returns the direct children of the tree.
+func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
+	if obj.Type != protocol.ObjectTypeTree {
+		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
+	}
+
 	// Convert PackfileTreeEntry to TreeEntry (direct children only)
-	entries := make([]TreeEntry, len(tree.Tree))
-	for i, entry := range tree.Tree {
+	entries := make([]TreeEntry, len(obj.Tree))
+	for i, entry := range obj.Tree {
 		entryHash, err := hash.FromHex(entry.Hash)
 		if err != nil {
 			return nil, fmt.Errorf("parsing hash: %w", err)
@@ -570,7 +581,7 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 
 	return &Tree{
 		Entries: entries,
-		Hash:    h,
+		Hash:    obj.Hash,
 	}, nil
 }
 
@@ -603,6 +614,10 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 //	    fmt.Printf("%s\n", entry.Name)
 //	}
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
+	// Ensure storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, _ = c.ensurePackfileStorage(ctx)
+
 	if path == "" || path == "." {
 		// Return the root tree
 		return c.GetTree(ctx, rootHash)
@@ -644,5 +659,10 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 	}
 
 	// Get the final tree
-	return c.GetTree(ctx, currentHash)
+	finalTree, err := c.GetTree(ctx, currentHash)
+	if err != nil {
+		return nil, fmt.Errorf("get final tree %s: %w", currentHash, err)
+	}
+
+	return finalTree, nil
 }
