@@ -36,14 +36,13 @@ The following features are explicitly not supported:
 ## Why nanogit?
 
 While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, nanogit is designed for cloud-native, multitenant environments requiring minimal, stateless operations.
-
-| Feature | nanogit | go-git |
-|---------|---------|--------|
-| Protocol | HTTPS-only | All protocols |
-| Storage | Stateless, no local disk | Local disk operations |
-| Scope | Essential operations only | Full Git functionality |
-| Use Case | Cloud services, multitenant | General purpose |
-| Resource Usage | Minimal footprint | Full Git features |
+| Feature        | nanogit                                                | go-git                 |
+| -------------- | ------------------------------------------------------ | ---------------------- |
+| Protocol       | HTTPS-only                                             | All protocols          |
+| Storage        | Stateless, configurable storage (memory, disk, custom) | Local disk operations  |
+| Scope          | Essential operations only                              | Full Git functionality |
+| Use Case       | Cloud services, multitenant                            | General purpose        |
+| Resource Usage | Minimal footprint                                      | Full Git features      |
 
 Choose nanogit for lightweight cloud services requiring stateless operations and minimal resources. Use go-git when you need full Git functionality, local operations, or advanced features.
 
