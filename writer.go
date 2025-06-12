@@ -62,8 +62,6 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
 
-	// TODO: Optimize by using the private getFlatTree
-	// Because it may get more objects in the same request
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting current tree: %w", err)

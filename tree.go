@@ -120,7 +120,6 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	}
 
 	totalRequests++
-	// TODO: we add objects twice
 	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
 		deepen:  1,
 		shallow: true,
