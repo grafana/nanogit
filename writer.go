@@ -47,17 +47,12 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		ctx = WithPackfileStorageFromContext(ctx, objStorage)
 	}
 
-	commit, err := c.getCommit(ctx, ref.Hash)
+	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
 	}
 
-	lastCommit, err := packfileObjectToCommit(commit)
-	if err != nil {
-		return nil, fmt.Errorf("converting packfile object to commit: %w", err)
-	}
-
-	treeObj, err := c.getTree(ctx, commit.Commit.Tree)
+	treeObj, err := c.getTree(ctx, commit.Tree)
 	if err != nil {
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
@@ -78,7 +73,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		httpClient:  c,
 		ref:         ref,
 		writer:      writer,
-		lastCommit:  lastCommit,
+		lastCommit:  commit,
 		lastTree:    treeObj,
 		objStorage:  objStorage,
 		treeEntries: entries,
