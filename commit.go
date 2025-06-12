@@ -351,6 +351,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 	allObjects := c.packfileStorage
 	if allObjects == nil {
 		allObjects = storage.NewInMemoryStorage(ctx)
+		ctx = WithPackfileStorageFromContext(ctx, allObjects)
 	}
 
 	for len(queue) > 0 && len(commitObjs) < skip+collect {
@@ -364,7 +365,6 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		// TODO: we add objects twice
 		objects, err := c.getCommitTree(ctx, currentHash, getCommitTreeOptions{
 			deepen: perPage,
 		})
@@ -372,10 +372,13 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 			return nil, fmt.Errorf("getting commit %s in queue: %w", currentHash.String(), err)
 		}
 
-		allObjects.AddMap(objects)
-		commit, exists := allObjects.Get(currentHash)
-		if !exists || commit.Type != protocol.ObjectTypeCommit {
-			return nil, fmt.Errorf("commit %s not found", currentHash.String())
+		// Try to find it in the objects we got but if not, get it from the storage
+		commit, ok := objects[currentHash.String()]
+		if !ok || commit.Type != protocol.ObjectTypeCommit {
+			commit, ok = allObjects.Get(currentHash)
+			if !ok || commit.Type != protocol.ObjectTypeCommit {
+				return nil, fmt.Errorf("commit %s not found", currentHash.String())
+			}
 		}
 
 		// Apply filters
@@ -493,7 +496,6 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
 	commit, exists := allObjects.Get(commitHash)
 	if !exists {
-		// TODO: we add objects twice
 		objects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
 			shallow: true,
 		})
@@ -501,10 +503,13 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
 		}
 
-		allObjects.AddMap(objects)
-		commit, exists = allObjects.Get(commitHash)
-		if !exists {
-			return hash.Zero, fmt.Errorf("commit %s not found", commitHash.String())
+		// Try to find it in the objects we got but if not, get it from the storage
+		commit, ok := objects[commitHash.String()]
+		if !ok || commit.Type != protocol.ObjectTypeCommit {
+			commit, ok = allObjects.Get(commitHash)
+			if !ok || commit.Type != protocol.ObjectTypeCommit {
+				return hash.Zero, fmt.Errorf("commit %s not found", commitHash.String())
+			}
 		}
 	}
 
@@ -518,10 +523,13 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			return hash.Zero, fmt.Errorf("getting tree: %w", err)
 		}
 
-		allObjects.AddMap(objs)
-		tree, exists = allObjects.Get(treeHash)
-		if !exists {
-			return hash.Zero, fmt.Errorf("tree %s not found", treeHash.String())
+		// Try to find it in the objects we got but if not, get it from the storage
+		tree, ok := objs[treeHash.String()]
+		if !ok || tree.Type != protocol.ObjectTypeTree {
+			tree, ok = allObjects.Get(treeHash)
+			if !ok || tree.Type != protocol.ObjectTypeTree {
+				return hash.Zero, fmt.Errorf("tree %s not found", treeHash.String())
+			}
 		}
 	}
 
@@ -571,17 +579,20 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		}
 
 		// Otherwise, get the next tree
-		nextTree, exists := allObjects.Get(entryHash)
-		if !exists {
+		nextTree, ok := allObjects.Get(entryHash)
+		if !ok {
 			objs, err := c.getTreeObjects(ctx, entryHash)
 			if err != nil {
 				return hash.Zero, fmt.Errorf("getting tree: %w", err)
 			}
 
-			allObjects.AddMap(objs)
-			nextTree, exists = allObjects.Get(entryHash)
-			if !exists {
-				return hash.Zero, fmt.Errorf("tree %s not found", entryHash.String())
+			// Try to find it in the objects we got but if not, get it from the storage again
+			nextTree, ok := objs[entryHash.String()]
+			if !ok || nextTree.Type != protocol.ObjectTypeTree {
+				nextTree, ok = allObjects.Get(entryHash)
+				if !ok || nextTree.Type != protocol.ObjectTypeTree {
+					return hash.Zero, fmt.Errorf("tree %s not found", entryHash.String())
+				}
 			}
 		}
 

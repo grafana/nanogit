@@ -116,6 +116,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	allObjects := c.packfileStorage
 	if allObjects == nil {
 		allObjects = storage.NewInMemoryStorage(ctx)
+		ctx = WithPackfileStorageFromContext(ctx, allObjects)
 	}
 
 	totalRequests++
@@ -137,7 +138,6 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		return nil, hash.Zero, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
 	}
 
-	allObjects.AddMap(initialObjects)
 	totalObjectsFetched = len(initialObjects)
 
 	// Debug: analyze what types of objects we got
@@ -348,9 +348,6 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 		if processedTrees[obj.Hash.String()] {
 			continue
 		}
-
-		// TODO: we add objects twice
-		allObjects.Add(obj)
 	}
 
 	for _, obj := range objects {

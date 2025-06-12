@@ -80,20 +80,6 @@ func (s *InMemoryStorage) Add(objs ...*protocol.PackfileObject) {
 	}
 }
 
-func (s *InMemoryStorage) AddMap(objs map[string]*protocol.PackfileObject) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now()
-	for _, obj := range objs {
-		key := obj.Hash.String()
-		s.objects[key] = obj
-		if s.ttl > 0 {
-			s.lastAccess[key] = now
-		}
-	}
-}
-
 func (s *InMemoryStorage) Delete(key hash.Hash) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

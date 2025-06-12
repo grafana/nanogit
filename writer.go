@@ -41,7 +41,12 @@ import (
 //	// Push to remote
 //	return writer.Push(ctx)
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
-	// TODO: umm, we don't use the one we provide
+	objStorage := c.packfileStorage
+	if objStorage == nil {
+		objStorage = storage.NewInMemoryStorage(ctx)
+		ctx = WithPackfileStorageFromContext(ctx, objStorage)
+	}
+
 	commit, err := c.getCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
@@ -56,13 +61,6 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	if err != nil {
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
-
-	objStorage := c.packfileStorage
-	if objStorage == nil {
-		objStorage = storage.NewInMemoryStorage(ctx)
-	}
-
-	objStorage.Add(treeObj)
 
 	// TODO: Optimize by using the private getFlatTree
 	// Because it may get more objects in the same request
@@ -601,7 +599,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				if err != nil {
 					return fmt.Errorf("get existing tree %s: %w", currentPath, err)
 				}
-				w.objStorage.Add(existingTree)
 				logger.Info("tree object found in remote", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
 			} else {
 				logger.Debug("tree object found in cache", "path", currentPath, "hash", existingObj.Hash.String(), "entries", len(existingTree.Tree))
@@ -645,7 +642,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	if err != nil {
 		return fmt.Errorf("update root tree: %w", err)
 	}
-	w.objStorage.Add(newRootObj)
 	w.lastTree = newRootObj
 
 	return nil
@@ -753,7 +749,6 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
-			w.objStorage.Add(treeObj)
 		}
 
 		var newObj *protocol.PackfileObject
@@ -871,7 +866,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			if err != nil {
 				return fmt.Errorf("get tree %s: %w", currentPath, err)
 			}
-			w.objStorage.Add(treeObj)
 		}
 
 		var newObj *protocol.PackfileObject

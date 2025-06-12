@@ -97,33 +97,6 @@ func TestInMemoryStorage(t *testing.T) {
 		require.Equal(t, obj2, got2)
 	})
 
-	t.Run("AddMap", func(t *testing.T) {
-		storage := NewInMemoryStorage(context.Background())
-		obj1 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
-			Type: protocol.ObjectTypeBlob,
-		}
-		obj2 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("fedcba9876543210"),
-			Type: protocol.ObjectTypeTree,
-		}
-		objects := map[string]*protocol.PackfileObject{
-			obj1.Hash.String(): obj1,
-			obj2.Hash.String(): obj2,
-		}
-
-		storage.AddMap(objects)
-		require.Equal(t, 2, storage.Len())
-
-		got1, ok1 := storage.Get(obj1.Hash)
-		require.True(t, ok1)
-		require.Equal(t, obj1, got1)
-
-		got2, ok2 := storage.Get(obj2.Hash)
-		require.True(t, ok2)
-		require.Equal(t, obj2, got2)
-	})
-
 	t.Run("TTL", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -147,13 +120,6 @@ func TestInMemoryStorage(t *testing.T) {
 		// Test Add with TTL
 		storage.Add(obj1, obj2)
 		require.Equal(t, 2, storage.Len())
-
-		// Test AddMap with TTL
-		objects := map[string]*protocol.PackfileObject{
-			obj3.Hash.String(): obj3,
-		}
-		storage.AddMap(objects)
-		require.Equal(t, 3, storage.Len())
 
 		// Wait for TTL to expire
 		time.Sleep(50 * time.Millisecond)
