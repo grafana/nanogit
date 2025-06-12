@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/grafana/nanogit/internal/storage"
+	"github.com/grafana/nanogit/storage"
 	"github.com/stretchr/testify/require"
 )
 

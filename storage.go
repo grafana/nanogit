@@ -3,9 +3,9 @@ package nanogit
 import (
 	"context"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 // WithPackfileStorage sets the packfile storage for the client.

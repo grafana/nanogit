@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	. "github.com/grafana/nanogit/storage"
 	"github.com/stretchr/testify/require"
 )
 
