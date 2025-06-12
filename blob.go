@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -85,6 +86,11 @@ type Blob struct {
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
 	if path == "" {
 		return nil, errors.New("path cannot be empty")
+	}
+
+	if c.packfileStorage == nil {
+		storage := storage.NewInMemoryStorage(ctx)
+		ctx = WithPackfileStorageFromContext(ctx, storage)
 	}
 
 	// Split the path into parts
