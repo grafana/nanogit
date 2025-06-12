@@ -349,6 +349,7 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 			continue
 		}
 
+		// TODO: we add objects twice
 		allObjects.Add(obj)
 	}
 
