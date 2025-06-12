@@ -92,7 +92,12 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 		return Ref{}, fmt.Errorf("multiple refs found for %s", refName)
 	}
 
-	return Ref{Name: lines[0].RefName, Hash: lines[0].Hash}, nil
+	refLine := lines[0]
+	if refLine.RefName != refName {
+		return Ref{}, NewRefNotFoundError(refName)
+	}
+
+	return Ref{Name: refLine.RefName, Hash: refLine.Hash}, nil
 }
 
 // CreateRef creates a new Git reference in the remote repository.
