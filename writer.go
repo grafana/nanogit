@@ -580,10 +580,9 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Mode: 0o40000,
 			}
 		} else {
-			// If tree exists, add our entries to it
-			existingTree, err := w.client.getTree(ctx, existingObj.Hash)
-			if err != nil {
-				return fmt.Errorf("get existing tree %s: %w", currentPath, err)
+			existingTree, ok := w.objStorage.Get(existingObj.Hash)
+			if !ok {
+				return fmt.Errorf("get existing tree %s: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 			}
 
 			newObj, err := w.updateTreeEntry(existingTree, current)
@@ -668,6 +667,7 @@ func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current pro
 	}
 
 	w.writer.AddObject(newObj)
+	w.objStorage.Add(&newObj)
 
 	return &newObj, nil
 }
@@ -723,12 +723,15 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
-		treeObj, err := w.client.getTree(ctx, existingObj.Hash)
-		if err != nil {
-			return fmt.Errorf("get tree %s: %w", currentPath, err)
+		treeObj, ok := w.objStorage.Get(existingObj.Hash)
+		if !ok {
+			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 		}
 
-		var newObj *protocol.PackfileObject
+		var (
+			newObj *protocol.PackfileObject
+			err    error
+		)
 
 		if i == len(dirParts)-1 {
 			// This is the immediate parent - remove the file
@@ -778,7 +781,6 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 	}
 
 	w.lastTree = newRootObj
-	w.objStorage.Add(newRootObj)
 	logger.Debug("updated root tree", "dir", rootDirName, "dir_hash", updatedChildHash.String(), "new_root_hash", newRootObj.Hash.String())
 
 	return nil
@@ -834,12 +836,15 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
-		treeObj, err := w.client.getTree(ctx, existingObj.Hash)
-		if err != nil {
-			return fmt.Errorf("get tree %s: %w", currentPath, err)
+		treeObj, ok := w.objStorage.Get(existingObj.Hash)
+		if !ok {
+			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 		}
 
-		var newObj *protocol.PackfileObject
+		var (
+			newObj *protocol.PackfileObject
+			err    error
+		)
 
 		if i == len(parentParts)-1 {
 			// This is the immediate parent - remove the directory
