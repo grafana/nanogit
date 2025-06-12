@@ -88,6 +88,8 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		return nil, errors.New("path cannot be empty")
 	}
 
+	// Add in-memory storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
 	if c.packfileStorage == nil {
 		storage := storage.NewInMemoryStorage(ctx)
 		ctx = WithPackfileStorageFromContext(ctx, storage)
@@ -143,7 +145,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
 			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeBlob, protocol.ObjectTypeTree)
+				return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeBlob, entry.Type)
 			}
 
 			return c.GetBlob(ctx, entry.Hash)
