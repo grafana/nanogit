@@ -2,83 +2,33 @@ package nanogit
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"strings"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
 func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	logger := c.getLogger(ctx)
-	packs := []protocol.Pack{
-		protocol.PackLine("command=fetch\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.SpecialPack(protocol.DelimeterPacket),
-		protocol.PackLine("no-progress\n"),
-		protocol.PackLine("filter blob:none\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", want.String())),
-		protocol.PackLine("done\n"),
-	}
-
-	pkt, err := protocol.FormatPacks(packs...)
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoCache:      true,
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{want},
+		Done:         true,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("formatting packets: %w", err)
-	}
-
-	logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
-
-	out, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		logger.Debug("UploadPack error", "want", want, "error", err)
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, NewObjectNotFoundError(want)
-		}
-		return nil, fmt.Errorf("sending commands: %w", err)
-	}
-
-	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
-
-	lines, _, err := protocol.ParsePack(out)
-	if err != nil {
-		logger.Debug("ParsePack error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	logger.Debug("Parsed lines", "want", want, "lines", lines)
-
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
-	objects := make(map[string]*protocol.PackfileObject)
-	for {
-		obj, err := response.Packfile.ReadObject()
-		if err != nil {
-			logger.Debug("ReadObject error", "want", want, "error", err)
-			break
-		}
-		if obj.Object == nil {
-			break
-		}
-
-		storage := c.getPackfileStorage(ctx)
-		if storage != nil {
-			storage.Add(obj.Object)
-		}
-
-		if obj.Object.Type != protocol.ObjectTypeTree {
-			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Object.Type)
-		}
-
-		objects[obj.Object.Hash.String()] = obj.Object
+		return nil, fmt.Errorf("fetching tree objects: %w", err)
 	}
 
 	if len(objects) == 0 {
 		return nil, NewObjectNotFoundError(want)
+	}
+
+	// TODO: can we do in the fetch?
+	for _, obj := range objects {
+		if obj.Type != protocol.ObjectTypeTree {
+			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Type)
+		}
 	}
 
 	return objects, nil
@@ -114,88 +64,43 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 		}
 	}
 
-	logger := c.getLogger(ctx)
-	packs := []protocol.Pack{
-		protocol.PackLine("command=fetch\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.SpecialPack(protocol.DelimeterPacket),
-		protocol.PackLine("no-progress\n"),
-		protocol.PackLine("filter blob:none\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", want.String())),
-		protocol.PackLine(fmt.Sprintf("shallow %s\n", want.String())),
-		protocol.PackLine("deepen 1\n"),
-		protocol.PackLine("done\n"),
-	}
-
-	pkt, err := protocol.FormatPacks(packs...)
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{want},
+		Deepen:       1,
+		Shallow:      true,
+		Done:         true,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("formatting packets: %w", err)
+		return nil, fmt.Errorf("fetching commit objects: %w", err)
 	}
 
-	logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
-
-	out, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		logger.Debug("UploadPack error", "want", want, "error", err)
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, NewObjectNotFoundError(want)
-		}
-		return nil, fmt.Errorf("sending commands: %w", err)
+	if len(objects) == 0 {
+		return nil, NewObjectNotFoundError(want)
 	}
 
-	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
-
-	lines, _, err := protocol.ParsePack(out)
-	if err != nil {
-		logger.Debug("ParsePack error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	logger.Debug("Parsed lines", "want", want, "lines", lines)
-
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
-	objects := make([]*protocol.PackfileObject, 0)
 	var foundObj *protocol.PackfileObject
-	for {
-		obj, err := response.Packfile.ReadObject()
-		if err != nil {
-			logger.Debug("ReadObject error", "want", want, "error", err)
-			break
-		}
-		if obj.Object == nil {
-			break
-		}
-
-		storage := c.getPackfileStorage(ctx)
-		if storage != nil {
-			storage.Add(obj.Object)
-		}
-
+	for _, obj := range objects {
 		// Skip tree objects that are included in the response despite the blob:none filter.
 		// Most Git servers don't support tree:0 filter specification, so we may receive
 		// recursive tree objects that we need to filter out.
-		if obj.Object.Type == protocol.ObjectTypeTree {
+		if obj.Type == protocol.ObjectTypeTree {
 			continue
 		}
 
-		if obj.Object.Type != protocol.ObjectTypeCommit {
-			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeCommit, obj.Object.Type)
+		if obj.Type != protocol.ObjectTypeCommit {
+			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeCommit, obj.Type)
 		}
 
-		objects = append(objects, obj.Object)
-		if obj.Object.Hash.Is(want) {
-			foundObj = obj.Object
+		// we got more commits than expected
+		if foundObj != nil {
+			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
 		}
-	}
 
-	// we got more commits than expected
-	if len(objects) > 1 {
-		return nil, NewUnexpectedObjectCountError(1, objects)
+		if obj.Hash.Is(want) {
+			foundObj = obj
+		}
 	}
 
 	if foundObj != nil {
@@ -213,77 +118,30 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 		}
 	}
 
-	logger := c.getLogger(ctx)
-	packs := []protocol.Pack{
-		protocol.PackLine("command=fetch\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.SpecialPack(protocol.DelimeterPacket),
-		protocol.PackLine("no-progress\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", want.String())),
-		protocol.PackLine("done\n"),
-	}
-
-	pkt, err := protocol.FormatPacks(packs...)
+	// TODO: do we want a fetch one?
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoProgress: true,
+		Want:       []hash.Hash{want},
+		Done:       true,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("formatting packets: %w", err)
+		return nil, fmt.Errorf("fetching blob objects: %w", err)
 	}
 
-	logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
-
-	out, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		logger.Debug("UploadPack error", "want", want, "error", err)
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, NewObjectNotFoundError(want)
-		}
-		return nil, fmt.Errorf("sending commands: %w", err)
-	}
-
-	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
-	lines, _, err := protocol.ParsePack(out)
-	if err != nil {
-		logger.Debug("ParsePack error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	logger.Debug("Parsed lines", "want", want, "lines", lines)
-
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
-	objects := make([]*protocol.PackfileObject, 0)
 	var foundObj *protocol.PackfileObject
-	for {
-		obj, err := response.Packfile.ReadObject()
-		if err != nil {
-			logger.Debug("ReadObject error", "want", want, "error", err)
-			break
-		}
-		if obj.Object == nil {
-			break
+	for _, obj := range objects {
+		if obj.Type != protocol.ObjectTypeBlob {
+			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeBlob, obj.Type)
 		}
 
-		storage := c.getPackfileStorage(ctx)
-		if storage != nil {
-			storage.Add(obj.Object)
+		// we got more blobs than expected
+		if foundObj != nil {
+			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
 		}
 
-		if obj.Object.Type != protocol.ObjectTypeBlob {
-			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeBlob, obj.Object.Type)
+		if obj.Hash.Is(want) {
+			foundObj = obj
 		}
-
-		objects = append(objects, obj.Object)
-		if obj.Object.Hash.Is(want) {
-			foundObj = obj.Object
-		}
-	}
-
-	// we got more commits than expected
-	if len(objects) > 1 {
-		return nil, NewUnexpectedObjectCountError(1, objects)
 	}
 
 	if foundObj != nil {
@@ -300,162 +158,12 @@ type getCommitTreeOptions struct {
 
 // getRootTree fetches the root tree of the repository.
 func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, opts getCommitTreeOptions) (map[string]*protocol.PackfileObject, error) {
-	logger := c.getLogger(ctx)
-	packs := []protocol.Pack{
-		protocol.PackLine("command=fetch\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.SpecialPack(protocol.DelimeterPacket),
-		protocol.PackLine("no-progress\n"),
-		protocol.PackLine("filter blob:none\n"),
-		protocol.PackLine(fmt.Sprintf("want %s\n", commitHash.String())),
-	}
-
-	if opts.shallow {
-		packs = append(packs, protocol.PackLine(fmt.Sprintf("shallow %s\n", commitHash.String())))
-	}
-
-	if opts.deepen > 0 {
-		packs = append(packs, protocol.PackLine(fmt.Sprintf("deepen %d\n", opts.deepen)))
-	}
-
-	packs = append(packs, protocol.PackLine("done\n"))
-
-	pkt, err := protocol.FormatPacks(packs...)
-	if err != nil {
-		return nil, fmt.Errorf("formatting packets: %w", err)
-	}
-
-	logger.Debug("Specific fetch request", "want", commitHash, "request", string(pkt))
-
-	out, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		logger.Debug("UploadPack error", "want", commitHash, "error", err)
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, NewObjectNotFoundError(commitHash)
-		}
-		return nil, fmt.Errorf("sending commands: %w", err)
-	}
-
-	logger.Debug("Raw server response", "want", commitHash, "response", hex.EncodeToString(out))
-
-	lines, _, err := protocol.ParsePack(out)
-	if err != nil {
-		logger.Debug("ParsePack error", "want", commitHash, "error", err)
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	logger.Debug("Parsed lines", "want", commitHash, "lines", lines)
-
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		logger.Debug("ParseFetchResponse error", "want", commitHash, "error", err)
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
-	objects := make(map[string]*protocol.PackfileObject)
-	for {
-		obj, err := response.Packfile.ReadObject()
-		if err != nil {
-			logger.Debug("ReadObject error", "want", commitHash, "error", err)
-			break
-		}
-		if obj.Object == nil {
-			break
-		}
-
-		storage := c.getPackfileStorage(ctx)
-		if storage != nil {
-			storage.Add(obj.Object)
-		}
-
-		objects[obj.Object.Hash.String()] = obj.Object
-	}
-
-	return objects, nil
-}
-
-func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	objects := make(map[string]*protocol.PackfileObject)
-	pending := make([]hash.Hash, 0, len(want))
-	storage := c.getPackfileStorage(ctx)
-	if storage != nil {
-		for _, w := range want {
-			if obj, ok := storage.Get(w); ok {
-				objects[w.String()] = obj
-			} else {
-				pending = append(pending, w)
-			}
-		}
-
-		if len(objects) == len(want) {
-			return objects, nil
-		}
-	}
-
-	logger := c.getLogger(ctx)
-	packs := []protocol.Pack{
-		protocol.PackLine("command=fetch\n"),
-		protocol.PackLine("object-format=sha1\n"),
-		protocol.SpecialPack(protocol.DelimeterPacket),
-		protocol.PackLine("no-progress\n"),
-		protocol.PackLine("filter blob:none\n"),
-	}
-
-	for _, w := range pending {
-		packs = append(packs, protocol.PackLine(fmt.Sprintf("want %s\n", w.String())))
-	}
-	packs = append(packs, protocol.PackLine("done\n"))
-
-	pkt, err := protocol.FormatPacks(packs...)
-	if err != nil {
-		return nil, fmt.Errorf("formatting packets: %w", err)
-	}
-
-	logger.Debug("Fetch request", "want", want, "request", string(pkt))
-
-	out, err := c.uploadPack(ctx, pkt)
-	if err != nil {
-		logger.Debug("UploadPack error", "want", want, "error", err)
-		if strings.Contains(err.Error(), "not our ref") {
-			return nil, ErrObjectNotFound
-		}
-		return nil, fmt.Errorf("send commands: %w", err)
-	}
-
-	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
-
-	lines, _, err := protocol.ParsePack(out)
-	if err != nil {
-		logger.Debug("ParsePack error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	logger.Debug("Parsed lines", "want", want, "lines", lines)
-
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
-	for {
-		obj, err := response.Packfile.ReadObject()
-		if err != nil {
-			logger.Debug("ReadObject error", "want", want, "error", err)
-			break
-		}
-
-		if obj.Object == nil {
-			break
-		}
-
-		storage := c.getPackfileStorage(ctx)
-		if storage != nil {
-			storage.Add(obj.Object)
-		}
-
-		objects[obj.Object.Hash.String()] = obj.Object
-	}
-
-	return objects, nil
+	return c.fetch(ctx, fetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{commitHash},
+		Deepen:       opts.deepen,
+		Shallow:      opts.shallow,
+		Done:         true,
+	})
 }

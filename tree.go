@@ -248,7 +248,12 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 			"remaining_retries", len(retries))
 
 		totalRequests++
-		objects, err := c.getObjects(ctx, currentBatch...)
+		objects, err := c.fetch(ctx, fetchOptions{
+			NoProgress:   true,
+			NoBlobFilter: true,
+			Want:         currentBatch,
+			Done:         true,
+		})
 		if err != nil {
 			return nil, hash.Zero, fmt.Errorf("getting objects: %w", err)
 		}
