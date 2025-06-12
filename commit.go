@@ -494,8 +494,8 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 // If the object is a blob, the hash of the blob will be returned.
 // Otherwise, return an error.
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
-	commit, exists := allObjects.Get(commitHash)
-	if !exists {
+	commit, ok := allObjects.Get(commitHash)
+	if !ok {
 		objects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
 			shallow: true,
 		})
@@ -504,7 +504,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		}
 
 		// Try to find it in the objects we got but if not, get it from the storage
-		commit, ok := objects[commitHash.String()]
+		commit, ok = objects[commitHash.String()]
 		if !ok || commit.Type != protocol.ObjectTypeCommit {
 			commit, ok = allObjects.Get(commitHash)
 			if !ok || commit.Type != protocol.ObjectTypeCommit {
@@ -516,15 +516,15 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	logger := c.getLogger(ctx)
 	logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
 	treeHash := commit.Commit.Tree
-	tree, exists := allObjects.Get(treeHash)
-	if !exists {
+	tree, ok := allObjects.Get(treeHash)
+	if !ok {
 		objs, err := c.getTreeObjects(ctx, treeHash)
 		if err != nil {
 			return hash.Zero, fmt.Errorf("getting tree: %w", err)
 		}
 
 		// Try to find it in the objects we got but if not, get it from the storage
-		tree, ok := objs[treeHash.String()]
+		tree, ok = objs[treeHash.String()]
 		if !ok || tree.Type != protocol.ObjectTypeTree {
 			tree, ok = allObjects.Get(treeHash)
 			if !ok || tree.Type != protocol.ObjectTypeTree {
