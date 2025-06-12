@@ -11,6 +11,7 @@ import (
 )
 
 func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -26,30 +27,30 @@ func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[st
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	c.logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
+	logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
 
 	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
-		c.logger.Debug("UploadPack error", "want", want, "error", err)
+		logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(want)
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
+	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
 
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		c.logger.Debug("ParsePack error", "want", want, "error", err)
+		logger.Debug("ParsePack error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	c.logger.Debug("Parsed lines", "want", want, "lines", lines)
+	logger.Debug("Parsed lines", "want", want, "lines", lines)
 
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		c.logger.Debug("ParseFetchResponse error", "want", want, "error", err)
+		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
@@ -57,7 +58,7 @@ func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[st
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			c.logger.Debug("ReadObject error", "want", want, "error", err)
+			logger.Debug("ReadObject error", "want", want, "error", err)
 			break
 		}
 		if obj.Object == nil {
@@ -94,6 +95,7 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 }
 
 func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -111,30 +113,30 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	c.logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
+	logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
 
 	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
-		c.logger.Debug("UploadPack error", "want", want, "error", err)
+		logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(want)
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
+	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
 
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		c.logger.Debug("ParsePack error", "want", want, "error", err)
+		logger.Debug("ParsePack error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	c.logger.Debug("Parsed lines", "want", want, "lines", lines)
+	logger.Debug("Parsed lines", "want", want, "lines", lines)
 
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		c.logger.Debug("ParseFetchResponse error", "want", want, "error", err)
+		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
@@ -143,7 +145,7 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			c.logger.Debug("ReadObject error", "want", want, "error", err)
+			logger.Debug("ReadObject error", "want", want, "error", err)
 			break
 		}
 		if obj.Object == nil {
@@ -180,6 +182,7 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 }
 
 func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -194,30 +197,29 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	c.logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
+	logger.Debug("Specific fetch request", "want", want, "request", string(pkt))
 
 	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
-		c.logger.Debug("UploadPack error", "want", want, "error", err)
+		logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(want)
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
-
+	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		c.logger.Debug("ParsePack error", "want", want, "error", err)
+		logger.Debug("ParsePack error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	c.logger.Debug("Parsed lines", "want", want, "lines", lines)
+	logger.Debug("Parsed lines", "want", want, "lines", lines)
 
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		c.logger.Debug("ParseFetchResponse error", "want", want, "error", err)
+		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
@@ -226,7 +228,7 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			c.logger.Debug("ReadObject error", "want", want, "error", err)
+			logger.Debug("ReadObject error", "want", want, "error", err)
 			break
 		}
 		if obj.Object == nil {
@@ -262,6 +264,7 @@ type getCommitTreeOptions struct {
 
 // getRootTree fetches the root tree of the repository.
 func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, opts getCommitTreeOptions) (map[string]*protocol.PackfileObject, error) {
+	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -286,30 +289,30 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	c.logger.Debug("Specific fetch request", "want", commitHash, "request", string(pkt))
+	logger.Debug("Specific fetch request", "want", commitHash, "request", string(pkt))
 
 	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
-		c.logger.Debug("UploadPack error", "want", commitHash, "error", err)
+		logger.Debug("UploadPack error", "want", commitHash, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(commitHash)
 		}
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "want", commitHash, "response", hex.EncodeToString(out))
+	logger.Debug("Raw server response", "want", commitHash, "response", hex.EncodeToString(out))
 
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		c.logger.Debug("ParsePack error", "want", commitHash, "error", err)
+		logger.Debug("ParsePack error", "want", commitHash, "error", err)
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	c.logger.Debug("Parsed lines", "want", commitHash, "lines", lines)
+	logger.Debug("Parsed lines", "want", commitHash, "lines", lines)
 
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		c.logger.Debug("ParseFetchResponse error", "want", commitHash, "error", err)
+		logger.Debug("ParseFetchResponse error", "want", commitHash, "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
@@ -317,7 +320,7 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			c.logger.Debug("ReadObject error", "want", commitHash, "error", err)
+			logger.Debug("ReadObject error", "want", commitHash, "error", err)
 			break
 		}
 		if obj.Object == nil {
@@ -331,6 +334,7 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 }
 
 func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
 		protocol.PackLine("object-format=sha1\n"),
@@ -349,30 +353,30 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	c.logger.Debug("Fetch request", "want", want, "request", string(pkt))
+	logger.Debug("Fetch request", "want", want, "request", string(pkt))
 
 	out, err := c.uploadPack(ctx, pkt)
 	if err != nil {
-		c.logger.Debug("UploadPack error", "want", want, "error", err)
+		logger.Debug("UploadPack error", "want", want, "error", err)
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, ErrObjectNotFound
 		}
 		return nil, fmt.Errorf("send commands: %w", err)
 	}
 
-	c.logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
+	logger.Debug("Raw server response", "want", want, "response", hex.EncodeToString(out))
 
 	lines, _, err := protocol.ParsePack(out)
 	if err != nil {
-		c.logger.Debug("ParsePack error", "want", want, "error", err)
+		logger.Debug("ParsePack error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	c.logger.Debug("Parsed lines", "want", want, "lines", lines)
+	logger.Debug("Parsed lines", "want", want, "lines", lines)
 
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		c.logger.Debug("ParseFetchResponse error", "want", want, "error", err)
+		logger.Debug("ParseFetchResponse error", "want", want, "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
@@ -380,7 +384,7 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			c.logger.Debug("ReadObject error", "want", want, "error", err)
+			logger.Debug("ReadObject error", "want", want, "error", err)
 			break
 		}
 		if obj.Object == nil {
