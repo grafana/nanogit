@@ -17,7 +17,6 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	}
 
 	objects, err := c.fetch(ctx, fetchOptions{
-		NoCache:      true,
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{want},
