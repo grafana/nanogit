@@ -173,11 +173,11 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
-          TEST_USER: ${{ vars.GH_REPO_USER }}
+          TEST_USER: ${{ secrets.GH_REPO_USER }}
           TEST_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
         run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN not set"
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
             exit 0
           fi
           make test-providers
@@ -209,11 +209,11 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
-          TEST_USER: ${{ vars.GITLAB_REPO_USER }}
+          TEST_USER: ${{ secrets.GITLAB_REPO_USER }}
           TEST_TOKEN: ${{ secrets.GITLAB_REPO_TOKEN }}
         run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN not set"
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
             exit 0
           fi
           make test-providers
@@ -244,11 +244,11 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
-          TEST_USER: ${{ vars.BITBUCKET_REPO_USER }}
+          TEST_USER: ${{ secrets.BITBUCKET_REPO_USER }}
           TEST_TOKEN: ${{ secrets.BITBUCKET_REPO_TOKEN }}
         run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN not set"
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
             exit 0
           fi
           make test-providers
