@@ -545,6 +545,13 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects PackfileStorage)
 //	    }
 //	}
 func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+	if c.packfileStorage != nil {
+		obj, ok := c.packfileStorage.Get(h)
+		if ok {
+			return packfileObjectToTree(obj)
+		}
+	}
+
 	tree, err := c.getTree(ctx, h)
 	if err != nil {
 		return nil, fmt.Errorf("get tree object: %w", err)
@@ -575,6 +582,39 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 	return &Tree{
 		Entries: entries,
 		Hash:    h,
+	}, nil
+}
+
+func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
+	if obj.Type != protocol.ObjectTypeTree {
+		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
+	}
+
+	// Convert PackfileTreeEntry to TreeEntry (direct children only)
+	entries := make([]TreeEntry, len(obj.Tree))
+	for i, entry := range obj.Tree {
+		entryHash, err := hash.FromHex(entry.Hash)
+		if err != nil {
+			return nil, fmt.Errorf("parsing hash: %w", err)
+		}
+
+		// Determine the type based on the mode
+		entryType := protocol.ObjectTypeBlob
+		if entry.FileMode&0o40000 != 0 {
+			entryType = protocol.ObjectTypeTree
+		}
+
+		entries[i] = TreeEntry{
+			Name: entry.FileName,
+			Mode: uint32(entry.FileMode),
+			Hash: entryHash,
+			Type: entryType,
+		}
+	}
+
+	return &Tree{
+		Entries: entries,
+		Hash:    obj.Hash,
 	}, nil
 }
 
@@ -616,6 +656,8 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 	parts := strings.Split(path, "/")
 	currentHash := rootHash
 
+	// TODO: Optimize by using the private getBlob and getTree
+	// Because they may get more objects in the same request
 	// Navigate through each part of the path
 	for i, part := range parts {
 		if part == "" {

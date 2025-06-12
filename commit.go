@@ -221,6 +221,12 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
+	if c.packfileStorage != nil {
+		if obj, ok := c.packfileStorage.Get(hash); ok {
+			return packfileObjectToCommit(obj)
+		}
+	}
+
 	obj, err := c.getCommit(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)

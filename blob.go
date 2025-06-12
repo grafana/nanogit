@@ -90,6 +90,8 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	parts := strings.Split(path, "/")
 	currentHash := rootHash
 
+	// TODO: Optimize by using the private getBlob and getTree
+	// Because they may get more objects
 	// Navigate through all but the last part (directories)
 	for _, part := range parts[:len(parts)-1] {
 		if part == "" {

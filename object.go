@@ -65,6 +65,10 @@ func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[st
 			break
 		}
 
+		if c.packfileStorage != nil {
+			c.packfileStorage.Add(obj.Object)
+		}
+
 		if obj.Object.Type != protocol.ObjectTypeTree {
 			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Object.Type)
 		}
@@ -152,6 +156,10 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 			break
 		}
 
+		if c.packfileStorage != nil {
+			c.packfileStorage.Add(obj.Object)
+		}
+
 		// Skip tree objects that are included in the response despite the blob:none filter.
 		// Most Git servers don't support tree:0 filter specification, so we may receive
 		// recursive tree objects that we need to filter out.
@@ -182,6 +190,12 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 }
 
 func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	if c.packfileStorage != nil {
+		if obj, ok := c.packfileStorage.Get(want); ok {
+			return obj, nil
+		}
+	}
+
 	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
@@ -233,6 +247,10 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 		}
 		if obj.Object == nil {
 			break
+		}
+
+		if c.packfileStorage != nil {
+			c.packfileStorage.Add(obj.Object)
 		}
 
 		if obj.Object.Type != protocol.ObjectTypeBlob {
@@ -327,6 +345,10 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 			break
 		}
 
+		if c.packfileStorage != nil {
+			c.packfileStorage.Add(obj.Object)
+		}
+
 		objects[obj.Object.Hash.String()] = obj.Object
 	}
 
@@ -387,8 +409,13 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 			logger.Debug("ReadObject error", "want", want, "error", err)
 			break
 		}
+
 		if obj.Object == nil {
 			break
+		}
+
+		if c.packfileStorage != nil {
+			c.packfileStorage.Add(obj.Object)
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object

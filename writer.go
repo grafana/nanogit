@@ -41,6 +41,8 @@ import (
 //	// Push to remote
 //	return writer.Push(ctx)
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
+	// TODO: Optimize by using the private getCommit and getTree
+	// Because they may get more objects in the same request
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
@@ -57,6 +59,8 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	}
 	objStorage.Add(treeObj)
 
+	// TODO: Optimize by using the private getFlatTree
+	// Because it may get more objects in the same request
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting current tree: %w", err)
