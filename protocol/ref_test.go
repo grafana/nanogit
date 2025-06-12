@@ -449,16 +449,16 @@ func TestParseRefLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRef, gotHash, err := protocol.ParseRefLine(tt.input)
+			got, err := protocol.ParseRefLine(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseRefLine() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if gotRef != tt.wantRef {
-				t.Errorf("ParseRefLine() gotRef = %v, want %v", gotRef, tt.wantRef)
+			if got.RefName != tt.wantRef {
+				t.Errorf("ParseRefLine() gotRef = %v, want %v", got.RefName, tt.wantRef)
 			}
-			if gotHash != tt.wantHash {
-				t.Errorf("ParseRefLine() gotHash = %v, want %v", gotHash, tt.wantHash)
+			if got.Hash.String() != tt.wantHash {
+				t.Errorf("ParseRefLine() gotHash = %v, want %v", got.Hash, tt.wantHash)
 			}
 		})
 	}

@@ -240,29 +240,39 @@ func (r RefUpdateRequest) Format() ([]byte, error) {
 	return pkt, nil
 }
 
+type RefLine struct {
+	RefName string
+	Hash    hash.Hash
+}
+
 // ParseRefLine parses a single reference line from the git response.
 // Returns the reference name, hash, and any error encountered.
-func ParseRefLine(line []byte) (ref, hash string, err error) {
+func ParseRefLine(line []byte) (RefLine, error) {
 	// Skip empty lines and pkt-line flush markers
 	if len(line) == 0 || bytes.Equal(line, []byte("0000")) {
-		return "", "", nil
+		return RefLine{}, nil
 	}
 
 	// Skip capability lines (they start with =)
 	if len(line) > 0 && line[0] == '=' {
-		return "", "", nil
+		return RefLine{}, nil
 	}
 
 	// Split into hash and rest
 	parts := bytes.SplitN(line, []byte(" "), 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid ref format: %s", line)
+		return RefLine{}, fmt.Errorf("invalid ref format: %s", line)
 	}
 
 	// Ensure we have a full 40-character SHA-1 hash
-	hash = string(parts[0])
-	if len(hash) != 40 {
-		return "", "", fmt.Errorf("invalid hash length: got %d, want 40", len(hash))
+	hashStr := string(parts[0])
+	if len(hashStr) != 40 {
+		return RefLine{}, fmt.Errorf("invalid hash length: got %d, want 40", len(hashStr))
+	}
+
+	h, err := hash.FromHex(hashStr)
+	if err != nil {
+		return RefLine{}, fmt.Errorf("invalid hash: %w", err)
 	}
 
 	refName := strings.TrimSpace(string(parts[1]))
@@ -271,10 +281,16 @@ func ParseRefLine(line []byte) (ref, hash string, err error) {
 	if strings.HasPrefix(refName, "HEAD") {
 		symref := extractSymref(refName)
 		if symref != "" {
-			return symref, hash, nil
+			return RefLine{
+				RefName: symref,
+				Hash:    h,
+			}, nil
 		}
 
-		return refName, hash, nil
+		return RefLine{
+			RefName: refName,
+			Hash:    h,
+		}, nil
 	}
 
 	// Remove capability suffix if present
@@ -282,7 +298,10 @@ func ParseRefLine(line []byte) (ref, hash string, err error) {
 		refName = string(parts[1][:idx])
 	}
 
-	return strings.TrimSpace(refName), strings.TrimSpace(hash), nil
+	return RefLine{
+		RefName: strings.TrimSpace(refName),
+		Hash:    h,
+	}, nil
 }
 
 // extractSymref extracts the symref value from a line.
