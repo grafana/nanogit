@@ -113,16 +113,11 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		found := false
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
-				entryHash, err := hash.FromHex(entry.Hash.String())
-				if err != nil {
-					return nil, fmt.Errorf("parsing tree entry hash: %w", err)
-				}
-
 				if entry.Type != protocol.ObjectTypeTree {
-					return nil, NewUnexpectedObjectTypeError(entryHash, protocol.ObjectTypeTree, protocol.ObjectTypeBlob)
+					return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeTree, entry.Type)
 				}
 
-				currentHash = entryHash
+				currentHash = entry.Hash
 				found = true
 				break
 			}
@@ -147,24 +142,11 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
-			entryHash, err := hash.FromHex(entry.Hash.String())
-			if err != nil {
-				return nil, fmt.Errorf("parsing entry hash: %w", err)
-			}
-
 			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, NewUnexpectedObjectTypeError(entryHash, protocol.ObjectTypeBlob, protocol.ObjectTypeTree)
+				return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeBlob, protocol.ObjectTypeTree)
 			}
 
-			obj, err := c.getBlob(ctx, entryHash)
-			if err != nil {
-				return nil, fmt.Errorf("get blob: %w", err)
-			}
-
-			return &Blob{
-				Hash:    entryHash,
-				Content: obj.Data,
-			}, nil
+			return c.GetBlob(ctx, entry.Hash)
 		}
 	}
 
