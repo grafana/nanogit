@@ -115,7 +115,6 @@ func (c *httpClient) addDefaultHeaders(req *http.Request) {
 	} else if c.tokenAuth != nil {
 		req.Header.Set("Authorization", *c.tokenAuth)
 	}
-
 }
 
 // uploadPack sends a POST request to the git-upload-pack endpoint.

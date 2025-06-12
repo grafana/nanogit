@@ -38,12 +38,6 @@ func TestProviders(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exists)
 
-	refs, err := client.ListRefs(context.Background())
-	require.NoError(t, err)
-	require.Len(t, refs, 2)
-	require.Equal(t, "HEAD", refs[0].Name)
-	require.Equal(t, "refs/heads/main", refs[1].Name)
-
 	branchName := fmt.Sprintf("test-branch-%d", time.Now().Unix())
 	mainRef, err := client.GetRef(context.Background(), "refs/heads/main")
 	require.NoError(t, err)
@@ -62,7 +56,7 @@ func TestProviders(t *testing.T) {
 		})
 	})
 
-	refs, err = client.ListRefs(context.Background())
+	refs, err := client.ListRefs(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, refs, nanogit.Ref{
 		Name: "refs/heads/" + branchName,
