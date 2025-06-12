@@ -51,7 +51,10 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
 
-	objStorage := storage.NewInMemoryStorage(ctx)
+	objStorage := c.packfileStorage
+	if objStorage == nil {
+		objStorage = storage.NewInMemoryStorage(ctx)
+	}
 	objStorage.Add(treeObj)
 
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)

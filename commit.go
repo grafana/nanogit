@@ -342,7 +342,10 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 	visited := make(map[string]bool)
 	queue := []hash.Hash{startCommit}
 
-	allObjects := storage.NewInMemoryStorage(ctx)
+	allObjects := c.packfileStorage
+	if allObjects == nil {
+		allObjects = storage.NewInMemoryStorage(ctx)
+	}
 
 	for len(queue) > 0 && len(commitObjs) < skip+collect {
 		currentHash := queue[0]
