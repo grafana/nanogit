@@ -118,9 +118,15 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 
 	ctx, allObjects := c.ensurePackfileStorage(ctx)
 	totalRequests++
-	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
-		deepen:  1,
-		shallow: true,
+
+	// Get all commit tree objects
+	initialObjects, err := c.fetch(ctx, fetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{commitHash},
+		Shallow:      true,
+		Deepen:       1,
+		Done:         true,
 	})
 	if err != nil {
 		return nil, hash.Zero, fmt.Errorf("get commit tree: %w", err)
@@ -552,6 +558,44 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 	}
 
 	return packfileObjectToTree(tree)
+}
+
+func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(want); ok {
+			return obj, nil
+		}
+	}
+
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{want},
+		Done:         true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetching tree objects: %w", err)
+	}
+
+	if len(objects) == 0 {
+		return nil, NewObjectNotFoundError(want)
+	}
+
+	// TODO: can we do in the fetch?
+	for _, obj := range objects {
+		if obj.Type != protocol.ObjectTypeTree {
+			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Type)
+		}
+	}
+
+	// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects
+	// in the path. We must filter the response to extract only the requested tree.
+	if obj, ok := objects[want.String()]; ok {
+		return obj, nil
+	}
+
+	return nil, NewObjectNotFoundError(want)
 }
 
 // packfileObjectToTree converts a packfile object to a tree object.

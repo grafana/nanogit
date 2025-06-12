@@ -401,8 +401,12 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		objects, err := c.getCommitTree(ctx, currentHash, getCommitTreeOptions{
-			deepen: perPage,
+		objects, err := c.fetch(ctx, fetchOptions{
+			NoProgress:   true,
+			NoBlobFilter: true,
+			Want:         []hash.Hash{currentHash},
+			Deepen:       perPage,
+			Done:         true,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("getting commit %s in queue: %w", currentHash.String(), err)
@@ -532,9 +536,14 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
 	commit, ok := allObjects.Get(commitHash)
 	if !ok {
-		objects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
-			shallow: true,
+		objects, err := c.fetch(ctx, fetchOptions{
+			NoProgress:   true,
+			NoBlobFilter: true,
+			Want:         []hash.Hash{commitHash},
+			Shallow:      true,
+			Done:         true,
 		})
+
 		if err != nil {
 			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
 		}
