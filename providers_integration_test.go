@@ -19,14 +19,14 @@ func TestProviders(t *testing.T) {
 		return
 	}
 
-	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" {
-		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN not set")
+	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" || os.Getenv("TEST_USER") == "" {
+		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN or TEST_USER or TEST_USER not set")
 		return
 	}
 
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
-		nanogit.WithBasicAuth("git", os.Getenv("TEST_TOKEN")),
+		nanogit.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
 		nanogit.WithLogger(testhelpers.NewTestLogger(t.Logf)),
 	)
 	require.NoError(t, err)
