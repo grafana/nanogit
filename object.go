@@ -65,12 +65,9 @@ func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[st
 			break
 		}
 
-		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
-			ctxStorage.Add(obj.Object)
-		}
-
-		if c.packfileStorage != nil {
-			c.packfileStorage.Add(obj.Object)
+		storage := c.getPackfileStorage(ctx)
+		if storage != nil {
+			storage.Add(obj.Object)
 		}
 
 		if obj.Object.Type != protocol.ObjectTypeTree {
@@ -88,6 +85,13 @@ func (c *httpClient) getTreeObjects(ctx context.Context, want hash.Hash) (map[st
 }
 
 func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(want); ok {
+			return obj, nil
+		}
+	}
+
 	objects, err := c.getTreeObjects(ctx, want)
 	if err != nil {
 		return nil, fmt.Errorf("getting tree objects: %w", err)
@@ -103,8 +107,9 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 }
 
 func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
-	if c.packfileStorage != nil {
-		if obj, ok := c.packfileStorage.Get(want); ok {
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(want); ok {
 			return obj, nil
 		}
 	}
@@ -166,12 +171,9 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 			break
 		}
 
-		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
-			ctxStorage.Add(obj.Object)
-		}
-
-		if c.packfileStorage != nil {
-			c.packfileStorage.Add(obj.Object)
+		storage := c.getPackfileStorage(ctx)
+		if storage != nil {
+			storage.Add(obj.Object)
 		}
 
 		// Skip tree objects that are included in the response despite the blob:none filter.
@@ -204,8 +206,9 @@ func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.P
 }
 
 func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
-	if c.packfileStorage != nil {
-		if obj, ok := c.packfileStorage.Get(want); ok {
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(want); ok {
 			return obj, nil
 		}
 	}
@@ -263,12 +266,9 @@ func (c *httpClient) getBlob(ctx context.Context, want hash.Hash) (*protocol.Pac
 			break
 		}
 
-		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
-			ctxStorage.Add(obj.Object)
-		}
-
-		if c.packfileStorage != nil {
-			c.packfileStorage.Add(obj.Object)
+		storage := c.getPackfileStorage(ctx)
+		if storage != nil {
+			storage.Add(obj.Object)
 		}
 
 		if obj.Object.Type != protocol.ObjectTypeBlob {
@@ -363,12 +363,9 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 			break
 		}
 
-		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
-			ctxStorage.Add(obj.Object)
-		}
-
-		if c.packfileStorage != nil {
-			c.packfileStorage.Add(obj.Object)
+		storage := c.getPackfileStorage(ctx)
+		if storage != nil {
+			storage.Add(obj.Object)
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object
@@ -378,6 +375,23 @@ func (c *httpClient) getCommitTree(ctx context.Context, commitHash hash.Hash, op
 }
 
 func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	objects := make(map[string]*protocol.PackfileObject)
+	pending := make([]hash.Hash, 0, len(want))
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		for _, w := range want {
+			if obj, ok := storage.Get(w); ok {
+				objects[w.String()] = obj
+			} else {
+				pending = append(pending, w)
+			}
+		}
+
+		if len(objects) == len(want) {
+			return objects, nil
+		}
+	}
+
 	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
@@ -387,7 +401,7 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 		protocol.PackLine("filter blob:none\n"),
 	}
 
-	for _, w := range want {
+	for _, w := range pending {
 		packs = append(packs, protocol.PackLine(fmt.Sprintf("want %s\n", w.String())))
 	}
 	packs = append(packs, protocol.PackLine("done\n"))
@@ -424,7 +438,6 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
-	objects := make(map[string]*protocol.PackfileObject)
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
@@ -436,12 +449,9 @@ func (c *httpClient) getObjects(ctx context.Context, want ...hash.Hash) (map[str
 			break
 		}
 
-		if ctxStorage := getPackfileStorageFromContext(ctx); ctxStorage != nil {
-			ctxStorage.Add(obj.Object)
-		}
-
-		if c.packfileStorage != nil {
-			c.packfileStorage.Add(obj.Object)
+		storage := c.getPackfileStorage(ctx)
+		if storage != nil {
+			storage.Add(obj.Object)
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object
