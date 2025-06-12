@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/nanogit/internal/storage"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -114,6 +113,10 @@ type CommitFile struct {
 //	    fmt.Printf("%s: %s\n", change.Status, change.Path)
 //	}
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
+	// Ensure storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, _ = c.ensurePackfileStorage(ctx)
+
 	// Get both trees
 	baseTree, err := c.GetFlatTree(ctx, baseCommit)
 	if err != nil {
@@ -221,12 +224,6 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	if c.packfileStorage != nil {
-		if obj, ok := c.packfileStorage.Get(hash); ok {
-			return packfileObjectToCommit(obj)
-		}
-	}
-
 	obj, err := c.getCommit(ctx, hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting commit: %w", err)
@@ -348,11 +345,9 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 	visited := make(map[string]bool)
 	queue := []hash.Hash{startCommit}
 
-	allObjects := c.packfileStorage
-	if allObjects == nil {
-		allObjects = storage.NewInMemoryStorage(ctx)
-		ctx = WithPackfileStorageFromContext(ctx, allObjects)
-	}
+	// Ensure storage as it's a complex operation with multiple calls
+	// and we may get more objects in the same request than expected in some responses
+	ctx, allObjects := c.ensurePackfileStorage(ctx)
 
 	for len(queue) > 0 && len(commitObjs) < skip+collect {
 		currentHash := queue[0]

@@ -103,6 +103,12 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 }
 
 func (c *httpClient) getCommit(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	if c.packfileStorage != nil {
+		if obj, ok := c.packfileStorage.Get(want); ok {
+			return obj, nil
+		}
+	}
+
 	logger := c.getLogger(ctx)
 	packs := []protocol.Pack{
 		protocol.PackLine("command=fetch\n"),
