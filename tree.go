@@ -117,7 +117,6 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	var totalObjectsFetched int
 
 	ctx, allObjects := c.ensurePackfileStorage(ctx)
-
 	totalRequests++
 	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
 		deepen:  1,

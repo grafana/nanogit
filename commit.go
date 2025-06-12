@@ -552,25 +552,9 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	logger := c.getLogger(ctx)
 	logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
 	treeHash := commit.Commit.Tree
-	tree, ok := allObjects.Get(treeHash)
-	if !ok {
-		objs, err := c.getTreeObjects(ctx, treeHash)
-		if err != nil {
-			return hash.Zero, fmt.Errorf("getting tree: %w", err)
-		}
-
-		// Try to find it in the objects we got but if not, get it from the storage
-		tree, ok = objs[treeHash.String()]
-		if !ok || tree.Type != protocol.ObjectTypeTree {
-			tree, ok = allObjects.Get(treeHash)
-			if !ok || tree.Type != protocol.ObjectTypeTree {
-				return hash.Zero, fmt.Errorf("tree %s not found", treeHash.String())
-			}
-		}
-	}
-
-	if tree.Type != protocol.ObjectTypeTree {
-		return hash.Zero, fmt.Errorf("object %s is not a tree", treeHash.String())
+	tree, err := c.GetTree(ctx, treeHash)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("getting tree: %w", err)
 	}
 
 	// If path is empty, return the tree hash
@@ -592,15 +576,10 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		// Find the entry in the current tree
 		var found bool
 		var entryHash hash.Hash
-		for _, entry := range currentTree.Tree {
-			if entry.FileName == component {
+		for _, entry := range currentTree.Entries {
+			if entry.Name == component {
 				found = true
-				var err error
-				entryHash, err = hash.FromHex(entry.Hash)
-				if err != nil {
-					return hash.Zero, fmt.Errorf("parsing hash: %w", err)
-				}
-
+				entryHash = entry.Hash
 				break
 			}
 		}
@@ -615,25 +594,9 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		}
 
 		// Otherwise, get the next tree
-		nextTree, ok := allObjects.Get(entryHash)
-		if !ok {
-			objs, err := c.getTreeObjects(ctx, entryHash)
-			if err != nil {
-				return hash.Zero, fmt.Errorf("getting tree: %w", err)
-			}
-
-			// Try to find it in the objects we got but if not, get it from the storage again
-			nextTree, ok := objs[entryHash.String()]
-			if !ok || nextTree.Type != protocol.ObjectTypeTree {
-				nextTree, ok = allObjects.Get(entryHash)
-				if !ok || nextTree.Type != protocol.ObjectTypeTree {
-					return hash.Zero, fmt.Errorf("tree %s not found", entryHash.String())
-				}
-			}
-		}
-
-		if nextTree.Type != protocol.ObjectTypeTree {
-			return hash.Zero, fmt.Errorf("path component %s is not a tree", component)
+		nextTree, err := c.GetTree(ctx, entryHash)
+		if err != nil {
+			return hash.Zero, fmt.Errorf("getting tree: %w", err)
 		}
 
 		currentTree = nextTree
