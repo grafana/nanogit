@@ -223,17 +223,58 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	    return err
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
-func (c *httpClient) GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error) {
-	obj, err := c.getCommit(ctx, hash)
-	if err != nil {
-		return nil, fmt.Errorf("getting commit: %w", err)
-	}
-	commit, err := packfileObjectToCommit(obj)
-	if err != nil {
-		return nil, fmt.Errorf("converting packfile object to commit: %w", err)
+func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
+	storage := c.getPackfileStorage(ctx)
+	if storage != nil {
+		if obj, ok := storage.Get(commitHash); ok {
+			return packfileObjectToCommit(obj)
+		}
 	}
 
-	return commit, nil
+	objects, err := c.fetch(ctx, fetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{commitHash},
+		Deepen:       1,
+		Shallow:      true,
+		Done:         true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetching commit objects: %w", err)
+	}
+
+	if len(objects) == 0 {
+		return nil, NewObjectNotFoundError(commitHash)
+	}
+
+	var foundObj *protocol.PackfileObject
+	for _, obj := range objects {
+		// Skip tree objects that are included in the response despite the blob:none filter.
+		// Most Git servers don't support tree:0 filter specification, so we may receive
+		// recursive tree objects that we need to filter out.
+		if obj.Type == protocol.ObjectTypeTree {
+			continue
+		}
+
+		if obj.Type != protocol.ObjectTypeCommit {
+			return nil, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+		}
+
+		// we got more commits than expected
+		if foundObj != nil {
+			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
+		}
+
+		if obj.Hash.Is(commitHash) {
+			foundObj = obj
+		}
+	}
+
+	if foundObj == nil {
+		return nil, NewObjectNotFoundError(commitHash)
+	}
+
+	return packfileObjectToCommit(foundObj)
 }
 
 func packfileObjectToCommit(commit *protocol.PackfileObject) (*Commit, error) {
