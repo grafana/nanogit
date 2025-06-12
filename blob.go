@@ -34,6 +34,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 		return nil, fmt.Errorf("get object: %w", err)
 	}
 
+	// FIXME: where to check for the type? here or in getBlob?
 	if obj.Type != protocol.ObjectTypeBlob {
 		return nil, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
 	}
@@ -90,8 +91,6 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	parts := strings.Split(path, "/")
 	currentHash := rootHash
 
-	// TODO: Optimize by using the private getBlob and getTree
-	// Because they may get more objects
 	// Navigate through all but the last part (directories)
 	for _, part := range parts[:len(parts)-1] {
 		if part == "" {
@@ -99,19 +98,25 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		}
 
 		// Get the current tree
-		currentTree, err := c.GetTree(ctx, currentHash)
+		currentTree, err := c.getTree(ctx, currentHash)
 		if err != nil {
 			return nil, fmt.Errorf("get tree %s: %w", currentHash, err)
 		}
 
 		// Find the entry with the matching name
 		found := false
-		for _, entry := range currentTree.Entries {
-			if entry.Name == part {
-				if entry.Type != protocol.ObjectTypeTree {
-					return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeTree, entry.Type)
+		for _, entry := range currentTree.Tree {
+			if entry.FileName == part {
+				entryHash, err := hash.FromHex(entry.Hash)
+				if err != nil {
+					return nil, fmt.Errorf("parsing tree entry hash: %w", err)
 				}
-				currentHash = entry.Hash
+
+				if entry.FileMode&0o40000 == 0 {
+					return nil, NewUnexpectedObjectTypeError(entryHash, protocol.ObjectTypeTree, protocol.ObjectTypeBlob)
+				}
+
+				currentHash = entryHash
 				found = true
 				break
 			}
@@ -123,7 +128,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	}
 
 	// Get the final tree containing the target file
-	finalTree, err := c.GetTree(ctx, currentHash)
+	finalTree, err := c.getTree(ctx, currentHash)
 	if err != nil {
 		return nil, fmt.Errorf("get final tree %s: %w", currentHash, err)
 	}
@@ -134,13 +139,26 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		return nil, errors.New("invalid path: ends with slash")
 	}
 
-	for _, entry := range finalTree.Entries {
-		if entry.Name == fileName {
-			if entry.Type != protocol.ObjectTypeBlob {
-				return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeBlob, entry.Type)
+	for _, entry := range finalTree.Tree {
+		if entry.FileName == fileName {
+			entryHash, err := hash.FromHex(entry.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("parsing entry hash: %w", err)
 			}
 
-			return c.GetBlob(ctx, entry.Hash)
+			if entry.FileMode&0o100644 == 0 {
+				return nil, NewUnexpectedObjectTypeError(entryHash, protocol.ObjectTypeBlob, protocol.ObjectTypeTree)
+			}
+
+			obj, err := c.getBlob(ctx, entryHash)
+			if err != nil {
+				return nil, fmt.Errorf("get blob: %w", err)
+			}
+
+			return &Blob{
+				Hash:    entryHash,
+				Content: obj.Data,
+			}, nil
 		}
 	}
 

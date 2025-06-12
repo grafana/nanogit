@@ -119,6 +119,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	}
 
 	totalRequests++
+	// TODO: we add objects twice
 	initialObjects, err := c.getCommitTree(ctx, commitHash, getCommitTreeOptions{
 		deepen:  1,
 		shallow: true,
@@ -656,8 +657,6 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 	parts := strings.Split(path, "/")
 	currentHash := rootHash
 
-	// TODO: Optimize by using the private getBlob and getTree
-	// Because they may get more objects in the same request
 	// Navigate through each part of the path
 	for i, part := range parts {
 		if part == "" {
@@ -666,19 +665,24 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 		currentPath := strings.Join(parts[:i+1], "/")
 
 		// Get the current tree
-		currentTree, err := c.GetTree(ctx, currentHash)
+		currentTree, err := c.getTree(ctx, currentHash)
 		if err != nil {
 			return nil, fmt.Errorf("get tree %s: %w", currentHash, err)
 		}
 
 		// Find the entry with the matching name
 		found := false
-		for _, entry := range currentTree.Entries {
-			if entry.Name == part {
-				if entry.Type != protocol.ObjectTypeTree {
-					return nil, fmt.Errorf("path component '%s' is not a directory: %w", currentPath, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeTree, entry.Type))
+		for _, entry := range currentTree.Tree {
+			if entry.FileName == part {
+				entryHash, err := hash.FromHex(entry.Hash)
+				if err != nil {
+					return nil, fmt.Errorf("parsing entry hash: %w", err)
 				}
-				currentHash = entry.Hash
+
+				if entry.FileMode&0o40000 == 0 {
+					return nil, fmt.Errorf("path component '%s' is not a directory: %w", currentPath, NewUnexpectedObjectTypeError(entryHash, protocol.ObjectTypeTree, protocol.ObjectTypeBlob))
+				}
+				currentHash = entryHash
 				found = true
 				break
 			}
@@ -690,5 +694,10 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 	}
 
 	// Get the final tree
-	return c.GetTree(ctx, currentHash)
+	finalTree, err := c.getTree(ctx, currentHash)
+	if err != nil {
+		return nil, fmt.Errorf("get final tree %s: %w", currentHash, err)
+	}
+
+	return packfileObjectToTree(finalTree)
 }

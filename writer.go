@@ -41,14 +41,18 @@ import (
 //	// Push to remote
 //	return writer.Push(ctx)
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
-	// TODO: Optimize by using the private getCommit and getTree
-	// Because they may get more objects in the same request
-	commit, err := c.GetCommit(ctx, ref.Hash)
+	// TODO: umm, we don't use the one we provide
+	commit, err := c.getCommit(ctx, ref.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("getting root tree: %w", err)
 	}
 
-	treeObj, err := c.getTree(ctx, commit.Tree)
+	lastCommit, err := packfileObjectToCommit(commit)
+	if err != nil {
+		return nil, fmt.Errorf("converting packfile object to commit: %w", err)
+	}
+
+	treeObj, err := c.getTree(ctx, commit.Commit.Tree)
 	if err != nil {
 		return nil, fmt.Errorf("getting tree object: %w", err)
 	}
@@ -57,6 +61,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 	if objStorage == nil {
 		objStorage = storage.NewInMemoryStorage(ctx)
 	}
+
 	objStorage.Add(treeObj)
 
 	// TODO: Optimize by using the private getFlatTree
@@ -77,7 +82,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		httpClient:  c,
 		ref:         ref,
 		writer:      writer,
-		lastCommit:  commit,
+		lastCommit:  lastCommit,
 		lastTree:    treeObj,
 		objStorage:  objStorage,
 		treeEntries: entries,
