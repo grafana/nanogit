@@ -3,6 +3,8 @@ package nanogit
 import (
 	"context"
 	"errors"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // WithLogger configures a custom logger for the Git client.
@@ -15,7 +17,7 @@ import (
 // Returns:
 //   - Option: Configuration function for the client
 //   - error: Error if the provided logger is nil
-func WithLogger(logger Logger) Option {
+func WithLogger(logger log.Logger) Option {
 	return func(c *rawClient) error {
 		if logger == nil {
 			return errors.New("logger cannot be nil")
@@ -38,7 +40,7 @@ type loggerCtxKey struct{}
 //
 // Returns:
 //   - context.Context: A new context with the logger stored
-func WithContextLogger(ctx context.Context, logger Logger) context.Context {
+func WithContextLogger(ctx context.Context, logger log.Logger) context.Context {
 	return context.WithValue(ctx, loggerCtxKey{}, logger)
 }
 
@@ -50,8 +52,8 @@ func WithContextLogger(ctx context.Context, logger Logger) context.Context {
 //
 // Returns:
 //   - Logger: The logger stored in the context, or nil if none is found
-func getContextLogger(ctx context.Context) Logger {
-	logger, ok := ctx.Value(loggerCtxKey{}).(Logger)
+func getContextLogger(ctx context.Context) log.Logger {
+	logger, ok := ctx.Value(loggerCtxKey{}).(log.Logger)
 	if !ok {
 		return nil
 	}
@@ -59,7 +61,8 @@ func getContextLogger(ctx context.Context) Logger {
 	return logger
 }
 
-func (c *rawClient) getLogger(ctx context.Context) Logger {
+// FIXME: this is duplicated in the client and http client
+func (c *rawClient) getLogger(ctx context.Context) log.Logger {
 	logger := getContextLogger(ctx)
 	if logger != nil {
 		return logger
@@ -68,7 +71,7 @@ func (c *rawClient) getLogger(ctx context.Context) Logger {
 	return c.logger
 }
 
-func (c *httpClient) getLogger(ctx context.Context) Logger {
+func (c *httpClient) getLogger(ctx context.Context) log.Logger {
 	logger := getContextLogger(ctx)
 	if logger != nil {
 		return logger
@@ -76,21 +79,3 @@ func (c *httpClient) getLogger(ctx context.Context) Logger {
 
 	return c.logger
 }
-
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/logger.go . Logger
-
-// Logger is a minimal logging interface for nanogit clients.
-type Logger interface {
-	Debug(msg string, keysAndValues ...any)
-	Info(msg string, keysAndValues ...any)
-	Error(msg string, keysAndValues ...any)
-	Warn(msg string, keysAndValues ...any)
-}
-
-// noopLogger implements Logger but does nothing.
-type noopLogger struct{}
-
-func (n *noopLogger) Debug(msg string, keysAndValues ...any) {}
-func (n *noopLogger) Info(msg string, keysAndValues ...any)  {}
-func (n *noopLogger) Error(msg string, keysAndValues ...any) {}
-func (n *noopLogger) Warn(msg string, keysAndValues ...any)  {}

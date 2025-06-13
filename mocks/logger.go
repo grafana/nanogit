@@ -4,7 +4,7 @@ package mocks
 import (
 	"sync"
 
-	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/log"
 )
 
 type FakeLogger struct {
@@ -198,4 +198,4 @@ func (fake *FakeLogger) recordInvocation(key string, args []interface{}) {
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ nanogit.Logger = new(FakeLogger)
+var _ log.Logger = new(FakeLogger)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/storage"
 )
 
@@ -16,7 +17,7 @@ type rawClient struct {
 	// User-Agent header value for requests
 	userAgent string
 	// Logger for debug and info messages
-	logger Logger
+	logger log.Logger
 	// Basic authentication credentials (username/password)
 	basicAuth *struct{ Username, Password string }
 	// Token-based authentication header
