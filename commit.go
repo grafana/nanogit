@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 // Author represents the person who created the changes in the commit.
@@ -466,7 +467,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 }
 
 // commitMatchesFilters checks if a commit matches the specified filters.
-func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions, allObjects PackfileStorage) (bool, error) {
+func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions, allObjects storage.PackfileStorage) (bool, error) {
 	logger := c.getLogger(ctx)
 	commitTime, err := commit.Commit.Author.Time()
 	if err != nil {
@@ -502,7 +503,7 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.
 
 // commitAffectsPath checks if a commit affects the specified path by comparing with the hash of that path in the parent commit.
 // TODO: make it work for merge commits
-func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.PackfileObject, path string, allObjects PackfileStorage) (bool, error) {
+func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.PackfileObject, path string, allObjects storage.PackfileStorage) (bool, error) {
 	// For the initial commit (no parent), check if the path exists
 	if commit.Commit.Parent.Is(hash.Zero) {
 		parentHash, err := c.hashForPath(ctx, commit.Hash, path, allObjects)
@@ -533,7 +534,7 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 // If the object is a tree, the hash of the tree will be returned.
 // If the object is a blob, the hash of the blob will be returned.
 // Otherwise, return an error.
-func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
+func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects storage.PackfileStorage) (hash.Hash, error) {
 	commit, ok := allObjects.Get(commitHash)
 	if !ok {
 		objects, err := c.Fetch(ctx, FetchOptions{

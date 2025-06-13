@@ -4,9 +4,9 @@ package mocks
 import (
 	"sync"
 
-	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 type FakePackfileStorage struct {
@@ -323,4 +323,4 @@ func (fake *FakePackfileStorage) recordInvocation(key string, args []interface{}
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ nanogit.PackfileStorage = new(FakePackfileStorage)
+var _ storage.PackfileStorage = new(FakePackfileStorage)

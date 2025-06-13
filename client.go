@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/staged_writer.go . StagedWriter
@@ -101,7 +102,7 @@ type Option func(*rawClient) error
 type httpClient struct {
 	RawClient
 	logger          Logger
-	packfileStorage PackfileStorage
+	packfileStorage storage.PackfileStorage
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
