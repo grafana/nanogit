@@ -74,6 +74,8 @@ func (c *httpClient) ensurePackfileStorage(ctx context.Context) (context.Context
 }
 
 // PackfileStorage is an interface for storing packfile objects.
+//
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/packfile_storage.go . PackfileStorage
 type PackfileStorage interface {
 	// Get retrieves an object by its hash.
 	Get(key hash.Hash) (*protocol.PackfileObject, bool)
