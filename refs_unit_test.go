@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
-	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +30,7 @@ func TestListRefs(t *testing.T) {
 		lsRefsResp    string
 		expectedRefs  []Ref
 		expectedError string
-		setupClient   client.Option
+		setupClient   options.Option
 	}{
 		{
 			name: "successful response with multiple refs",
@@ -87,7 +87,7 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp:    "",
 			expectedRefs:  nil,
 			expectedError: "send ls-refs command",
-			setupClient: client.WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
 						Timeout: 1 * time.Nanosecond,
@@ -158,7 +158,7 @@ func TestGetRef(t *testing.T) {
 		refToGet      string
 		expectedRef   Ref
 		expectedError error
-		setupClient   client.Option
+		setupClient   options.Option
 	}{
 		{
 			name: "successful get of existing ref",
@@ -193,7 +193,7 @@ func TestGetRef(t *testing.T) {
 			refToGet:      "refs/heads/master",
 			expectedRef:   Ref{},
 			expectedError: nil, // We'll check for wrapped error differently
-			setupClient: client.WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
 						Timeout: 1 * time.Nanosecond,
@@ -276,7 +276,7 @@ func TestCreateRef(t *testing.T) {
 		refToCreate   Ref
 		refExists     bool
 		expectedError string
-		setupClient   client.Option
+		setupClient   options.Option
 	}{
 		{
 			name: "successful ref creation",
@@ -304,7 +304,7 @@ func TestCreateRef(t *testing.T) {
 			},
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: client.WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
 						Timeout: 1 * time.Nanosecond,
@@ -416,7 +416,7 @@ func TestUpdateRef(t *testing.T) {
 		refToUpdate   Ref
 		refExists     bool
 		expectedError string
-		setupClient   client.Option
+		setupClient   options.Option
 	}{
 		{
 			name: "successful ref update",
@@ -444,7 +444,7 @@ func TestUpdateRef(t *testing.T) {
 			},
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: client.WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
 						Timeout: 1 * time.Nanosecond,
@@ -558,7 +558,7 @@ func TestDeleteRef(t *testing.T) {
 		refToDelete   string
 		refExists     bool
 		expectedError string
-		setupClient   client.Option
+		setupClient   options.Option
 	}{
 		{
 			name:          "successful ref deletion",
@@ -577,7 +577,7 @@ func TestDeleteRef(t *testing.T) {
 			refToDelete:   "refs/heads/main",
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: client.WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
 						Timeout: 1 * time.Nanosecond,

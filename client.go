@@ -3,6 +3,7 @@ package nanogit
 import (
 	"context"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -99,19 +100,14 @@ type httpClient struct {
 //	// Create client with basic authentication
 //	client, err := nanogit.NewHTTPClient(
 //	    "https://github.com/user/repo",
-//	    nanogit.WithBasicAuth("username", "password"),
-//	    nanogit.WithLogger(logger),
+//	    options.WithBasicAuth("username", "password"),
+//	    options.WithLogger(logger),
 //	)
 //	if err != nil {
 //	    return err
 //	}
-func NewHTTPClient(repo string, options ...client.Option) (Client, error) {
-	rawOptions := make([]client.Option, len(options))
-	for i, option := range options {
-		rawOptions[i] = client.Option(option)
-	}
-
-	rawClient, err := client.NewRawClient(repo, rawOptions...)
+func NewHTTPClient(repo string, options ...options.Option) (Client, error) {
+	rawClient, err := client.NewRawClient(repo, options...)
 	if err != nil {
 		return nil, err
 	}

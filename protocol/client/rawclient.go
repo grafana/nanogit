@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 )
 
@@ -23,8 +24,6 @@ type RawClient interface {
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }
-
-type Option func(*rawClient) error
 
 type rawClient struct {
 	// Base URL of the Git repository
@@ -55,15 +54,15 @@ type rawClient struct {
 // Example:
 //
 //	// Create client with basic authentication
-//	client, err := nanogit.NewHTTPClient(
+//	client, err := client.NewHTTPClient(
 //	    "https://github.com/user/repo",
-//	    nanogit.WithBasicAuth("username", "password"),
-//	    nanogit.WithLogger(logger),
+//	    options.WithBasicAuth("username", "password"),
+//	    options.WithLogger(logger),
 //	)
 //	if err != nil {
 //	    return err
 //	}
-func NewRawClient(repo string, options ...Option) (*rawClient, error) {
+func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 	if repo == "" {
 		return nil, errors.New("repository URL cannot be empty")
 	}
@@ -79,18 +78,37 @@ func NewRawClient(repo string, options ...Option) (*rawClient, error) {
 
 	u.Path = strings.TrimRight(u.Path, "/")
 
-	c := &rawClient{
-		base:   u,
-		client: &http.Client{},
+	options := &options.Options{
+		HTTPClient: &http.Client{},
 	}
 
-	for _, option := range options {
-		if option == nil { // allow for easy optional options
+	for _, opt := range opts {
+		if opt == nil {
 			continue
 		}
-		if err := option(c); err != nil {
+
+		if err := opt(options); err != nil {
 			return nil, err
 		}
+	}
+
+	var basicAuth *struct{ Username, Password string }
+	if options.BasicAuth != nil {
+		basicAuth = &struct {
+			Username string
+			Password string
+		}{
+			Username: options.BasicAuth.Username,
+			Password: options.BasicAuth.Password,
+		}
+	}
+
+	c := &rawClient{
+		base:      u,
+		client:    options.HTTPClient,
+		userAgent: options.UserAgent,
+		basicAuth: basicAuth,
+		tokenAuth: options.AuthToken,
 	}
 
 	return c, nil
@@ -108,41 +126,5 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
 	} else if c.tokenAuth != nil {
 		req.Header.Set("Authorization", *c.tokenAuth)
-	}
-}
-
-// WithUserAgent configures a custom User-Agent header for HTTP requests.
-// If not specified, a default User-Agent will be used.
-//
-// Parameters:
-//   - agent: Custom User-Agent string to use in requests
-//
-// Returns:
-//   - Option: Configuration function for the client
-func WithUserAgent(agent string) Option {
-	return func(c *rawClient) error {
-		c.userAgent = agent
-		return nil
-	}
-}
-
-// WithHTTPClient configures a custom HTTP client for making requests.
-// This allows customization of timeouts, transport settings, proxies, and other HTTP behavior.
-// The provided client must not be nil.
-//
-// Parameters:
-//   - client: Custom HTTP client to use for requests
-//
-// Returns:
-//   - Option: Configuration function for the client
-//   - error: Error if the provided HTTP client is nil
-func WithHTTPClient(client *http.Client) Option {
-	return func(c *rawClient) error {
-		if client == nil {
-			return errors.New("httpClient is nil")
-		}
-
-		c.client = client
-		return nil
 	}
 }

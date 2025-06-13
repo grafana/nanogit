@@ -2,28 +2,28 @@ package client
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuthentication(t *testing.T) {
 	tests := []struct {
 		name           string
-		authOption     Option
+		authOption     options.Option
 		expectedHeader string
 	}{
 		{
 			name:           "basic auth",
-			authOption:     WithBasicAuth("user", "pass"),
+			authOption:     options.WithBasicAuth("user", "pass"),
 			expectedHeader: "Basic dXNlcjpwYXNz",
 		},
 		{
 			name:           "token auth",
-			authOption:     WithTokenAuth("token123"),
+			authOption:     options.WithTokenAuth("token123"),
 			expectedHeader: "token123",
 		},
 	}
@@ -66,129 +66,6 @@ func TestAuthentication(t *testing.T) {
 
 			_, err = c.UploadPack(context.Background(), []byte("test"))
 			require.NoError(t, err)
-		})
-	}
-}
-
-func TestWithBasicAuth(t *testing.T) {
-	tests := []struct {
-		name     string
-		username string
-		password string
-		wantErr  error
-	}{
-		{
-			name:     "valid credentials",
-			username: "user",
-			password: "pass",
-			wantErr:  nil,
-		},
-		{
-			name:     "empty username",
-			username: "",
-			password: "pass",
-			wantErr:  errors.New("username cannot be empty"),
-		},
-		{
-			name:     "empty password allowed",
-			username: "user",
-			password: "",
-			wantErr:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			client, err := NewRawClient("https://github.com/owner/repo", WithBasicAuth(tt.username, tt.password))
-			if tt.wantErr != nil {
-				require.Error(t, err)
-				require.Equal(t, tt.wantErr.Error(), err.Error())
-				return
-			}
-			require.NoError(t, err)
-
-			require.NotNil(t, client.basicAuth)
-			require.Equal(t, tt.username, client.basicAuth.Username)
-			require.Equal(t, tt.password, client.basicAuth.Password)
-		})
-	}
-}
-
-func TestWithTokenAuth(t *testing.T) {
-	tests := []struct {
-		name    string
-		token   string
-		wantErr error
-	}{
-		{
-			name:    "valid token",
-			token:   "token123",
-			wantErr: nil,
-		},
-		{
-			name:    "empty token",
-			token:   "",
-			wantErr: errors.New("token cannot be empty"),
-		},
-		{
-			name:    "token with bearer prefix",
-			token:   "Bearer token123",
-			wantErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			client, err := NewRawClient("https://github.com/owner/repo", WithTokenAuth(tt.token))
-			if tt.wantErr != nil {
-				require.Error(t, err)
-				require.Equal(t, tt.wantErr.Error(), err.Error())
-				return
-			}
-			require.NoError(t, err)
-
-			require.NotNil(t, client.tokenAuth)
-			require.Equal(t, tt.token, *client.tokenAuth)
-		})
-	}
-}
-
-func TestAuthConflict(t *testing.T) {
-	tests := []struct {
-		name    string
-		options []Option
-		wantErr error
-	}{
-		{
-			name: "basic auth then token auth",
-			options: []Option{
-				WithBasicAuth("user", "pass"),
-				WithTokenAuth("token123"),
-			},
-			wantErr: errors.New("cannot use both basic auth and token auth"),
-		},
-		{
-			name: "token auth then basic auth",
-			options: []Option{
-				WithTokenAuth("token123"),
-				WithBasicAuth("user", "pass"),
-			},
-			wantErr: errors.New("cannot use both basic auth and token auth"),
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			client, err := NewRawClient("https://github.com/owner/repo", tt.options...)
-			require.Error(t, err)
-			require.Equal(t, tt.wantErr.Error(), err.Error())
-			require.Nil(t, client)
 		})
 	}
 }

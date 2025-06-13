@@ -6,14 +6,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewClient(t *testing.T) {
+
+	errOption := func(o *options.Options) error {
+		return errors.New("option application failed")
+	}
+
 	tests := []struct {
 		name    string
 		repo    string
-		options []Option
+		options []options.Option
 		wantErr error
 	}{
 		{
@@ -37,43 +43,41 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "valid repo with basic auth",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				WithBasicAuth("user", "pass"),
+			options: []options.Option{
+				options.WithBasicAuth("user", "pass"),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid repo with token auth",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				WithTokenAuth("token123"),
+			options: []options.Option{
+				options.WithTokenAuth("token123"),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid repo with custom user agent",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				WithUserAgent("custom-agent/1.0"),
+			options: []options.Option{
+				options.WithUserAgent("custom-agent/1.0"),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "option returns error",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				func(c *rawClient) error {
-					return errors.New("option application failed")
-				},
+			options: []options.Option{
+				errOption,
 			},
 			wantErr: errors.New("option application failed"),
 		},
 		{
 			name: "nil option is skipped",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
+			options: []options.Option{
 				nil,
-				WithUserAgent("custom-agent/1.0"),
+				options.WithUserAgent("custom-agent/1.0"),
 			},
 			wantErr: nil,
 		},
@@ -98,25 +102,25 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "multiple auth options",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				WithBasicAuth("user", "pass"),
-				WithTokenAuth("token123"),
+			options: []options.Option{
+				options.WithBasicAuth("user", "pass"),
+				options.WithTokenAuth("token123"),
 			},
 			wantErr: errors.New("cannot use both basic auth and token auth"),
 		},
 		{
 			name: "invalid basic auth",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				WithBasicAuth("", "pass"),
+			options: []options.Option{
+				options.WithBasicAuth("", "pass"),
 			},
 			wantErr: errors.New("username cannot be empty"),
 		},
 		{
 			name: "invalid token auth",
 			repo: "https://github.com/owner/repo",
-			options: []Option{
-				WithTokenAuth(""),
+			options: []options.Option{
+				options.WithTokenAuth(""),
 			},
 			wantErr: errors.New("token cannot be empty"),
 		},
@@ -162,7 +166,7 @@ func TestWithHTTPClient(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewRawClient("https://github.com/owner/repo", WithHTTPClient(tt.httpClient))
+			client, err := NewRawClient("https://github.com/owner/repo", options.WithHTTPClient(tt.httpClient))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())

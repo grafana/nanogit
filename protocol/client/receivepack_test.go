@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +19,7 @@ func TestReceivePack(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    Option
+		setupClient    options.Option
 	}{
 		{
 			name:           "successful response",
@@ -50,7 +51,7 @@ func TestReceivePack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Timeout: 1 * time.Nanosecond,
 			}),
 		},
@@ -60,7 +61,7 @@ func TestReceivePack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: WithHTTPClient(&http.Client{
+			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
 						Timeout: 1 * time.Nanosecond,
