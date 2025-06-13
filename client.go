@@ -10,7 +10,6 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/storage"
 )
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/staged_writer.go . StagedWriter
@@ -101,7 +100,6 @@ type Option func(*rawClient) error
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
 	RawClient
-	packfileStorage storage.PackfileStorage
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -159,8 +157,7 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	}
 
 	c := &httpClient{
-		RawClient:       rawClient,
-		packfileStorage: rawClient.packfileStorage,
+		RawClient: rawClient,
 	}
 
 	return c, nil

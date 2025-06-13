@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 // GetBlob retrieves a blob (file content) from the repository by its hash.
@@ -29,17 +30,6 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
-	storage := c.getPackfileStorage(ctx)
-	if storage != nil {
-		if obj, ok := storage.Get(blobID); ok {
-			return &Blob{
-				Hash:    blobID,
-				Content: obj.Data,
-			}, nil
-		}
-	}
-
-	// TODO: do we want a fetch one?
 	objects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress: true,
 		Want:       []hash.Hash{blobID},
@@ -115,7 +105,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 
 	// Add in-memory storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	ctx, _ = c.ensurePackfileStorage(ctx)
+	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	// Split the path into parts
 	parts := strings.Split(path, "/")

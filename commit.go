@@ -117,7 +117,7 @@ type CommitFile struct {
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	ctx, _ = c.ensurePackfileStorage(ctx)
+	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	// Get both trees
 	baseTree, err := c.GetFlatTree(ctx, baseCommit)
@@ -226,13 +226,6 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
-	storage := c.getPackfileStorage(ctx)
-	if storage != nil {
-		if obj, ok := storage.Get(commitHash); ok {
-			return packfileObjectToCommit(obj)
-		}
-	}
-
 	objects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
@@ -390,7 +383,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	ctx, allObjects := c.ensurePackfileStorage(ctx)
+	ctx, allObjects := storage.FromContextOrInMemory(ctx)
 
 	for len(queue) > 0 && len(commitObjs) < skip+collect {
 		currentHash := queue[0]

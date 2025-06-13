@@ -4,8 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-
-	"github.com/grafana/nanogit/storage"
 )
 
 type rawClient struct {
@@ -19,8 +17,6 @@ type rawClient struct {
 	basicAuth *struct{ Username, Password string }
 	// Token-based authentication header
 	tokenAuth *string
-	// Packfile storage
-	packfileStorage storage.PackfileStorage
 }
 
 // addDefaultHeaders adds the default headers to the request.

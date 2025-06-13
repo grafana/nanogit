@@ -100,7 +100,7 @@ type Tree struct {
 func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*FlatTree, error) {
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	ctx, _ = c.ensurePackfileStorage(ctx)
+	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	allTreeObjects, treeHash, err := c.fetchAllTreeObjects(ctx, commitHash)
 	if err != nil {
@@ -118,7 +118,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	var totalRequests int
 	var totalObjectsFetched int
 
-	ctx, allObjects := c.ensurePackfileStorage(ctx)
+	ctx, allObjects := storage.FromContextOrInMemory(ctx)
 	totalRequests++
 
 	// Get all commit tree objects
@@ -563,13 +563,6 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 }
 
 func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
-	storage := c.getPackfileStorage(ctx)
-	if storage != nil {
-		if obj, ok := storage.Get(want); ok {
-			return obj, nil
-		}
-	}
-
 	objects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
@@ -666,7 +659,7 @@ func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	ctx, _ = c.ensurePackfileStorage(ctx)
+	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	if path == "" || path == "." {
 		// Return the root tree
