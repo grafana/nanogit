@@ -245,6 +245,7 @@ func TestGetRef(t *testing.T) {
 			} else {
 				client, err = NewHTTPClient(url)
 			}
+			require.NoError(t, err)
 
 			ref, err := client.GetRef(context.Background(), tt.refToGet)
 			if tt.expectedError != nil {
@@ -402,6 +403,7 @@ func TestCreateRef(t *testing.T) {
 			} else {
 				client, err = NewHTTPClient(url)
 			}
+			require.NoError(t, err)
 
 			err = client.CreateRef(context.Background(), tt.refToCreate)
 			if tt.expectedError != "" {
@@ -553,6 +555,7 @@ func TestUpdateRef(t *testing.T) {
 			} else {
 				client, err = NewHTTPClient(url)
 			}
+			require.NoError(t, err)
 
 			err = client.UpdateRef(context.Background(), tt.refToUpdate)
 			if tt.expectedError != "" {
@@ -689,6 +692,7 @@ func TestDeleteRef(t *testing.T) {
 			} else {
 				client, err = NewHTTPClient(url)
 			}
+			require.NoError(t, err)
 
 			err = client.DeleteRef(context.Background(), tt.refToDelete)
 			if tt.expectedError != "" {

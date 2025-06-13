@@ -441,6 +441,7 @@ func TestReceivePack(t *testing.T) {
 			} else {
 				client, err = NewHTTPClient(url)
 			}
+			require.NoError(t, err)
 
 			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")

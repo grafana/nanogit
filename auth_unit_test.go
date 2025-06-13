@@ -159,6 +159,8 @@ func TestWithTokenAuth(t *testing.T) {
 			require.NoError(t, err)
 
 			c, ok := client.(*httpClient)
+			require.True(t, ok, "client should be of type *httpClient")
+
 			rawClient, ok := c.RawClient.(*rawClient)
 			require.True(t, ok, "client should be of type *httpClient")
 			require.NotNil(t, rawClient.tokenAuth)
