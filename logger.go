@@ -28,6 +28,7 @@ func WithLogger(logger log.Logger) Option {
 }
 
 // FIXME: this is duplicated in the client and http client
+// FIXME: can we avoid this functions
 func (c *rawClient) getLogger(ctx context.Context) log.Logger {
 	logger := log.FromContext(ctx)
 	if logger != nil {
