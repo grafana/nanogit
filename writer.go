@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 // NewStagedWriter creates a new StagedWriter for staging changes to a Git reference.
@@ -99,7 +100,7 @@ type stagedWriter struct {
 	// Root tree object from last commit
 	lastTree *protocol.PackfileObject
 	// Cache of fetched tree objects
-	objStorage PackfileStorage
+	objStorage storage.PackfileStorage
 	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
 }
@@ -504,7 +505,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	}
 
 	// Send the packfile to the server
-	if _, err := w.client.receivePack(ctx, packfile); err != nil {
+	if _, err := w.client.ReceivePack(ctx, packfile); err != nil {
 		return fmt.Errorf("send packfile: %w", err)
 	}
 

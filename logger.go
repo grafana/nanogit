@@ -3,6 +3,8 @@ package nanogit
 import (
 	"context"
 	"errors"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // WithLogger configures a custom logger for the Git client.
@@ -15,8 +17,8 @@ import (
 // Returns:
 //   - Option: Configuration function for the client
 //   - error: Error if the provided logger is nil
-func WithLogger(logger Logger) Option {
-	return func(c *httpClient) error {
+func WithLogger(logger log.Logger) Option {
+	return func(c *rawClient) error {
 		if logger == nil {
 			return errors.New("logger cannot be nil")
 		}
@@ -25,54 +27,22 @@ func WithLogger(logger Logger) Option {
 	}
 }
 
-// loggerCtxKey is the key used to store the logger in the context.
-type loggerCtxKey struct{}
-
-// WithContextLogger adds a logger to the context that can be retrieved later.
-// The logger will be used for operations performed with this context.
-// If no logger is provided in the context, a no-op logger will be used.
-//
-// Parameters:
-//   - ctx: The context to add the logger to
-//   - logger: The logger to store in the context
-//
-// Returns:
-//   - context.Context: A new context with the logger stored
-func WithContextLogger(ctx context.Context, logger Logger) context.Context {
-	return context.WithValue(ctx, loggerCtxKey{}, logger)
-}
-
-// getContextLogger retrieves the logger from the context.
-// If no logger is stored in the context, nil will be returned.
-//
-// Parameters:
-//   - ctx: The context to retrieve the logger from
-//
-// Returns:
-//   - Logger: The logger stored in the context, or nil if none is found
-func getContextLogger(ctx context.Context) Logger {
-	logger, ok := ctx.Value(loggerCtxKey{}).(Logger)
-	if !ok {
-		return nil
+// FIXME: this is duplicated in the client and http client
+// FIXME: can we avoid this functions
+func (c *rawClient) getLogger(ctx context.Context) log.Logger {
+	logger := log.FromContext(ctx)
+	if logger != nil {
+		return logger
 	}
 
-	return logger
+	return c.logger
 }
 
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/logger.go . Logger
+func (c *httpClient) getLogger(ctx context.Context) log.Logger {
+	logger := log.FromContext(ctx)
+	if logger != nil {
+		return logger
+	}
 
-// Logger is a minimal logging interface for nanogit clients.
-type Logger interface {
-	Debug(msg string, keysAndValues ...any)
-	Info(msg string, keysAndValues ...any)
-	Error(msg string, keysAndValues ...any)
-	Warn(msg string, keysAndValues ...any)
+	return c.logger
 }
-
-// noopLogger implements Logger but does nothing.
-type noopLogger struct{}
-
-func (n *noopLogger) Debug(msg string, keysAndValues ...any) {}
-func (n *noopLogger) Info(msg string, keysAndValues ...any)  {}
-func (n *noopLogger) Error(msg string, keysAndValues ...any) {}
-func (n *noopLogger) Warn(msg string, keysAndValues ...any)  {}

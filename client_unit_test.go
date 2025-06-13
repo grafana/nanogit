@@ -67,7 +67,7 @@ func TestNewClient(t *testing.T) {
 			name: "option returns error",
 			repo: "https://github.com/owner/repo",
 			options: []Option{
-				func(c *httpClient) error {
+				func(c *rawClient) error {
 					return errors.New("option application failed")
 				},
 			},
@@ -178,37 +178,16 @@ func TestWithHTTPClient(t *testing.T) {
 
 			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
+			rawClient, ok := c.RawClient.(*rawClient)
+			require.True(t, ok, "client should be of type *rawClient")
 
 			if tt.httpClient == nil {
-				require.NotNil(t, c.client, "client should not be nil even when nil is provided")
+				require.NotNil(t, rawClient.client, "client should not be nil even when nil is provided")
 			} else {
-				require.Equal(t, tt.httpClient, c.client, "http client should match the provided client")
+				require.Equal(t, tt.httpClient, rawClient.client, "http client should match the provided client")
 			}
 		})
 	}
-}
-
-type logEntry struct {
-	level string
-	msg   string
-	args  []any
-}
-
-type testLogger struct {
-	entries []logEntry
-}
-
-func (l *testLogger) Debug(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Debug", msg, keysAndValues})
-}
-func (l *testLogger) Info(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Info", msg, keysAndValues})
-}
-func (l *testLogger) Warn(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Warn", msg, keysAndValues})
-}
-func (l *testLogger) Error(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Error", msg, keysAndValues})
 }
 
 func TestUploadPack(t *testing.T) {
@@ -218,7 +197,7 @@ func TestUploadPack(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    func(*httpClient)
+		setupClient    Option
 	}{
 		{
 			name:           "successful response",
@@ -250,10 +229,11 @@ func TestUploadPack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.client = &http.Client{
 					Timeout: 1 * time.Nanosecond,
 				}
+				return nil
 			},
 		},
 		{
@@ -262,7 +242,7 @@ func TestUploadPack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -271,6 +251,7 @@ func TestUploadPack(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -315,15 +296,23 @@ func TestUploadPack(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
-			require.NoError(t, err)
+			var (
+				client Client
+				err    error
+			)
+
+			if tt.setupClient != nil {
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
+			}
 			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
-			if tt.setupClient != nil {
-				tt.setupClient(c)
-			}
+			rawClient, ok := c.RawClient.(*rawClient)
+			require.True(t, ok, "client should be of type *rawClient")
 
-			response, err := c.uploadPack(context.Background(), []byte("test data"))
+			require.NoError(t, err)
+			response, err := rawClient.UploadPack(context.Background(), []byte("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -343,7 +332,7 @@ func TestReceivePack(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    func(*httpClient)
+		setupClient    Option
 	}{
 		{
 			name:           "successful response",
@@ -375,10 +364,11 @@ func TestReceivePack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.client = &http.Client{
 					Timeout: 1 * time.Nanosecond,
 				}
+				return nil
 			},
 		},
 		{
@@ -387,7 +377,7 @@ func TestReceivePack(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -396,6 +386,7 @@ func TestReceivePack(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -440,15 +431,24 @@ func TestReceivePack(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
+			var (
+				client Client
+				err    error
+			)
+
+			if tt.setupClient != nil {
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
+			}
 			require.NoError(t, err)
+
 			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
-			if tt.setupClient != nil {
-				tt.setupClient(c)
-			}
+			rawClient, ok := c.RawClient.(*rawClient)
+			require.True(t, ok, "client should be of type *rawClient")
 
-			response, err := c.receivePack(context.Background(), []byte("test data"))
+			response, err := rawClient.ReceivePack(context.Background(), []byte("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -468,7 +468,7 @@ func TestSmartInfo(t *testing.T) {
 		responseBody   string
 		expectedError  string
 		expectedResult string
-		setupClient    func(*httpClient)
+		setupClient    Option
 	}{
 		{
 			name:           "successful response",
@@ -500,10 +500,11 @@ func TestSmartInfo(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "context deadline exceeded",
 			expectedResult: "",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.client = &http.Client{
 					Timeout: 1 * time.Nanosecond,
 				}
+				return nil
 			},
 		},
 		{
@@ -512,7 +513,7 @@ func TestSmartInfo(t *testing.T) {
 			responseBody:   "",
 			expectedError:  "i/o timeout",
 			expectedResult: "",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -521,6 +522,7 @@ func TestSmartInfo(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -569,15 +571,24 @@ func TestSmartInfo(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
+			var (
+				client Client
+				err    error
+			)
+
+			if tt.setupClient != nil {
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
+			}
 			require.NoError(t, err)
+
 			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
-			if tt.setupClient != nil {
-				tt.setupClient(c)
-			}
+			rawClient, ok := c.RawClient.(*rawClient)
+			require.True(t, ok, "client should be of type *rawClient")
 
-			response, err := c.smartInfo(context.Background(), "custom-service")
+			response, err := rawClient.SmartInfo(context.Background(), "custom-service")
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)

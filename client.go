@@ -1,16 +1,17 @@
 package nanogit
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/staged_writer.go . StagedWriter
@@ -52,10 +53,10 @@ type StagedWriter interface {
 	Push(ctx context.Context) error
 }
 
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/client.go . Client
-
 // Client defines the interface for interacting with a Git repository.
 // It provides methods for repository operations, reference management,
+//
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/client.go . Client
 type Client interface {
 	// Repo operations
 	IsAuthorized(ctx context.Context) (bool, error)
@@ -81,175 +82,28 @@ type Client interface {
 	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
 }
 
+// RawClient is a client that can be used to make raw Git protocol requests.
+// It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
+//
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/raw_client.go . RawClient
+type RawClient interface {
+	SmartInfo(ctx context.Context, service string) ([]byte, error)
+	UploadPack(ctx context.Context, data []byte) ([]byte, error)
+	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
+	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
+	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
+}
+
 // Option is a function that configures a Client during creation.
 // Options allow customization of the HTTP client, authentication, logging, and other settings.
-type Option func(*httpClient) error
+type Option func(*rawClient) error
 
 // httpClient is the private implementation of the Client interface.
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
-	// Base URL of the Git repository
-	base *url.URL
-	// HTTP client used for making requests
-	client *http.Client
-	// User-Agent header value for requests
-	userAgent string
-	// Logger for debug and info messages
-	logger Logger
-	// Basic authentication credentials (username/password)
-	basicAuth *struct{ Username, Password string }
-	// Token-based authentication header
-	tokenAuth *string
-	// Packfile storage
-	packfileStorage PackfileStorage
-}
-
-// addDefaultHeaders adds the default headers to the request.
-func (c *httpClient) addDefaultHeaders(req *http.Request) {
-	req.Header.Add("Git-Protocol", "version=2")
-	if c.userAgent == "" {
-		c.userAgent = "nanogit/0"
-	}
-	req.Header.Add("User-Agent", c.userAgent)
-
-	if c.basicAuth != nil {
-		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
-	} else if c.tokenAuth != nil {
-		req.Header.Set("Authorization", *c.tokenAuth)
-	}
-}
-
-func (c *httpClient) getLogger(ctx context.Context) Logger {
-	logger := getContextLogger(ctx)
-	if logger != nil {
-		return logger
-	}
-
-	return c.logger
-}
-
-// uploadPack sends a POST request to the git-upload-pack endpoint.
-// This endpoint is used to fetch objects and refs from the remote repository.
-func (c *httpClient) uploadPack(ctx context.Context, data []byte) ([]byte, error) {
-	body := bytes.NewReader(data)
-
-	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
-	// See: https://git-scm.com/docs/protocol-v2#_http_transport
-	u := c.base.JoinPath("git-upload-pack").String()
-
-	logger := c.getLogger(ctx)
-
-	logger.Info("UploadPack", "url", u, "requestBody", string(data))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
-	c.addDefaultHeaders(req)
-
-	res, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	responseBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Info("UploadPack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u)
-
-	return responseBody, nil
-}
-
-// receivePack sends a POST request to the git-receive-pack endpoint.
-// This endpoint is used to send objects to the remote repository.
-func (c *httpClient) receivePack(ctx context.Context, data []byte) ([]byte, error) {
-	body := bytes.NewReader(data)
-
-	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
-	// See: https://git-scm.com/docs/protocol-v2#_http_transport
-	u := c.base.JoinPath("git-receive-pack")
-	logger := c.getLogger(ctx)
-	logger.Info("GitReceivePack", "url", u.String())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	c.addDefaultHeaders(req)
-	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
-	req.Header.Add("Accept", "application/x-git-receive-pack-result")
-
-	res, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	responseBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
-
-	return responseBody, nil
-}
-
-// smartInfo sends a GET request to the info/refs endpoint.
-func (c *httpClient) smartInfo(ctx context.Context, service string) ([]byte, error) {
-	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
-	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
-	// See: https://git-scm.com/docs/http-protocol#_smart_clients
-	// See: https://git-scm.com/docs/protocol-v2#_http_transport
-	u := c.base.JoinPath("info/refs")
-
-	query := make(url.Values)
-	query.Set("service", service)
-	u.RawQuery = query.Encode()
-
-	logger := c.getLogger(ctx)
-	logger.Info("SmartInfo", "url", u.String())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	c.addDefaultHeaders(req)
-
-	res, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
-
-	return body, nil
+	RawClient
+	logger          log.Logger
+	packfileStorage storage.PackfileStorage
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -292,55 +146,27 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 
 	u.Path = strings.TrimRight(u.Path, "/")
 
-	c := &httpClient{
+	rawClient := &rawClient{
 		base:   u,
 		client: &http.Client{},
-		logger: &noopLogger{}, // No-op logger by default
+		logger: &log.NoopLogger{}, // No-op logger by default
 	}
+
 	for _, option := range options {
 		if option == nil { // allow for easy optional options
 			continue
 		}
-		if err := option(c); err != nil {
+		if err := option(rawClient); err != nil {
 			return nil, err
 		}
 	}
 
+	c := &httpClient{
+		RawClient: rawClient,
+		// FIXME: this is leaky
+		logger:          rawClient.logger,
+		packfileStorage: rawClient.packfileStorage,
+	}
+
 	return c, nil
-}
-
-// WithUserAgent configures a custom User-Agent header for HTTP requests.
-// If not specified, a default User-Agent will be used.
-//
-// Parameters:
-//   - agent: Custom User-Agent string to use in requests
-//
-// Returns:
-//   - Option: Configuration function for the client
-func WithUserAgent(agent string) Option {
-	return func(c *httpClient) error {
-		c.userAgent = agent
-		return nil
-	}
-}
-
-// WithHTTPClient configures a custom HTTP client for making requests.
-// This allows customization of timeouts, transport settings, proxies, and other HTTP behavior.
-// The provided client must not be nil.
-//
-// Parameters:
-//   - client: Custom HTTP client to use for requests
-//
-// Returns:
-//   - Option: Configuration function for the client
-//   - error: Error if the provided HTTP client is nil
-func WithHTTPClient(client *http.Client) Option {
-	return func(c *httpClient) error {
-		if client == nil {
-			return errors.New("httpClient is nil")
-		}
-
-		c.client = client
-		return nil
-	}
 }

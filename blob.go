@@ -40,7 +40,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	}
 
 	// TODO: do we want a fetch one?
-	objects, err := c.fetch(ctx, fetchOptions{
+	objects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress: true,
 		Want:       []hash.Hash{blobID},
 		Done:       true,
