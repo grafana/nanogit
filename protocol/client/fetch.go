@@ -1,4 +1,4 @@
-package nanogit
+package client
 
 import (
 	"context"
@@ -123,10 +123,6 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object
-	}
-
-	if len(objects) == 0 {
-		return nil, ErrObjectNotFound
 	}
 
 	return objects, nil

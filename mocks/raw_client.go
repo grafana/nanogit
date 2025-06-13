@@ -5,16 +5,16 @@ import (
 	"context"
 	"sync"
 
-	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 )
 
 type FakeRawClient struct {
-	FetchStub        func(context.Context, nanogit.FetchOptions) (map[string]*protocol.PackfileObject, error)
+	FetchStub        func(context.Context, client.FetchOptions) (map[string]*protocol.PackfileObject, error)
 	fetchMutex       sync.RWMutex
 	fetchArgsForCall []struct {
 		arg1 context.Context
-		arg2 nanogit.FetchOptions
+		arg2 client.FetchOptions
 	}
 	fetchReturns struct {
 		result1 map[string]*protocol.PackfileObject
@@ -24,11 +24,24 @@ type FakeRawClient struct {
 		result1 map[string]*protocol.PackfileObject
 		result2 error
 	}
-	LsRefsStub        func(context.Context, nanogit.LsRefsOptions) ([]protocol.RefLine, error)
+	IsAuthorizedStub        func(context.Context) (bool, error)
+	isAuthorizedMutex       sync.RWMutex
+	isAuthorizedArgsForCall []struct {
+		arg1 context.Context
+	}
+	isAuthorizedReturns struct {
+		result1 bool
+		result2 error
+	}
+	isAuthorizedReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
+	LsRefsStub        func(context.Context, client.LsRefsOptions) ([]protocol.RefLine, error)
 	lsRefsMutex       sync.RWMutex
 	lsRefsArgsForCall []struct {
 		arg1 context.Context
-		arg2 nanogit.LsRefsOptions
+		arg2 client.LsRefsOptions
 	}
 	lsRefsReturns struct {
 		result1 []protocol.RefLine
@@ -84,12 +97,12 @@ type FakeRawClient struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 nanogit.FetchOptions) (map[string]*protocol.PackfileObject, error) {
+func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 client.FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	fake.fetchMutex.Lock()
 	ret, specificReturn := fake.fetchReturnsOnCall[len(fake.fetchArgsForCall)]
 	fake.fetchArgsForCall = append(fake.fetchArgsForCall, struct {
 		arg1 context.Context
-		arg2 nanogit.FetchOptions
+		arg2 client.FetchOptions
 	}{arg1, arg2})
 	stub := fake.FetchStub
 	fakeReturns := fake.fetchReturns
@@ -110,13 +123,13 @@ func (fake *FakeRawClient) FetchCallCount() int {
 	return len(fake.fetchArgsForCall)
 }
 
-func (fake *FakeRawClient) FetchCalls(stub func(context.Context, nanogit.FetchOptions) (map[string]*protocol.PackfileObject, error)) {
+func (fake *FakeRawClient) FetchCalls(stub func(context.Context, client.FetchOptions) (map[string]*protocol.PackfileObject, error)) {
 	fake.fetchMutex.Lock()
 	defer fake.fetchMutex.Unlock()
 	fake.FetchStub = stub
 }
 
-func (fake *FakeRawClient) FetchArgsForCall(i int) (context.Context, nanogit.FetchOptions) {
+func (fake *FakeRawClient) FetchArgsForCall(i int) (context.Context, client.FetchOptions) {
 	fake.fetchMutex.RLock()
 	defer fake.fetchMutex.RUnlock()
 	argsForCall := fake.fetchArgsForCall[i]
@@ -149,12 +162,76 @@ func (fake *FakeRawClient) FetchReturnsOnCall(i int, result1 map[string]*protoco
 	}{result1, result2}
 }
 
-func (fake *FakeRawClient) LsRefs(arg1 context.Context, arg2 nanogit.LsRefsOptions) ([]protocol.RefLine, error) {
+func (fake *FakeRawClient) IsAuthorized(arg1 context.Context) (bool, error) {
+	fake.isAuthorizedMutex.Lock()
+	ret, specificReturn := fake.isAuthorizedReturnsOnCall[len(fake.isAuthorizedArgsForCall)]
+	fake.isAuthorizedArgsForCall = append(fake.isAuthorizedArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.IsAuthorizedStub
+	fakeReturns := fake.isAuthorizedReturns
+	fake.recordInvocation("IsAuthorized", []interface{}{arg1})
+	fake.isAuthorizedMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeRawClient) IsAuthorizedCallCount() int {
+	fake.isAuthorizedMutex.RLock()
+	defer fake.isAuthorizedMutex.RUnlock()
+	return len(fake.isAuthorizedArgsForCall)
+}
+
+func (fake *FakeRawClient) IsAuthorizedCalls(stub func(context.Context) (bool, error)) {
+	fake.isAuthorizedMutex.Lock()
+	defer fake.isAuthorizedMutex.Unlock()
+	fake.IsAuthorizedStub = stub
+}
+
+func (fake *FakeRawClient) IsAuthorizedArgsForCall(i int) context.Context {
+	fake.isAuthorizedMutex.RLock()
+	defer fake.isAuthorizedMutex.RUnlock()
+	argsForCall := fake.isAuthorizedArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRawClient) IsAuthorizedReturns(result1 bool, result2 error) {
+	fake.isAuthorizedMutex.Lock()
+	defer fake.isAuthorizedMutex.Unlock()
+	fake.IsAuthorizedStub = nil
+	fake.isAuthorizedReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) IsAuthorizedReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.isAuthorizedMutex.Lock()
+	defer fake.isAuthorizedMutex.Unlock()
+	fake.IsAuthorizedStub = nil
+	if fake.isAuthorizedReturnsOnCall == nil {
+		fake.isAuthorizedReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.isAuthorizedReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) LsRefs(arg1 context.Context, arg2 client.LsRefsOptions) ([]protocol.RefLine, error) {
 	fake.lsRefsMutex.Lock()
 	ret, specificReturn := fake.lsRefsReturnsOnCall[len(fake.lsRefsArgsForCall)]
 	fake.lsRefsArgsForCall = append(fake.lsRefsArgsForCall, struct {
 		arg1 context.Context
-		arg2 nanogit.LsRefsOptions
+		arg2 client.LsRefsOptions
 	}{arg1, arg2})
 	stub := fake.LsRefsStub
 	fakeReturns := fake.lsRefsReturns
@@ -175,13 +252,13 @@ func (fake *FakeRawClient) LsRefsCallCount() int {
 	return len(fake.lsRefsArgsForCall)
 }
 
-func (fake *FakeRawClient) LsRefsCalls(stub func(context.Context, nanogit.LsRefsOptions) ([]protocol.RefLine, error)) {
+func (fake *FakeRawClient) LsRefsCalls(stub func(context.Context, client.LsRefsOptions) ([]protocol.RefLine, error)) {
 	fake.lsRefsMutex.Lock()
 	defer fake.lsRefsMutex.Unlock()
 	fake.LsRefsStub = stub
 }
 
-func (fake *FakeRawClient) LsRefsArgsForCall(i int) (context.Context, nanogit.LsRefsOptions) {
+func (fake *FakeRawClient) LsRefsArgsForCall(i int) (context.Context, client.LsRefsOptions) {
 	fake.lsRefsMutex.RLock()
 	defer fake.lsRefsMutex.RUnlock()
 	argsForCall := fake.lsRefsArgsForCall[i]
@@ -424,6 +501,8 @@ func (fake *FakeRawClient) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.fetchMutex.RLock()
 	defer fake.fetchMutex.RUnlock()
+	fake.isAuthorizedMutex.RLock()
+	defer fake.isAuthorizedMutex.RUnlock()
 	fake.lsRefsMutex.RLock()
 	defer fake.lsRefsMutex.RUnlock()
 	fake.receivePackMutex.RLock()
@@ -451,4 +530,4 @@ func (fake *FakeRawClient) recordInvocation(key string, args []interface{}) {
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ nanogit.RawClient = new(FakeRawClient)
+var _ client.RawClient = new(FakeRawClient)

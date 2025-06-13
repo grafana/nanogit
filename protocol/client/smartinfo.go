@@ -1,4 +1,4 @@
-package nanogit
+package client
 
 import (
 	"context"

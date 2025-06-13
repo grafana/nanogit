@@ -65,7 +65,7 @@ go get github.com/grafana/nanogit
 // Create client with authentication
 client, err := nanogit.NewHTTPClient(
     "https://github.com/user/repo.git",
-    nanogit.WithBasicAuth("username", "token"),
+    options.WithBasicAuth("username", "token"),
 )
 
 // Get main branch and create staged writer

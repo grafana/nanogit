@@ -3,6 +3,7 @@ package nanogit_test
 import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/internal/testhelpers"
+	"github.com/grafana/nanogit/options"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,7 +25,7 @@ var _ = Describe("Authorization", func() {
 	It("should successfully authorize with basic auth", func() {
 		By("Creating client with correct basic auth credentials")
 
-		authClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password))
+		authClient, err := nanogit.NewHTTPClient(remoteURL, options.WithBasicAuth(user.Username, user.Password))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization")
@@ -35,7 +36,7 @@ var _ = Describe("Authorization", func() {
 
 	It("should fail authorization with wrong credentials", func() {
 		By("Creating client with incorrect credentials")
-		unauthorizedClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth("wronguser", "wrongpass"))
+		unauthorizedClient, err := nanogit.NewHTTPClient(remoteURL, options.WithBasicAuth("wronguser", "wrongpass"))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization should fail")
@@ -50,7 +51,7 @@ var _ = Describe("Authorization", func() {
 		Expect(token).NotTo(BeEmpty())
 
 		By("Creating client with access token")
-		tokenClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(token))
+		tokenClient, err := nanogit.NewHTTPClient(remoteURL, options.WithTokenAuth(token))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization")
@@ -62,7 +63,7 @@ var _ = Describe("Authorization", func() {
 	It("should fail authorization with invalid token", func() {
 		By("Creating client with invalid token")
 		invalidToken := "token invalid-token"
-		invalidClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(invalidToken))
+		invalidClient, err := nanogit.NewHTTPClient(remoteURL, options.WithTokenAuth(invalidToken))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization should fail")

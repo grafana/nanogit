@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
 )
@@ -226,7 +227,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
-	objects, err := c.Fetch(ctx, FetchOptions{
+	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{commitHash},
@@ -396,7 +397,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		objects, err := c.Fetch(ctx, FetchOptions{
+		objects, err := c.Fetch(ctx, client.FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
 			Want:         []hash.Hash{currentHash},
@@ -531,7 +532,7 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects storage.PackfileStorage) (hash.Hash, error) {
 	commit, ok := allObjects.Get(commitHash)
 	if !ok {
-		objects, err := c.Fetch(ctx, FetchOptions{
+		objects, err := c.Fetch(ctx, client.FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
 			Want:         []hash.Hash{commitHash},

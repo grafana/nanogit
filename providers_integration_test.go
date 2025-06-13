@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +29,7 @@ func TestProviders(t *testing.T) {
 	ctx := log.ToContext(context.Background(), testhelpers.NewTestLogger(t.Logf))
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
-		nanogit.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
+		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
 	)
 	require.NoError(t, err)
 	auth, err := client.IsAuthorized(ctx)

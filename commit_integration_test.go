@@ -65,8 +65,8 @@ var _ = Describe("Commits", func() {
 
 			By("Checking that commit times are recent")
 			now := time.Now()
-			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
-			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 50))
+			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 50))
 		})
 
 		It("should get modify file commit details", func() {

@@ -2,13 +2,9 @@ package nanogit
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 
-	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -80,26 +76,10 @@ type Client interface {
 	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
 }
 
-// RawClient is a client that can be used to make raw Git protocol requests.
-// It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
-//
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/raw_client.go . RawClient
-type RawClient interface {
-	SmartInfo(ctx context.Context, service string) ([]byte, error)
-	UploadPack(ctx context.Context, data []byte) ([]byte, error)
-	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
-	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
-	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
-}
-
-// Option is a function that configures a Client during creation.
-// Options allow customization of the HTTP client, authentication, logging, and other settings.
-type Option func(*rawClient) error
-
 // httpClient is the private implementation of the Client interface.
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
-	RawClient
+	client.RawClient
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -120,45 +100,19 @@ type httpClient struct {
 //	// Create client with basic authentication
 //	client, err := nanogit.NewHTTPClient(
 //	    "https://github.com/user/repo",
-//	    nanogit.WithBasicAuth("username", "password"),
-//	    nanogit.WithLogger(logger),
+//	    options.WithBasicAuth("username", "password"),
+//	    options.WithLogger(logger),
 //	)
 //	if err != nil {
 //	    return err
 //	}
-func NewHTTPClient(repo string, options ...Option) (Client, error) {
-	if repo == "" {
-		return nil, errors.New("repository URL cannot be empty")
-	}
-
-	u, err := url.Parse(repo)
+func NewHTTPClient(repo string, options ...options.Option) (Client, error) {
+	rawClient, err := client.NewRawClient(repo, options...)
 	if err != nil {
-		return nil, fmt.Errorf("parsing url: %w", err)
+		return nil, err
 	}
 
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, errors.New("only HTTP and HTTPS URLs are supported")
-	}
-
-	u.Path = strings.TrimRight(u.Path, "/")
-
-	rawClient := &rawClient{
-		base:   u,
-		client: &http.Client{},
-	}
-
-	for _, option := range options {
-		if option == nil { // allow for easy optional options
-			continue
-		}
-		if err := option(rawClient); err != nil {
-			return nil, err
-		}
-	}
-
-	c := &httpClient{
+	return &httpClient{
 		RawClient: rawClient,
-	}
-
-	return c, nil
+	}, nil
 }
