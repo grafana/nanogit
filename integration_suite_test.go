@@ -35,6 +35,7 @@ var _ = BeforeSuite(func() {
 	gitServer = testhelpers.NewGitServer(logger)
 	logger.Success("🚀 Integration test suite setup complete")
 	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
+	//nolint:fatcontext // we need to pass the logger to the context for the tests to work
 	ctx = log.ToContext(context.Background(), logger)
 })
 
