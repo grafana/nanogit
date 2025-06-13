@@ -96,6 +96,21 @@ writer.Push(ctx)
 
 nanogit offers a flexible storage system for managing Git objects with multiple implementation options. Git objects (commits, trees, blobs) are immutable by design - once created, their content and hash remain constant. This immutability enables efficient caching and sharing of objects across repositories. Local caching of these objects is crucial for performance as it reduces network requests and speeds up common operations like diffing, merging, and history traversal.
 
+
+### Flexibility on context caching
+
+nanogit provides flexibility in how Git objects are cached through context-based storage configuration. This allows different parts of your application to use different storage strategies:
+
+- Use in-memory storage for temporary operations
+- Implement persistent storage for long-running processes
+- Configure different storage backends per request
+- Share storage across multiple operations
+- Optimize storage based on specific use cases
+- Scale storage independently of Git operations
+- Persist Git objects across service restarts
+
+The context-based approach enables fine-grained control over object caching while maintaining clean separation of concerns.
+
 ### In-Memory Storage
 The default implementation uses an in-memory cache for Git objects, optimized for:
 - Stateless operations requiring minimal resource footprint
@@ -110,7 +125,7 @@ The storage system is built with extensibility in mind through a well-defined in
 - Scale storage independently of the Git operations
 - Persist Git objects across service restarts
 
-To implement a custom storage backend, simply implement the `PackfileStorage` interface and configure it using `WithPackfileStorage()`.
+To implement a custom storage backend, simply implement the `PackfileStorage` interface and put it using `storage.ToContext`.
 
 ## Testing
 

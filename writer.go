@@ -44,7 +44,7 @@ import (
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
-	ctx, objStorage := c.ensurePackfileStorage(ctx)
+	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {

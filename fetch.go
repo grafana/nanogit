@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 type FetchOptions struct {
@@ -24,7 +25,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 	logger := log.FromContext(ctx)
 	objects := make(map[string]*protocol.PackfileObject)
 
-	storage := c.getPackfileStorage(ctx)
+	storage := storage.FromContext(ctx)
 	if storage != nil && !opts.NoCache {
 		pending := make([]hash.Hash, 0, len(opts.Want))
 		for _, want := range opts.Want {
@@ -117,7 +118,6 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 			break
 		}
 
-		storage := c.getPackfileStorage(ctx)
 		if storage != nil {
 			storage.Add(obj.Object)
 		}

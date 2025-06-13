@@ -19,3 +19,14 @@ func FromContext(ctx context.Context) PackfileStorage {
 
 	return storage
 }
+
+// FromContextOrInMemory creates a new in-memory storage if the storage is not set in the context.
+func FromContextOrInMemory(ctx context.Context) (context.Context, PackfileStorage) {
+	storage := FromContext(ctx)
+	if storage != nil {
+		return ctx, storage
+	}
+
+	inMemoryStorage := NewInMemoryStorage(ctx)
+	return ToContext(ctx, inMemoryStorage), inMemoryStorage
+}
