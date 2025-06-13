@@ -10,7 +10,7 @@ import (
 
 // WithPackfileStorage sets the packfile storage for the client.
 func WithPackfileStorage(storage PackfileStorage) Option {
-	return func(c *httpClient) error {
+	return func(c *rawClient) error {
 		c.packfileStorage = storage
 		return nil
 	}
@@ -32,6 +32,18 @@ func getPackfileStorageFromContext(ctx context.Context) PackfileStorage {
 	}
 
 	return storage
+}
+
+// FIXME:  refactor this to have storage outsite raw client and not inject deal with storage in 2 layers
+// getPackfileStorage gets the packfile storage from the context.
+// If it's not set, it returns a no-op storage.
+func (c *rawClient) getPackfileStorage(ctx context.Context) PackfileStorage {
+	ctxStorage := getPackfileStorageFromContext(ctx)
+	if ctxStorage != nil {
+		return ctxStorage
+	}
+
+	return &noopPackfileStorage{}
 }
 
 // getPackfileStorage gets the packfile storage from the context.

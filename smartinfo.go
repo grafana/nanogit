@@ -36,7 +36,7 @@ import (
 //
 //	Returns an error if the HTTP request fails, the server returns a non-2xx status code,
 //	or the response body cannot be read.
-func (c *httpClient) SmartInfo(ctx context.Context, service string) ([]byte, error) {
+func (c *rawClient) SmartInfo(ctx context.Context, service string) ([]byte, error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)

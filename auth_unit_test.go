@@ -113,10 +113,12 @@ func TestWithBasicAuth(t *testing.T) {
 			require.NoError(t, err)
 
 			c, ok := client.(*httpClient)
-			require.True(t, ok, "client should be of type *httpClient")
-			require.NotNil(t, c.basicAuth)
-			require.Equal(t, tt.username, c.basicAuth.Username)
-			require.Equal(t, tt.password, c.basicAuth.Password)
+			require.True(t, ok, "client should be of type *client")
+			rawClient, ok := c.RawClient.(*rawClient)
+			require.True(t, ok, "rawClient should be of type *rawClient")
+			require.NotNil(t, rawClient.basicAuth)
+			require.Equal(t, tt.username, rawClient.basicAuth.Username)
+			require.Equal(t, tt.password, rawClient.basicAuth.Password)
 		})
 	}
 }
@@ -157,9 +159,10 @@ func TestWithTokenAuth(t *testing.T) {
 			require.NoError(t, err)
 
 			c, ok := client.(*httpClient)
+			rawClient, ok := c.RawClient.(*rawClient)
 			require.True(t, ok, "client should be of type *httpClient")
-			require.NotNil(t, c.tokenAuth)
-			require.Equal(t, tt.token, *c.tokenAuth)
+			require.NotNil(t, rawClient.tokenAuth)
+			require.Equal(t, tt.token, *rawClient.tokenAuth)
 		})
 	}
 }
@@ -216,7 +219,9 @@ func TestIsAuthorized(t *testing.T) {
 			expectedAuth:  true,
 			expectedError: "",
 			setupAuth: func(c *httpClient) {
-				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
+				rawClient, ok := c.RawClient.(*rawClient)
+				require.True(t, ok, "rawClient should be of type *rawClient")
+				rawClient.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
 		{
@@ -227,7 +232,9 @@ func TestIsAuthorized(t *testing.T) {
 			expectedError: "",
 			setupAuth: func(c *httpClient) {
 				token := "token123"
-				c.tokenAuth = &token
+				rawClient, ok := c.RawClient.(*rawClient)
+				require.True(t, ok, "rawClient should be of type *rawClient")
+				rawClient.tokenAuth = &token
 			},
 		},
 		{
@@ -237,7 +244,9 @@ func TestIsAuthorized(t *testing.T) {
 			expectedAuth:  false,
 			expectedError: "",
 			setupAuth: func(c *httpClient) {
-				c.basicAuth = &struct{ Username, Password string }{"user", "wrong"}
+				rawClient, ok := c.RawClient.(*rawClient)
+				require.True(t, ok, "rawClient should be of type *rawClient")
+				rawClient.basicAuth = &struct{ Username, Password string }{"user", "wrong"}
 			},
 		},
 		{
@@ -247,7 +256,9 @@ func TestIsAuthorized(t *testing.T) {
 			expectedAuth:  false,
 			expectedError: "get repository info: got status code 500: 500 Internal Server Error",
 			setupAuth: func(c *httpClient) {
-				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
+				rawClient, ok := c.RawClient.(*rawClient)
+				require.True(t, ok, "rawClient should be of type *rawClient")
+				rawClient.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
 	}

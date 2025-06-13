@@ -12,7 +12,7 @@ import (
 func WithBasicAuth(username, password string) Option {
 	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *httpClient) error {
+	return func(c *rawClient) error {
 		if username == "" {
 			return errors.New("username cannot be empty")
 		}
@@ -29,7 +29,7 @@ func WithBasicAuth(username, password string) Option {
 func WithTokenAuth(token string) Option {
 	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *httpClient) error {
+	return func(c *rawClient) error {
 		if token == "" {
 			return errors.New("token cannot be empty")
 		}

@@ -24,6 +24,20 @@ type FakeRawClient struct {
 		result1 map[string]*protocol.PackfileObject
 		result2 error
 	}
+	LsRefsStub        func(context.Context, nanogit.LsRefsOptions) ([]protocol.RefLine, error)
+	lsRefsMutex       sync.RWMutex
+	lsRefsArgsForCall []struct {
+		arg1 context.Context
+		arg2 nanogit.LsRefsOptions
+	}
+	lsRefsReturns struct {
+		result1 []protocol.RefLine
+		result2 error
+	}
+	lsRefsReturnsOnCall map[int]struct {
+		result1 []protocol.RefLine
+		result2 error
+	}
 	ReceivePackStub        func(context.Context, []byte) ([]byte, error)
 	receivePackMutex       sync.RWMutex
 	receivePackArgsForCall []struct {
@@ -131,6 +145,71 @@ func (fake *FakeRawClient) FetchReturnsOnCall(i int, result1 map[string]*protoco
 	}
 	fake.fetchReturnsOnCall[i] = struct {
 		result1 map[string]*protocol.PackfileObject
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) LsRefs(arg1 context.Context, arg2 nanogit.LsRefsOptions) ([]protocol.RefLine, error) {
+	fake.lsRefsMutex.Lock()
+	ret, specificReturn := fake.lsRefsReturnsOnCall[len(fake.lsRefsArgsForCall)]
+	fake.lsRefsArgsForCall = append(fake.lsRefsArgsForCall, struct {
+		arg1 context.Context
+		arg2 nanogit.LsRefsOptions
+	}{arg1, arg2})
+	stub := fake.LsRefsStub
+	fakeReturns := fake.lsRefsReturns
+	fake.recordInvocation("LsRefs", []interface{}{arg1, arg2})
+	fake.lsRefsMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeRawClient) LsRefsCallCount() int {
+	fake.lsRefsMutex.RLock()
+	defer fake.lsRefsMutex.RUnlock()
+	return len(fake.lsRefsArgsForCall)
+}
+
+func (fake *FakeRawClient) LsRefsCalls(stub func(context.Context, nanogit.LsRefsOptions) ([]protocol.RefLine, error)) {
+	fake.lsRefsMutex.Lock()
+	defer fake.lsRefsMutex.Unlock()
+	fake.LsRefsStub = stub
+}
+
+func (fake *FakeRawClient) LsRefsArgsForCall(i int) (context.Context, nanogit.LsRefsOptions) {
+	fake.lsRefsMutex.RLock()
+	defer fake.lsRefsMutex.RUnlock()
+	argsForCall := fake.lsRefsArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeRawClient) LsRefsReturns(result1 []protocol.RefLine, result2 error) {
+	fake.lsRefsMutex.Lock()
+	defer fake.lsRefsMutex.Unlock()
+	fake.LsRefsStub = nil
+	fake.lsRefsReturns = struct {
+		result1 []protocol.RefLine
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) LsRefsReturnsOnCall(i int, result1 []protocol.RefLine, result2 error) {
+	fake.lsRefsMutex.Lock()
+	defer fake.lsRefsMutex.Unlock()
+	fake.LsRefsStub = nil
+	if fake.lsRefsReturnsOnCall == nil {
+		fake.lsRefsReturnsOnCall = make(map[int]struct {
+			result1 []protocol.RefLine
+			result2 error
+		})
+	}
+	fake.lsRefsReturnsOnCall[i] = struct {
+		result1 []protocol.RefLine
 		result2 error
 	}{result1, result2}
 }
@@ -345,6 +424,8 @@ func (fake *FakeRawClient) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.fetchMutex.RLock()
 	defer fake.fetchMutex.RUnlock()
+	fake.lsRefsMutex.RLock()
+	defer fake.lsRefsMutex.RUnlock()
 	fake.receivePackMutex.RLock()
 	defer fake.receivePackMutex.RUnlock()
 	fake.smartInfoMutex.RLock()

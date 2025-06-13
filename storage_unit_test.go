@@ -25,7 +25,7 @@ func TestWithPackfileStorage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &httpClient{}
+			cfg := &rawClient{}
 			err := WithPackfileStorage(tt.storage)(cfg)
 
 			require.NoError(t, err)

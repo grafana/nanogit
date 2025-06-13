@@ -19,7 +19,7 @@ type FetchOptions struct {
 	Shallow      bool
 }
 
-func (c *httpClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
+func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	logger := c.getLogger(ctx)
 	objects := make(map[string]*protocol.PackfileObject)
 

@@ -30,7 +30,7 @@ func TestListRefs(t *testing.T) {
 		lsRefsResp    string
 		expectedRefs  []Ref
 		expectedError string
-		setupClient   func(*httpClient)
+		setupClient   Option
 	}{
 		{
 			name: "successful response with multiple refs",
@@ -87,7 +87,7 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp:    "",
 			expectedRefs:  nil,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -96,6 +96,7 @@ func TestListRefs(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -124,14 +125,17 @@ func TestListRefs(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
-			require.NoError(t, err)
-			if tt.setupClient != nil {
-				c, ok := client.(*httpClient)
-				require.True(t, ok, "client should be of type *client")
-				tt.setupClient(c)
-			}
+			var (
+				client Client
+				err    error
+			)
 
+			if tt.setupClient != nil {
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
+			}
+			require.NoError(t, err)
 			refs, err := client.ListRefs(context.Background())
 			if tt.expectedError != "" {
 				require.Error(t, err)
@@ -158,7 +162,7 @@ func TestGetRef(t *testing.T) {
 		refToGet      string
 		expectedRef   Ref
 		expectedError error
-		setupClient   func(*httpClient)
+		setupClient   Option
 	}{
 		{
 			name: "successful get of existing ref",
@@ -193,7 +197,7 @@ func TestGetRef(t *testing.T) {
 			refToGet:      "refs/heads/master",
 			expectedRef:   Ref{},
 			expectedError: nil, // We'll check for wrapped error differently
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -202,6 +206,7 @@ func TestGetRef(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -230,12 +235,15 @@ func TestGetRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
-			require.NoError(t, err)
+			var (
+				client Client
+				err    error
+			)
+
 			if tt.setupClient != nil {
-				c, ok := client.(*httpClient)
-				require.True(t, ok, "client should be of type *client")
-				tt.setupClient(c)
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
 			}
 
 			ref, err := client.GetRef(context.Background(), tt.refToGet)
@@ -275,7 +283,7 @@ func TestCreateRef(t *testing.T) {
 		refToCreate   Ref
 		refExists     bool
 		expectedError string
-		setupClient   func(*httpClient)
+		setupClient   Option
 	}{
 		{
 			name: "successful ref creation",
@@ -303,7 +311,7 @@ func TestCreateRef(t *testing.T) {
 			},
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -312,6 +320,7 @@ func TestCreateRef(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -383,12 +392,15 @@ func TestCreateRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
-			require.NoError(t, err)
+			var (
+				client Client
+				err    error
+			)
+
 			if tt.setupClient != nil {
-				c, ok := client.(*httpClient)
-				require.True(t, ok, "client should be of type *client")
-				tt.setupClient(c)
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
 			}
 
 			err = client.CreateRef(context.Background(), tt.refToCreate)
@@ -414,7 +426,7 @@ func TestUpdateRef(t *testing.T) {
 		refToUpdate   Ref
 		refExists     bool
 		expectedError string
-		setupClient   func(*httpClient)
+		setupClient   Option
 	}{
 		{
 			name: "successful ref update",
@@ -442,7 +454,7 @@ func TestUpdateRef(t *testing.T) {
 			},
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -451,6 +463,7 @@ func TestUpdateRef(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -530,12 +543,15 @@ func TestUpdateRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
-			require.NoError(t, err)
+			var (
+				client Client
+				err    error
+			)
+
 			if tt.setupClient != nil {
-				c, ok := client.(*httpClient)
-				require.True(t, ok, "client should be of type *client")
-				tt.setupClient(c)
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
 			}
 
 			err = client.UpdateRef(context.Background(), tt.refToUpdate)
@@ -555,7 +571,7 @@ func TestDeleteRef(t *testing.T) {
 		refToDelete   string
 		refExists     bool
 		expectedError string
-		setupClient   func(*httpClient)
+		setupClient   Option
 	}{
 		{
 			name:          "successful ref deletion",
@@ -574,7 +590,7 @@ func TestDeleteRef(t *testing.T) {
 			refToDelete:   "refs/heads/main",
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *httpClient) {
+			setupClient: func(c *rawClient) error {
 				c.base, _ = url.Parse("http://127.0.0.1:0")
 				c.client = &http.Client{
 					Transport: &http.Transport{
@@ -583,6 +599,7 @@ func TestDeleteRef(t *testing.T) {
 						}).DialContext,
 					},
 				}
+				return nil
 			},
 		},
 	}
@@ -662,12 +679,15 @@ func TestDeleteRef(t *testing.T) {
 				url = server.URL
 			}
 
-			client, err := NewHTTPClient(url)
-			require.NoError(t, err)
+			var (
+				client Client
+				err    error
+			)
+
 			if tt.setupClient != nil {
-				c, ok := client.(*httpClient)
-				require.True(t, ok, "client should be of type *client")
-				tt.setupClient(c)
+				client, err = NewHTTPClient(url, tt.setupClient)
+			} else {
+				client, err = NewHTTPClient(url)
 			}
 
 			err = client.DeleteRef(context.Background(), tt.refToDelete)

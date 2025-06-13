@@ -7,11 +7,11 @@ import (
 	"github.com/grafana/nanogit/protocol"
 )
 
-type lsRefsOptions struct {
+type LsRefsOptions struct {
 	Prefix string
 }
 
-func (c *httpClient) lsRefs(ctx context.Context, opts lsRefsOptions) ([]protocol.RefLine, error) {
+func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error) {
 	// Send the ls-refs command directly - Protocol v2 allows this without needing
 	// a separate capability advertisement request
 	packs := []protocol.Pack{

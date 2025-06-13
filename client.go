@@ -89,53 +89,19 @@ type RawClient interface {
 	UploadPack(ctx context.Context, data []byte) ([]byte, error)
 	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
+	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }
 
 // Option is a function that configures a Client during creation.
 // Options allow customization of the HTTP client, authentication, logging, and other settings.
-type Option func(*httpClient) error
+type Option func(*rawClient) error
 
 // httpClient is the private implementation of the Client interface.
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
-	// Base URL of the Git repository
-	base *url.URL
-	// HTTP client used for making requests
-	client *http.Client
-	// User-Agent header value for requests
-	userAgent string
-	// Logger for debug and info messages
-	logger Logger
-	// Basic authentication credentials (username/password)
-	basicAuth *struct{ Username, Password string }
-	// Token-based authentication header
-	tokenAuth *string
-	// Packfile storage
+	RawClient
+	logger          Logger
 	packfileStorage PackfileStorage
-}
-
-// addDefaultHeaders adds the default headers to the request.
-func (c *httpClient) addDefaultHeaders(req *http.Request) {
-	req.Header.Add("Git-Protocol", "version=2")
-	if c.userAgent == "" {
-		c.userAgent = "nanogit/0"
-	}
-	req.Header.Add("User-Agent", c.userAgent)
-
-	if c.basicAuth != nil {
-		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
-	} else if c.tokenAuth != nil {
-		req.Header.Set("Authorization", *c.tokenAuth)
-	}
-}
-
-func (c *httpClient) getLogger(ctx context.Context) Logger {
-	logger := getContextLogger(ctx)
-	if logger != nil {
-		return logger
-	}
-
-	return c.logger
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -178,55 +144,27 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 
 	u.Path = strings.TrimRight(u.Path, "/")
 
-	c := &httpClient{
+	rawClient := &rawClient{
 		base:   u,
 		client: &http.Client{},
 		logger: &noopLogger{}, // No-op logger by default
 	}
+
 	for _, option := range options {
 		if option == nil { // allow for easy optional options
 			continue
 		}
-		if err := option(c); err != nil {
+		if err := option(rawClient); err != nil {
 			return nil, err
 		}
 	}
 
+	c := &httpClient{
+		RawClient: rawClient,
+		// FIXME: this is leaky
+		logger:          rawClient.logger,
+		packfileStorage: rawClient.packfileStorage,
+	}
+
 	return c, nil
-}
-
-// WithUserAgent configures a custom User-Agent header for HTTP requests.
-// If not specified, a default User-Agent will be used.
-//
-// Parameters:
-//   - agent: Custom User-Agent string to use in requests
-//
-// Returns:
-//   - Option: Configuration function for the client
-func WithUserAgent(agent string) Option {
-	return func(c *httpClient) error {
-		c.userAgent = agent
-		return nil
-	}
-}
-
-// WithHTTPClient configures a custom HTTP client for making requests.
-// This allows customization of timeouts, transport settings, proxies, and other HTTP behavior.
-// The provided client must not be nil.
-//
-// Parameters:
-//   - client: Custom HTTP client to use for requests
-//
-// Returns:
-//   - Option: Configuration function for the client
-//   - error: Error if the provided HTTP client is nil
-func WithHTTPClient(client *http.Client) Option {
-	return func(c *httpClient) error {
-		if client == nil {
-			return errors.New("httpClient is nil")
-		}
-
-		c.client = client
-		return nil
-	}
 }

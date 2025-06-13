@@ -10,7 +10,7 @@ import (
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-func (c *httpClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error) {
+func (c *rawClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.

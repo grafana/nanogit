@@ -16,7 +16,7 @@ import (
 //   - Option: Configuration function for the client
 //   - error: Error if the provided logger is nil
 func WithLogger(logger Logger) Option {
-	return func(c *httpClient) error {
+	return func(c *rawClient) error {
 		if logger == nil {
 			return errors.New("logger cannot be nil")
 		}
@@ -57,6 +57,24 @@ func getContextLogger(ctx context.Context) Logger {
 	}
 
 	return logger
+}
+
+func (c *rawClient) getLogger(ctx context.Context) Logger {
+	logger := getContextLogger(ctx)
+	if logger != nil {
+		return logger
+	}
+
+	return c.logger
+}
+
+func (c *httpClient) getLogger(ctx context.Context) Logger {
+	logger := getContextLogger(ctx)
+	if logger != nil {
+		return logger
+	}
+
+	return c.logger
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/logger.go . Logger
