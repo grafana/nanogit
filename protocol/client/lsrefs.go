@@ -1,4 +1,4 @@
-package nanogit
+package client
 
 import (
 	"context"
@@ -11,7 +11,7 @@ type LsRefsOptions struct {
 	Prefix string
 }
 
-func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error) {
+func (c *RawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error) {
 	// Send the ls-refs command directly - Protocol v2 allows this without needing
 	// a separate capability advertisement request
 	packs := []protocol.Pack{

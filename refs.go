@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -43,7 +44,7 @@ type Ref struct {
 //	    fmt.Printf("%s -> %s\n", ref.Name, ref.Hash.String())
 //	}
 func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
-	lines, err := c.LsRefs(ctx, LsRefsOptions{})
+	lines, err := c.LsRefs(ctx, client.LsRefsOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list refs: %w", err)
 	}
@@ -79,7 +80,7 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 //	    fmt.Printf("main branch points to %s\n", ref.Hash.String())
 //	}
 func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
-	lines, err := c.LsRefs(ctx, LsRefsOptions{Prefix: refName})
+	lines, err := c.LsRefs(ctx, client.LsRefsOptions{Prefix: refName})
 	if err != nil {
 		return Ref{}, fmt.Errorf("list refs: %w", err)
 	}

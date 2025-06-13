@@ -1,4 +1,4 @@
-package nanogit
+package client
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type FetchOptions struct {
 	Shallow      bool
 }
 
-func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
+func (c *RawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
 	objects := make(map[string]*protocol.PackfileObject)
 
@@ -123,10 +123,6 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		}
 
 		objects[obj.Object.Hash.String()] = obj.Object
-	}
-
-	if len(objects) == 0 {
-		return nil, ErrObjectNotFound
 	}
 
 	return objects, nil

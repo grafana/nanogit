@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
 )
@@ -30,7 +31,7 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
-	objects, err := c.Fetch(ctx, FetchOptions{
+	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress: true,
 		Want:       []hash.Hash{blobID},
 		Done:       true,

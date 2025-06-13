@@ -1,4 +1,4 @@
-package nanogit
+package client
 
 import (
 	"context"
@@ -61,11 +61,8 @@ func TestAuthentication(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewHTTPClient(server.URL, tt.authOption)
+			c, err := NewRawClient(server.URL, tt.authOption)
 			require.NoError(t, err)
-
-			c, ok := client.(*httpClient)
-			require.True(t, ok, "client should be of type *client")
 
 			_, err = c.UploadPack(context.Background(), []byte("test"))
 			require.NoError(t, err)
@@ -104,7 +101,7 @@ func TestWithBasicAuth(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewHTTPClient("https://github.com/owner/repo", WithBasicAuth(tt.username, tt.password))
+			client, err := NewRawClient("https://github.com/owner/repo", WithBasicAuth(tt.username, tt.password))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -112,13 +109,9 @@ func TestWithBasicAuth(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			c, ok := client.(*httpClient)
-			require.True(t, ok, "client should be of type *client")
-			rawClient, ok := c.RawClient.(*rawClient)
-			require.True(t, ok, "rawClient should be of type *rawClient")
-			require.NotNil(t, rawClient.basicAuth)
-			require.Equal(t, tt.username, rawClient.basicAuth.Username)
-			require.Equal(t, tt.password, rawClient.basicAuth.Password)
+			require.NotNil(t, client.basicAuth)
+			require.Equal(t, tt.username, client.basicAuth.Username)
+			require.Equal(t, tt.password, client.basicAuth.Password)
 		})
 	}
 }
@@ -150,7 +143,7 @@ func TestWithTokenAuth(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewHTTPClient("https://github.com/owner/repo", WithTokenAuth(tt.token))
+			client, err := NewRawClient("https://github.com/owner/repo", WithTokenAuth(tt.token))
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
@@ -158,13 +151,8 @@ func TestWithTokenAuth(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			c, ok := client.(*httpClient)
-			require.True(t, ok, "client should be of type *httpClient")
-
-			rawClient, ok := c.RawClient.(*rawClient)
-			require.True(t, ok, "client should be of type *httpClient")
-			require.NotNil(t, rawClient.tokenAuth)
-			require.Equal(t, tt.token, *rawClient.tokenAuth)
+			require.NotNil(t, client.tokenAuth)
+			require.Equal(t, tt.token, *client.tokenAuth)
 		})
 	}
 }
@@ -197,7 +185,7 @@ func TestAuthConflict(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client, err := NewHTTPClient("https://github.com/owner/repo", tt.options...)
+			client, err := NewRawClient("https://github.com/owner/repo", tt.options...)
 			require.Error(t, err)
 			require.Equal(t, tt.wantErr.Error(), err.Error())
 			require.Nil(t, client)
@@ -212,7 +200,7 @@ func TestIsAuthorized(t *testing.T) {
 		responseBody  string
 		expectedAuth  bool
 		expectedError string
-		setupAuth     func(*httpClient)
+		setupAuth     func(*RawClient)
 	}{
 		{
 			name:          "authorized with basic auth",
@@ -220,10 +208,8 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "capabilities",
 			expectedAuth:  true,
 			expectedError: "",
-			setupAuth: func(c *httpClient) {
-				rawClient, ok := c.RawClient.(*rawClient)
-				require.True(t, ok, "rawClient should be of type *rawClient")
-				rawClient.basicAuth = &struct{ Username, Password string }{"user", "pass"}
+			setupAuth: func(c *RawClient) {
+				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
 		{
@@ -232,11 +218,9 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "capabilities",
 			expectedAuth:  true,
 			expectedError: "",
-			setupAuth: func(c *httpClient) {
+			setupAuth: func(c *RawClient) {
 				token := "token123"
-				rawClient, ok := c.RawClient.(*rawClient)
-				require.True(t, ok, "rawClient should be of type *rawClient")
-				rawClient.tokenAuth = &token
+				c.tokenAuth = &token
 			},
 		},
 		{
@@ -245,10 +229,8 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "unauthorized",
 			expectedAuth:  false,
 			expectedError: "",
-			setupAuth: func(c *httpClient) {
-				rawClient, ok := c.RawClient.(*rawClient)
-				require.True(t, ok, "rawClient should be of type *rawClient")
-				rawClient.basicAuth = &struct{ Username, Password string }{"user", "wrong"}
+			setupAuth: func(c *RawClient) {
+				c.basicAuth = &struct{ Username, Password string }{"user", "wrong"}
 			},
 		},
 		{
@@ -257,10 +239,8 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "server error",
 			expectedAuth:  false,
 			expectedError: "get repository info: got status code 500: 500 Internal Server Error",
-			setupAuth: func(c *httpClient) {
-				rawClient, ok := c.RawClient.(*rawClient)
-				require.True(t, ok, "rawClient should be of type *rawClient")
-				rawClient.basicAuth = &struct{ Username, Password string }{"user", "pass"}
+			setupAuth: func(c *RawClient) {
+				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
 	}
@@ -287,14 +267,12 @@ func TestIsAuthorized(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewHTTPClient(server.URL)
+			client, err := NewRawClient(server.URL)
 			require.NoError(t, err)
 
-			c, ok := client.(*httpClient)
-			require.True(t, ok, "client should be of type *httpClient")
-			tt.setupAuth(c)
+			tt.setupAuth(client)
 
-			authorized, err := c.IsAuthorized(context.Background())
+			authorized, err := client.IsAuthorized(context.Background())
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.expectedError, err.Error())

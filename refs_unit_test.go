@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -87,17 +86,13 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp:    "",
 			expectedRefs:  nil,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *rawClient) error {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-				return nil
-			},
+			setupClient: WithHTTPClient(&http.Client{
+				Transport: &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 1 * time.Nanosecond,
+					}).DialContext,
+				},
+			}),
 		},
 	}
 
@@ -197,17 +192,13 @@ func TestGetRef(t *testing.T) {
 			refToGet:      "refs/heads/master",
 			expectedRef:   Ref{},
 			expectedError: nil, // We'll check for wrapped error differently
-			setupClient: func(c *rawClient) error {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-				return nil
-			},
+			setupClient: WithHTTPClient(&http.Client{
+				Transport: &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 1 * time.Nanosecond,
+					}).DialContext,
+				},
+			}),
 		},
 	}
 
@@ -312,17 +303,13 @@ func TestCreateRef(t *testing.T) {
 			},
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *rawClient) error {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-				return nil
-			},
+			setupClient: WithHTTPClient(&http.Client{
+				Transport: &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 1 * time.Nanosecond,
+					}).DialContext,
+				},
+			}),
 		},
 	}
 
@@ -456,17 +443,13 @@ func TestUpdateRef(t *testing.T) {
 			},
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *rawClient) error {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-				return nil
-			},
+			setupClient: WithHTTPClient(&http.Client{
+				Transport: &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 1 * time.Nanosecond,
+					}).DialContext,
+				},
+			}),
 		},
 	}
 
@@ -593,17 +576,13 @@ func TestDeleteRef(t *testing.T) {
 			refToDelete:   "refs/heads/main",
 			refExists:     false,
 			expectedError: "send ls-refs command",
-			setupClient: func(c *rawClient) error {
-				c.base, _ = url.Parse("http://127.0.0.1:0")
-				c.client = &http.Client{
-					Transport: &http.Transport{
-						DialContext: (&net.Dialer{
-							Timeout: 1 * time.Nanosecond,
-						}).DialContext,
-					},
-				}
-				return nil
-			},
+			setupClient: WithHTTPClient(&http.Client{
+				Transport: &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 1 * time.Nanosecond,
+					}).DialContext,
+				},
+			}),
 		},
 	}
 

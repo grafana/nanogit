@@ -1,4 +1,4 @@
-package nanogit
+package client
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 func WithBasicAuth(username, password string) Option {
 	// NOTE: basic auth is defined as a valid authentication method by the http-protocol spec.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *rawClient) error {
+	return func(c *RawClient) error {
 		if username == "" {
 			return errors.New("username cannot be empty")
 		}
@@ -29,7 +29,7 @@ func WithBasicAuth(username, password string) Option {
 func WithTokenAuth(token string) Option {
 	// NOTE: auth beyond basic is defined as a valid authentication method by the http-protocol spec, if the server wants to implement it.
 	// See: https://git-scm.com/docs/http-protocol#_authentication
-	return func(c *rawClient) error {
+	return func(c *RawClient) error {
 		if token == "" {
 			return errors.New("token cannot be empty")
 		}
@@ -49,7 +49,7 @@ func WithTokenAuth(token string) Option {
 //   - true if the server is reachable and the client is authorized
 //   - false if the server returns a 401 Unauthorized response
 //   - error if there are any other connection or protocol issues
-func (c *httpClient) IsAuthorized(ctx context.Context) (bool, error) {
+func (c *RawClient) IsAuthorized(ctx context.Context) (bool, error) {
 	// First get the initial capability advertisement
 	_, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {

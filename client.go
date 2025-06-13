@@ -2,13 +2,9 @@ package nanogit
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -85,16 +81,13 @@ type Client interface {
 //
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/raw_client.go . RawClient
 type RawClient interface {
+	IsAuthorized(ctx context.Context) (bool, error)
 	SmartInfo(ctx context.Context, service string) ([]byte, error)
 	UploadPack(ctx context.Context, data []byte) ([]byte, error)
 	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
-	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
-	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
+	Fetch(ctx context.Context, opts client.FetchOptions) (map[string]*protocol.PackfileObject, error)
+	LsRefs(ctx context.Context, opts client.LsRefsOptions) ([]protocol.RefLine, error)
 }
-
-// Option is a function that configures a Client during creation.
-// Options allow customization of the HTTP client, authentication, logging, and other settings.
-type Option func(*rawClient) error
 
 // httpClient is the private implementation of the Client interface.
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
@@ -127,38 +120,17 @@ type httpClient struct {
 //	    return err
 //	}
 func NewHTTPClient(repo string, options ...Option) (Client, error) {
-	if repo == "" {
-		return nil, errors.New("repository URL cannot be empty")
+	rawOptions := make([]client.Option, len(options))
+	for i, option := range options {
+		rawOptions[i] = client.Option(option)
 	}
 
-	u, err := url.Parse(repo)
+	rawClient, err := client.NewRawClient(repo, rawOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("parsing url: %w", err)
+		return nil, err
 	}
 
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, errors.New("only HTTP and HTTPS URLs are supported")
-	}
-
-	u.Path = strings.TrimRight(u.Path, "/")
-
-	rawClient := &rawClient{
-		base:   u,
-		client: &http.Client{},
-	}
-
-	for _, option := range options {
-		if option == nil { // allow for easy optional options
-			continue
-		}
-		if err := option(rawClient); err != nil {
-			return nil, err
-		}
-	}
-
-	c := &httpClient{
+	return &httpClient{
 		RawClient: rawClient,
-	}
-
-	return c, nil
+	}, nil
 }

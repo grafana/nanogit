@@ -7,6 +7,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
 )
@@ -122,7 +123,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	totalRequests++
 
 	// Get all commit tree objects
-	initialObjects, err := c.Fetch(ctx, FetchOptions{
+	initialObjects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{commitHash},
@@ -255,7 +256,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 			"remaining_retries", len(retries))
 
 		totalRequests++
-		objects, err := c.Fetch(ctx, FetchOptions{
+		objects, err := c.Fetch(ctx, client.FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
 			Want:         currentBatch,
@@ -563,7 +564,7 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 }
 
 func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
-	objects, err := c.Fetch(ctx, FetchOptions{
+	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{want},
