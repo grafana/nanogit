@@ -27,43 +27,9 @@ func WithLogger(logger log.Logger) Option {
 	}
 }
 
-// loggerCtxKey is the key used to store the logger in the context.
-type loggerCtxKey struct{}
-
-// WithContextLogger adds a logger to the context that can be retrieved later.
-// The logger will be used for operations performed with this context.
-// If no logger is provided in the context, a no-op logger will be used.
-//
-// Parameters:
-//   - ctx: The context to add the logger to
-//   - logger: The logger to store in the context
-//
-// Returns:
-//   - context.Context: A new context with the logger stored
-func WithContextLogger(ctx context.Context, logger log.Logger) context.Context {
-	return context.WithValue(ctx, loggerCtxKey{}, logger)
-}
-
-// getContextLogger retrieves the logger from the context.
-// If no logger is stored in the context, nil will be returned.
-//
-// Parameters:
-//   - ctx: The context to retrieve the logger from
-//
-// Returns:
-//   - Logger: The logger stored in the context, or nil if none is found
-func getContextLogger(ctx context.Context) log.Logger {
-	logger, ok := ctx.Value(loggerCtxKey{}).(log.Logger)
-	if !ok {
-		return nil
-	}
-
-	return logger
-}
-
 // FIXME: this is duplicated in the client and http client
 func (c *rawClient) getLogger(ctx context.Context) log.Logger {
-	logger := getContextLogger(ctx)
+	logger := log.GetContextLogger(ctx)
 	if logger != nil {
 		return logger
 	}
@@ -72,7 +38,7 @@ func (c *rawClient) getLogger(ctx context.Context) log.Logger {
 }
 
 func (c *httpClient) getLogger(ctx context.Context) log.Logger {
-	logger := getContextLogger(ctx)
+	logger := log.GetContextLogger(ctx)
 	if logger != nil {
 		return logger
 	}

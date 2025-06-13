@@ -190,29 +190,6 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 }
 
-type logEntry struct {
-	level string
-	msg   string
-	args  []any
-}
-
-type testLogger struct {
-	entries []logEntry
-}
-
-func (l *testLogger) Debug(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Debug", msg, keysAndValues})
-}
-func (l *testLogger) Info(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Info", msg, keysAndValues})
-}
-func (l *testLogger) Warn(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Warn", msg, keysAndValues})
-}
-func (l *testLogger) Error(msg string, keysAndValues ...any) {
-	l.entries = append(l.entries, logEntry{"Error", msg, keysAndValues})
-}
-
 func TestUploadPack(t *testing.T) {
 	tests := []struct {
 		name           string
