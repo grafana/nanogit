@@ -135,7 +135,7 @@ func (r *LocalGitRepo) QuickInit(user *User, remoteURL string) (client nanogit.C
 	r.logger.Info("📦 [LOCAL] Tracking current branch")
 	r.Git("branch", "--set-upstream-to=origin/main", "main")
 
-	client, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(r.logger))
+	client, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password))
 	Expect(err).NotTo(HaveOccurred())
 	return client, "test.txt"
 }

@@ -32,7 +32,7 @@ func ToContext(ctx context.Context, logger Logger) context.Context {
 func FromContext(ctx context.Context) Logger {
 	logger, ok := ctx.Value(loggerCtxKey{}).(Logger)
 	if !ok {
-		return nil
+		return &NoopLogger{}
 	}
 
 	return logger

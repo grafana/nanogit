@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // SmartInfo retrieves reference and capability information from the remote Git repository
@@ -43,7 +45,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) ([]byte, erro
 	query.Set("service", service)
 	u.RawQuery = query.Encode()
 
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("SmartInfo", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)

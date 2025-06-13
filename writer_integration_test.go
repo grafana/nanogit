@@ -61,38 +61,38 @@ var _ = Describe("Writer Operations", func() {
 		It("should create a new file", func() {
 			client, _, local, _ := QuickSetup()
 
-			writer, currentHash := createWriterFromHead(context.Background(), client, local)
+			writer, currentHash := createWriterFromHead(ctx, client, local)
 
 			newContent := []byte("new content")
 			fileName := "new.txt"
 			commitMsg := "Add new file"
 
 			// Verify empty state before creating blob
-			err := writer.Push(context.Background())
+			err := writer.Push(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(nanogit.ErrNothingToPush))
 
-			_, err = writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			_, err = writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(nanogit.ErrNothingToCommit))
 
-			exists, err := writer.BlobExists(context.Background(), fileName)
+			exists, err := writer.BlobExists(ctx, fileName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(exists).To(BeFalse())
 
 			// Create blob and commit
-			_, err = writer.CreateBlob(context.Background(), fileName, newContent)
+			_, err = writer.CreateBlob(ctx, fileName, newContent)
 			Expect(err).NotTo(HaveOccurred())
 
-			exists, err = writer.BlobExists(context.Background(), fileName)
+			exists, err = writer.BlobExists(ctx, fileName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(exists).To(BeTrue())
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -120,17 +120,17 @@ var _ = Describe("Writer Operations", func() {
 		It("should create a nested file", func() {
 			client, _, local, _ := QuickSetup()
 
-			writer, currentHash := createWriterFromHead(context.Background(), client, local)
+			writer, currentHash := createWriterFromHead(ctx, client, local)
 			nestedContent := []byte("nested content")
 			nestedPath := "dir/subdir/file.txt"
 			commitMsg := "Add nested file"
 
 			// Verify nested path doesn't exist
-			exists, err := writer.BlobExists(context.Background(), nestedPath)
+			exists, err := writer.BlobExists(ctx, nestedPath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(exists).To(BeFalse())
 
-			_, err = writer.GetTree(context.Background(), "dir")
+			_, err = writer.GetTree(ctx, "dir")
 			var pathNotFoundErr *nanogit.PathNotFoundError
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(pathNotFoundErr))
@@ -141,15 +141,15 @@ var _ = Describe("Writer Operations", func() {
 			}
 
 			// Create nested blob
-			_, err = writer.CreateBlob(context.Background(), nestedPath, nestedContent)
+			_, err = writer.CreateBlob(ctx, nestedPath, nestedContent)
 			Expect(err).NotTo(HaveOccurred())
 
-			exists, err = writer.BlobExists(context.Background(), nestedPath)
+			exists, err = writer.BlobExists(ctx, nestedPath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(exists).To(BeTrue())
 
 			// Verify tree structure created
-			tree, err := writer.GetTree(context.Background(), "dir")
+			tree, err := writer.GetTree(ctx, "dir")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 			Expect(tree.Entries).To(HaveLen(1))
@@ -157,7 +157,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(tree.Entries[0].Type).To(Equal(protocol.ObjectTypeTree))
 			Expect(tree.Entries[0].Mode).To(Equal(uint32(0o40000)))
 
-			subdirTree, err := writer.GetTree(context.Background(), "dir/subdir")
+			subdirTree, err := writer.GetTree(ctx, "dir/subdir")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(subdirTree).NotTo(BeNil())
 			Expect(subdirTree.Entries).To(HaveLen(1))
@@ -165,11 +165,11 @@ var _ = Describe("Writer Operations", func() {
 			Expect(subdirTree.Entries[0].Type).To(Equal(protocol.ObjectTypeBlob))
 			Expect(subdirTree.Entries[0].Mode).To(Equal(uint32(0o100644)))
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -203,7 +203,7 @@ var _ = Describe("Writer Operations", func() {
 		It("should handle invalid ref", func() {
 			client, _, _, _ := QuickSetup()
 
-			_, err := client.NewStagedWriter(context.Background(), nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
+			_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
 		})
@@ -221,7 +221,7 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("branch", "-M", "main")
 			local.Git("push", "-u", "origin", "main", "--force")
 
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
 			fileName := "tobeupdated.txt"
 			updatedContent := []byte("Updated content")
@@ -230,16 +230,16 @@ var _ = Describe("Writer Operations", func() {
 			// Verify blob hash before update
 			oldBlobHash := local.Git("rev-parse", "HEAD:"+fileName)
 
-			blobHash, err := writer.UpdateBlob(context.Background(), fileName, updatedContent)
+			blobHash, err := writer.UpdateBlob(ctx, fileName, updatedContent)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(blobHash).NotTo(BeNil())
 			Expect(blobHash.String()).NotTo(Equal(oldBlobHash))
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -270,21 +270,21 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("branch", "-M", "main")
 			local.Git("push", "-u", "origin", "main", "--force")
 
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
 			nestedPath := "dir/subdir/tobeupdated.txt"
 			updatedContent := []byte("Updated nested content")
 			commitMsg := "Update nested file"
 
-			blobHash, err := writer.UpdateBlob(context.Background(), nestedPath, updatedContent)
+			blobHash, err := writer.UpdateBlob(ctx, nestedPath, updatedContent)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(blobHash).NotTo(BeNil())
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -312,9 +312,9 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("commit", "-m", "Initial commit")
 			local.Git("push", "-u", "origin", "main", "--force")
 
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
-			_, err := writer.UpdateBlob(context.Background(), "nonexistent.txt", []byte("should fail"))
+			_, err := writer.UpdateBlob(ctx, "nonexistent.txt", []byte("should fail"))
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
 		})
@@ -332,20 +332,20 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("commit", "-m", "Initial commit with files")
 			local.Git("push", "-u", "origin", "main", "--force")
 
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
 			fileName := "tobedeleted.txt"
 			commitMsg := "Delete file"
 
-			treeHash, err := writer.DeleteBlob(context.Background(), fileName)
+			treeHash, err := writer.DeleteBlob(ctx, fileName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(treeHash).NotTo(BeNil())
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -377,20 +377,20 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("branch", "-M", "main")
 			local.Git("push", "-u", "origin", "main", "--force")
 
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
 			nestedPath := "dir/subdir/tobedeleted.txt"
 			commitMsg := "Delete nested file"
 
-			treeHash, err := writer.DeleteBlob(context.Background(), nestedPath)
+			treeHash, err := writer.DeleteBlob(ctx, nestedPath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(treeHash).NotTo(BeNil())
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -412,9 +412,9 @@ var _ = Describe("Writer Operations", func() {
 
 		It("should handle deleting missing file", func() {
 			client, _, local, _ := QuickSetup()
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
-			_, err := writer.DeleteBlob(context.Background(), "nonexistent.txt")
+			_, err := writer.DeleteBlob(ctx, "nonexistent.txt")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
 		})
@@ -432,21 +432,21 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("branch", "-M", "main")
 			local.Git("push", "-u", "origin", "main", "--force")
 
-			writer, _ := createWriterFromHead(context.Background(), client, local)
+			writer, _ := createWriterFromHead(ctx, client, local)
 
 			deletePath := "shared/tobedeleted.txt"
 			preservePath := "shared/tobepreserved.txt"
 			commitMsg := "Delete one file from shared directory"
 
-			treeHash, err := writer.DeleteBlob(context.Background(), deletePath)
+			treeHash, err := writer.DeleteBlob(ctx, deletePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(treeHash).NotTo(BeNil())
 
-			commit, err := writer.Commit(context.Background(), commitMsg, testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
@@ -508,21 +508,21 @@ var _ = Describe("Writer Operations", func() {
 			}
 
 			By("Creating ref writer")
-			writer, err := client.NewStagedWriter(context.Background(), ref)
+			writer, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Deleting the entire directory")
-			treeHash, err := writer.DeleteTree(context.Background(), "toberemoved")
+			treeHash, err := writer.DeleteTree(ctx, "toberemoved")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(treeHash).NotTo(BeNil())
 
 			By("Committing directory deletion")
-			commit, err := writer.Commit(context.Background(), "Delete entire directory", testAuthor, testCommitter)
+			commit, err := writer.Commit(ctx, "Delete entire directory", testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
 			By("Pushing changes")
-			err = writer.Push(context.Background())
+			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pulling latest changes")
@@ -561,7 +561,7 @@ var _ = Describe("Writer Operations", func() {
 
 		It("should delete a tree structure with nested directories", func() {
 			client, _, local, _ := QuickSetup()
-			ctx := context.Background()
+			ctx := ctx
 
 			logger.Info("Creating nested directory structure to be deleted")
 			preservedContent := []byte("Preserved content")
@@ -638,7 +638,7 @@ var _ = Describe("Writer Operations", func() {
 
 		It("should fail to delete tree of missing directory", func() {
 			client, _, _, _ := QuickSetup()
-			ctx := context.Background()
+			ctx := ctx
 
 			logger.Info("Getting current ref")
 			ref, err := client.GetRef(ctx, "refs/heads/main")
@@ -656,7 +656,7 @@ var _ = Describe("Writer Operations", func() {
 
 		It("should fail to delete tree when path is a file", func() {
 			client, _, local, _ := QuickSetup()
-			ctx := context.Background()
+			ctx := ctx
 
 			logger.Info("Creating a file to test error case")
 			fileContent := []byte("This is a file, not a directory")
@@ -692,7 +692,7 @@ var _ = Describe("Writer Operations", func() {
 
 		It("should delete a tree structure with subdirectory only", func() {
 			client, _, local, _ := QuickSetup()
-			ctx := context.Background()
+			ctx := ctx
 
 			logger.Info("Creating parent directory with subdirectories")
 			parentFile := []byte("Parent file")
@@ -763,7 +763,7 @@ var _ = Describe("Writer Operations", func() {
 		Context("Complex scenarios", func() {
 			It("should create multiple files in different directories with one commit", func() {
 				client, _, local, _ := QuickSetup()
-				ctx := context.Background()
+				ctx := ctx
 
 				logger.Info("Getting current ref")
 				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
@@ -868,7 +868,7 @@ var _ = Describe("Writer Operations", func() {
 
 			It("should create multiple files in different directories across multiple commits", func() {
 				client, _, local, _ := QuickSetup()
-				ctx := context.Background()
+				ctx := ctx
 
 				logger.Info("Getting current ref")
 				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
@@ -1044,7 +1044,7 @@ var _ = Describe("Writer Operations", func() {
 
 			It("should create multiple commits and all be visible after push", func() {
 				client, _, local, _ := QuickSetup()
-				ctx := context.Background()
+				ctx := ctx
 
 				logger.Info("Getting current ref")
 				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))

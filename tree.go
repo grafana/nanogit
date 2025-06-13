@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -112,7 +113,7 @@ func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*Fl
 // fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
 // an initial request and iteratively fetching missing tree objects in batches.
 func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Hash) (storage.PackfileStorage, hash.Hash, error) {
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	// Track essential metrics
 	var totalRequests int
 	var totalObjectsFetched int
@@ -338,7 +339,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 // It iterates through the provided objects, optionally adds them to allObjects if addToCollection is true,
 // and identifies any missing child tree objects that need to be fetched.
 func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[string]*protocol.PackfileObject, allObjects storage.PackfileStorage, pending []hash.Hash, processedTrees map[string]bool, requestedHashes map[string]bool) ([]hash.Hash, error) {
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	var treesProcessed int
 	var newTreesFound int
 
@@ -418,7 +419,7 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 // findRootTree locates the root tree object from the target hash and available objects.
 // It handles both commit and tree target objects, extracting the tree hash and object as needed.
 func (c *httpClient) findRootTree(ctx context.Context, targetHash hash.Hash, allObjects storage.PackfileStorage) (*protocol.PackfileObject, hash.Hash, error) {
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	// Find our target object in the response
 	obj, exists := allObjects.Get(targetHash)
 	if !exists {
