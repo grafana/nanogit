@@ -3,7 +3,6 @@ package nanogit
 import (
 	"context"
 
-	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -76,23 +75,10 @@ type Client interface {
 	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
 }
 
-// RawClient is a client that can be used to make raw Git protocol requests.
-// It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
-//
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/raw_client.go . RawClient
-type RawClient interface {
-	IsAuthorized(ctx context.Context) (bool, error)
-	SmartInfo(ctx context.Context, service string) ([]byte, error)
-	UploadPack(ctx context.Context, data []byte) ([]byte, error)
-	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
-	Fetch(ctx context.Context, opts client.FetchOptions) (map[string]*protocol.PackfileObject, error)
-	LsRefs(ctx context.Context, opts client.LsRefsOptions) ([]protocol.RefLine, error)
-}
-
 // httpClient is the private implementation of the Client interface.
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
-	RawClient
+	client.RawClient
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -119,7 +105,7 @@ type httpClient struct {
 //	if err != nil {
 //	    return err
 //	}
-func NewHTTPClient(repo string, options ...Option) (Client, error) {
+func NewHTTPClient(repo string, options ...client.Option) (Client, error) {
 	rawOptions := make([]client.Option, len(options))
 	for i, option := range options {
 		rawOptions[i] = client.Option(option)

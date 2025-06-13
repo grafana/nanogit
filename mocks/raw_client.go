@@ -5,7 +5,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 )
@@ -531,4 +530,4 @@ func (fake *FakeRawClient) recordInvocation(key string, args []interface{}) {
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ nanogit.RawClient = new(FakeRawClient)
+var _ client.RawClient = new(FakeRawClient)

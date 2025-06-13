@@ -116,7 +116,7 @@ func TestSmartInfo(t *testing.T) {
 			}
 
 			var (
-				client *RawClient
+				client *rawClient
 				err    error
 			)
 

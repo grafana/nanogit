@@ -200,7 +200,7 @@ func TestIsAuthorized(t *testing.T) {
 		responseBody  string
 		expectedAuth  bool
 		expectedError string
-		setupAuth     func(*RawClient)
+		setupAuth     func(*rawClient)
 	}{
 		{
 			name:          "authorized with basic auth",
@@ -208,7 +208,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "capabilities",
 			expectedAuth:  true,
 			expectedError: "",
-			setupAuth: func(c *RawClient) {
+			setupAuth: func(c *rawClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},
@@ -218,7 +218,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "capabilities",
 			expectedAuth:  true,
 			expectedError: "",
-			setupAuth: func(c *RawClient) {
+			setupAuth: func(c *rawClient) {
 				token := "token123"
 				c.tokenAuth = &token
 			},
@@ -229,7 +229,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "unauthorized",
 			expectedAuth:  false,
 			expectedError: "",
-			setupAuth: func(c *RawClient) {
+			setupAuth: func(c *rawClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "wrong"}
 			},
 		},
@@ -239,7 +239,7 @@ func TestIsAuthorized(t *testing.T) {
 			responseBody:  "server error",
 			expectedAuth:  false,
 			expectedError: "get repository info: got status code 500: 500 Internal Server Error",
-			setupAuth: func(c *RawClient) {
+			setupAuth: func(c *rawClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
 		},

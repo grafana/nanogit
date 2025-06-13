@@ -62,7 +62,7 @@ func TestNewClient(t *testing.T) {
 			name: "option returns error",
 			repo: "https://github.com/owner/repo",
 			options: []Option{
-				func(c *RawClient) error {
+				func(c *rawClient) error {
 					return errors.New("option application failed")
 				},
 			},

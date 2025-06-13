@@ -1,16 +1,32 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/grafana/nanogit/protocol"
 )
 
-type Option func(*RawClient) error
+// RawClient is a client that can be used to make raw Git protocol requests.
+// It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
+//
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o ../../mocks/raw_client.go . RawClient
+type RawClient interface {
+	IsAuthorized(ctx context.Context) (bool, error)
+	SmartInfo(ctx context.Context, service string) ([]byte, error)
+	UploadPack(ctx context.Context, data []byte) ([]byte, error)
+	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
+	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
+	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
+}
 
-type RawClient struct {
+type Option func(*rawClient) error
+
+type rawClient struct {
 	// Base URL of the Git repository
 	base *url.URL
 	// HTTP client used for making requests
@@ -39,7 +55,7 @@ type RawClient struct {
 // Example:
 //
 //	// Create client with basic authentication
-//	client, err := nanogit.NewRawClient(
+//	client, err := nanogit.NewHTTPClient(
 //	    "https://github.com/user/repo",
 //	    nanogit.WithBasicAuth("username", "password"),
 //	    nanogit.WithLogger(logger),
@@ -47,7 +63,7 @@ type RawClient struct {
 //	if err != nil {
 //	    return err
 //	}
-func NewRawClient(repo string, options ...Option) (*RawClient, error) {
+func NewRawClient(repo string, options ...Option) (*rawClient, error) {
 	if repo == "" {
 		return nil, errors.New("repository URL cannot be empty")
 	}
@@ -63,7 +79,7 @@ func NewRawClient(repo string, options ...Option) (*RawClient, error) {
 
 	u.Path = strings.TrimRight(u.Path, "/")
 
-	c := &RawClient{
+	c := &rawClient{
 		base:   u,
 		client: &http.Client{},
 	}
@@ -81,7 +97,7 @@ func NewRawClient(repo string, options ...Option) (*RawClient, error) {
 }
 
 // addDefaultHeaders adds the default headers to the request.
-func (c *RawClient) addDefaultHeaders(req *http.Request) {
+func (c *rawClient) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
 	if c.userAgent == "" {
 		c.userAgent = "nanogit/0"
@@ -104,7 +120,7 @@ func (c *RawClient) addDefaultHeaders(req *http.Request) {
 // Returns:
 //   - Option: Configuration function for the client
 func WithUserAgent(agent string) Option {
-	return func(c *RawClient) error {
+	return func(c *rawClient) error {
 		c.userAgent = agent
 		return nil
 	}
@@ -121,7 +137,7 @@ func WithUserAgent(agent string) Option {
 //   - Option: Configuration function for the client
 //   - error: Error if the provided HTTP client is nil
 func WithHTTPClient(client *http.Client) Option {
-	return func(c *RawClient) error {
+	return func(c *rawClient) error {
 		if client == nil {
 			return errors.New("httpClient is nil")
 		}
