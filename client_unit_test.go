@@ -323,7 +323,7 @@ func TestUploadPack(t *testing.T) {
 				tt.setupClient(c)
 			}
 
-			response, err := c.uploadPack(context.Background(), []byte("test data"))
+			response, err := c.UploadPack(context.Background(), []byte("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -448,7 +448,7 @@ func TestReceivePack(t *testing.T) {
 				tt.setupClient(c)
 			}
 
-			response, err := c.receivePack(context.Background(), []byte("test data"))
+			response, err := c.ReceivePack(context.Background(), []byte("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -577,7 +577,7 @@ func TestSmartInfo(t *testing.T) {
 				tt.setupClient(c)
 			}
 
-			response, err := c.smartInfo(context.Background(), "custom-service")
+			response, err := c.SmartInfo(context.Background(), "custom-service")
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)

@@ -231,7 +231,7 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 		}
 	}
 
-	objects, err := c.fetch(ctx, fetchOptions{
+	objects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{commitHash},
@@ -401,7 +401,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		visited[currentHash.String()] = true
 
 		// Get the commit object
-		objects, err := c.fetch(ctx, fetchOptions{
+		objects, err := c.Fetch(ctx, FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
 			Want:         []hash.Hash{currentHash},
@@ -536,7 +536,7 @@ func (c *httpClient) commitAffectsPath(ctx context.Context, commit *protocol.Pac
 func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path string, allObjects PackfileStorage) (hash.Hash, error) {
 	commit, ok := allObjects.Get(commitHash)
 	if !ok {
-		objects, err := c.fetch(ctx, fetchOptions{
+		objects, err := c.Fetch(ctx, FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
 			Want:         []hash.Hash{commitHash},

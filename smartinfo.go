@@ -8,12 +8,35 @@ import (
 	"net/url"
 )
 
-// smartInfo sends a GET request to the info/refs endpoint.
-func (c *httpClient) smartInfo(ctx context.Context, service string) ([]byte, error) {
-	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/info/refs.
-	// The ?service=git-upload-pack is documented in the protocol-v2 spec. It also implies elsewhere that ?svc is also valid.
-	// See: https://git-scm.com/docs/http-protocol#_smart_clients
-	// See: https://git-scm.com/docs/protocol-v2#_http_transport
+// SmartInfo retrieves reference and capability information from the remote Git repository
+// using the Smart HTTP protocol.
+//
+// It sends a GET request to the $GIT_URL/info/refs endpoint with the specified service
+// (e.g., "git-upload-pack" or "git-receive-pack") as a query parameter. This is required
+// by the Git Smart Protocol v2 specification for repository discovery and capability
+// negotiation.
+//
+// The response contains a list of references and advertised server capabilities in the
+// format expected by Git clients.
+//
+// See:
+//   - https://git-scm.com/docs/http-protocol#_smart_clients
+//   - https://git-scm.com/docs/protocol-v2#_http_transport
+//
+// Parameters:
+//
+//	ctx     - Context for request cancellation and deadlines.
+//	service - The Git service to query ("git-upload-pack" or "git-receive-pack").
+//
+// Returns:
+//
+//	The raw response body from the server, or an error if the request fails.
+//
+// Errors:
+//
+//	Returns an error if the HTTP request fails, the server returns a non-2xx status code,
+//	or the response body cannot be read.
+func (c *httpClient) SmartInfo(ctx context.Context, service string) ([]byte, error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)

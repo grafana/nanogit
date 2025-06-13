@@ -120,7 +120,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	totalRequests++
 
 	// Get all commit tree objects
-	initialObjects, err := c.fetch(ctx, fetchOptions{
+	initialObjects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{commitHash},
@@ -253,7 +253,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 			"remaining_retries", len(retries))
 
 		totalRequests++
-		objects, err := c.fetch(ctx, fetchOptions{
+		objects, err := c.Fetch(ctx, FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
 			Want:         currentBatch,
@@ -568,7 +568,7 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		}
 	}
 
-	objects, err := c.fetch(ctx, fetchOptions{
+	objects, err := c.Fetch(ctx, FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
 		Want:         []hash.Hash{want},

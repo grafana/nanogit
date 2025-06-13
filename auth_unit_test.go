@@ -67,7 +67,7 @@ func TestAuthentication(t *testing.T) {
 			c, ok := client.(*httpClient)
 			require.True(t, ok, "client should be of type *client")
 
-			_, err = c.uploadPack(context.Background(), []byte("test"))
+			_, err = c.UploadPack(context.Background(), []byte("test"))
 			require.NoError(t, err)
 		})
 	}

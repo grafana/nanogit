@@ -14,7 +14,7 @@ import (
 //   - false if the repository does not exist (404)
 //   - error if there are any other connection or protocol issues
 func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
-	_, err := c.smartInfo(ctx, "git-upload-pack")
+	_, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		if strings.Contains(err.Error(), "404 Not Found") {
 			return false, nil

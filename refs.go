@@ -140,7 +140,7 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Send the ref update
-	_, err = c.receivePack(ctx, pkt)
+	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
 		return fmt.Errorf("send ref update: %w", err)
 	}
@@ -189,7 +189,7 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 	}
 
 	// Send the ref update
-	_, err = c.receivePack(ctx, pkt)
+	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
 		return fmt.Errorf("update ref: %w", err)
 	}
@@ -234,7 +234,7 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 	}
 
 	// Send the ref update
-	_, err = c.receivePack(ctx, pkt)
+	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
 		return fmt.Errorf("delete ref: %w", err)
 	}

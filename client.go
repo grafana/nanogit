@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -50,10 +51,10 @@ type StagedWriter interface {
 	Push(ctx context.Context) error
 }
 
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/client.go . Client
-
 // Client defines the interface for interacting with a Git repository.
 // It provides methods for repository operations, reference management,
+//
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/client.go . Client
 type Client interface {
 	// Repo operations
 	IsAuthorized(ctx context.Context) (bool, error)
@@ -77,6 +78,17 @@ type Client interface {
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
 	// Write operations
 	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
+}
+
+// RawClient is a client that can be used to make raw Git protocol requests.
+// It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
+//
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/raw_client.go . RawClient
+type RawClient interface {
+	SmartInfo(ctx context.Context, service string) ([]byte, error)
+	UploadPack(ctx context.Context, data []byte) ([]byte, error)
+	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
+	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
 }
 
 // Option is a function that configures a Client during creation.

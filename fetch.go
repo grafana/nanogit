@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-type fetchOptions struct {
+type FetchOptions struct {
 	NoCache      bool
 	NoProgress   bool
 	NoBlobFilter bool
@@ -19,7 +19,7 @@ type fetchOptions struct {
 	Shallow      bool
 }
 
-func (c *httpClient) fetch(ctx context.Context, opts fetchOptions) (map[string]*protocol.PackfileObject, error) {
+func (c *httpClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	logger := c.getLogger(ctx)
 	objects := make(map[string]*protocol.PackfileObject)
 
@@ -85,7 +85,7 @@ func (c *httpClient) fetch(ctx context.Context, opts fetchOptions) (map[string]*
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	out, err := c.uploadPack(ctx, pkt)
+	out, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}

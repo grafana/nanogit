@@ -504,7 +504,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	}
 
 	// Send the packfile to the server
-	if _, err := w.client.receivePack(ctx, packfile); err != nil {
+	if _, err := w.client.ReceivePack(ctx, packfile); err != nil {
 		return fmt.Errorf("send packfile: %w", err)
 	}
 

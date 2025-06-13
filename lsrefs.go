@@ -30,7 +30,7 @@ func (c *httpClient) lsRefs(ctx context.Context, opts lsRefsOptions) ([]protocol
 		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
-	refsData, err := c.uploadPack(ctx, pkt)
+	refsData, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}

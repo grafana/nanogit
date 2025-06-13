@@ -51,7 +51,7 @@ func WithTokenAuth(token string) Option {
 //   - error if there are any other connection or protocol issues
 func (c *httpClient) IsAuthorized(ctx context.Context) (bool, error) {
 	// First get the initial capability advertisement
-	_, err := c.smartInfo(ctx, "git-upload-pack")
+	_, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		if strings.Contains(err.Error(), "401 Unauthorized") {
 			return false, nil
