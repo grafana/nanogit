@@ -9,24 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWithContextLogger(t *testing.T) {
+func TestContextLogger(t *testing.T) {
 	t.Run("adds logger to context", func(t *testing.T) {
 		customLogger := &mocks.FakeLogger{}
 		ctx := context.Background()
-		newCtx := log.WithContextLogger(ctx, customLogger)
+		newCtx := log.ToContext(ctx, customLogger)
 
 		// Verify logger was added to context
-		logger := log.GetContextLogger(newCtx)
+		logger := log.FromContext(newCtx)
 		require.Equal(t, customLogger, logger, "context should contain provided logger")
 
 		// Verify original context was not modified
-		originalLogger := log.GetContextLogger(ctx)
+		originalLogger := log.FromContext(ctx)
 		require.NotEqual(t, customLogger, originalLogger, "original context should not be modified")
 	})
 
 	t.Run("returns nil logger if no logger in context", func(t *testing.T) {
 		ctx := context.Background()
-		logger := log.GetContextLogger(ctx)
+		logger := log.FromContext(ctx)
 		require.Nil(t, logger, "should return nil logger")
 	})
 }

@@ -7,7 +7,7 @@ import (
 // loggerCtxKey is the key used to store the logger in the context.
 type loggerCtxKey struct{}
 
-// WithContextLogger adds a logger to the context that can be retrieved later.
+// ToContext adds a logger to the context that can be retrieved later.
 // The logger will be used for operations performed with this context.
 // If no logger is provided in the context, a no-op logger will be used.
 //
@@ -17,11 +17,11 @@ type loggerCtxKey struct{}
 //
 // Returns:
 //   - context.Context: A new context with the logger stored
-func WithContextLogger(ctx context.Context, logger Logger) context.Context {
+func ToContext(ctx context.Context, logger Logger) context.Context {
 	return context.WithValue(ctx, loggerCtxKey{}, logger)
 }
 
-// GetContextLogger retrieves the logger from the context.
+// FromContext retrieves the logger from the context.
 // If no logger is stored in the context, nil will be returned.
 //
 // Parameters:
@@ -29,7 +29,7 @@ func WithContextLogger(ctx context.Context, logger Logger) context.Context {
 //
 // Returns:
 //   - Logger: The logger stored in the context, or nil if none is found
-func GetContextLogger(ctx context.Context) Logger {
+func FromContext(ctx context.Context) Logger {
 	logger, ok := ctx.Value(loggerCtxKey{}).(Logger)
 	if !ok {
 		return nil

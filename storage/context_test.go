@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWithPackfileStorageFromContext(t *testing.T) {
+func TestToContext(t *testing.T) {
 	tests := []struct {
 		name    string
 		ctx     context.Context
@@ -28,15 +28,15 @@ func TestWithPackfileStorageFromContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := storage.WithPackfileStorageFromContext(tt.ctx, tt.storage)
+			ctx := storage.ToContext(tt.ctx, tt.storage)
 			require.NotNil(t, ctx)
 
-			require.Equal(t, tt.storage, storage.GetPackfileStorageFromContext(ctx))
+			require.Equal(t, tt.storage, storage.FromContext(ctx))
 		})
 	}
 }
 
-func TestGetPackfileStorageFromContext(t *testing.T) {
+func TestFromContext(t *testing.T) {
 	tests := []struct {
 		name    string
 		ctx     context.Context
@@ -61,12 +61,12 @@ func TestGetPackfileStorageFromContext(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var ctx context.Context
 			if tt.ctx != nil && tt.storage != nil {
-				ctx = storage.WithPackfileStorageFromContext(tt.ctx, tt.storage)
+				ctx = storage.ToContext(tt.ctx, tt.storage)
 			} else {
 				ctx = tt.ctx
 			}
 
-			got := storage.GetPackfileStorageFromContext(ctx)
+			got := storage.FromContext(ctx)
 			require.Equal(t, tt.want, got)
 		})
 	}

@@ -18,7 +18,7 @@ func WithPackfileStorage(storage storage.PackfileStorage) Option {
 // getPackfileStorage gets the packfile storage from the context.
 // If it's not set, it returns a no-op storage.
 func (c *rawClient) getPackfileStorage(ctx context.Context) storage.PackfileStorage {
-	ctxStorage := storage.GetPackfileStorageFromContext(ctx)
+	ctxStorage := storage.FromContext(ctx)
 	if ctxStorage != nil {
 		return ctxStorage
 	}
@@ -29,7 +29,7 @@ func (c *rawClient) getPackfileStorage(ctx context.Context) storage.PackfileStor
 // getPackfileStorage gets the packfile storage from the context.
 // If it's not set, it returns a no-op storage.
 func (c *httpClient) getPackfileStorage(ctx context.Context) storage.PackfileStorage {
-	ctxStorage := storage.GetPackfileStorageFromContext(ctx)
+	ctxStorage := storage.FromContext(ctx)
 	if ctxStorage != nil {
 		return ctxStorage
 	}
@@ -40,7 +40,7 @@ func (c *httpClient) getPackfileStorage(ctx context.Context) storage.PackfileSto
 // ensurePackfileStorage ensures that the packfile storage is set in the context.
 // If it's not set, it creates a new in-memory storage and adds it to the context.
 func (c *httpClient) ensurePackfileStorage(ctx context.Context) (context.Context, storage.PackfileStorage) {
-	ctxStorage := storage.GetPackfileStorageFromContext(ctx)
+	ctxStorage := storage.FromContext(ctx)
 	if ctxStorage != nil {
 		return ctx, ctxStorage
 	}
@@ -51,5 +51,5 @@ func (c *httpClient) ensurePackfileStorage(ctx context.Context) (context.Context
 
 	inMemoryStorage := storage.NewInMemoryStorage(ctx)
 
-	return storage.WithPackfileStorageFromContext(ctx, inMemoryStorage), inMemoryStorage
+	return storage.ToContext(ctx, inMemoryStorage), inMemoryStorage
 }

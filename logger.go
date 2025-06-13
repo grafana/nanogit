@@ -29,7 +29,7 @@ func WithLogger(logger log.Logger) Option {
 
 // FIXME: this is duplicated in the client and http client
 func (c *rawClient) getLogger(ctx context.Context) log.Logger {
-	logger := log.GetContextLogger(ctx)
+	logger := log.FromContext(ctx)
 	if logger != nil {
 		return logger
 	}
@@ -38,7 +38,7 @@ func (c *rawClient) getLogger(ctx context.Context) log.Logger {
 }
 
 func (c *httpClient) getLogger(ctx context.Context) log.Logger {
-	logger := log.GetContextLogger(ctx)
+	logger := log.FromContext(ctx)
 	if logger != nil {
 		return logger
 	}
