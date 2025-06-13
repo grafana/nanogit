@@ -1,10 +1,12 @@
 package nanogit_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/internal/testhelpers"
+	"github.com/grafana/nanogit/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -14,6 +16,7 @@ import (
 var (
 	gitServer *testhelpers.GitServer
 	logger    *testhelpers.TestLogger
+	ctx       context.Context
 )
 
 func TestIntegrationSuite(t *testing.T) {
@@ -32,6 +35,7 @@ var _ = BeforeSuite(func() {
 	gitServer = testhelpers.NewGitServer(logger)
 	logger.Success("🚀 Integration test suite setup complete")
 	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
+	ctx = log.ToContext(context.Background(), logger)
 })
 
 var _ = AfterSuite(func() {

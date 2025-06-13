@@ -210,7 +210,7 @@ func (s *GitServer) CreateRepo(repoName string, user *User) *RemoteRepo {
 	Expect(resp.StatusCode).To(Equal(http.StatusCreated))
 
 	s.logger.Logf("%s✅ Repository '%s' created successfully%s", ColorGreen, repoName, ColorReset)
-	return NewRemoteRepo(s.logger, repoName, user, s.Host, s.Port)
+	return NewRemoteRepo(repoName, user, s.Host, s.Port)
 }
 
 func (s *GitServer) TestRepo() (nanogit.Client, *RemoteRepo, *LocalGitRepo) {

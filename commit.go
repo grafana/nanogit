@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -468,7 +469,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 
 // commitMatchesFilters checks if a commit matches the specified filters.
 func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions, allObjects storage.PackfileStorage) (bool, error) {
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	commitTime, err := commit.Commit.Author.Time()
 	if err != nil {
 		logger.Debug("error parsing commit time", "commit", commit.Hash.String(), "error", err.Error())
@@ -559,7 +560,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		}
 	}
 
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Debug("hashForPath", "commit", commitHash.String(), "path", path, "allObjects", allObjects.GetAllKeys(), "commit", commit)
 	treeHash := commit.Commit.Tree
 	tree, err := c.GetTree(ctx, treeHash)

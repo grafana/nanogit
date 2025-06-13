@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
@@ -16,7 +18,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("GitReceivePack", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)

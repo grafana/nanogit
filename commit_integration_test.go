@@ -1,7 +1,6 @@
 package nanogit_test
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -54,7 +53,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should get initial commit details", func() {
-			commit, err := client.GetCommit(context.Background(), initialCommitHash)
+			commit, err := client.GetCommit(ctx, initialCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying commit details")
@@ -71,7 +70,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should get modify file commit details", func() {
-			commit, err := client.GetCommit(context.Background(), modifyFileCommitHash)
+			commit, err := client.GetCommit(ctx, modifyFileCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying commit details")
@@ -92,7 +91,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should get rename file commit details", func() {
-			commit, err := client.GetCommit(context.Background(), renameCommitHash)
+			commit, err := client.GetCommit(ctx, renameCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying commit details")
@@ -161,7 +160,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should compare initial and modified commits", func() {
-			changes, err := client.CompareCommits(context.Background(), initialCommitHash, modifiedCommitHash)
+			changes, err := client.CompareCommits(ctx, initialCommitHash, modifiedCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(changes).To(HaveLen(1))
 			Expect(changes[0].Path).To(Equal("test.txt"))
@@ -171,7 +170,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should compare modified and renamed commits", func() {
-			changes, err := client.CompareCommits(context.Background(), modifiedCommitHash, renamedCommitHash)
+			changes, err := client.CompareCommits(ctx, modifiedCommitHash, renamedCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(changes).To(HaveLen(3))
 
@@ -186,7 +185,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should compare renamed and modified commits in inverted direction", func() {
-			changes, err := client.CompareCommits(context.Background(), renamedCommitHash, modifiedCommitHash)
+			changes, err := client.CompareCommits(ctx, renamedCommitHash, modifiedCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(changes).To(HaveLen(3))
 
@@ -201,7 +200,7 @@ var _ = Describe("Commits", func() {
 		})
 
 		It("should compare modified and initial commits in inverted direction", func() {
-			changes, err := client.CompareCommits(context.Background(), modifiedCommitHash, initialCommitHash)
+			changes, err := client.CompareCommits(ctx, modifiedCommitHash, initialCommitHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(changes).To(HaveLen(1))
 			Expect(changes[0].Path).To(Equal("test.txt"))
@@ -246,7 +245,7 @@ var _ = Describe("Commits", func() {
 			})
 
 			It("should list commits without options", func() {
-				commits, err := client.ListCommits(context.Background(), headHash, nanogit.ListCommitsOptions{})
+				commits, err := client.ListCommits(ctx, headHash, nanogit.ListCommitsOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(commits)).To(BeNumerically(">=", 3), "Should have at least 3 commits")
 
@@ -295,7 +294,7 @@ var _ = Describe("Commits", func() {
 					Page:    1,
 				}
 
-				commits, err := client.ListCommits(context.Background(), headHash, options)
+				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commits).To(HaveLen(2))
 				Expect(commits[0].Message).To(Equal("Add file5"))
@@ -308,7 +307,7 @@ var _ = Describe("Commits", func() {
 					Page:    2,
 				}
 
-				commits, err := client.ListCommits(context.Background(), headHash, options)
+				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commits).To(HaveLen(2))
 				Expect(commits[0].Message).To(Equal("Add file3"))
@@ -355,7 +354,7 @@ var _ = Describe("Commits", func() {
 				options := nanogit.ListCommitsOptions{
 					Path: "docs",
 				}
-				commits, err := client.ListCommits(context.Background(), headHash, options)
+				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Finding commits that affect docs directory")
@@ -372,7 +371,7 @@ var _ = Describe("Commits", func() {
 				options := nanogit.ListCommitsOptions{
 					Path: "src/main.go",
 				}
-				commits, err := client.ListCommits(context.Background(), headHash, options)
+				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commits).To(HaveLen(1))
 
@@ -426,7 +425,7 @@ var _ = Describe("Commits", func() {
 				options := nanogit.ListCommitsOptions{
 					Since: midTime,
 				}
-				commits, err := client.ListCommits(context.Background(), headHash, options)
+				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Finding at least the new commit")

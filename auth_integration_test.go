@@ -1,8 +1,6 @@
 package nanogit_test
 
 import (
-	"context"
-
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/internal/testhelpers"
 
@@ -25,11 +23,12 @@ var _ = Describe("Authorization", func() {
 
 	It("should successfully authorize with basic auth", func() {
 		By("Creating client with correct basic auth credentials")
-		authClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password), nanogit.WithLogger(logger))
+
+		authClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithBasicAuth(user.Username, user.Password))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization")
-		auth, err := authClient.IsAuthorized(context.Background())
+		auth, err := authClient.IsAuthorized(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(auth).To(BeTrue())
 	})
@@ -40,7 +39,7 @@ var _ = Describe("Authorization", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization should fail")
-		auth, err := unauthorizedClient.IsAuthorized(context.Background())
+		auth, err := unauthorizedClient.IsAuthorized(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(auth).To(BeFalse())
 	})
@@ -51,11 +50,11 @@ var _ = Describe("Authorization", func() {
 		Expect(token).NotTo(BeEmpty())
 
 		By("Creating client with access token")
-		tokenClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(token), nanogit.WithLogger(logger))
+		tokenClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(token))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization")
-		auth, err := tokenClient.IsAuthorized(context.Background())
+		auth, err := tokenClient.IsAuthorized(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(auth).To(BeTrue())
 	})
@@ -63,11 +62,11 @@ var _ = Describe("Authorization", func() {
 	It("should fail authorization with invalid token", func() {
 		By("Creating client with invalid token")
 		invalidToken := "token invalid-token"
-		invalidClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(invalidToken), nanogit.WithLogger(logger))
+		invalidClient, err := nanogit.NewHTTPClient(remoteURL, nanogit.WithTokenAuth(invalidToken))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking authorization should fail")
-		auth, err := invalidClient.IsAuthorized(context.Background())
+		auth, err := invalidClient.IsAuthorized(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(auth).To(BeFalse())
 	})

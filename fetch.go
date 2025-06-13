@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -20,7 +21,7 @@ type FetchOptions struct {
 }
 
 func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	objects := make(map[string]*protocol.PackfileObject)
 
 	storage := c.getPackfileStorage(ctx)

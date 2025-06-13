@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // UploadPack sends a POST request to the git-upload-pack endpoint.
@@ -17,7 +19,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data []byte) ([]byte, error)
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-upload-pack").String()
 
-	logger := c.getLogger(ctx)
+	logger := log.FromContext(ctx)
 
 	logger.Info("UploadPack", "url", u, "requestBody", string(data))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)

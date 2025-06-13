@@ -1,7 +1,6 @@
 package nanogit_test
 
 import (
-	"context"
 	"errors"
 
 	"github.com/grafana/nanogit"
@@ -40,7 +39,7 @@ var _ = Describe("References", func() {
 		})
 
 		It("should list all references", func() {
-			refs, err := client.ListRefs(context.Background())
+			refs, err := client.ListRefs(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(refs).To(HaveLen(4), "should have 4 references")
 
@@ -91,7 +90,7 @@ var _ = Describe("References", func() {
 
 			By("Getting refs one by one")
 			for _, wantRef := range wantRefs {
-				ref, err := client.GetRef(context.Background(), wantRef.Name)
+				ref, err := client.GetRef(ctx, wantRef.Name)
 				Expect(err).NotTo(HaveOccurred(), "GetRef failed for %s", wantRef.Name)
 				Expect(ref.Name).To(Equal(wantRef.Name))
 				Expect(ref.Hash).To(Equal(firstCommit))
@@ -99,7 +98,7 @@ var _ = Describe("References", func() {
 		})
 
 		It("should return error for non-existent ref", func() {
-			_, err := client.GetRef(context.Background(), "refs/heads/non-existent")
+			_, err := client.GetRef(ctx, "refs/heads/non-existent")
 
 			var notFoundErr *nanogit.RefNotFoundError
 			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
@@ -131,22 +130,22 @@ var _ = Describe("References", func() {
 
 		It("should create branch ref", func() {
 			By("Creating new branch ref")
-			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
+			err := client.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/new-branch", Hash: firstCommit})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the created ref")
-			ref, err := client.GetRef(context.Background(), "refs/heads/new-branch")
+			ref, err := client.GetRef(ctx, "refs/heads/new-branch")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ref.Hash).To(Equal(firstCommit))
 		})
 
 		It("should create tag ref", func() {
 			By("Creating new tag ref")
-			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
+			err := client.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/v2.0.0", Hash: firstCommit})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the created tag")
-			ref, err := client.GetRef(context.Background(), "refs/tags/v2.0.0")
+			ref, err := client.GetRef(ctx, "refs/tags/v2.0.0")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ref.Hash).To(Equal(firstCommit))
 		})
@@ -176,7 +175,7 @@ var _ = Describe("References", func() {
 
 		It("should update existing ref", func() {
 			By("Creating ref for update test")
-			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/update-test", Hash: firstCommit})
+			err := client.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/update-test", Hash: firstCommit})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a new commit")
@@ -187,11 +186,11 @@ var _ = Describe("References", func() {
 			local.Git("push", "origin", "main", "--force")
 
 			By("Updating ref to point to new commit")
-			err = client.UpdateRef(context.Background(), nanogit.Ref{Name: "refs/heads/update-test", Hash: newHash})
+			err = client.UpdateRef(ctx, nanogit.Ref{Name: "refs/heads/update-test", Hash: newHash})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the update")
-			ref, err := client.GetRef(context.Background(), "refs/heads/update-test")
+			ref, err := client.GetRef(ctx, "refs/heads/update-test")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ref.Hash).To(Equal(newHash))
 		})
@@ -221,15 +220,15 @@ var _ = Describe("References", func() {
 
 		It("should delete branch ref", func() {
 			By("Creating ref for delete test")
-			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/heads/delete-test", Hash: firstCommit})
+			err := client.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/delete-test", Hash: firstCommit})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Deleting the ref")
-			err = client.DeleteRef(context.Background(), "refs/heads/delete-test")
+			err = client.DeleteRef(ctx, "refs/heads/delete-test")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying ref is deleted")
-			_, err = client.GetRef(context.Background(), "refs/heads/delete-test")
+			_, err = client.GetRef(ctx, "refs/heads/delete-test")
 			var notFoundErr *nanogit.RefNotFoundError
 			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
 			Expect(notFoundErr.RefName).To(Equal("refs/heads/delete-test"))
@@ -237,15 +236,15 @@ var _ = Describe("References", func() {
 
 		It("should delete tag ref", func() {
 			By("Creating tag for delete test")
-			err := client.CreateRef(context.Background(), nanogit.Ref{Name: "refs/tags/delete-test", Hash: firstCommit})
+			err := client.CreateRef(ctx, nanogit.Ref{Name: "refs/tags/delete-test", Hash: firstCommit})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Deleting the tag")
-			err = client.DeleteRef(context.Background(), "refs/tags/delete-test")
+			err = client.DeleteRef(ctx, "refs/tags/delete-test")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying tag is deleted")
-			_, err = client.GetRef(context.Background(), "refs/tags/delete-test")
+			_, err = client.GetRef(ctx, "refs/tags/delete-test")
 			var notFoundErr *nanogit.RefNotFoundError
 			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
 			Expect(notFoundErr.RefName).To(Equal("refs/tags/delete-test"))
@@ -278,11 +277,11 @@ var _ = Describe("References", func() {
 			refName := "refs/heads/integration-flow"
 
 			By("Creating ref for integration flow")
-			err := client.CreateRef(context.Background(), nanogit.Ref{Name: refName, Hash: firstCommit})
+			err := client.CreateRef(ctx, nanogit.Ref{Name: refName, Hash: firstCommit})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting created ref")
-			ref, err := client.GetRef(context.Background(), refName)
+			ref, err := client.GetRef(ctx, refName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ref.Hash).To(Equal(firstCommit))
 
@@ -294,20 +293,20 @@ var _ = Describe("References", func() {
 			local.Git("push", "origin", "main", "--force")
 
 			By("Updating ref to new commit")
-			err = client.UpdateRef(context.Background(), nanogit.Ref{Name: refName, Hash: newHash})
+			err = client.UpdateRef(ctx, nanogit.Ref{Name: refName, Hash: newHash})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying ref update")
-			ref, err = client.GetRef(context.Background(), refName)
+			ref, err = client.GetRef(ctx, refName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ref.Hash).To(Equal(newHash))
 
 			By("Deleting ref")
-			err = client.DeleteRef(context.Background(), refName)
+			err = client.DeleteRef(ctx, refName)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying ref deletion")
-			_, err = client.GetRef(context.Background(), refName)
+			_, err = client.GetRef(ctx, refName)
 			var notFoundErr *nanogit.RefNotFoundError
 			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
 			Expect(notFoundErr.RefName).To(Equal(refName))

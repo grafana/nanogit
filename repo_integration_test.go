@@ -1,8 +1,6 @@
 package nanogit_test
 
 import (
-	"context"
-
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/internal/testhelpers"
 
@@ -23,7 +21,7 @@ var _ = Describe("Repository", func() {
 		})
 
 		It("should confirm existence of existing repository", func() {
-			exists, err := client.RepoExists(context.Background())
+			exists, err := client.RepoExists(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(exists).To(BeTrue())
 		})
@@ -33,7 +31,7 @@ var _ = Describe("Repository", func() {
 			nonExistentClient, err := nanogit.NewHTTPClient(remote.URL()+"/nonexistent", nanogit.WithBasicAuth(remote.User.Username, remote.User.Password))
 			Expect(err).NotTo(HaveOccurred())
 
-			exists, err := nonExistentClient.RepoExists(context.Background())
+			exists, err := nonExistentClient.RepoExists(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(exists).To(BeFalse())
 		})
@@ -43,7 +41,7 @@ var _ = Describe("Repository", func() {
 			unauthorizedClient, err := nanogit.NewHTTPClient(remote.URL(), nanogit.WithBasicAuth("wronguser", "wrongpass"))
 			Expect(err).NotTo(HaveOccurred())
 
-			exists, err := unauthorizedClient.RepoExists(context.Background())
+			exists, err := unauthorizedClient.RepoExists(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("401 Unauthorized"))
 			Expect(exists).To(BeFalse())

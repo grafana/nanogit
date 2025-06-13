@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -150,7 +151,7 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 //
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	if obj, ok := w.treeEntries[path]; ok {
 		return nil, NewObjectAlreadyExistsError(obj.Hash)
 	}
@@ -195,7 +196,7 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	if w.treeEntries[path] == nil {
 		return nil, NewPathNotFoundError(path)
 	}
@@ -240,7 +241,7 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	existing, ok := w.treeEntries[path]
 	if !ok {
 		return nil, NewPathNotFoundError(path)
@@ -348,7 +349,7 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 //
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	if path == "" {
 		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
 		if err != nil {
@@ -526,7 +527,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 // The method works by traversing the path from the deepest directory up to the root,
 // creating or updating tree objects as necessary to accommodate the new blob.
 func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -683,7 +684,7 @@ func (w *stagedWriter) updateTreeEntry(obj *protocol.PackfileObject, current pro
 // The method works by traversing from the immediate parent directory up to the root,
 // updating each tree object to reflect the removal of the blob or updated child tree.
 func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) error {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {
@@ -796,7 +797,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 //
 // This is similar to removeBlobFromTree but handles directory removal instead of file removal.
 func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) error {
-	logger := w.client.getLogger(ctx)
+	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
 	if len(pathParts) == 0 {

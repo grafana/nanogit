@@ -24,9 +24,10 @@ func TestContextLogger(t *testing.T) {
 		require.NotEqual(t, customLogger, originalLogger, "original context should not be modified")
 	})
 
-	t.Run("returns nil logger if no logger in context", func(t *testing.T) {
+	t.Run("returns noop logger if no logger in context", func(t *testing.T) {
 		ctx := context.Background()
 		logger := log.FromContext(ctx)
-		require.Nil(t, logger, "should return nil logger")
+		require.NotNil(t, logger, "should return noop logger")
+		require.IsType(t, &log.NoopLogger{}, logger, "should return noop logger")
 	})
 }

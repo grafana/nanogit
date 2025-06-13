@@ -1,7 +1,6 @@
 package nanogit_test
 
 import (
-	"context"
 	"errors"
 
 	"github.com/grafana/nanogit"
@@ -57,7 +56,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should retrieve flat tree structure successfully", func() {
-			tree, err := client.GetFlatTree(context.Background(), commitHash)
+			tree, err := client.GetFlatTree(ctx, commitHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 
@@ -135,7 +134,7 @@ var _ = Describe("Trees", func() {
 			nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = client.GetFlatTree(context.Background(), nonExistentHash)
+			_, err = client.GetFlatTree(ctx, nonExistentHash)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not our ref"))
 		})
@@ -175,7 +174,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should retrieve tree structure successfully", func() {
-			tree, err := client.GetTree(context.Background(), treeHash)
+			tree, err := client.GetTree(ctx, treeHash)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 
@@ -193,7 +192,7 @@ var _ = Describe("Trees", func() {
 			nonExistentHash, err := hash.FromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = client.GetTree(context.Background(), nonExistentHash)
+			_, err = client.GetTree(ctx, nonExistentHash)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not our ref"))
 		})
@@ -242,7 +241,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should get root tree with empty path", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, "")
+			tree, err := client.GetTreeByPath(ctx, treeHash, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 
@@ -254,7 +253,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should get root tree with dot path", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, ".")
+			tree, err := client.GetTreeByPath(ctx, treeHash, ".")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 
@@ -266,7 +265,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should get dir1 subdirectory", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, "dir1")
+			tree, err := client.GetTreeByPath(ctx, treeHash, "dir1")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 
@@ -280,7 +279,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should get dir2 subdirectory", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, "dir2")
+			tree, err := client.GetTreeByPath(ctx, treeHash, "dir2")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tree).NotTo(BeNil())
 
@@ -290,7 +289,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should handle nonexistent path", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, "nonexistent")
+			tree, err := client.GetTreeByPath(ctx, treeHash, "nonexistent")
 			Expect(err).To(HaveOccurred())
 			var pathNotFoundErr *nanogit.PathNotFoundError
 			Expect(errors.As(err, &pathNotFoundErr)).To(BeTrue())
@@ -298,7 +297,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should handle path to file instead of directory", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, "root.txt")
+			tree, err := client.GetTreeByPath(ctx, treeHash, "root.txt")
 			Expect(err).To(HaveOccurred())
 			var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
 			Expect(errors.As(err, &unexpectedTypeErr)).To(BeTrue())
@@ -306,7 +305,7 @@ var _ = Describe("Trees", func() {
 		})
 
 		It("should handle nested nonexistent path", func() {
-			tree, err := client.GetTreeByPath(context.Background(), treeHash, "dir1/nonexistent")
+			tree, err := client.GetTreeByPath(ctx, treeHash, "dir1/nonexistent")
 			Expect(err).To(HaveOccurred())
 			var pathNotFoundErr *nanogit.PathNotFoundError
 			Expect(errors.As(err, &pathNotFoundErr)).To(BeTrue())

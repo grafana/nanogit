@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -102,7 +101,6 @@ type Option func(*rawClient) error
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
 	RawClient
-	logger          log.Logger
 	packfileStorage storage.PackfileStorage
 }
 
@@ -149,7 +147,6 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	rawClient := &rawClient{
 		base:   u,
 		client: &http.Client{},
-		logger: &log.NoopLogger{}, // No-op logger by default
 	}
 
 	for _, option := range options {
@@ -162,9 +159,7 @@ func NewHTTPClient(repo string, options ...Option) (Client, error) {
 	}
 
 	c := &httpClient{
-		RawClient: rawClient,
-		// FIXME: this is leaky
-		logger:          rawClient.logger,
+		RawClient:       rawClient,
 		packfileStorage: rawClient.packfileStorage,
 	}
 
