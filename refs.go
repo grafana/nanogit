@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -44,8 +45,12 @@ type Ref struct {
 //	    fmt.Printf("%s -> %s\n", ref.Name, ref.Hash.String())
 //	}
 func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting refs listing")
+
 	lines, err := c.LsRefs(ctx, client.LsRefsOptions{})
 	if err != nil {
+		logger.Debug("Failed to list refs", "error", err)
 		return nil, fmt.Errorf("list refs: %w", err)
 	}
 
@@ -54,6 +59,7 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 		refs = append(refs, Ref{Name: line.RefName, Hash: line.Hash})
 	}
 
+	logger.Debug("Refs listing completed", "refCount", len(refs))
 	return refs, nil
 }
 
@@ -80,24 +86,34 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 //	    fmt.Printf("main branch points to %s\n", ref.Hash.String())
 //	}
 func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting ref lookup", "refName", refName)
+
 	lines, err := c.LsRefs(ctx, client.LsRefsOptions{Prefix: refName})
 	if err != nil {
+		logger.Debug("Failed to list refs", "refName", refName, "error", err)
 		return Ref{}, fmt.Errorf("list refs: %w", err)
 	}
 
 	if len(lines) == 0 {
+		logger.Debug("Ref not found", "refName", refName)
 		return Ref{}, NewRefNotFoundError(refName)
 	}
 
 	if len(lines) > 1 {
+		logger.Debug("Multiple refs found", "refName", refName, "count", len(lines))
 		return Ref{}, fmt.Errorf("multiple refs found for %s", refName)
 	}
 
 	refLine := lines[0]
 	if refLine.RefName != refName {
+		logger.Debug("Ref name mismatch",
+			"requestedName", refName,
+			"returnedName", refLine.RefName)
 		return Ref{}, NewRefNotFoundError(refName)
 	}
 
+	logger.Debug("Ref found", "refName", refName, "hash", refLine.Hash.String())
 	return Ref{Name: refLine.RefName, Hash: refLine.Hash}, nil
 }
 
@@ -124,11 +140,16 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 //	    return fmt.Errorf("failed to create branch: %w", err)
 //	}
 func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting ref creation", "refName", ref.Name, "hash", ref.Hash.String())
+
 	_, err := c.GetRef(ctx, ref.Name)
 	if err == nil {
+		logger.Debug("Ref already exists", "refName", ref.Name)
 		return NewRefAlreadyExistsError(ref.Name)
 	}
 	if !errors.Is(err, ErrObjectNotFound) {
+		logger.Debug("Failed to check existing ref", "refName", ref.Name, "error", err)
 		return fmt.Errorf("get ref: %w", err)
 	}
 	// Ref doesn't exist, we can create it (this is the expected case)
@@ -137,15 +158,18 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewCreateRefRequest(ref.Name, ref.Hash).Format()
 	if err != nil {
+		logger.Debug("Failed to format ref creation request", "refName", ref.Name, "error", err)
 		return fmt.Errorf("format ref update request: %w", err)
 	}
 
 	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
+		logger.Debug("Failed to send ref creation request", "refName", ref.Name, "error", err)
 		return fmt.Errorf("send ref update: %w", err)
 	}
 
+	logger.Debug("Ref created successfully", "refName", ref.Name, "hash", ref.Hash.String())
 	return nil
 }
 
@@ -172,13 +196,17 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 //	    return fmt.Errorf("failed to update branch: %w", err)
 //	}
 func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting ref update", "refName", ref.Name, "newHash", ref.Hash.String())
+
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, ref.Name)
 	if err != nil {
 		if errors.Is(err, ErrObjectNotFound) {
+			logger.Debug("Ref not found for update", "refName", ref.Name)
 			return err
 		}
-
+		logger.Debug("Failed to get existing ref", "refName", ref.Name, "error", err)
 		return fmt.Errorf("get ref: %w", err)
 	}
 
@@ -186,15 +214,21 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewUpdateRefRequest(oldRef.Hash, ref.Hash, ref.Name).Format()
 	if err != nil {
+		logger.Debug("Failed to format ref update request", "refName", ref.Name, "error", err)
 		return fmt.Errorf("format ref update request: %w", err)
 	}
 
 	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
+		logger.Debug("Failed to send ref update request", "refName", ref.Name, "error", err)
 		return fmt.Errorf("update ref: %w", err)
 	}
 
+	logger.Debug("Ref updated successfully",
+		"refName", ref.Name,
+		"oldHash", oldRef.Hash.String(),
+		"newHash", ref.Hash.String())
 	return nil
 }
 
@@ -218,12 +252,17 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 //	    return fmt.Errorf("failed to delete branch: %w", err)
 //	}
 func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting ref deletion", "refName", refName)
+
 	// First check if the ref exists
 	oldRef, err := c.GetRef(ctx, refName)
 	if err != nil {
 		if errors.Is(err, ErrObjectNotFound) {
+			logger.Debug("Ref not found for deletion", "refName", refName)
 			return err
 		}
+		logger.Debug("Failed to get existing ref", "refName", refName, "error", err)
 		return fmt.Errorf("get ref: %w", err)
 	}
 
@@ -231,14 +270,17 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewDeleteRefRequest(oldRef.Hash, refName).Format()
 	if err != nil {
+		logger.Debug("Failed to format ref deletion request", "refName", refName, "error", err)
 		return fmt.Errorf("format ref update request: %w", err)
 	}
 
 	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
+		logger.Debug("Failed to send ref deletion request", "refName", refName, "error", err)
 		return fmt.Errorf("delete ref: %w", err)
 	}
 
+	logger.Debug("Ref deleted successfully", "refName", refName, "hash", oldRef.Hash.String())
 	return nil
 }

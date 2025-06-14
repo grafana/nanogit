@@ -99,16 +99,29 @@ type Tree struct {
 //	    fmt.Printf("%s (%s)\n", entry.Path, entry.Type)
 //	}
 func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*FlatTree, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting flat tree retrieval", "commitHash", commitHash.String())
+
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	allTreeObjects, treeHash, err := c.fetchAllTreeObjects(ctx, commitHash)
 	if err != nil {
+		logger.Debug("Failed to fetch tree objects", "commitHash", commitHash.String(), "error", err)
 		return nil, err
 	}
 
-	return c.flatten(treeHash, allTreeObjects)
+	flatTree, err := c.flatten(ctx, treeHash, allTreeObjects)
+	if err != nil {
+		logger.Debug("Failed to flatten tree", "treeHash", treeHash.String(), "error", err)
+		return nil, err
+	}
+
+	logger.Debug("Flat tree retrieval completed",
+		"commitHash", commitHash.String(),
+		"entryCount", len(flatTree.Entries))
+	return flatTree, nil
 }
 
 // fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
@@ -458,10 +471,14 @@ func (c *httpClient) findRootTree(ctx context.Context, targetHash hash.Hash, all
 }
 
 // flatten converts collected tree objects into a flat tree structure using breadth-first traversal.
-func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
+func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting tree flattening", "treeHash", treeHash.String())
+
 	// Get the root tree object
 	rootTree, exists := allTreeObjects.Get(treeHash)
 	if !exists {
+		logger.Debug("Root tree not found", "treeHash", treeHash.String())
 		return nil, fmt.Errorf("root tree %s not found in collected objects", treeHash.String())
 	}
 
@@ -475,6 +492,7 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects storage.Packfile
 	}
 
 	queue := []queueItem{{tree: rootTree, basePath: ""}}
+	logger.Debug("Starting breadth-first traversal", "queueSize", len(queue))
 
 	// Process the queue iteratively
 	for len(queue) > 0 {
@@ -485,6 +503,9 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects storage.Packfile
 		for _, entry := range current.tree.Tree {
 			entryHash, err := hash.FromHex(entry.Hash)
 			if err != nil {
+				logger.Debug("Failed to parse entry hash",
+					"hash", entry.Hash,
+					"error", err)
 				return nil, fmt.Errorf("parsing entry hash %s: %w", entry.Hash, err)
 			}
 
@@ -513,6 +534,9 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects storage.Packfile
 			if entryType == protocol.ObjectTypeTree {
 				childTree, exists := allTreeObjects.Get(entryHash)
 				if !exists {
+					logger.Debug("Child tree not found",
+						"hash", entry.Hash,
+						"path", entryPath)
 					return nil, fmt.Errorf("tree object %s not found in collection", entry.Hash)
 				}
 				queue = append(queue, queueItem{
@@ -521,8 +545,15 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects storage.Packfile
 				})
 			}
 		}
+
+		logger.Debug("Queue progress",
+			"remaining", len(queue),
+			"processedEntries", len(entries))
 	}
 
+	logger.Debug("Tree flattening completed",
+		"treeHash", treeHash.String(),
+		"totalEntries", len(entries))
 	return &FlatTree{
 		Entries: entries,
 		Hash:    treeHash,
@@ -555,15 +586,31 @@ func (c *httpClient) flatten(treeHash hash.Hash, allTreeObjects storage.Packfile
 //	    }
 //	}
 func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting tree retrieval", "hash", h.String())
+
 	tree, err := c.getTree(ctx, h)
 	if err != nil {
+		logger.Debug("Failed to get tree object", "hash", h.String(), "error", err)
 		return nil, fmt.Errorf("get tree object: %w", err)
 	}
 
-	return packfileObjectToTree(tree)
+	result, err := packfileObjectToTree(tree)
+	if err != nil {
+		logger.Debug("Failed to convert packfile to tree", "hash", h.String(), "error", err)
+		return nil, err
+	}
+
+	logger.Debug("Tree retrieval completed",
+		"hash", h.String(),
+		"entryCount", len(result.Entries))
+	return result, nil
 }
 
 func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Fetching tree object", "hash", want.String())
+
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:   true,
 		NoBlobFilter: true,
@@ -571,16 +618,22 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		Done:         true,
 	})
 	if err != nil {
+		logger.Debug("Failed to fetch tree objects", "hash", want.String(), "error", err)
 		return nil, fmt.Errorf("fetching tree objects: %w", err)
 	}
 
 	if len(objects) == 0 {
+		logger.Debug("No objects returned", "hash", want.String())
 		return nil, NewObjectNotFoundError(want)
 	}
 
 	// TODO: can we do in the fetch?
 	for _, obj := range objects {
 		if obj.Type != protocol.ObjectTypeTree {
+			logger.Debug("Unexpected object type",
+				"hash", want.String(),
+				"expectedType", protocol.ObjectTypeTree,
+				"actualType", obj.Type)
 			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Type)
 		}
 	}
@@ -588,9 +641,11 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects
 	// in the path. We must filter the response to extract only the requested tree.
 	if obj, ok := objects[want.String()]; ok {
+		logger.Debug("Tree object found", "hash", want.String())
 		return obj, nil
 	}
 
+	logger.Debug("Tree object not found in response", "hash", want.String())
 	return nil, NewObjectNotFoundError(want)
 }
 
@@ -658,11 +713,17 @@ func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
 //	    fmt.Printf("%s\n", entry.Name)
 //	}
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting tree path traversal",
+		"rootHash", rootHash.String(),
+		"path", path)
+
 	// Ensure storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	if path == "" || path == "." {
+		logger.Debug("Empty path, returning root tree", "rootHash", rootHash.String())
 		// Return the root tree
 		return c.GetTree(ctx, rootHash)
 	}
@@ -677,10 +738,18 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 			continue // Skip empty parts (e.g., from leading/trailing slashes)
 		}
 		currentPath := strings.Join(parts[:i+1], "/")
+		logger.Debug("Traversing path component",
+			"component", part,
+			"currentPath", currentPath,
+			"depth", i+1)
 
 		// Get the current tree
 		currentTree, err := c.GetTree(ctx, currentHash)
 		if err != nil {
+			logger.Debug("Failed to get tree during traversal",
+				"hash", currentHash.String(),
+				"path", currentPath,
+				"error", err)
 			return nil, fmt.Errorf("get tree %s: %w", currentHash, err)
 		}
 
@@ -689,6 +758,10 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 		for _, entry := range currentTree.Entries {
 			if entry.Name == part {
 				if entry.Type != protocol.ObjectTypeTree {
+					logger.Debug("Path component is not a directory",
+						"component", part,
+						"path", currentPath,
+						"type", entry.Type)
 					return nil, fmt.Errorf("path component '%s' is not a directory: %w", currentPath, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeTree, entry.Type))
 				}
 				currentHash = entry.Hash
@@ -698,6 +771,9 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 		}
 
 		if !found {
+			logger.Debug("Path component not found",
+				"component", part,
+				"path", currentPath)
 			return nil, NewPathNotFoundError(currentPath)
 		}
 	}
@@ -705,8 +781,15 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 	// Get the final tree
 	finalTree, err := c.GetTree(ctx, currentHash)
 	if err != nil {
+		logger.Debug("Failed to get final tree",
+			"hash", currentHash.String(),
+			"path", path,
+			"error", err)
 		return nil, fmt.Errorf("get final tree %s: %w", currentHash, err)
 	}
 
+	logger.Debug("Tree path traversal completed",
+		"path", path,
+		"entryCount", len(finalTree.Entries))
 	return finalTree, nil
 }
