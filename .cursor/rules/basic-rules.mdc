@@ -50,6 +50,35 @@ Always prioritize security, scalability, and maintainability in your designs and
 - Document error conditions in godoc
 - Use `errors.New` if the error is just a text and not `fmt` package.
 
+# Error Wrapping
+- Use `fmt.Errorf` with `%w` verb for wrapping errors to preserve the error chain
+- Keep error messages concise and descriptive
+- Follow the pattern `operation: %w` (e.g., `read file: %w`)
+- Do not use redundant phrases like "failed to", "unable to", etc.
+- Add extra context only when it's not clear from the operation
+- Use `errors.New` for static error messages without formatting
+- Use `errors.Join` when combining multiple errors
+- Create custom error types for domain-specific errors
+- Test error wrapping chains in unit tests
+- Document error types and their possible values in godoc
+
+# Logging
+- Use structured logging with key-value pairs
+- Log at appropriate levels (Debug, Info, Warn, Error)
+- Include relevant context in log messages
+- Use debug level for detailed operation tracing
+- Use info level for significant state changes
+- Use warn level for recoverable errors
+- Use error level for unrecoverable errors
+- Do not log sensitive information (tokens, passwords)
+- Include request IDs or correlation IDs when available
+- Log the error message and stack trace for errors
+- Keep log messages concise and descriptive
+- Use consistent key names across the codebase
+- Add logging statements at key points in the code flow
+- Log entry and exit of important operations at debug level
+- Include timing information for performance-sensitive operations
+
 # Documentation
 
 - Document all exported types, functions, and methods
