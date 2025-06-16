@@ -43,28 +43,25 @@ import (
 //	return writer.Push(ctx)
 func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Creating new staged writer", "ref", ref.Name, "hash", ref.Hash.String())
+	logger.Debug("Initialize staged writer",
+		"ref_name", ref.Name,
+		"ref_hash", ref.Hash.String())
 
-	// Ensure storage as it's a complex operation with multiple calls
-	// and we may get more objects in the same request than expected in some responses
 	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
 	commit, err := c.GetCommit(ctx, ref.Hash)
 	if err != nil {
-		logger.Debug("Failed to get root commit", "hash", ref.Hash.String(), "error", err)
-		return nil, fmt.Errorf("getting root tree: %w", err)
+		return nil, fmt.Errorf("get commit %s: %w", ref.Hash.String(), err)
 	}
 
 	treeObj, err := c.getTree(ctx, commit.Tree)
 	if err != nil {
-		logger.Debug("Failed to get tree object", "hash", commit.Tree.String(), "error", err)
-		return nil, fmt.Errorf("getting tree object: %w", err)
+		return nil, fmt.Errorf("get tree %s: %w", commit.Tree.String(), err)
 	}
 
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
-		logger.Debug("Failed to get flat tree", "hash", commit.Hash.String(), "error", err)
-		return nil, fmt.Errorf("getting current tree: %w", err)
+		return nil, fmt.Errorf("get flat tree for commit %s: %w", commit.Hash.String(), err)
 	}
 
 	entries := make(map[string]*FlatTreeEntry, len(currentTree.Entries))
@@ -72,13 +69,12 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		entries[entry.Path] = &entry
 	}
 
-	logger.Debug("Staged writer initialized",
-		"ref", ref.Name,
-		"commitHash", commit.Hash.String(),
-		"treeHash", treeObj.Hash.String(),
-		"entryCount", len(entries))
+	logger.Debug("Staged writer ready",
+		"ref_name", ref.Name,
+		"commit_hash", commit.Hash.String(),
+		"tree_hash", treeObj.Hash.String(),
+		"entry_count", len(entries))
 
-	// Create a packfile writer
 	writer := protocol.NewPackfileWriter(crypto.SHA1)
 	return &stagedWriter{
 		client:      c,
@@ -134,18 +130,19 @@ type stagedWriter struct {
 //
 //	exists, err := writer.BlobExists(ctx, "src/main.go")
 func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error) {
+	if path == "" {
+		return false, NewInvalidPathError(path, "empty path")
+	}
+
 	logger := log.FromContext(ctx)
-	logger.Debug("Checking blob existence", "path", path)
+	logger.Debug("Check blob existence", "path", path)
 
 	entry, exists := w.treeEntries[path]
 	if !exists {
-		logger.Debug("Path not found", "path", path)
 		return false, nil
 	}
 
-	isBlob := entry.Type == protocol.ObjectTypeBlob
-	logger.Debug("Path found", "path", path, "type", entry.Type, "isBlob", isBlob)
-	return isBlob, nil
+	return entry.Type == protocol.ObjectTypeBlob, nil
 }
 
 // CreateBlob creates a new blob object at the specified path with the given content.
@@ -168,18 +165,24 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 //
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	logger := log.FromContext(ctx)
-	if obj, ok := w.treeEntries[path]; ok {
-		return nil, NewObjectAlreadyExistsError(obj.Hash)
+	if path == "" {
+		return hash.Zero, NewInvalidPathError(path, "empty path")
 	}
 
-	// Create the blob for the file content
+	logger := log.FromContext(ctx)
+	logger.Debug("Create blob",
+		"path", path,
+		"content_size", len(content))
+
+	if obj, ok := w.treeEntries[path]; ok {
+		return hash.Zero, NewObjectAlreadyExistsError(obj.Hash)
+	}
+
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
-		return nil, fmt.Errorf("create blob: %w", err)
+		return hash.Zero, fmt.Errorf("create blob at %q: %w", path, err)
 	}
 
-	logger.Debug("created blob", "hash", blobHash.String())
 	w.treeEntries[path] = &FlatTreeEntry{
 		Path: path,
 		Hash: blobHash,
@@ -188,8 +191,12 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 	}
 
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return nil, fmt.Errorf("add new blob to tree: %w", err)
+		return hash.Zero, fmt.Errorf("update tree structure for %q: %w", path, err)
 	}
+
+	logger.Debug("Blob created",
+		"path", path,
+		"blob_hash", blobHash.String())
 
 	return blobHash, nil
 }
@@ -213,28 +220,37 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
-	logger := log.FromContext(ctx)
-	if w.treeEntries[path] == nil {
-		return nil, NewPathNotFoundError(path)
+	if path == "" {
+		return hash.Zero, NewInvalidPathError(path, "empty path")
 	}
 
-	// Create the blob for the file content
+	logger := log.FromContext(ctx)
+	logger.Debug("Update blob",
+		"path", path,
+		"content_size", len(content))
+
+	if w.treeEntries[path] == nil {
+		return hash.Zero, NewPathNotFoundError(path)
+	}
+
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
-		return nil, fmt.Errorf("create blob: %w", err)
+		return hash.Zero, fmt.Errorf("create blob at %q: %w", path, err)
 	}
 
-	logger.Debug("created blob", "hash", blobHash.String())
 	w.treeEntries[path] = &FlatTreeEntry{
 		Path: path,
 		Hash: blobHash,
 		Type: protocol.ObjectTypeBlob,
 	}
 
-	// Add the new entry
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return nil, fmt.Errorf("update tree with updated blob: %w", err)
+		return hash.Zero, fmt.Errorf("update tree structure for %q: %w", path, err)
 	}
+
+	logger.Debug("Blob updated",
+		"path", path,
+		"blob_hash", blobHash.String())
 
 	return blobHash, nil
 }
@@ -258,26 +274,33 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
+	if path == "" {
+		return hash.Zero, NewInvalidPathError(path, "empty path")
+	}
+
 	logger := log.FromContext(ctx)
+	logger.Debug("Delete blob",
+		"path", path)
+
 	existing, ok := w.treeEntries[path]
 	if !ok {
-		return nil, NewPathNotFoundError(path)
+		return hash.Zero, NewPathNotFoundError(path)
 	}
 
 	if existing.Type != protocol.ObjectTypeBlob {
-		return nil, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeBlob, existing.Type)
+		return hash.Zero, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeBlob, existing.Type)
 	}
 
 	blobHash := existing.Hash
-	logger.Debug("deleting blob", "path", path)
-
-	// Remove the entry from our tracking
 	delete(w.treeEntries, path)
 
-	// Update the tree structure to remove the entry
 	if err := w.removeBlobFromTree(ctx, path); err != nil {
-		return nil, fmt.Errorf("remove blob from tree: %w", err)
+		return hash.Zero, fmt.Errorf("remove blob from tree at %q: %w", path, err)
 	}
+
+	logger.Debug("Blob deleted",
+		"path", path,
+		"blob_hash", blobHash.String())
 
 	return blobHash, nil
 }
@@ -454,15 +477,25 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 //	}
 //	commit, err := writer.Commit(ctx, "Add new features", author, author)
 func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
-	logger := log.FromContext(ctx)
-	logger.Debug("Starting commit creation",
-		"message", message,
-		"author", author.Name,
-		"committer", committer.Name)
+	if message == "" {
+		return nil, ErrEmptyCommitMessage
+	}
 
-	// Check if there are any changes to commit
+	if author.Name == "" || author.Email == "" {
+		return nil, NewAuthorError("author", "missing name or email")
+	}
+
+	if committer.Name == "" || committer.Email == "" {
+		return nil, NewAuthorError("committer", "missing name or email")
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Create commit",
+		"message", message,
+		"author_name", author.Name,
+		"committer_name", committer.Name)
+
 	if !w.writer.HasObjects() {
-		logger.Debug("No changes to commit")
 		return nil, ErrNothingToCommit
 	}
 
@@ -482,8 +515,7 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 
 	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message)
 	if err != nil {
-		logger.Debug("Failed to create commit", "error", err)
-		return nil, fmt.Errorf("create commit: %w", err)
+		return nil, fmt.Errorf("create commit object: %w", err)
 	}
 
 	w.lastCommit = &Commit{
@@ -495,10 +527,10 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		Message:   message,
 	}
 
-	logger.Debug("Commit created successfully",
-		"hash", commitHash.String(),
-		"treeHash", w.lastTree.Hash.String(),
-		"parentHash", w.lastCommit.Parent.String())
+	logger.Debug("Commit created",
+		"commit_hash", commitHash.String(),
+		"tree_hash", w.lastTree.Hash.String(),
+		"parent_hash", w.lastCommit.Parent.String())
 
 	return w.lastCommit, nil
 }
@@ -524,40 +556,32 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 //	}
 func (w *stagedWriter) Push(ctx context.Context) error {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting push operation",
-		"ref", w.ref.Name,
-		"fromHash", w.ref.Hash.String(),
-		"toHash", w.lastCommit.Hash.String())
+	logger.Debug("Push changes",
+		"ref_name", w.ref.Name,
+		"from_hash", w.ref.Hash.String(),
+		"to_hash", w.lastCommit.Hash.String())
 
-	// Check if there are any objects to push
 	if !w.writer.HasObjects() {
-		logger.Debug("No objects to push")
 		return ErrNothingToPush
 	}
 
-	// TODO: write in chunks and not having all bytes in memory
-	// Write the packfile
 	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
 	if err != nil {
-		logger.Debug("Failed to write packfile", "error", err)
-		return fmt.Errorf("write packfile: %w", err)
+		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, err)
 	}
 
-	logger.Debug("Packfile created", "size", len(packfile))
+	logger.Debug("Packfile prepared", "packfile_size", len(packfile))
 
-	// Send the packfile to the server
 	if _, err := w.client.ReceivePack(ctx, packfile); err != nil {
-		logger.Debug("Failed to send packfile", "error", err)
-		return fmt.Errorf("send packfile: %w", err)
+		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 
-	// Reset things to accumulate things for next push
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1)
 	w.ref.Hash = w.lastCommit.Hash
 
-	logger.Debug("Push completed successfully",
-		"ref", w.ref.Name,
-		"newHash", w.lastCommit.Hash.String())
+	logger.Debug("Push completed",
+		"ref_name", w.ref.Name,
+		"new_hash", w.lastCommit.Hash.String())
 
 	return nil
 }

@@ -17,7 +17,7 @@ import (
 //   - error if there are any other connection or protocol issues
 func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Checking repository existence")
+	logger.Debug("Check repository existence")
 
 	_, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
@@ -25,8 +25,7 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 			logger.Debug("Repository not found")
 			return false, nil
 		}
-		logger.Debug("Failed to get repository info", "error", err)
-		return false, fmt.Errorf("get repository info: %w", err)
+		return false, fmt.Errorf("check repository info: %w", err)
 	}
 
 	logger.Debug("Repository exists")

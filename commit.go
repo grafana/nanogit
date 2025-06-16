@@ -117,37 +117,31 @@ type CommitFile struct {
 //	}
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting commit comparison",
-		"baseCommit", baseCommit.String(),
-		"headCommit", headCommit.String())
+	logger.Debug("Compare commits",
+		"base_hash", baseCommit.String(),
+		"head_hash", headCommit.String())
 
-	// Ensure storage as it's a complex operation with multiple calls
-	// and we may get more objects in the same request than expected in some responses
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
-	// Get both trees
 	baseTree, err := c.GetFlatTree(ctx, baseCommit)
 	if err != nil {
-		logger.Debug("Failed to get base tree", "commit", baseCommit.String(), "error", err)
-		return nil, fmt.Errorf("getting base tree: %w", err)
+		return nil, fmt.Errorf("get base tree for commit %s: %w", baseCommit.String(), err)
 	}
 
 	headTree, err := c.GetFlatTree(ctx, headCommit)
 	if err != nil {
-		logger.Debug("Failed to get head tree", "commit", headCommit.String(), "error", err)
-		return nil, fmt.Errorf("getting head tree: %w", err)
+		return nil, fmt.Errorf("get head tree for commit %s: %w", headCommit.String(), err)
 	}
 
-	// Compare trees recursively
 	changes, err := c.compareTrees(baseTree, headTree)
 	if err != nil {
-		return nil, fmt.Errorf("comparing trees: %w", err)
+		return nil, fmt.Errorf("compare trees: %w", err)
 	}
 
-	logger.Debug("Commit comparison completed",
-		"baseCommit", baseCommit.String(),
-		"headCommit", headCommit.String(),
-		"changeCount", len(changes))
+	logger.Debug("Commits compared",
+		"base_hash", baseCommit.String(),
+		"head_hash", headCommit.String(),
+		"change_count", len(changes))
 	return changes, nil
 }
 
@@ -238,7 +232,8 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting commit fetch", "commitHash", commitHash.String())
+	logger.Debug("Get commit",
+		"commit_hash", commitHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:   true,
@@ -249,37 +244,24 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 		Done:         true,
 	})
 	if err != nil {
-		logger.Debug("Failed to fetch commit", "commitHash", commitHash.String(), "error", err)
-		return nil, fmt.Errorf("fetching commit objects: %w", err)
+		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
 	}
 
 	if len(objects) == 0 {
-		logger.Debug("No objects found for commit", "commitHash", commitHash.String())
 		return nil, NewObjectNotFoundError(commitHash)
 	}
 
 	var foundObj *protocol.PackfileObject
 	for _, obj := range objects {
-		// Skip tree objects that are included in the response despite the blob:none filter.
-		// Most Git servers don't support tree:0 filter specification, so we may receive
-		// recursive tree objects that we need to filter out.
 		if obj.Type == protocol.ObjectTypeTree {
 			continue
 		}
 
 		if obj.Type != protocol.ObjectTypeCommit {
-			logger.Debug("Unexpected object type",
-				"commitHash", commitHash.String(),
-				"expectedType", protocol.ObjectTypeCommit,
-				"actualType", obj.Type)
 			return nil, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
 		}
 
-		// we got more commits than expected
 		if foundObj != nil {
-			logger.Debug("Multiple commits found",
-				"commitHash", commitHash.String(),
-				"foundCommits", []string{foundObj.Hash.String(), obj.Hash.String()})
 			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
 		}
 
@@ -289,12 +271,19 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 	}
 
 	if foundObj == nil {
-		logger.Debug("Commit not found in fetched objects", "commitHash", commitHash.String())
 		return nil, NewObjectNotFoundError(commitHash)
 	}
 
-	logger.Debug("Commit found", "commitHash", commitHash.String())
-	return packfileObjectToCommit(foundObj)
+	commit, err := packfileObjectToCommit(foundObj)
+	if err != nil {
+		return nil, fmt.Errorf("parse commit %s: %w", commitHash.String(), err)
+	}
+
+	logger.Debug("Commit found",
+		"commit_hash", commitHash.String(),
+		"tree_hash", commit.Tree.String(),
+		"parent_hash", commit.Parent.String())
+	return commit, nil
 }
 
 func packfileObjectToCommit(commit *protocol.PackfileObject) (*Commit, error) {
@@ -384,17 +373,12 @@ type ListCommitsOptions struct {
 //	}
 func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting commit list",
-		"startCommit", startCommit.String(),
-		"options", map[string]interface{}{
-			"perPage": options.PerPage,
-			"page":    options.Page,
-			"path":    options.Path,
-			"since":   options.Since,
-			"until":   options.Until,
-		})
+	logger.Debug("List commits",
+		"start_hash", startCommit.String(),
+		"path_filter", options.Path,
+		"page", options.Page,
+		"per_page", options.PerPage)
 
-	// Set defaults for pagination
 	perPage := options.PerPage
 	if perPage <= 0 {
 		perPage = 30
@@ -408,7 +392,6 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		page = 1
 	}
 
-	// Calculate how many commits to skip and collect
 	skip := (page - 1) * perPage
 	collect := perPage
 
@@ -416,23 +399,21 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 	visited := make(map[string]bool)
 	queue := []hash.Hash{startCommit}
 
-	// Ensure storage as it's a complex operation with multiple calls
-	// and we may get more objects in the same request than expected in some responses
 	ctx, allObjects := storage.FromContextOrInMemory(ctx)
 
 	for len(queue) > 0 && len(commitObjs) < skip+collect {
 		currentHash := queue[0]
 		queue = queue[1:]
 
-		// Skip if already visited (handle merge commits)
 		if visited[currentHash.String()] {
 			continue
 		}
 		visited[currentHash.String()] = true
 
-		logger.Debug("Processing commit in queue", "commitHash", currentHash.String())
+		logger.Debug("Process commit",
+			"commit_hash", currentHash.String(),
+			"visited_count", len(visited))
 
-		// Get the commit object
 		objects, err := c.Fetch(ctx, client.FetchOptions{
 			NoProgress:   true,
 			NoBlobFilter: true,
@@ -441,10 +422,9 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 			Done:         true,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("getting commit %s in queue: %w", currentHash.String(), err)
+			return nil, fmt.Errorf("fetch commit %s: %w", currentHash.String(), err)
 		}
 
-		// Try to find it in the objects we got but if not, get it from the storage
 		commit, ok := objects[currentHash.String()]
 		if !ok || commit.Type != protocol.ObjectTypeCommit {
 			commit, ok = allObjects.Get(currentHash)
@@ -453,100 +433,96 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 			}
 		}
 
-		// Apply filters
 		matches, err := c.commitMatchesFilters(ctx, commit, &options, allObjects)
 		if err != nil {
-			logger.Debug("Failed to check commit filters", "commitHash", currentHash.String(), "error", err)
-			return nil, fmt.Errorf("check commit filters: %w", err)
+			return nil, fmt.Errorf("check filters for commit %s: %w", currentHash.String(), err)
 		}
 
 		if !matches {
-			logger.Debug("Commit filtered out", "commitHash", currentHash.String())
-			// Add parent to queue for continued traversal
-			// TODO: handle merge commits
 			if !commit.Commit.Parent.Is(hash.Zero) {
 				queue = append(queue, commit.Commit.Parent)
 			}
 			continue
 		}
 
-		// Add to results
 		commitObjs = append(commitObjs, commit)
-		logger.Debug("Commit added to results", "commitHash", currentHash.String(), "totalCommits", len(commitObjs))
+		logger.Debug("Commit added",
+			"commit_hash", currentHash.String(),
+			"total_commits", len(commitObjs))
 
-		// Continue with parent commit
-		// TODO: handle merge commits
 		if !commit.Commit.Parent.Is(hash.Zero) {
 			queue = append(queue, commit.Commit.Parent)
 		}
 	}
 
-	// Apply pagination
 	if skip >= len(commitObjs) {
-		logger.Debug("Skip exceeds available commits", "skip", skip, "available", len(commitObjs))
 		return []Commit{}, nil
 	}
 
-	// Convert to Commit objects
 	end := min(skip+collect, len(commitObjs))
 	commits := make([]Commit, 0, end-skip)
 	for _, obj := range commitObjs[skip:end] {
 		commit, err := packfileObjectToCommit(obj)
 		if err != nil {
-			return nil, fmt.Errorf("converting packfile object %s to commit: %w", obj.Hash.String(), err)
+			return nil, fmt.Errorf("parse commit %s: %w", obj.Hash.String(), err)
 		}
 		commits = append(commits, *commit)
 	}
 
-	logger.Debug("Commit list completed",
-		"totalFound", len(commitObjs),
-		"returned", len(commits),
+	logger.Debug("Commits listed",
+		"start_hash", startCommit.String(),
+		"total_found", len(commitObjs),
+		"returned_count", len(commits),
 		"page", page,
-		"perPage", perPage)
+		"per_page", perPage)
 	return commits, nil
 }
 
 // commitMatchesFilters checks if a commit matches the specified filters.
 func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.PackfileObject, options *ListCommitsOptions, allObjects storage.PackfileStorage) (bool, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Checking commit filters", "commitHash", commit.Hash.String())
+	logger.Debug("Check commit filters",
+		"commit_hash", commit.Hash.String(),
+		"path_filter", options.Path)
 
 	commitTime, err := commit.Commit.Author.Time()
 	if err != nil {
-		logger.Debug("Failed to parse commit time", "commitHash", commit.Hash.String(), "error", err)
-		return false, fmt.Errorf("parsing commit time: %w", err)
+		return false, fmt.Errorf("parse commit time for %s: %w", commit.Hash.String(), err)
 	}
 
-	// Check time filters
 	if !options.Since.IsZero() && commitTime.Before(options.Since) {
-		logger.Debug("Commit filtered by since time", "commitHash", commit.Hash.String(), "commitTime", commitTime, "since", options.Since)
+		logger.Debug("Commit filtered by time",
+			"commit_hash", commit.Hash.String(),
+			"commit_time", commitTime,
+			"since", options.Since)
 		return false, nil
 	}
 
 	if !options.Until.IsZero() && commitTime.After(options.Until) {
-		logger.Debug("Commit filtered by until time", "commitHash", commit.Hash.String(), "commitTime", commitTime, "until", options.Until)
+		logger.Debug("Commit filtered by time",
+			"commit_hash", commit.Hash.String(),
+			"commit_time", commitTime,
+			"until", options.Until)
 		return false, nil
 	}
 
-	// Check path filter
 	if options.Path != "" {
 		affected, err := c.commitAffectsPath(ctx, commit, options.Path, allObjects)
 		if err != nil {
-			// Log error but continue
-			// TODO should we handle this differently?
-			logger.Debug("Failed to check if commit affects path",
-				"commitHash", commit.Hash.String(),
+			logger.Debug("Failed to check path filter",
+				"commit_hash", commit.Hash.String(),
 				"path", options.Path,
 				"error", err)
 			return false, nil
 		}
 		if !affected {
-			logger.Debug("Commit does not affect path", "commitHash", commit.Hash.String(), "path", options.Path)
+			logger.Debug("Commit filtered by path",
+				"commit_hash", commit.Hash.String(),
+				"path", options.Path)
 			return false, nil
 		}
 	}
 
-	logger.Debug("Commit matches all filters", "commitHash", commit.Hash.String())
 	return true, nil
 }
 
