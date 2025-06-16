@@ -34,6 +34,22 @@ var (
 	// ErrUnexpectedObjectCount is returned when the number of objects returned by the server is unexpected.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrUnexpectedObjectCount = errors.New("unexpected object count")
+
+	// ErrEmptyCommitMessage is returned when attempting to create a commit with an empty message.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrEmptyCommitMessage = errors.New("empty commit message")
+
+	// ErrEmptyPath is returned when a path is empty.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrEmptyPath = errors.New("empty path")
+
+	// ErrEmptyRefName is returned when a ref name is empty.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrEmptyRefName = errors.New("empty ref name")
+
+	// ErrInvalidAuthor is returned when author information is invalid.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrInvalidAuthor = errors.New("invalid author information")
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
@@ -192,5 +208,27 @@ func (e *RefAlreadyExistsError) Unwrap() error {
 func NewRefAlreadyExistsError(refName string) *RefAlreadyExistsError {
 	return &RefAlreadyExistsError{
 		RefName: refName,
+	}
+}
+
+// AuthorError provides structured information about invalid author information.
+type AuthorError struct {
+	Field  string
+	Reason string
+}
+
+func (e *AuthorError) Error() string {
+	return fmt.Sprintf("invalid author %s: %s", e.Field, e.Reason)
+}
+
+func (e *AuthorError) Unwrap() error {
+	return ErrInvalidAuthor
+}
+
+// NewAuthorError creates a new AuthorError with the specified details.
+func NewAuthorError(field, reason string) *AuthorError {
+	return &AuthorError{
+		Field:  field,
+		Reason: reason,
 	}
 }

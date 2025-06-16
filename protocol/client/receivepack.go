@@ -19,7 +19,8 @@ func (c *rawClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
 	logger := log.FromContext(ctx)
-	logger.Info("GitReceivePack", "url", u.String())
+	logger.Debug("Receive-pack", "url", u.String())
+	logger.Debug("Receive-pack raw request", "requestBody", string(data))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
 	if err != nil {
@@ -46,7 +47,12 @@ func (c *rawClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error
 		return nil, err
 	}
 
-	logger.Info("ReceivePack", "status", res.StatusCode, "statusText", res.Status, "responseBody", string(responseBody), "requestBody", string(data), "url", u.String())
+	logger.Debug("Receive-pack response",
+		"status", res.StatusCode,
+		"statusText", res.Status,
+		"requestSize", len(data),
+		"responseSize", len(responseBody))
+	logger.Debug("Receive-pack raw response", "responseBody", string(responseBody))
 
 	return responseBody, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -31,13 +32,17 @@ import (
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Get blob",
+		"blob_hash", blobID.String())
+
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress: true,
 		Want:       []hash.Hash{blobID},
 		Done:       true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("fetching blob objects: %w", err)
+		return nil, fmt.Errorf("fetch blob %s: %w", blobID.String(), err)
 	}
 
 	var foundObj *protocol.PackfileObject
@@ -57,6 +62,9 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	}
 
 	if foundObj != nil {
+		logger.Debug("Blob found",
+			"blob_hash", blobID.String(),
+			"content_size", len(foundObj.Data))
 		return &Blob{
 			Hash:    blobID,
 			Content: foundObj.Data,
@@ -101,8 +109,13 @@ type Blob struct {
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
 	if path == "" {
-		return nil, errors.New("path cannot be empty")
+		return nil, ErrEmptyPath
 	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Get blob by path",
+		"root_hash", rootHash.String(),
+		"path", path)
 
 	// Add in-memory storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
@@ -113,15 +126,19 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	currentHash := rootHash
 
 	// Navigate through all but the last part (directories)
-	for _, part := range parts[:len(parts)-1] {
+	for i, part := range parts[:len(parts)-1] {
 		if part == "" {
 			continue // Skip empty parts (e.g., from leading/trailing slashes)
 		}
 
+		logger.Debug("Navigate directory",
+			"depth", i+1,
+			"dir_name", part)
+
 		// Get the current tree
 		currentTree, err := c.GetTree(ctx, currentHash)
 		if err != nil {
-			return nil, fmt.Errorf("get tree %s: %w", currentHash, err)
+			return nil, fmt.Errorf("get tree at %q: %w", strings.Join(parts[:i+1], "/"), err)
 		}
 
 		// Find the entry with the matching name
@@ -146,7 +163,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	// Get the final tree containing the target file
 	finalTree, err := c.GetTree(ctx, currentHash)
 	if err != nil {
-		return nil, fmt.Errorf("get final tree %s: %w", currentHash, err)
+		return nil, fmt.Errorf("get final tree %s: %w", currentHash.String(), err)
 	}
 
 	// Find the target file (last part of path)
@@ -155,13 +172,26 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		return nil, errors.New("invalid path: ends with slash")
 	}
 
+	logger.Debug("Search for file",
+		"file_name", fileName,
+		"dir_hash", currentHash.String())
+
 	for _, entry := range finalTree.Entries {
 		if entry.Name == fileName {
 			if entry.Type != protocol.ObjectTypeBlob {
 				return nil, NewUnexpectedObjectTypeError(entry.Hash, protocol.ObjectTypeBlob, entry.Type)
 			}
 
-			return c.GetBlob(ctx, entry.Hash)
+			blob, err := c.GetBlob(ctx, entry.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("get blob %s at %q: %w", entry.Hash.String(), path, err)
+			}
+
+			logger.Debug("Blob found by path",
+				"path", path,
+				"blob_hash", blob.Hash.String(),
+				"content_size", len(blob.Content))
+			return blob, nil
 		}
 	}
 

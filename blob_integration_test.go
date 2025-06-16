@@ -209,7 +209,7 @@ var _ = Describe("Blobs", func() {
 		It("should fail with empty path", func() {
 			_, err := client.GetBlobByPath(ctx, rootHash, "")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("path cannot be empty"))
+			Expect(err.Error()).To(ContainSubstring("empty path"))
 		})
 
 		It("should fail when path points to directory instead of file", func() {

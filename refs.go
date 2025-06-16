@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -44,6 +45,9 @@ type Ref struct {
 //	    fmt.Printf("%s -> %s\n", ref.Name, ref.Hash.String())
 //	}
 func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("List refs")
+
 	lines, err := c.LsRefs(ctx, client.LsRefsOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list refs: %w", err)
@@ -54,6 +58,8 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 		refs = append(refs, Ref{Name: line.RefName, Hash: line.Hash})
 	}
 
+	logger.Debug("Refs listed",
+		"ref_count", len(refs))
 	return refs, nil
 }
 
@@ -80,9 +86,17 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 //	    fmt.Printf("main branch points to %s\n", ref.Hash.String())
 //	}
 func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
+	if refName == "" {
+		return Ref{}, ErrEmptyRefName
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Get ref",
+		"ref_name", refName)
+
 	lines, err := c.LsRefs(ctx, client.LsRefsOptions{Prefix: refName})
 	if err != nil {
-		return Ref{}, fmt.Errorf("list refs: %w", err)
+		return Ref{}, fmt.Errorf("list refs with prefix %q: %w", refName, err)
 	}
 
 	if len(lines) == 0 {
@@ -90,7 +104,7 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 	}
 
 	if len(lines) > 1 {
-		return Ref{}, fmt.Errorf("multiple refs found for %s", refName)
+		return Ref{}, fmt.Errorf("multiple refs found for %q", refName)
 	}
 
 	refLine := lines[0]
@@ -98,6 +112,9 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 		return Ref{}, NewRefNotFoundError(refName)
 	}
 
+	logger.Debug("Ref found",
+		"ref_name", refName,
+		"ref_hash", refLine.Hash.String())
 	return Ref{Name: refLine.RefName, Hash: refLine.Hash}, nil
 }
 
@@ -124,28 +141,36 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 //	    return fmt.Errorf("failed to create branch: %w", err)
 //	}
 func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
+	if ref.Name == "" {
+		return ErrEmptyRefName
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Create ref",
+		"ref_name", ref.Name,
+		"ref_hash", ref.Hash.String())
+
 	_, err := c.GetRef(ctx, ref.Name)
 	if err == nil {
 		return NewRefAlreadyExistsError(ref.Name)
 	}
 	if !errors.Is(err, ErrObjectNotFound) {
-		return fmt.Errorf("get ref: %w", err)
+		return fmt.Errorf("check existing ref %q: %w", ref.Name, err)
 	}
-	// Ref doesn't exist, we can create it (this is the expected case)
 
-	// Create and send the ref update request directly - Protocol v2 allows this
-	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewCreateRefRequest(ref.Name, ref.Hash).Format()
 	if err != nil {
-		return fmt.Errorf("format ref update request: %w", err)
+		return fmt.Errorf("format ref create request for %q: %w", ref.Name, err)
 	}
 
-	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
-		return fmt.Errorf("send ref update: %w", err)
+		return fmt.Errorf("send ref create request for %q: %w", ref.Name, err)
 	}
 
+	logger.Debug("Ref created",
+		"ref_name", ref.Name,
+		"ref_hash", ref.Hash.String())
 	return nil
 }
 
@@ -172,29 +197,37 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 //	    return fmt.Errorf("failed to update branch: %w", err)
 //	}
 func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
-	// First check if the ref exists
+	if ref.Name == "" {
+		return ErrEmptyRefName
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Update ref",
+		"ref_name", ref.Name,
+		"ref_hash", ref.Hash.String())
+
 	oldRef, err := c.GetRef(ctx, ref.Name)
 	if err != nil {
 		if errors.Is(err, ErrObjectNotFound) {
 			return err
 		}
-
-		return fmt.Errorf("get ref: %w", err)
+		return fmt.Errorf("get existing ref %q: %w", ref.Name, err)
 	}
 
-	// Create and send the ref update request directly - Protocol v2 allows this
-	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewUpdateRefRequest(oldRef.Hash, ref.Hash, ref.Name).Format()
 	if err != nil {
-		return fmt.Errorf("format ref update request: %w", err)
+		return fmt.Errorf("format ref update request for %q: %w", ref.Name, err)
 	}
 
-	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
-		return fmt.Errorf("update ref: %w", err)
+		return fmt.Errorf("send ref update request for %q: %w", ref.Name, err)
 	}
 
+	logger.Debug("Ref updated",
+		"ref_name", ref.Name,
+		"old_hash", oldRef.Hash.String(),
+		"new_hash", ref.Hash.String())
 	return nil
 }
 
@@ -218,27 +251,34 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 //	    return fmt.Errorf("failed to delete branch: %w", err)
 //	}
 func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
-	// First check if the ref exists
+	if refName == "" {
+		return ErrEmptyRefName
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Delete ref",
+		"ref_name", refName)
+
 	oldRef, err := c.GetRef(ctx, refName)
 	if err != nil {
 		if errors.Is(err, ErrObjectNotFound) {
 			return err
 		}
-		return fmt.Errorf("get ref: %w", err)
+		return fmt.Errorf("get existing ref %q: %w", refName, err)
 	}
 
-	// Create and send the ref update request directly - Protocol v2 allows this
-	// without needing a separate capability advertisement request
 	pkt, err := protocol.NewDeleteRefRequest(oldRef.Hash, refName).Format()
 	if err != nil {
-		return fmt.Errorf("format ref update request: %w", err)
+		return fmt.Errorf("format ref delete request for %q: %w", refName, err)
 	}
 
-	// Send the ref update
 	_, err = c.ReceivePack(ctx, pkt)
 	if err != nil {
-		return fmt.Errorf("delete ref: %w", err)
+		return fmt.Errorf("send ref delete request for %q: %w", refName, err)
 	}
 
+	logger.Debug("Ref deleted",
+		"ref_name", refName,
+		"ref_hash", oldRef.Hash.String())
 	return nil
 }

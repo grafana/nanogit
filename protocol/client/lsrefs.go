@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 )
 
@@ -12,6 +13,9 @@ type LsRefsOptions struct {
 }
 
 func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Ls-refs", "prefix", opts.Prefix)
+
 	// Send the ls-refs command directly - Protocol v2 allows this without needing
 	// a separate capability advertisement request
 	packs := []protocol.Pack{
@@ -30,10 +34,16 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
+	logger.Debug("Send Ls-refs request", "requestSize", len(pkt))
+	logger.Debug("Ls-refs raw request", "request", string(pkt))
+
 	refsData, err := c.UploadPack(ctx, pkt)
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
+
+	logger.Debug("Received ls-refs response", "responseSize", len(refsData))
+	logger.Debug("Ls-refs raw response", "response", string(refsData))
 
 	refs := make([]protocol.RefLine, 0)
 	lines, _, err := protocol.ParsePack(refsData)
@@ -41,6 +51,7 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		return nil, fmt.Errorf("parse refs response: %w", err)
 	}
 
+	logger.Debug("Parse ref lines", "lineCount", len(lines))
 	for _, line := range lines {
 		refLine, err := protocol.ParseRefLine(line)
 		if err != nil {
@@ -52,6 +63,6 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		}
 	}
 
+	logger.Debug("Ls-refs completed", "refCount", len(refs))
 	return refs, nil
-
 }

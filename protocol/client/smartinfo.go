@@ -46,7 +46,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) ([]byte, erro
 	u.RawQuery = query.Encode()
 
 	logger := log.FromContext(ctx)
-	logger.Info("SmartInfo", "url", u.String())
+	logger.Debug("SmartInfo", "url", u.String(), "service", service)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -70,7 +70,11 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) ([]byte, erro
 		return nil, err
 	}
 
-	logger.Info("SmartInfo", "status", res.StatusCode, "statusText", res.Status, "body", string(body))
+	logger.Debug("SmartInfo response",
+		"status", res.StatusCode,
+		"statusText", res.Status,
+		"responseSize", len(body))
+	logger.Debug("SmartInfo raw response", "body", string(body))
 
 	return body, nil
 }
