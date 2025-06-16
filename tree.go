@@ -167,6 +167,8 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 			treeCount++
 		case protocol.ObjectTypeBlob:
 			blobCount++
+		case protocol.ObjectTypeRefDelta, protocol.ObjectTypeOfsDelta, protocol.ObjectTypeTag, protocol.ObjectTypeReserved, protocol.ObjectTypeInvalid:
+			otherCount++
 		default:
 			otherCount++
 		}
@@ -445,7 +447,7 @@ func (c *httpClient) findRootTree(ctx context.Context, targetHash hash.Hash, all
 // flatten converts collected tree objects into a flat tree structure using breadth-first traversal.
 func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting tree flattening", "treeHash", treeHash.String())
+	logger.Debug("Flatten tree", "treeHash", treeHash.String())
 
 	// Get the root tree object
 	rootTree, exists := allTreeObjects.Get(treeHash)
@@ -464,7 +466,7 @@ func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObj
 	}
 
 	queue := []queueItem{{tree: rootTree, basePath: ""}}
-	logger.Debug("Starting breadth-first traversal", "queueSize", len(queue))
+	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue))
 
 	// Process the queue iteratively
 	for len(queue) > 0 {
@@ -580,7 +582,7 @@ func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
 
 func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Fetching tree object", "hash", want.String())
+	logger.Debug("Fetch tree object", "hash", want.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:   true,

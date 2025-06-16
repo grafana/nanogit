@@ -713,18 +713,16 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 //   - error: Error if tree creation fails
 func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Updating tree entry",
+	logger.Debug("Update tree entry",
 		"fileName", current.FileName,
-		"fileMode", fmt.Sprintf("%o", current.FileMode))
+		"fileMode", fmt.Sprintf("%o", current.FileMode),
+	)
 
 	if obj == nil {
 		return nil, errors.New("object is nil")
 	}
 
 	if obj.Type != protocol.ObjectTypeTree {
-		logger.Debug("Unexpected object type",
-			"expectedType", protocol.ObjectTypeTree,
-			"actualType", obj.Type)
 		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
 	}
 
@@ -743,7 +741,6 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.Packfi
 
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {
-		logger.Debug("Failed to build tree object", "error", err)
 		return nil, fmt.Errorf("build tree object: %w", err)
 	}
 
@@ -1003,18 +1000,20 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 // Note: If the target entry is not found, the original object is returned unchanged.
 func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Removing tree entry",
+	var treeHash string
+	if obj != nil {
+		treeHash = obj.Hash.String()
+	}
+
+	logger.Debug("Remove tree entry",
 		"targetFileName", targetFileName,
-		"treeHash", obj.Hash.String())
+		"treeHash", treeHash)
 
 	if obj == nil {
 		return nil, errors.New("object is nil")
 	}
 
 	if obj.Type != protocol.ObjectTypeTree {
-		logger.Debug("Unexpected object type",
-			"expectedType", protocol.ObjectTypeTree,
-			"actualType", obj.Type)
 		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
 	}
 
@@ -1042,7 +1041,6 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.Packfi
 	// Build new tree object with the filtered entries
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, filteredEntries)
 	if err != nil {
-		logger.Debug("Failed to build tree object", "error", err)
 		return nil, fmt.Errorf("build tree object: %w", err)
 	}
 

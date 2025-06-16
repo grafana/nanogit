@@ -14,7 +14,7 @@ type LsRefsOptions struct {
 
 func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting ls-refs operation", "prefix", opts.Prefix)
+	logger.Debug("Ls-refs", "prefix", opts.Prefix)
 
 	// Send the ls-refs command directly - Protocol v2 allows this without needing
 	// a separate capability advertisement request
@@ -34,7 +34,7 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		return nil, fmt.Errorf("format ls-refs command: %w", err)
 	}
 
-	logger.Debug("Sending ls-refs request", "requestSize", len(pkt))
+	logger.Debug("Send Ls-refs request", "requestSize", len(pkt))
 	logger.Debug("Ls-refs raw request", "request", string(pkt))
 
 	refsData, err := c.UploadPack(ctx, pkt)
@@ -48,16 +48,13 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 	refs := make([]protocol.RefLine, 0)
 	lines, _, err := protocol.ParsePack(refsData)
 	if err != nil {
-		logger.Debug("Failed to parse refs response", "error", err)
 		return nil, fmt.Errorf("parse refs response: %w", err)
 	}
 
-	logger.Debug("Parsing ref lines", "lineCount", len(lines))
-
+	logger.Debug("Parse ref lines", "lineCount", len(lines))
 	for _, line := range lines {
 		refLine, err := protocol.ParseRefLine(line)
 		if err != nil {
-			logger.Debug("Failed to parse ref line", "line", line, "error", err)
 			return nil, fmt.Errorf("parse ref line: %w", err)
 		}
 
@@ -66,6 +63,6 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		}
 	}
 
-	logger.Debug("Ls-refs operation completed", "refCount", len(refs))
+	logger.Debug("Ls-refs completed", "refCount", len(refs))
 	return refs, nil
 }

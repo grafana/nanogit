@@ -20,7 +20,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data []byte) ([]byte, error)
 	u := c.base.JoinPath("git-upload-pack").String()
 
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting upload-pack request", "url", u, "requestSize", len(data))
+	logger.Debug("Upload-pack", "url", u, "requestSize", len(data))
 	logger.Debug("Upload-pack raw request", "requestBody", string(data))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
@@ -47,7 +47,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data []byte) ([]byte, error)
 		return nil, err
 	}
 
-	logger.Debug("Received upload-pack response",
+	logger.Debug("Upload-pack response",
 		"status", res.StatusCode,
 		"statusText", res.Status,
 		"responseSize", len(responseBody))

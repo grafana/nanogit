@@ -23,7 +23,7 @@ type FetchOptions struct {
 
 func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Starting fetch operation", "wantCount", len(opts.Want), "noCache", opts.NoCache)
+	logger.Debug("Fetch", "wantCount", len(opts.Want), "noCache", opts.NoCache)
 	objects := make(map[string]*protocol.PackfileObject)
 
 	storage := storage.FromContext(ctx)
@@ -43,7 +43,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 			return objects, nil
 		}
 
-		logger.Debug("Cache status", "foundInCache", len(objects), "pendingFetch", len(pending))
+		logger.Debug("Some objects not found in cache", "foundInCache", len(objects), "pendingFetch", len(pending))
 		opts.Want = pending
 	}
 
@@ -90,7 +90,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		return nil, fmt.Errorf("formatting packets: %w", err)
 	}
 
-	logger.Debug("Sending fetch request",
+	logger.Debug("Send fetch request",
 		"requestSize", len(pkt),
 		"options", map[string]interface{}{
 			"noProgress":   opts.NoProgress,
@@ -115,11 +115,9 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		return nil, fmt.Errorf("parsing packet: %w", err)
 	}
 
-	logger.Debug("Parsed pack lines", "lineCount", len(lines))
-
+	logger.Debug("Parse pack lines", "lineCount", len(lines))
 	response, err := protocol.ParseFetchResponse(lines)
 	if err != nil {
-		logger.Debug("Failed to parse fetch response", "error", err)
 		return nil, fmt.Errorf("parsing fetch response: %w", err)
 	}
 
@@ -142,6 +140,6 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		objectCount++
 	}
 
-	logger.Debug("Fetch operation completed", "totalObjects", len(objects))
+	logger.Debug("Fetch completed", "totalObjects", len(objects))
 	return objects, nil
 }

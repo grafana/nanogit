@@ -253,6 +253,9 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 
 	var foundObj *protocol.PackfileObject
 	for _, obj := range objects {
+		// Skip tree objects that are included in the response despite the blob:none filter.
+		// Most Git servers don't support tree:0 filter specification, so we may receive
+		// recursive tree objects that we need to filter out.
 		if obj.Type == protocol.ObjectTypeTree {
 			continue
 		}
