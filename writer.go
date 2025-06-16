@@ -131,7 +131,7 @@ type stagedWriter struct {
 //	exists, err := writer.BlobExists(ctx, "src/main.go")
 func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error) {
 	if path == "" {
-		return false, NewInvalidPathError(path, "empty path")
+		return false, ErrEmptyPath
 	}
 
 	logger := log.FromContext(ctx)
@@ -166,7 +166,7 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if path == "" {
-		return hash.Zero, NewInvalidPathError(path, "empty path")
+		return hash.Zero, ErrEmptyPath
 	}
 
 	logger := log.FromContext(ctx)
@@ -221,7 +221,7 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
 	if path == "" {
-		return hash.Zero, NewInvalidPathError(path, "empty path")
+		return hash.Zero, ErrEmptyPath
 	}
 
 	logger := log.FromContext(ctx)
@@ -275,7 +275,7 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
 	if path == "" {
-		return hash.Zero, NewInvalidPathError(path, "empty path")
+		return hash.Zero, ErrEmptyPath
 	}
 
 	logger := log.FromContext(ctx)
@@ -390,7 +390,7 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
 	logger := log.FromContext(ctx)
-	if path == "" {
+	if path == "" || path == "." {
 		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
 		if err != nil {
 			return nil, fmt.Errorf("create empty tree: %w", err)

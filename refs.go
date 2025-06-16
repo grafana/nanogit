@@ -87,7 +87,7 @@ func (c *httpClient) ListRefs(ctx context.Context) ([]Ref, error) {
 //	}
 func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 	if refName == "" {
-		return Ref{}, NewInvalidPathError(refName, "empty ref name")
+		return Ref{}, ErrEmptyRefName
 	}
 
 	logger := log.FromContext(ctx)
@@ -142,7 +142,7 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 //	}
 func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 	if ref.Name == "" {
-		return NewInvalidPathError(ref.Name, "empty ref name")
+		return ErrEmptyRefName
 	}
 
 	logger := log.FromContext(ctx)
@@ -198,7 +198,7 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 //	}
 func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 	if ref.Name == "" {
-		return NewInvalidPathError(ref.Name, "empty ref name")
+		return ErrEmptyRefName
 	}
 
 	logger := log.FromContext(ctx)
@@ -252,7 +252,7 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 //	}
 func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 	if refName == "" {
-		return NewInvalidPathError(refName, "empty ref name")
+		return ErrEmptyRefName
 	}
 
 	logger := log.FromContext(ctx)

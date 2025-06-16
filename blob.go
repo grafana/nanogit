@@ -2,6 +2,7 @@ package nanogit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -108,7 +109,7 @@ type Blob struct {
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
 	if path == "" {
-		return nil, NewInvalidPathError(path, "empty path")
+		return nil, ErrEmptyPath
 	}
 
 	logger := log.FromContext(ctx)
@@ -168,7 +169,7 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 	// Find the target file (last part of path)
 	fileName := parts[len(parts)-1]
 	if fileName == "" {
-		return nil, NewInvalidPathError(path, "ends with slash")
+		return nil, errors.New("invalid path: ends with slash")
 	}
 
 	logger.Debug("Search for file",

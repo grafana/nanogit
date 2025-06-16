@@ -35,17 +35,17 @@ var (
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrUnexpectedObjectCount = errors.New("unexpected object count")
 
-	// ErrInvalidPath is returned when a path is malformed or invalid.
-	// This error should only be used with errors.Is() for comparison, not for type assertions.
-	ErrInvalidPath = errors.New("invalid path")
-
 	// ErrEmptyCommitMessage is returned when attempting to create a commit with an empty message.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrEmptyCommitMessage = errors.New("empty commit message")
 
-	// ErrInvalidTreeOperation is returned when a tree operation is invalid.
+	// ErrEmptyPath is returned when a path is empty.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
-	ErrInvalidTreeOperation = errors.New("invalid tree operation")
+	ErrEmptyPath = errors.New("empty path")
+
+	// ErrEmptyRefName is returned when a ref name is empty.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrEmptyRefName = errors.New("empty ref name")
 
 	// ErrInvalidAuthor is returned when author information is invalid.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
@@ -208,52 +208,6 @@ func (e *RefAlreadyExistsError) Unwrap() error {
 func NewRefAlreadyExistsError(refName string) *RefAlreadyExistsError {
 	return &RefAlreadyExistsError{
 		RefName: refName,
-	}
-}
-
-// InvalidPathError provides structured information about an invalid path.
-type InvalidPathError struct {
-	Path   string
-	Reason string
-}
-
-func (e *InvalidPathError) Error() string {
-	return fmt.Sprintf("invalid path %q: %s", e.Path, e.Reason)
-}
-
-func (e *InvalidPathError) Unwrap() error {
-	return ErrInvalidPath
-}
-
-// NewInvalidPathError creates a new InvalidPathError with the specified details.
-func NewInvalidPathError(path, reason string) *InvalidPathError {
-	return &InvalidPathError{
-		Path:   path,
-		Reason: reason,
-	}
-}
-
-// TreeOperationError provides structured information about an invalid tree operation.
-type TreeOperationError struct {
-	Operation string
-	Path      string
-	Reason    string
-}
-
-func (e *TreeOperationError) Error() string {
-	return fmt.Sprintf("invalid tree operation %q on path %q: %s", e.Operation, e.Path, e.Reason)
-}
-
-func (e *TreeOperationError) Unwrap() error {
-	return ErrInvalidTreeOperation
-}
-
-// NewTreeOperationError creates a new TreeOperationError with the specified details.
-func NewTreeOperationError(operation, path, reason string) *TreeOperationError {
-	return &TreeOperationError{
-		Operation: operation,
-		Path:      path,
-		Reason:    reason,
 	}
 }
 

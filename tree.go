@@ -686,7 +686,8 @@ func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
 //	    fmt.Printf("%s\n", entry.Name)
 //	}
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
-	if path == "" {
+	if path == "" || path == "." {
+		// Return the root tree
 		return c.GetTree(ctx, rootHash)
 	}
 
