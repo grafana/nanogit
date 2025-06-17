@@ -1,4 +1,4 @@
-package nanogit_test
+package integration_test
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 
@@ -33,7 +32,7 @@ var _ = Describe("Writer Operations", func() {
 	)
 
 	// Helper to verify author and committer in commit
-	verifyCommitAuthorship := func(local *testhelpers.LocalGitRepo) {
+	verifyCommitAuthorship := func(local *LocalGitRepo) {
 		commitAuthor := local.Git("log", "-1", "--pretty=%an <%ae>")
 		Expect(strings.TrimSpace(commitAuthor)).To(Equal("Test Author <test@example.com>"))
 
@@ -42,7 +41,7 @@ var _ = Describe("Writer Operations", func() {
 	}
 
 	// Helper to create writer from current HEAD
-	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *testhelpers.LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
+	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
 		currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		Expect(err).NotTo(HaveOccurred())
 

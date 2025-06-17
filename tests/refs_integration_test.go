@@ -1,10 +1,9 @@
-package nanogit_test
+package integration_test
 
 import (
 	"errors"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol/hash"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,7 +14,7 @@ var _ = Describe("References", func() {
 	Context("ListRefs operations", func() {
 		var (
 			client      nanogit.Client
-			local       *testhelpers.LocalGitRepo
+			local       *LocalGitRepo
 			firstCommit hash.Hash
 		)
 
@@ -57,7 +56,7 @@ var _ = Describe("References", func() {
 	Context("GetRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *testhelpers.LocalGitRepo
+			local       *LocalGitRepo
 			firstCommit hash.Hash
 		)
 
@@ -109,7 +108,7 @@ var _ = Describe("References", func() {
 	Context("CreateRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *testhelpers.LocalGitRepo
+			local       *LocalGitRepo
 			firstCommit hash.Hash
 		)
 
@@ -154,7 +153,7 @@ var _ = Describe("References", func() {
 	Context("UpdateRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *testhelpers.LocalGitRepo
+			local       *LocalGitRepo
 			firstCommit hash.Hash
 		)
 
@@ -199,7 +198,7 @@ var _ = Describe("References", func() {
 	Context("DeleteRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *testhelpers.LocalGitRepo
+			local       *LocalGitRepo
 			firstCommit hash.Hash
 		)
 
@@ -254,7 +253,7 @@ var _ = Describe("References", func() {
 	Context("Integration workflow", func() {
 		var (
 			client      nanogit.Client
-			local       *testhelpers.LocalGitRepo
+			local       *LocalGitRepo
 			firstCommit hash.Hash
 		)
 

@@ -1,4 +1,4 @@
-package testhelpers
+package integration_test
 
 import (
 	"os"
@@ -9,9 +9,6 @@ import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/options"
 	"github.com/onsi/ginkgo/v2"
-
-	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
-	//lint:ignore ST1001 dot-imports
 	. "github.com/onsi/gomega"
 )
 
