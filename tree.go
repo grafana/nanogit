@@ -591,6 +591,11 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		Done:         true,
 	})
 	if err != nil {
+		// TODO: handle this at the client level
+		if strings.Contains(err.Error(), "not our ref") {
+			return nil, NewObjectNotFoundError(want)
+		}
+
 		logger.Debug("Failed to fetch tree objects", "hash", want.String(), "error", err)
 		return nil, fmt.Errorf("fetching tree objects: %w", err)
 	}
