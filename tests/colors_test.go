@@ -1,5 +1,5 @@
-// Package nanogit_test provides common utilities for integration tests.
-package nanogit_test
+// Package integration_test provides common utilities for integration tests.
+package integration_test
 
 // ANSI color codes for terminal output
 const (
