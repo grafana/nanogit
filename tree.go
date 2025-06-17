@@ -144,6 +144,11 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		Done:         true,
 	})
 	if err != nil {
+		// TODO: handle this at the client level
+		if strings.Contains(err.Error(), "not our ref") {
+			return nil, hash.Zero, NewObjectNotFoundError(commitHash)
+		}
+
 		return nil, hash.Zero, fmt.Errorf("fetch commit tree %s: %w", commitHash.String(), err)
 	}
 
