@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 
@@ -16,7 +15,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree operations", func() {
 		var (
 			client     nanogit.Client
-			local      *testhelpers.LocalGitRepo
+			local      *LocalGitRepo
 			commitHash hash.Hash
 			getHash    func(string) hash.Hash
 		)
@@ -143,7 +142,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTree operations", func() {
 		var (
 			client   nanogit.Client
-			local    *testhelpers.LocalGitRepo
+			local    *LocalGitRepo
 			treeHash hash.Hash
 		)
 
@@ -201,7 +200,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTreeByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *testhelpers.LocalGitRepo
+			local    *LocalGitRepo
 			treeHash hash.Hash
 			getHash  func(string) hash.Hash
 		)

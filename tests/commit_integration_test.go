@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 
@@ -17,8 +16,8 @@ var _ = Describe("Commits", func() {
 	Context("GetCommit operations", func() {
 		var (
 			client               nanogit.Client
-			local                *testhelpers.LocalGitRepo
-			user                 *testhelpers.User
+			local                *LocalGitRepo
+			user                 *User
 			initialCommitHash    hash.Hash
 			modifyFileCommitHash hash.Hash
 			renameCommitHash     hash.Hash
@@ -114,7 +113,7 @@ var _ = Describe("Commits", func() {
 	Context("CompareCommits operations", func() {
 		var (
 			client             nanogit.Client
-			local              *testhelpers.LocalGitRepo
+			local              *LocalGitRepo
 			initialCommitHash  hash.Hash
 			modifiedCommitHash hash.Hash
 			renamedCommitHash  hash.Hash
@@ -214,7 +213,7 @@ var _ = Describe("Commits", func() {
 		Context("basic functionality", func() {
 			var (
 				client   nanogit.Client
-				local    *testhelpers.LocalGitRepo
+				local    *LocalGitRepo
 				headHash hash.Hash
 			)
 
@@ -263,7 +262,7 @@ var _ = Describe("Commits", func() {
 		Context("pagination", func() {
 			var (
 				client   nanogit.Client
-				local    *testhelpers.LocalGitRepo
+				local    *LocalGitRepo
 				headHash hash.Hash
 			)
 
@@ -318,7 +317,7 @@ var _ = Describe("Commits", func() {
 		Context("path filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *testhelpers.LocalGitRepo
+				local    *LocalGitRepo
 				headHash hash.Hash
 			)
 
@@ -389,7 +388,7 @@ var _ = Describe("Commits", func() {
 		Context("time filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *testhelpers.LocalGitRepo
+				local    *LocalGitRepo
 				headHash hash.Hash
 				midTime  time.Time
 			)

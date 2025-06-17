@@ -1,5 +1,5 @@
-// Package testhelpers provides common utilities for integration tests.
-package testhelpers
+// Package nanogit_test provides common utilities for integration tests.
+package nanogit_test
 
 // ANSI color codes for terminal output
 const (

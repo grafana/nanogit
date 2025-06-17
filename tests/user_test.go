@@ -1,4 +1,4 @@
-package testhelpers
+package nanogit_test
 
 type User struct {
 	Username string

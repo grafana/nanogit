@@ -2,7 +2,6 @@ package nanogit_test
 
 import (
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/options"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,7 +12,7 @@ var _ = Describe("Repository", func() {
 	Context("RepoExists functionality", func() {
 		var (
 			client nanogit.Client
-			remote *testhelpers.RemoteRepo
+			remote *RemoteRepo
 		)
 
 		BeforeEach(func() {

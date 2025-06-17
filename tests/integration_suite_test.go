@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/log"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -14,8 +13,8 @@ import (
 
 // Shared test infrastructure
 var (
-	gitServer *testhelpers.GitServer
-	logger    *testhelpers.TestLogger
+	gitServer *GitServer
+	logger    *TestLogger
 	ctx       context.Context
 )
 
@@ -31,8 +30,8 @@ func TestIntegrationSuite(t *testing.T) {
 var _ = BeforeSuite(func() {
 	By("Setting up shared Git server for integration tests")
 
-	logger = testhelpers.NewTestLogger(GinkgoWriter.Printf)
-	gitServer = testhelpers.NewGitServer(logger)
+	logger = NewTestLogger(GinkgoWriter.Printf)
+	gitServer = NewGitServer(logger)
 	logger.Success("🚀 Integration test suite setup complete")
 	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
 	//nolint:fatcontext // we need to pass the logger to the context for the tests to work
@@ -46,7 +45,7 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *testhelpers.RemoteRepo, *testhelpers.LocalGitRepo, *testhelpers.User) {
+func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	client, remote, local := gitServer.TestRepo()
 	return client, remote, local, remote.User
 }
