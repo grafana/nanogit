@@ -431,13 +431,9 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 
 		commit, ok := objects[currentHash.String()]
 		if !ok || commit.Type != protocol.ObjectTypeCommit {
-			commit, ok = allObjects.Get(currentHash)
+			commit, ok = allObjects.GetByType(currentHash, protocol.ObjectTypeCommit)
 			if !ok {
 				return nil, NewObjectNotFoundError(currentHash)
-			}
-
-			if commit.Type != protocol.ObjectTypeCommit {
-				return nil, NewUnexpectedObjectTypeError(currentHash, protocol.ObjectTypeCommit, commit.Type)
 			}
 		}
 
@@ -602,7 +598,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		"commitHash", commitHash.String(),
 		"path", path)
 
-	commit, ok := allObjects.Get(commitHash)
+	commit, ok := allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
 	if !ok {
 		logger.Debug("Commit not in storage, fetching", "commitHash", commitHash.String())
 		objects, err := c.Fetch(ctx, client.FetchOptions{
@@ -620,15 +616,8 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 
 		// Try to find it in the objects we got but if not, get it from the storage
 		commit, ok = objects[commitHash.String()]
-		if !ok || commit.Type != protocol.ObjectTypeCommit {
-			commit, ok = allObjects.Get(commitHash)
-			if !ok {
-				return hash.Zero, fmt.Errorf("commit not found in cache: %w", NewObjectNotFoundError(commitHash))
-			}
-
-			if commit.Type != protocol.ObjectTypeCommit {
-				return hash.Zero, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commit.Type)
-			}
+		if !ok {
+			return hash.Zero, NewObjectNotFoundError(commitHash)
 		}
 	}
 

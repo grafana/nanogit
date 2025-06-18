@@ -32,6 +32,24 @@ func TestInMemoryStorage(t *testing.T) {
 		require.Equal(t, 1, storage.Len())
 	})
 
+	t.Run("GetByType", func(t *testing.T) {
+		storage := NewInMemoryStorage(context.Background())
+		obj := &protocol.PackfileObject{
+			Hash: hash.MustFromHex("0123456789abcdef"),
+			Type: protocol.ObjectTypeBlob,
+		}
+
+		storage.Add(obj)
+		got, ok := storage.GetByType(obj.Hash, protocol.ObjectTypeBlob)
+		require.True(t, ok)
+		require.Equal(t, obj, got)
+		require.Equal(t, 1, storage.Len())
+
+		got, ok = storage.GetByType(obj.Hash, protocol.ObjectTypeTree)
+		require.False(t, ok)
+		require.Nil(t, got)
+	})
+
 	t.Run("Get non-existent", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
 		hash := hash.MustFromHex("0123456789abcdef")

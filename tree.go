@@ -373,7 +373,7 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 			}
 
 			// Skip if we already have this object
-			if _, exists := allObjects.Get(entryHash); exists {
+			if _, exists := allObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
 				continue
 			}
 
@@ -411,42 +411,31 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 
 // findRootTree locates the root tree object from the target hash and available objects.
 // It handles both commit and tree target objects, extracting the tree hash and object as needed.
-func (c *httpClient) findRootTree(ctx context.Context, targetHash hash.Hash, allObjects storage.PackfileStorage) (*protocol.PackfileObject, hash.Hash, error) {
+func (c *httpClient) findRootTree(ctx context.Context, commitHash hash.Hash, allObjects storage.PackfileStorage) (*protocol.PackfileObject, hash.Hash, error) {
 	logger := log.FromContext(ctx)
-	// Find our target object in the response
-	obj, exists := allObjects.Get(targetHash)
+	obj, exists := allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
 	if !exists {
-		return nil, hash.Zero, NewObjectNotFoundError(targetHash)
+		return nil, hash.Zero, NewObjectNotFoundError(commitHash)
 	}
 
-	var tree *protocol.PackfileObject
-	var treeHash hash.Hash
-
-	if obj.Type == protocol.ObjectTypeCommit {
-		// Extract tree hash from commit
-		var err error
-		treeHash, err = hash.FromHex(obj.Commit.Tree.String())
-		if err != nil {
-			return nil, hash.Zero, fmt.Errorf("parsing tree hash: %w", err)
-		}
-
-		// Check if the tree object is already in our available objects
-		if treeObj, exists := allObjects.Get(treeHash); exists {
-			tree = treeObj
-		} else {
-			// Tree not in available objects, we'll fetch it later
-			tree = nil
-		}
-
-		logger.Debug("resolved commit to tree",
-			"commit_hash", targetHash.String(),
-			"tree_hash", treeHash.String(),
-			"tree_available", tree != nil)
-	} else {
-		return nil, hash.Zero, NewUnexpectedObjectTypeError(targetHash, protocol.ObjectTypeCommit, obj.Type)
+	// Extract tree hash from commit
+	treeHash, err := hash.FromHex(obj.Commit.Tree.String())
+	if err != nil {
+		return nil, hash.Zero, fmt.Errorf("parsing tree hash: %w", err)
 	}
 
-	return tree, treeHash, nil
+	// Check if the tree object is already in our available objects
+	treeObj, exists := allObjects.GetByType(treeHash, protocol.ObjectTypeTree)
+	if !exists {
+		return nil, hash.Zero, NewObjectNotFoundError(treeHash)
+	}
+
+	logger.Debug("resolved commit to tree",
+		"commit_hash", commitHash.String(),
+		"tree_hash", treeHash.String(),
+		"tree_available", treeObj != nil)
+
+	return treeObj, treeHash, nil
 }
 
 // flatten converts collected tree objects into a flat tree structure using breadth-first traversal.
@@ -455,7 +444,7 @@ func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObj
 	logger.Debug("Flatten tree", "treeHash", treeHash.String())
 
 	// Get the root tree object
-	rootTree, exists := allTreeObjects.Get(treeHash)
+	rootTree, exists := allTreeObjects.GetByType(treeHash, protocol.ObjectTypeTree)
 	if !exists {
 		logger.Debug("Root tree not found", "treeHash", treeHash.String())
 		return nil, fmt.Errorf("root tree %s not found in collected objects", treeHash.String())
@@ -511,7 +500,7 @@ func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObj
 
 			// If this is a tree, add it to the queue for processing
 			if entryType == protocol.ObjectTypeTree {
-				childTree, exists := allTreeObjects.Get(entryHash)
+				childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree)
 				if !exists {
 					logger.Debug("Child tree not found",
 						"hash", entry.Hash,

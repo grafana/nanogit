@@ -55,6 +55,19 @@ func (s *InMemoryStorage) Get(key hash.Hash) (*protocol.PackfileObject, bool) {
 	return obj, ok
 }
 
+func (s *InMemoryStorage) GetByType(key hash.Hash, objType protocol.ObjectType) (*protocol.PackfileObject, bool) {
+	obj, ok := s.Get(key)
+	if !ok {
+		return nil, false
+	}
+
+	if obj.Type != objType {
+		return nil, false
+	}
+
+	return obj, true
+}
+
 func (s *InMemoryStorage) GetAllKeys() []hash.Hash {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

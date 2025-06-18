@@ -651,7 +651,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Mode: 0o40000,
 			}
 		} else {
-			existingTree, ok := w.objStorage.Get(existingObj.Hash)
+			existingTree, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
 			if !ok {
 				return fmt.Errorf("get existing tree %s: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 			}
@@ -807,7 +807,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
-		treeObj, ok := w.objStorage.Get(existingObj.Hash)
+		treeObj, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
 		if !ok {
 			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 		}
@@ -920,7 +920,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
-		treeObj, ok := w.objStorage.Get(existingObj.Hash)
+		treeObj, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
 		if !ok {
 			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 		}

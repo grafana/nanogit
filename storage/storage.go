@@ -11,6 +11,8 @@ import (
 type PackfileStorage interface {
 	// Get retrieves an object by its hash.
 	Get(key hash.Hash) (*protocol.PackfileObject, bool)
+	// GetByType retrieves an object by its hash and type.
+	GetByType(key hash.Hash, objType protocol.ObjectType) (*protocol.PackfileObject, bool)
 	// GetAllKeys returns all keys in the storage.
 	GetAllKeys() []hash.Hash
 	// Add adds objects to the storage.
