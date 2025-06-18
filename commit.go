@@ -630,6 +630,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 
 	// If path is empty, return the tree hash
 	if path == "" {
+		// This should never happen with the current use of hashForPath
 		return treeHash, nil
 	}
 

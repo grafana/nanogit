@@ -459,6 +459,14 @@ var _ = Describe("Commits", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("path component is empty"))
 			})
+			It("should fail when path ends empty component", func() {
+				options := nanogit.ListCommitsOptions{
+					Path: "docs/  ", // Invalid path with empty component
+				}
+				_, err := client.ListCommits(ctx, headHash, options)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("path component is empty"))
+			})
 
 			It("should filter commits affecting specific file", func() {
 				options := nanogit.ListCommitsOptions{
