@@ -341,18 +341,6 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 		requestedHashes[h.String()] = true
 	}
 
-	// We could have the children of the trees we already have, so we need to add them to the allObjects map
-	for _, obj := range objects {
-		if obj.Type != protocol.ObjectTypeTree {
-			continue
-		}
-
-		// Skip if we've already processed this tree for dependencies
-		if processedTrees[obj.Hash.String()] {
-			continue
-		}
-	}
-
 	for _, obj := range objects {
 		if obj.Type != protocol.ObjectTypeTree {
 			continue
