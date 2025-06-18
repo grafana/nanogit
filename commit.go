@@ -133,11 +133,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, fmt.Errorf("get head tree for commit %s: %w", headCommit.String(), err)
 	}
 
-	changes, err := c.compareTrees(baseTree, headTree)
-	if err != nil {
-		return nil, fmt.Errorf("compare trees: %w", err)
-	}
-
+	changes := c.compareTrees(baseTree, headTree)
 	logger.Debug("Commits compared",
 		"base_hash", baseCommit.String(),
 		"head_hash", headCommit.String(),
@@ -153,7 +149,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 //
 // The function returns a sorted list of changes, with each change containing
 // the relevant file information and status.
-func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
+func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 	changes := make([]CommitFile, 0)
 
 	// Build maps for efficient lookup
@@ -208,7 +204,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 		return changes[i].Path < changes[j].Path
 	})
 
-	return changes, nil
+	return changes
 }
 
 // GetCommit retrieves a specific commit object from the repository by its hash.
