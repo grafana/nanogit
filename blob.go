@@ -41,7 +41,13 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 		Want:       []hash.Hash{blobID},
 		Done:       true,
 	})
+
 	if err != nil {
+		// TODO: handle this at the client level
+		if strings.Contains(err.Error(), "not our ref") {
+			return nil, NewObjectNotFoundError(blobID)
+		}
+
 		return nil, fmt.Errorf("fetch blob %s: %w", blobID.String(), err)
 	}
 
@@ -112,6 +118,10 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 		return nil, ErrEmptyPath
 	}
 
+	if strings.HasSuffix(path, "/") {
+		return nil, errors.New("invalid path: ends with slash")
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Get blob by path",
 		"root_hash", rootHash.String(),
@@ -168,10 +178,6 @@ func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path
 
 	// Find the target file (last part of path)
 	fileName := parts[len(parts)-1]
-	if fileName == "" {
-		return nil, errors.New("invalid path: ends with slash")
-	}
-
 	logger.Debug("Search for file",
 		"file_name", fileName,
 		"dir_hash", currentHash.String())

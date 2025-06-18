@@ -2,3 +2,7 @@
 __debug_bin*
 vendor
 coverage.txt
+unit.cov
+integration.cov
+node_modules
+yarn.lock

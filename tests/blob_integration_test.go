@@ -48,7 +48,7 @@ var _ = Describe("Blobs", func() {
 
 			_, err = client.GetBlob(ctx, nonExistentHash)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not our ref b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0"))
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
 	})
 
@@ -112,8 +112,15 @@ var _ = Describe("Blobs", func() {
 
 			_, err = client.GetBlobByPath(ctx, nonExistentHash, "blob.txt")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not our ref"))
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
+		It("should fail when path ends with slash", func() {
+			By("Attempting to get a file with a path ending in slash")
+			_, err := client.GetBlobByPath(ctx, rootHash, "blob.txt/")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid path: ends with slash"))
+		})
+
 	})
 
 	Context("GetBlobByPath with nested directories", func() {
@@ -209,6 +216,23 @@ var _ = Describe("Blobs", func() {
 			_, err := client.GetBlobByPath(ctx, rootHash, "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("empty path"))
+		})
+		It("should ignore empty parts of the path", func() {
+			// These paths should all resolve to the same file
+			paths := []string{
+				"dir1//file1.txt",
+				"//dir1/file1.txt",
+			}
+			expectedContent := "dir1 file content"
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir1/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, p := range paths {
+				file, err := client.GetBlobByPath(ctx, rootHash, p)
+				Expect(err).NotTo(HaveOccurred(), "path: %q", p)
+				Expect(string(file.Content)).To(Equal(expectedContent), "path: %q", p)
+				Expect(file.Hash).To(Equal(expectedHash), "path: %q", p)
+			}
 		})
 
 		It("should fail when path points to directory instead of file", func() {

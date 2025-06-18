@@ -244,6 +244,11 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 		Done:         true,
 	})
 	if err != nil {
+		// TODO: handle this at the client level
+		if strings.Contains(err.Error(), "not our ref") {
+			return nil, NewObjectNotFoundError(commitHash)
+		}
+
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
 	}
 

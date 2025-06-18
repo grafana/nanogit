@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -108,6 +109,14 @@ var _ = Describe("Commits", func() {
 			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
 			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
 		})
+		It("should fail with Object not found error if commit does not exist", func() {
+			nonExistentHash, err := hash.FromHex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.GetCommit(ctx, nonExistentHash)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
+		})
 	})
 
 	Context("CompareCommits operations", func() {
@@ -206,6 +215,23 @@ var _ = Describe("Commits", func() {
 			Expect(changes[0].Status).To(Equal(protocol.FileStatusModified))
 			Expect(changes[0].OldHash).To(Equal(modifiedFileHash))
 			Expect(changes[0].Hash).To(Equal(initialFileHash))
+		})
+		It("should return object not found error if base commit does not exist", func() {
+			nonExistentHash, err := hash.FromHex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.CompareCommits(ctx, nonExistentHash, modifiedCommitHash)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
+		})
+
+		It("should return object not found error if head commit does not exist", func() {
+			nonExistentHash, err := hash.FromHex("cafebabecafebabecafebabecafebabecafebabe")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = client.CompareCommits(ctx, initialCommitHash, nonExistentHash)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
 	})
 
