@@ -1491,4 +1491,91 @@ var _ = Describe("Writer Operations", func() {
 			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
 		})
 	})
+
+	Describe("Empty branch repository", func() {
+		var (
+			writer nanogit.StagedWriter
+			local  *LocalGitRepo
+		)
+
+		BeforeEach(func() {
+			var client nanogit.Client
+			client, _, local, _ = QuickSetup()
+			// Delete the branch on the remote and locally, then recreate it as an orphan (no history).
+			local.Git("checkout", "--orphan", "temp-empty-branch")
+			local.Git("rm", "-rf", ".")
+			local.Git("commit", "--allow-empty", "-m", "Empty commit")
+			local.Git("branch", "-D", "main")
+			local.Git("branch", "-m", "main")
+			local.Git("push", "origin", "--force", "--set-upstream", "main")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			writer, err = client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should not find any blobs in an empty repository", func() {
+			exists, err := writer.BlobExists(ctx, "text.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("should fail to commit if there are no staged changes", func() {
+			_, err := writer.Commit(ctx, "Empty commit", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToCommit))
+		})
+
+		It("should fail to push if there are no staged objects", func() {
+			err := writer.Push(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToPush))
+		})
+		It("should create a new tree when creating a file in an empty repository", func() {
+			fileName := "hello.txt"
+			content := []byte("Hello, world!")
+
+			// The file should not exist yet
+			exists, err := writer.BlobExists(ctx, fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+
+			// Create the blob
+			_, err = writer.CreateBlob(ctx, fileName, content)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now the blob should exist
+			exists, err = writer.BlobExists(ctx, fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Commit the change
+			commitMsg := "Add hello.txt to empty repo"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			// Push the commit
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull and verify the file exists in the local repo
+			local.Git("pull", "origin", "main")
+			filePath := filepath.Join(local.Path, fileName)
+			readContent, err := os.ReadFile(filePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(readContent).To(Equal(content))
+
+			// The tree for the root should now contain the file
+			treeHash := local.Git("rev-parse", "HEAD^{tree}")
+			Expect(treeHash).NotTo(BeEmpty())
+			lsTree := local.Git("ls-tree", "--name-only", treeHash)
+			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
+		})
+	})
 })
