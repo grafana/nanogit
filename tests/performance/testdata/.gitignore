@@ -1,0 +1,2 @@
+# Ignore generated test repository archives
+*.tar.gz

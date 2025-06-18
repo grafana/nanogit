@@ -29,27 +29,11 @@ func NewBenchmarkSuite(ctx context.Context, networkLatency time.Duration) (*Benc
 		return nil, fmt.Errorf("failed to create Git server: %w", err)
 	}
 
-	// Provision test repositories
+	// Provision test repositories (extract and mount pre-created archives)
 	repositories, err := gitServer.ProvisionTestRepositories(ctx)
 	if err != nil {
 		gitServer.Cleanup(ctx)
 		return nil, fmt.Errorf("failed to provision test repositories: %w", err)
-	}
-
-	// Generate test data for repositories using git CLI client
-	gitCLI, err := NewGitCLIClientWrapper()
-	if err != nil {
-		gitServer.Cleanup(ctx)
-		return nil, fmt.Errorf("failed to create git CLI client for test data: %w", err)
-	}
-
-	for i, repo := range repositories {
-		spec := GetStandardSpecs()[i]
-		generator := NewTestDataGenerator(repo.AuthURL(), gitCLI)
-		if err := generator.GenerateRepository(ctx, spec); err != nil {
-			gitServer.Cleanup(ctx)
-			return nil, fmt.Errorf("failed to generate test data for %s repository: %w", spec.Name, err)
-		}
 	}
 
 	// Initialize clients
@@ -406,4 +390,3 @@ func BenchmarkFileOperations(b *testing.B) {
 		})
 	}
 }
-

@@ -1,7 +1,9 @@
 package performance
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -9,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -263,7 +267,28 @@ func (s *GitServer) CreateRepo(ctx context.Context, repoName string, user *User)
 	}, nil
 }
 
-// ProvisionTestRepositories creates repositories with different characteristics for performance testing
+// RepoSpec defines the characteristics of a test repository
+type RepoSpec struct {
+	Name        string
+	FileCount   int
+	CommitCount int
+	MaxDepth    int
+	FileSizes   []int // Various file sizes in bytes
+	BinaryFiles int   // Number of binary files
+	Branches    int   // Number of branches
+}
+
+// GetStandardSpecs returns predefined repository specifications
+func GetStandardSpecs() []RepoSpec {
+	return []RepoSpec{
+		{Name: "small"},
+		{Name: "medium"},
+		{Name: "large"},
+		{Name: "xlarge"},
+	}
+}
+
+// ProvisionTestRepositories extracts and mounts pre-created repositories for performance testing
 func (s *GitServer) ProvisionTestRepositories(ctx context.Context) ([]*Repository, error) {
 	specs := GetStandardSpecs()
 	repositories := make([]*Repository, len(specs))
@@ -275,21 +300,243 @@ func (s *GitServer) ProvisionTestRepositories(ctx context.Context) ([]*Repositor
 			return nil, fmt.Errorf("failed to create user for %s repository: %w", spec.Name, err)
 		}
 
-		// Create repository
-		repo, err := s.CreateRepo(ctx, fmt.Sprintf("%s-repo", spec.Name), user)
+		// Extract and mount pre-created repository
+		repo, err := s.extractAndMountRepository(ctx, spec.Name, user)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create %s repository: %w", spec.Name, err)
-		}
-
-		// Create initial commit so repository is not empty
-		if err := s.createInitialCommit(ctx, repo); err != nil {
-			return nil, fmt.Errorf("failed to create initial commit for %s repository: %w", spec.Name, err)
+			return nil, fmt.Errorf("failed to extract and mount %s repository: %w", spec.Name, err)
 		}
 
 		repositories[i] = repo
 	}
 
 	return repositories, nil
+}
+
+// extractAndMountRepository extracts a pre-created repository archive and mounts it in Gitea
+func (s *GitServer) extractAndMountRepository(ctx context.Context, repoName string, user *User) (*Repository, error) {
+	// Path to the archive file
+	archivePath := fmt.Sprintf("./testdata/%s-repo.tar.gz", repoName)
+	
+	// Check if archive exists
+	if _, err := os.Stat(archivePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("archive file not found: %s (run 'go run ./cmd/generate_repo' to create it)", archivePath)
+	}
+	
+	// Create temporary directory to extract the repository
+	tempDir, err := os.MkdirTemp("", fmt.Sprintf("nanogit-%s-*", repoName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	// Don't defer cleanup - we need the directory to remain for mounting
+	
+	// Extract the archive
+	if err := extractArchive(archivePath, tempDir); err != nil {
+		os.RemoveAll(tempDir) // Cleanup on error
+		return nil, fmt.Errorf("failed to extract archive: %w", err)
+	}
+	
+	// Mount the extracted repository directory into the container
+	gitDataPath := fmt.Sprintf("/data/git/repositories/%s/%s-repo.git", user.Username, repoName)
+	if err := s.mountRepositoryToContainer(ctx, tempDir, gitDataPath); err != nil {
+		os.RemoveAll(tempDir) // Cleanup on error
+		return nil, fmt.Errorf("failed to mount repository to container: %w", err)
+	}
+	
+	// Create the repository record in Gitea via API
+	repoFullName := fmt.Sprintf("%s-repo", repoName)
+	if err := s.createRepositoryRecord(ctx, repoFullName, user); err != nil {
+		return nil, fmt.Errorf("failed to create repository record: %w", err)
+	}
+	
+	return &Repository{
+		Name: repoFullName,
+		Owner: user.Username,
+		Host: s.Host,
+		Port: s.Port,
+		User: user,
+		tempDir: tempDir, // Store for cleanup later
+	}, nil
+}
+
+// extractArchive extracts a tar.gz archive to the specified directory
+func extractArchive(archivePath, destDir string) error {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("failed to open archive: %w", err)
+	}
+	defer file.Close()
+	
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gzReader.Close()
+	
+	tarReader := tar.NewReader(gzReader)
+	
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar header: %w", err)
+		}
+		
+		path := filepath.Join(destDir, header.Name)
+		
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(path, os.FileMode(header.Mode)); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", path, err)
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				return fmt.Errorf("failed to create parent directory: %w", err)
+			}
+			
+			outFile, err := os.Create(path)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", path, err)
+			}
+			
+			if _, err := io.Copy(outFile, tarReader); err != nil {
+				outFile.Close()
+				return fmt.Errorf("failed to copy file content: %w", err)
+			}
+			outFile.Close()
+			
+			if err := os.Chmod(path, os.FileMode(header.Mode)); err != nil {
+				return fmt.Errorf("failed to set file permissions: %w", err)
+			}
+		}
+	}
+	
+	return nil
+}
+
+// mountRepositoryToContainer mounts the extracted repository directory into the container
+func (s *GitServer) mountRepositoryToContainer(ctx context.Context, sourceDir, destPath string) error {
+	// Create the parent directory structure in the container
+	parentDir := filepath.Dir(destPath)
+	execResult, reader, err := s.container.Exec(ctx, []string{"mkdir", "-p", parentDir})
+	if err != nil {
+		return fmt.Errorf("failed to create parent directory: %w", err)
+	}
+	
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		return fmt.Errorf("failed to read mkdir output: %w", err)
+	}
+	
+	if execResult != 0 {
+		return fmt.Errorf("mkdir failed with exit code %d: %s", execResult, string(output))
+	}
+	
+	// Use testcontainers' CopyToContainer method which handles large files efficiently
+	return s.copyRepositoryWithTestcontainers(ctx, sourceDir, destPath)
+}
+
+// copyRepositoryWithTestcontainers uses testcontainers' built-in copy functionality
+func (s *GitServer) copyRepositoryWithTestcontainers(ctx context.Context, sourceDir, destPath string) error {
+	// Create tar archive file on disk (testcontainers will handle the transfer)
+	tempTarFile, err := os.CreateTemp("", "repo-*.tar")
+	if err != nil {
+		return fmt.Errorf("failed to create temp tar file: %w", err)
+	}
+	defer os.Remove(tempTarFile.Name())
+	defer tempTarFile.Close()
+	
+	// Create tar archive
+	tarWriter := tar.NewWriter(tempTarFile)
+	
+	err = filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		
+		relPath, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+		
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+		
+		if info.Mode().IsRegular() {
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			
+			_, err = io.Copy(tarWriter, file)
+			return err
+		}
+		
+		return nil
+	})
+	
+	if err != nil {
+		return fmt.Errorf("failed to create tar archive: %w", err)
+	}
+	
+	tarWriter.Close()
+	tempTarFile.Close()
+	
+	// Copy tar file to container and extract
+	if err := s.container.CopyFileToContainer(ctx, tempTarFile.Name(), "/tmp/repo.tar", 0644); err != nil {
+		return fmt.Errorf("failed to copy tar file to container: %w", err)
+	}
+	
+	// Extract tar file in container
+	execResult, reader, err := s.container.Exec(ctx, []string{
+		"sh", "-c", fmt.Sprintf("cd %s && tar -xf /tmp/repo.tar && rm /tmp/repo.tar", filepath.Dir(destPath)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to extract tar in container: %w", err)
+	}
+	
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		return fmt.Errorf("failed to read tar extraction output: %w", err)
+	}
+	
+	if execResult != 0 {
+		return fmt.Errorf("tar extraction failed with exit code %d: %s", execResult, string(output))
+	}
+	
+	return nil
+}
+
+// createRepositoryRecord creates a repository record in Gitea database
+func (s *GitServer) createRepositoryRecord(ctx context.Context, repoName string, user *User) error {
+	// Use Gitea CLI to create repository record that points to existing git data
+	execResult, reader, err := s.container.Exec(ctx, []string{
+		"su", "git", "-c", 
+		fmt.Sprintf("gitea admin repo create --name %s --owner %s", repoName, user.Username),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create repository record: %w", err)
+	}
+	
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		return fmt.Errorf("failed to read repo creation output: %w", err)
+	}
+	
+	if execResult != 0 {
+		return fmt.Errorf("repository creation failed with exit code %d: %s", execResult, string(output))
+	}
+	
+	return nil
 }
 
 // Cleanup stops the container and cleans up resources
@@ -306,6 +553,14 @@ func (s *GitServer) Cleanup(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// CleanupRepository cleans up temporary directories for a repository
+func (r *Repository) Cleanup() error {
+	if r.tempDir != "" {
+		return os.RemoveAll(r.tempDir)
+	}
 	return nil
 }
 
@@ -359,11 +614,12 @@ func (s *GitServer) createInitialCommit(ctx context.Context, repo *Repository) e
 
 // Repository represents a test repository
 type Repository struct {
-	Name  string
-	Owner string
-	Host  string
-	Port  string
-	User  *User
+	Name    string
+	Owner   string
+	Host    string
+	Port    string
+	User    *User
+	tempDir string // For cleanup
 }
 
 // HTTPURL returns the HTTP URL for the repository

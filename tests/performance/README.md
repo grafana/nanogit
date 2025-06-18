@@ -8,9 +8,10 @@ This package provides comprehensive performance benchmarking for comparing nanog
 
 - **types.go**: Common interfaces and data structures
 - **metrics.go**: Performance metrics collection and reporting
-- **gitserver.go**: Containerized Gitea server with network latency simulation
+- **gitserver.go**: Containerized Gitea server with pre-created repository mounting
 - **clients/**: Implementation wrappers for each Git client
-- **testdata.go**: Test repository generation utilities
+- **cmd/generate_repo/**: Script to generate test repository archives
+- **testdata/**: Pre-created repository archives and documentation
 - **benchmark_test.go**: Main benchmark test suites
 
 ### Supported Clients
@@ -58,6 +59,10 @@ This package provides comprehensive performance benchmarking for comparing nanog
 **Important**: These tests require Docker and are disabled by default.
 
 ```bash
+# First-time setup: Generate test repository archives
+cd tests/performance
+go run ./cmd/generate_repo
+
 # Enable performance tests (required)
 export RUN_PERFORMANCE_TESTS=true
 
@@ -107,17 +112,34 @@ The framework can simulate network latency to test performance under realistic n
 
 ### Test Data Generation
 
-Test repositories are automatically generated with specific characteristics:
+Test repositories use pre-created archives for fast, consistent testing:
+
+#### First-time Setup
+
+```bash
+# Generate test repository archives (one-time setup)
+cd tests/performance
+go run ./cmd/generate_repo
+```
+
+This creates four repository archives in `testdata/`:
+- `small-repo.tar.gz` - Small repository (100 files, 50 commits, 4 directory levels)
+- `medium-repo.tar.gz` - Medium repository (750 files, 200 commits, 5 directory levels)  
+- `large-repo.tar.gz` - Large repository (3000 files, 800 commits, 6 directory levels)
+- `xlarge-repo.tar.gz` - Extra-large repository (15000 files, 3000 commits, 8 directory levels)
+
+#### How It Works
 
 ```go
-// Repositories are created automatically by the GitServer
+// Repositories are extracted and mounted from pre-created archives
 server, err := NewGitServer(ctx, networkLatency)
-repositories, err := server.ProvisionTestRepositories(ctx)
+repositories, err := server.ProvisionTestRepositories(ctx) // Extracts archives
 
-// Standard repository specifications:
-// - Small: 50 files, 10 commits, 3 directory levels
-// - Medium: 500 files, 100 commits, 5 directory levels
-// - Large: 2000 files, 500 commits, 8 directory levels
+// Benefits:
+// - Fast test startup (no file/commit generation time)
+// - Consistent test data across runs
+// - Better performance isolation
+// - Reproducible results
 ```
 
 ## Metrics and Reporting
