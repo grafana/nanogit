@@ -135,7 +135,7 @@ var _ = Describe("Trees", func() {
 
 			_, err = client.GetFlatTree(ctx, nonExistentHash)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not our ref"))
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
 	})
 
@@ -193,7 +193,7 @@ var _ = Describe("Trees", func() {
 
 			_, err = client.GetTree(ctx, nonExistentHash)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not our ref"))
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
 	})
 
