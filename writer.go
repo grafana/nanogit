@@ -599,10 +599,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
-	if len(pathParts) == 0 {
-		return errors.New("empty path")
-	}
-
 	// Get the file name and directory parts
 	fileName := pathParts[len(pathParts)-1]
 	dirParts := pathParts[:len(pathParts)-1]
@@ -711,26 +707,18 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 // Returns:
 //   - *protocol.PackfileObject: New tree object with the updated entry
 //   - error: Error if tree creation fails
-func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
+func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Update tree entry",
 		"fileName", current.FileName,
 		"fileMode", fmt.Sprintf("%o", current.FileMode),
 	)
 
-	if obj == nil {
-		return nil, errors.New("object is nil")
-	}
-
-	if obj.Type != protocol.ObjectTypeTree {
-		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
-	}
-
 	// Create a new slice for the updated entries
-	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree))
+	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(treeObj.Tree))
 
 	// Add all entries except the one we're updating
-	for _, entry := range obj.Tree {
+	for _, entry := range treeObj.Tree {
 		if entry.FileName != current.FileName {
 			combinedEntries = append(combinedEntries, entry)
 		}
@@ -738,7 +726,6 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.Packfi
 
 	// Add the new/updated entry
 	combinedEntries = append(combinedEntries, current)
-
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {
 		return nil, fmt.Errorf("build tree object: %w", err)
@@ -749,7 +736,7 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.Packfi
 
 	logger.Debug("Tree entry updated",
 		"fileName", current.FileName,
-		"oldEntryCount", len(obj.Tree),
+		"oldEntryCount", len(treeObj.Tree),
 		"newEntryCount", len(combinedEntries),
 		"newHash", newObj.Hash.String())
 
