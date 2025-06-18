@@ -1,5 +1,5 @@
-// Package testhelpers provides common utilities for integration tests.
-package testhelpers
+// Package integration_test provides common utilities for integration tests.
+package integration_test
 
 // ANSI color codes for terminal output
 const (

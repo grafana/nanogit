@@ -1,4 +1,4 @@
-package nanogit_test
+package integration_test
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testhelpers"
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
@@ -26,7 +25,7 @@ func TestProviders(t *testing.T) {
 		return
 	}
 
-	ctx := log.ToContext(context.Background(), testhelpers.NewTestLogger(t.Logf))
+	ctx := log.ToContext(context.Background(), NewTestLogger(t.Logf))
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),

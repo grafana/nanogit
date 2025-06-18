@@ -1,4 +1,4 @@
-package testhelpers
+package integration_test
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package testhelpers
+package integration_test
 
 import (
 	"bytes"
@@ -12,11 +12,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
-	//lint:ignore ST1001 dot-imports
 	. "github.com/onsi/ginkgo/v2"
-	//nolint:stylecheck // specifically ignore ST1001 (dot-imports)
-	//lint:ignore ST1001 dot-imports
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
