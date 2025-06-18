@@ -30,6 +30,10 @@ func TestInMemoryStorage(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, obj, got)
 		require.Equal(t, 1, storage.Len())
+
+		lastAccess, ok := storage.LastAccess(obj.Hash)
+		require.False(t, ok)
+		require.Empty(t, lastAccess)
 	})
 
 	t.Run("GetByType", func(t *testing.T) {
@@ -46,6 +50,14 @@ func TestInMemoryStorage(t *testing.T) {
 		require.Equal(t, 1, storage.Len())
 
 		got, ok = storage.GetByType(obj.Hash, protocol.ObjectTypeTree)
+		require.False(t, ok)
+		require.Nil(t, got)
+	})
+
+	t.Run("GetByType non-existent", func(t *testing.T) {
+		storage := NewInMemoryStorage(context.Background())
+		hash := hash.MustFromHex("0123456789abcdef")
+		got, ok := storage.GetByType(hash, protocol.ObjectTypeBlob)
 		require.False(t, ok)
 		require.Nil(t, got)
 	})
@@ -90,6 +102,10 @@ func TestInMemoryStorage(t *testing.T) {
 		require.False(t, ok)
 		require.Nil(t, got)
 		require.Equal(t, 0, storage.Len())
+
+		lastAccess, ok := storage.LastAccess(obj.Hash)
+		require.False(t, ok)
+		require.Equal(t, time.Time{}, lastAccess)
 	})
 
 	t.Run("Add multiple objects", func(t *testing.T) {
@@ -164,7 +180,17 @@ func TestInMemoryStorage(t *testing.T) {
 		require.False(t, ok3)
 		require.Nil(t, got3)
 
+		lastAccess, ok := storage.LastAccess(obj1.Hash)
+		require.True(t, ok)
+		require.WithinDuration(t, time.Now(), lastAccess, 50*time.Millisecond)
+
 		// Verify length
 		require.Equal(t, 1, storage.Len())
+
+		// Verify last access time is deleted when object is deleted
+		storage.Delete(obj1.Hash)
+		lastAccess, ok = storage.LastAccess(obj1.Hash)
+		require.False(t, ok)
+		require.Empty(t, lastAccess)
 	})
 }

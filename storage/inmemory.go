@@ -68,6 +68,20 @@ func (s *InMemoryStorage) GetByType(key hash.Hash, objType protocol.ObjectType) 
 	return obj, true
 }
 
+// LastAccess returns the last access time for a given key.
+// If the key doesn't exist or TTL is not enabled, returns zero time and false.
+func (s *InMemoryStorage) LastAccess(key hash.Hash) (time.Time, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.ttl == 0 {
+		return time.Time{}, false
+	}
+
+	t, ok := s.lastAccess[key.String()]
+	return t, ok
+}
+
 func (s *InMemoryStorage) GetAllKeys() []hash.Hash {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
