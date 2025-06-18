@@ -10,19 +10,23 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/go-git/go-git/v5/storage/memory"
+	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
+	"github.com/go-git/go-git/v5/plumbing/cache"
+	"github.com/go-git/go-billy/v5/memfs"
 )
 
 // GoGitClient implements the GitClient interface using go-git
 type GoGitClient struct {
 	repos map[string]*git.Repository // Cache repos by URL
+	auths map[string]*http.BasicAuth  // Cache auth info by URL
 }
 
 // NewGoGitClient creates a new go-git client
 func NewGoGitClient() *GoGitClient {
 	return &GoGitClient{
 		repos: make(map[string]*git.Repository),
+		auths: make(map[string]*http.BasicAuth),
 	}
 }
 
@@ -52,10 +56,14 @@ func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.
 	if u.User != nil {
 		username := u.User.Username()
 		password, _ := u.User.Password()
-		cloneOpts.Auth = &http.BasicAuth{
+		auth := &http.BasicAuth{
 			Username: username,
 			Password: password,
 		}
+		cloneOpts.Auth = auth
+		
+		// Store auth info for later push operations
+		c.auths[repoURL] = auth
 		
 		// Use clean URL without credentials
 		cleanURL := &url.URL{
@@ -66,14 +74,53 @@ func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.
 		cloneOpts.URL = cleanURL.String()
 	}
 
-	// Clone repository into memory
-	repo, err := git.CloneContext(ctx, memory.NewStorage(), nil, cloneOpts)
+	// Create in-memory filesystem for worktree
+	fs := memfs.New()
+	
+	// Create .git directory for storage
+	gitDir, err := fs.Chroot("/.git")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create .git directory: %w", err)
+	}
+	
+	// Create storage with filesystem support
+	storage := filesystem.NewStorage(gitDir, cache.NewObjectLRUDefault())
+
+	// Clone repository with filesystem storage to support worktree
+	repo, err := git.CloneContext(ctx, storage, fs, cloneOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
 
 	c.repos[repoURL] = repo
 	return repo, nil
+}
+
+// pushChanges pushes local changes to the remote repository
+func (c *GoGitClient) pushChanges(ctx context.Context, repo *git.Repository, repoURL string) error {
+	// Parse URL to get clean URL for push
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return fmt.Errorf("invalid repository URL: %w", err)
+	}
+
+	cleanURL := &url.URL{
+		Scheme: u.Scheme,
+		Host:   u.Host,
+		Path:   u.Path,
+	}
+
+	pushOpts := &git.PushOptions{
+		RemoteName: "origin",
+		RemoteURL:  cleanURL.String(),
+	}
+
+	// Add authentication if available
+	if auth, exists := c.auths[repoURL]; exists {
+		pushOpts.Auth = auth
+	}
+
+	return repo.PushContext(ctx, pushOpts)
 }
 
 // CreateFile creates a new file in the repository
@@ -114,6 +161,11 @@ func (c *GoGitClient) CreateFile(ctx context.Context, repoURL, path, content, me
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	// Push changes to remote
+	if err := c.pushChanges(ctx, repo, repoURL); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
 	}
 
 	return nil
@@ -195,6 +247,11 @@ func (c *GoGitClient) DeleteFile(ctx context.Context, repoURL, path, message str
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	// Push changes to remote
+	if err := c.pushChanges(ctx, repo, repoURL); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
 	}
 
 	return nil
@@ -386,6 +443,11 @@ func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit bulk changes: %w", err)
+	}
+
+	// Push changes to remote
+	if err := c.pushChanges(ctx, repo, repoURL); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
 	}
 
 	return nil

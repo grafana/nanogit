@@ -70,9 +70,10 @@ func NewGitServer(ctx context.Context, latency time.Duration) (*GitServer, error
 		WaitingFor: wait.ForHTTP("/api/v1/version").WithPort("3000").WithStartupTimeout(60 * time.Second),
 	}
 
-	// Add network if latency simulation is enabled
+	// Add network and capabilities if latency simulation is enabled
 	if dockerNetwork != nil {
 		req.Networks = []string{networkName}
+		req.CapAdd = []string{"NET_ADMIN"}
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{

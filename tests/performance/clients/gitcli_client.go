@@ -71,6 +71,17 @@ func (c *GitCLIClient) runGitCommand(ctx context.Context, repoPath string, args 
 	return cmd.Output()
 }
 
+// runGitCommandWithOutput runs a git command and returns both stdout and stderr for better error reporting
+func (c *GitCLIClient) runGitCommandWithOutput(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return output, fmt.Errorf("git %s failed: %s (output: %s)", strings.Join(args, " "), err.Error(), string(output))
+	}
+	return output, nil
+}
+
 // CreateFile creates a new file in the repository
 func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, message string) error {
 	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
@@ -98,6 +109,11 @@ func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, m
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
+	// Push changes to remote
+	if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main"); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
+	}
+
 	return nil
 }
 
@@ -123,6 +139,11 @@ func (c *GitCLIClient) UpdateFile(ctx context.Context, repoURL, path, content, m
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
+	// Push changes to remote
+	if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main"); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
+	}
+
 	return nil
 }
 
@@ -141,6 +162,11 @@ func (c *GitCLIClient) DeleteFile(ctx context.Context, repoURL, path, message st
 	// Commit
 	if _, err := c.runGitCommand(ctx, repoPath, "commit", "-m", message); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	// Push changes to remote
+	if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main"); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
 	}
 
 	return nil
@@ -254,6 +280,12 @@ func (c *GitCLIClient) BulkCreateFiles(ctx context.Context, repoURL string, file
 		return err
 	}
 
+	// Check if this is the first commit by checking if HEAD exists
+	isFirstCommit := false
+	if _, err := c.runGitCommand(ctx, repoPath, "rev-parse", "HEAD"); err != nil {
+		isFirstCommit = true
+	}
+
 	// Process all files
 	for _, fileChange := range files {
 		switch strings.ToLower(fileChange.Action) {
@@ -272,17 +304,47 @@ func (c *GitCLIClient) BulkCreateFiles(ctx context.Context, repoURL string, file
 			}
 
 		case "delete":
-			if _, err := c.runGitCommand(ctx, repoPath, "rm", fileChange.Path); err != nil {
-				return fmt.Errorf("failed to remove file %s: %w", fileChange.Path, err)
+			// Check if file is tracked by git before trying to delete it
+			output, err := c.runGitCommand(ctx, repoPath, "ls-files", fileChange.Path)
+			if err == nil && len(strings.TrimSpace(string(output))) > 0 {
+				// File is tracked, remove it with git rm
+				if _, err := c.runGitCommand(ctx, repoPath, "rm", fileChange.Path); err != nil {
+					return fmt.Errorf("failed to remove file %s: %w", fileChange.Path, err)
+				}
 			}
 		}
 	}
 
-	// Commit all changes
-	if _, err := c.runGitCommand(ctx, repoPath, "commit", "-m", message); err != nil {
-		return fmt.Errorf("failed to commit bulk changes: %w", err)
+	// Check if there are any changes to commit
+	statusOutput, err := c.runGitCommand(ctx, repoPath, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("failed to check git status: %w", err)
+	}
+
+	// Only commit if there are changes
+	if len(strings.TrimSpace(string(statusOutput))) > 0 {
+		if _, err := c.runGitCommand(ctx, repoPath, "commit", "-m", message); err != nil {
+			return fmt.Errorf("failed to commit bulk changes: %w", err)
+		}
+	}
+
+	// If this is the first commit and we actually committed something, set up the main branch and push to establish the repository
+	if isFirstCommit && len(strings.TrimSpace(string(statusOutput))) > 0 {
+		// Set up main branch
+		if _, err := c.runGitCommand(ctx, repoPath, "branch", "-M", "main"); err != nil {
+			return fmt.Errorf("failed to rename branch to main: %w", err)
+		}
+
+		// Push to origin to establish the repository
+		if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main", "--force"); err != nil {
+			return fmt.Errorf("failed to push initial commit: %w", err)
+		}
+
+		// Set up tracking
+		if _, err := c.runGitCommand(ctx, repoPath, "branch", "--set-upstream-to=origin/main", "main"); err != nil {
+			return fmt.Errorf("failed to set upstream: %w", err)
+		}
 	}
 
 	return nil
 }
-

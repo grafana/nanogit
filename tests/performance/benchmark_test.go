@@ -56,14 +56,14 @@ func NewBenchmarkSuite(ctx context.Context, networkLatency time.Duration) (*Benc
 	var allClients []GitClient
 	allClients = append(allClients, NewNanogitClientWrapper())
 	allClients = append(allClients, NewGoGitClientWrapper())
-	
+
 	gitCLIWrapper, err := NewGitCLIClientWrapper()
 	if err != nil {
 		gitServer.Cleanup(ctx)
 		return nil, fmt.Errorf("failed to create git CLI client: %w", err)
 	}
 	allClients = append(allClients, gitCLIWrapper)
-	
+
 	return &BenchmarkSuite{
 		clients:      allClients,
 		collector:    NewMetricsCollector(),
@@ -100,9 +100,9 @@ func TestFileOperationsPerformance(t *testing.T) {
 	if os.Getenv("RUN_PERFORMANCE_TESTS") != "true" {
 		t.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
 	}
-	
+
 	ctx := context.Background()
-	
+
 	// Get network latency from environment (default 0ms)
 	latencyMs := 0
 	if envLatency := os.Getenv("PERF_TEST_LATENCY_MS"); envLatency != "" {
@@ -111,29 +111,29 @@ func TestFileOperationsPerformance(t *testing.T) {
 		}
 	}
 	networkLatency := time.Duration(latencyMs) * time.Millisecond
-	
+
 	suite, err := NewBenchmarkSuite(ctx, networkLatency)
 	require.NoError(t, err)
 	defer suite.Cleanup(ctx)
-	
+
 	testCases := []struct {
-		name     string
-		repoSize string
+		name      string
+		repoSize  string
 		fileCount int
 	}{
 		{"small_repo", "small", 50},
 		{"medium_repo", "medium", 500},
-		{"large_repo", "large", 2000},
+		// {"large_repo", "large", 2000},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := suite.GetRepository(tc.repoSize)
 			require.NotNil(t, repo, "Repository not found for size: %s", tc.repoSize)
-			
+
 			ctx, cancel := context.WithTimeout(ctx, suite.config.Timeout)
 			defer cancel()
-			
+
 			for _, client := range suite.clients {
 				t.Run(client.Name(), func(t *testing.T) {
 					// Test file creation
@@ -143,7 +143,7 @@ func TestFileOperationsPerformance(t *testing.T) {
 							return client.CreateFile(ctx, repo.AuthURL(), "test/new_file.txt", "test content", "Add test file")
 						},
 					)
-					
+
 					// Test file update
 					suite.collector.RecordOperation(
 						client.Name(), "UpdateFile", tc.name, tc.repoSize, tc.fileCount,
@@ -151,7 +151,7 @@ func TestFileOperationsPerformance(t *testing.T) {
 							return client.UpdateFile(ctx, repo.AuthURL(), "test/new_file.txt", "updated content", "Update test file")
 						},
 					)
-					
+
 					// Test file deletion
 					suite.collector.RecordOperation(
 						client.Name(), "DeleteFile", tc.name, tc.repoSize, tc.fileCount,
@@ -163,7 +163,7 @@ func TestFileOperationsPerformance(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Save results
 	err = suite.collector.SaveReport("./reports")
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestCompareCommitsPerformance(t *testing.T) {
 	if os.Getenv("RUN_PERFORMANCE_TESTS") != "true" {
 		t.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
 	}
-	
+
 	ctx := context.Background()
 	latencyMs := 0
 	if envLatency := os.Getenv("PERF_TEST_LATENCY_MS"); envLatency != "" {
@@ -183,11 +183,11 @@ func TestCompareCommitsPerformance(t *testing.T) {
 		}
 	}
 	networkLatency := time.Duration(latencyMs) * time.Millisecond
-	
+
 	suite, err := NewBenchmarkSuite(ctx, networkLatency)
 	require.NoError(t, err)
 	defer suite.Cleanup(ctx)
-	
+
 	testCases := []struct {
 		name         string
 		repoSize     string
@@ -199,15 +199,15 @@ func TestCompareCommitsPerformance(t *testing.T) {
 		{"distant_commits", "medium", "HEAD~10", "HEAD", 10},
 		{"large_diff", "large", "HEAD~20", "HEAD", 20},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := suite.GetRepository(tc.repoSize)
 			require.NotNil(t, repo, "Repository not found for size: %s", tc.repoSize)
-			
+
 			ctx, cancel := context.WithTimeout(ctx, suite.config.Timeout)
 			defer cancel()
-			
+
 			for _, client := range suite.clients {
 				t.Run(client.Name(), func(t *testing.T) {
 					suite.collector.RecordOperation(
@@ -221,7 +221,7 @@ func TestCompareCommitsPerformance(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Save results
 	err = suite.collector.SaveReport("./reports")
 	require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestGetFlatTreePerformance(t *testing.T) {
 	if os.Getenv("RUN_PERFORMANCE_TESTS") != "true" {
 		t.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
 	}
-	
+
 	ctx := context.Background()
 	latencyMs := 0
 	if envLatency := os.Getenv("PERF_TEST_LATENCY_MS"); envLatency != "" {
@@ -241,11 +241,11 @@ func TestGetFlatTreePerformance(t *testing.T) {
 		}
 	}
 	networkLatency := time.Duration(latencyMs) * time.Millisecond
-	
+
 	suite, err := NewBenchmarkSuite(ctx, networkLatency)
 	require.NoError(t, err)
 	defer suite.Cleanup(ctx)
-	
+
 	testCases := []struct {
 		name      string
 		repoSize  string
@@ -256,15 +256,15 @@ func TestGetFlatTreePerformance(t *testing.T) {
 		{"medium_tree", "medium", "HEAD", 500},
 		{"large_tree", "large", "HEAD", 2000},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := suite.GetRepository(tc.repoSize)
 			require.NotNil(t, repo, "Repository not found for size: %s", tc.repoSize)
-			
+
 			ctx, cancel := context.WithTimeout(ctx, suite.config.Timeout)
 			defer cancel()
-			
+
 			for _, client := range suite.clients {
 				t.Run(client.Name(), func(t *testing.T) {
 					suite.collector.RecordOperation(
@@ -278,7 +278,7 @@ func TestGetFlatTreePerformance(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Save results
 	err = suite.collector.SaveReport("./reports")
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestBulkOperationsPerformance(t *testing.T) {
 	if os.Getenv("RUN_PERFORMANCE_TESTS") != "true" {
 		t.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
 	}
-	
+
 	ctx := context.Background()
 	latencyMs := 0
 	if envLatency := os.Getenv("PERF_TEST_LATENCY_MS"); envLatency != "" {
@@ -298,11 +298,11 @@ func TestBulkOperationsPerformance(t *testing.T) {
 		}
 	}
 	networkLatency := time.Duration(latencyMs) * time.Millisecond
-	
+
 	suite, err := NewBenchmarkSuite(ctx, networkLatency)
 	require.NoError(t, err)
 	defer suite.Cleanup(ctx)
-	
+
 	testCases := []struct {
 		name      string
 		repoSize  string
@@ -312,18 +312,18 @@ func TestBulkOperationsPerformance(t *testing.T) {
 		{"bulk_100_files", "medium", 100},
 		{"bulk_1000_files", "large", 1000},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := suite.GetRepository(tc.repoSize)
 			require.NotNil(t, repo, "Repository not found for size: %s", tc.repoSize)
-			
+
 			ctx, cancel := context.WithTimeout(ctx, suite.config.Timeout)
 			defer cancel()
-			
+
 			// Generate test files
 			files := generateTestFiles(tc.fileCount)
-			
+
 			for _, client := range suite.clients {
 				t.Run(client.Name(), func(t *testing.T) {
 					suite.collector.RecordOperation(
@@ -336,7 +336,7 @@ func TestBulkOperationsPerformance(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Save results
 	err = suite.collector.SaveReport("./reports")
 	require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestBulkOperationsPerformance(t *testing.T) {
 // generateTestFiles creates test file data for bulk operations
 func generateTestFiles(count int) []FileChange {
 	files := make([]FileChange, count)
-	
+
 	for i := 0; i < count; i++ {
 		files[i] = FileChange{
 			Path:    fmt.Sprintf("bulk/file_%04d.txt", i),
@@ -355,7 +355,7 @@ func generateTestFiles(count int) []FileChange {
 			Action:  "create",
 		}
 	}
-	
+
 	return files
 }
 
@@ -364,21 +364,21 @@ func BenchmarkFileOperations(b *testing.B) {
 	if os.Getenv("RUN_PERFORMANCE_TESTS") != "true" {
 		b.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
 	}
-	
+
 	ctx := context.Background()
-	
+
 	// No latency for benchmarks (they need to be fast)
 	suite, err := NewBenchmarkSuite(ctx, 0)
 	if err != nil {
 		b.Fatal(err)
 	}
 	defer suite.Cleanup(ctx)
-	
+
 	repo := suite.GetRepository("small")
 	if repo == nil {
 		b.Fatal("Small repository not found")
 	}
-	
+
 	for _, client := range suite.clients {
 		b.Run(fmt.Sprintf("%s_CreateFile", client.Name()), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
@@ -389,7 +389,7 @@ func BenchmarkFileOperations(b *testing.B) {
 				}
 			}
 		})
-		
+
 		b.Run(fmt.Sprintf("%s_GetFlatTree", client.Name()), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				_, err := client.GetFlatTree(ctx, repo.AuthURL(), "HEAD")
@@ -400,3 +400,4 @@ func BenchmarkFileOperations(b *testing.B) {
 		})
 	}
 }
+

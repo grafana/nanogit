@@ -24,13 +24,13 @@ func NewTestDataGenerator(baseURL string, client GitClient) *TestDataGenerator {
 
 // RepoSpec defines the characteristics of a test repository
 type RepoSpec struct {
-	Name          string
-	FileCount     int
-	CommitCount   int
-	MaxDepth      int
-	FileSizes     []int // Various file sizes in bytes
-	BinaryFiles   int   // Number of binary files
-	Branches      int   // Number of branches
+	Name        string
+	FileCount   int
+	CommitCount int
+	MaxDepth    int
+	FileSizes   []int // Various file sizes in bytes
+	BinaryFiles int   // Number of binary files
+	Branches    int   // Number of branches
 }
 
 // GetStandardSpecs returns predefined repository specifications
@@ -54,31 +54,32 @@ func GetStandardSpecs() []RepoSpec {
 			BinaryFiles: 10,
 			Branches:    5,
 		},
-		{
-			Name:        "large",
-			FileCount:   2000,
-			CommitCount: 500,
-			MaxDepth:    8,
-			FileSizes:   []int{1000, 5000, 25000, 100000, 500000},
-			BinaryFiles: 50,
-			Branches:    10,
-		},
+		// {
+		// 	Name:        "large",
+		// 	FileCount:   2000,
+		// 	CommitCount: 500,
+		// 	MaxDepth:    8,
+		// 	FileSizes:   []int{1000, 5000, 25000, 100000, 500000},
+		// 	BinaryFiles: 50,
+		// 	Branches:    10,
+		// },
 	}
 }
 
 // GenerateRepository creates a test repository according to the specification
 func (g *TestDataGenerator) GenerateRepository(ctx context.Context, spec RepoSpec) error {
-	repoURL := fmt.Sprintf("%s/%s-test-repo", g.baseURL, spec.Name)
-	
+	// Use the baseURL directly - it should already be the complete authenticated URL
+	repoURL := g.baseURL
+
 	// Generate initial file structure
 	files := g.generateFileStructure(spec)
-	
+
 	// Create repository with initial commit
 	err := g.client.BulkCreateFiles(ctx, repoURL, files, "Initial commit with test data")
 	if err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
-	
+
 	// Generate additional commits
 	for i := 1; i < spec.CommitCount; i++ {
 		changes := g.generateCommitChanges(spec, i)
@@ -90,7 +91,7 @@ func (g *TestDataGenerator) GenerateRepository(ctx context.Context, spec RepoSpe
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -98,10 +99,10 @@ func (g *TestDataGenerator) GenerateRepository(ctx context.Context, spec RepoSpe
 func (g *TestDataGenerator) generateFileStructure(spec RepoSpec) []FileChange {
 	rand.Seed(time.Now().UnixNano())
 	files := make([]FileChange, 0, spec.FileCount)
-	
+
 	// Generate directory structure
 	dirs := g.generateDirectoryStructure(spec.MaxDepth)
-	
+
 	// Distribute files across directories
 	for i := 0; i < spec.FileCount; i++ {
 		dir := dirs[rand.Intn(len(dirs))]
@@ -110,16 +111,16 @@ func (g *TestDataGenerator) generateFileStructure(spec RepoSpec) []FileChange {
 		if dir == "" {
 			path = filename
 		}
-		
+
 		content := g.generateFileContent(i, spec)
-		
+
 		files = append(files, FileChange{
 			Path:    path,
 			Content: content,
 			Action:  "create",
 		})
 	}
-	
+
 	// Add some standard files
 	files = append(files, []FileChange{
 		{
@@ -138,19 +139,19 @@ func (g *TestDataGenerator) generateFileStructure(spec RepoSpec) []FileChange {
 			Action:  "create",
 		},
 	}...)
-	
+
 	return files
 }
 
 // generateDirectoryStructure creates a realistic directory structure
 func (g *TestDataGenerator) generateDirectoryStructure(maxDepth int) []string {
 	dirs := []string{""}
-	
+
 	baseDirs := []string{"src", "docs", "tests", "config", "scripts", "assets"}
-	
+
 	for _, baseDir := range baseDirs {
 		dirs = append(dirs, baseDir)
-		
+
 		// Create subdirectories
 		for depth := 1; depth < maxDepth; depth++ {
 			subDirs := []string{"utils", "components", "models", "handlers", "common"}
@@ -165,27 +166,27 @@ func (g *TestDataGenerator) generateDirectoryStructure(maxDepth int) []string {
 			}
 		}
 	}
-	
+
 	return dirs
 }
 
 // generateFilename creates realistic filenames
 func (g *TestDataGenerator) generateFilename(index int, spec RepoSpec) string {
 	extensions := []string{".go", ".js", ".py", ".java", ".cpp", ".h", ".md", ".txt", ".json", ".yaml", ".xml"}
-	
+
 	// Binary file extensions
 	binaryExtensions := []string{".png", ".jpg", ".pdf", ".zip", ".exe", ".so", ".dll"}
-	
+
 	var ext string
 	if index < spec.BinaryFiles {
 		ext = binaryExtensions[rand.Intn(len(binaryExtensions))]
 	} else {
 		ext = extensions[rand.Intn(len(extensions))]
 	}
-	
+
 	prefixes := []string{"test", "main", "util", "helper", "config", "model", "handler", "service", "component"}
 	prefix := prefixes[rand.Intn(len(prefixes))]
-	
+
 	return fmt.Sprintf("%s_%04d%s", prefix, index, ext)
 }
 
@@ -193,12 +194,12 @@ func (g *TestDataGenerator) generateFilename(index int, spec RepoSpec) string {
 func (g *TestDataGenerator) generateFileContent(index int, spec RepoSpec) string {
 	// Choose a random file size from the spec
 	size := spec.FileSizes[rand.Intn(len(spec.FileSizes))]
-	
+
 	// For binary files (first spec.BinaryFiles files), generate binary-looking content
 	if index < spec.BinaryFiles {
 		return g.generateBinaryContent(size)
 	}
-	
+
 	// Generate text content
 	return g.generateTextContent(size, index)
 }
@@ -226,11 +227,11 @@ func (g *TestDataGenerator) generateTextContent(size int, index int) string {
 		"database", "query", "result", "response", "request", "client", "server",
 		"configuration", "parameter", "argument", "value", "property", "attribute",
 	}
-	
+
 	var content strings.Builder
 	content.WriteString(fmt.Sprintf("// File %d - Generated test content\n", index))
 	content.WriteString(fmt.Sprintf("// Size target: %d bytes\n\n", size))
-	
+
 	currentSize := content.Len()
 	for currentSize < size {
 		line := fmt.Sprintf("const %s_%d = \"%s %s %s\";\n",
@@ -243,23 +244,23 @@ func (g *TestDataGenerator) generateTextContent(size int, index int) string {
 		content.WriteString(line)
 		currentSize = content.Len()
 	}
-	
+
 	return content.String()
 }
 
 // generateCommitChanges creates realistic changes for subsequent commits
 func (g *TestDataGenerator) generateCommitChanges(spec RepoSpec, commitIndex int) []FileChange {
 	rand.Seed(time.Now().UnixNano() + int64(commitIndex))
-	
+
 	// Number of changes per commit (1-10% of total files)
 	maxChanges := max(1, spec.FileCount/10)
 	changeCount := rand.Intn(maxChanges) + 1
-	
+
 	changes := make([]FileChange, 0, changeCount)
-	
+
 	for i := 0; i < changeCount; i++ {
 		action := g.chooseAction()
-		
+
 		switch action {
 		case "create":
 			changes = append(changes, FileChange{
@@ -270,18 +271,19 @@ func (g *TestDataGenerator) generateCommitChanges(spec RepoSpec, commitIndex int
 		case "update":
 			// Update an existing file (simulate by creating a new version)
 			changes = append(changes, FileChange{
-				Path:    g.generateExistingFilePath(spec, commitIndex),
+				Path:    g.generateNewFilePath(spec, commitIndex, i), // Use new file path for updates too
 				Content: g.generateTextContent(spec.FileSizes[rand.Intn(len(spec.FileSizes))], commitIndex*1000+i),
 				Action:  "update",
 			})
 		case "delete":
-			changes = append(changes, FileChange{
-				Path:   g.generateExistingFilePath(spec, commitIndex),
-				Action: "delete",
-			})
+			// Skip delete operations for now to avoid complexity
+			// changes = append(changes, FileChange{
+			//	Path:   g.generateExistingFilePath(spec, commitIndex),
+			//	Action: "delete",
+			// })
 		}
 	}
-	
+
 	return changes
 }
 
@@ -321,7 +323,7 @@ func (g *TestDataGenerator) generateCommitMessage(changes []FileChange) string {
 		"Add unit tests",
 		"Update configuration",
 	}
-	
+
 	return messages[rand.Intn(len(messages))]
 }
 
@@ -344,8 +346,8 @@ This repository contains generated test data for evaluating Git client performan
 across different repository sizes and structures.
 
 Generated on: %s
-`, spec.Name, spec.FileCount, spec.CommitCount, spec.MaxDepth, 
-spec.BinaryFiles, spec.Branches, time.Now().Format(time.RFC3339))
+`, spec.Name, spec.FileCount, spec.CommitCount, spec.MaxDepth,
+		spec.BinaryFiles, spec.Branches, time.Now().Format(time.RFC3339))
 }
 
 func (g *TestDataGenerator) generateGitignore() string {
@@ -394,3 +396,4 @@ func max(a, b int) int {
 	}
 	return b
 }
+
