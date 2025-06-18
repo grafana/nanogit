@@ -133,11 +133,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 		return nil, fmt.Errorf("get head tree for commit %s: %w", headCommit.String(), err)
 	}
 
-	changes, err := c.compareTrees(baseTree, headTree)
-	if err != nil {
-		return nil, fmt.Errorf("compare trees: %w", err)
-	}
-
+	changes := c.compareTrees(baseTree, headTree)
 	logger.Debug("Commits compared",
 		"base_hash", baseCommit.String(),
 		"head_hash", headCommit.String(),
@@ -153,7 +149,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 //
 // The function returns a sorted list of changes, with each change containing
 // the relevant file information and status.
-func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
+func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 	changes := make([]CommitFile, 0)
 
 	// Build maps for efficient lookup
@@ -208,7 +204,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) ([]CommitFile, error) {
 		return changes[i].Path < changes[j].Path
 	})
 
-	return changes, nil
+	return changes
 }
 
 // GetCommit retrieves a specific commit object from the repository by its hash.
@@ -435,9 +431,9 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 
 		commit, ok := objects[currentHash.String()]
 		if !ok || commit.Type != protocol.ObjectTypeCommit {
-			commit, ok = allObjects.Get(currentHash)
-			if !ok || commit.Type != protocol.ObjectTypeCommit {
-				return nil, fmt.Errorf("commit %s not found", currentHash.String())
+			commit, ok = allObjects.GetByType(currentHash, protocol.ObjectTypeCommit)
+			if !ok {
+				return nil, NewObjectNotFoundError(currentHash)
 			}
 		}
 
@@ -521,7 +517,7 @@ func (c *httpClient) commitMatchesFilters(ctx context.Context, commit *protocol.
 				"commit_hash", commit.Hash.String(),
 				"path", options.Path,
 				"error", err)
-			return false, nil
+			return false, fmt.Errorf("check path filter: %w", err)
 		}
 		if !affected {
 			logger.Debug("Commit filtered by path",
@@ -602,7 +598,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		"commitHash", commitHash.String(),
 		"path", path)
 
-	commit, ok := allObjects.Get(commitHash)
+	commit, ok := allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
 	if !ok {
 		logger.Debug("Commit not in storage, fetching", "commitHash", commitHash.String())
 		objects, err := c.Fetch(ctx, client.FetchOptions{
@@ -620,12 +616,8 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 
 		// Try to find it in the objects we got but if not, get it from the storage
 		commit, ok = objects[commitHash.String()]
-		if !ok || commit.Type != protocol.ObjectTypeCommit {
-			commit, ok = allObjects.Get(commitHash)
-			if !ok || commit.Type != protocol.ObjectTypeCommit {
-				logger.Debug("Commit not found", "commitHash", commitHash.String())
-				return hash.Zero, fmt.Errorf("commit %s not found", commitHash.String())
-			}
+		if !ok {
+			return hash.Zero, NewObjectNotFoundError(commitHash)
 		}
 	}
 
@@ -638,6 +630,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 
 	// If path is empty, return the tree hash
 	if path == "" {
+		// This should never happen with the current use of hashForPath
 		return treeHash, nil
 	}
 
@@ -645,20 +638,20 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	components := strings.Split(path, "/")
 	currentTree := tree
 
-	// Walk through each path component
-	for i, component := range components {
-		component = strings.TrimSpace(component)
+	// Walk through all components except the last one
+	for i := 0; i < len(components)-1; i++ {
+		component := strings.TrimSpace(components[i])
 		if component == "" {
 			return hash.Zero, errors.New("path component is empty")
 		}
 
 		// Find the entry in the current tree
-		var found bool
 		var entryHash hash.Hash
+		var found bool
 		for _, entry := range currentTree.Entries {
 			if entry.Name == component {
-				found = true
 				entryHash = entry.Hash
+				found = true
 				break
 			}
 		}
@@ -671,15 +664,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			return hash.Zero, nil
 		}
 
-		// If this is the last component, return its hash
-		if i == len(components)-1 {
-			logger.Debug("Found hash for path",
-				"path", path,
-				"hash", entryHash.String())
-			return entryHash, nil
-		}
-
-		// Otherwise, get the next tree
+		// Get the next tree for the next iteration
 		nextTree, err := c.GetTree(ctx, entryHash)
 		if err != nil {
 			logger.Debug("Failed to get next tree",
@@ -692,5 +677,25 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		currentTree = nextTree
 	}
 
+	// Handle the final component
+	finalComponent := strings.TrimSpace(components[len(components)-1])
+	if finalComponent == "" {
+		return hash.Zero, errors.New("path component is empty")
+	}
+
+	// Find the final entry in the current tree
+	for _, entry := range currentTree.Entries {
+		if entry.Name == finalComponent {
+			logger.Debug("Found hash for path",
+				"path", path,
+				"hash", entry.Hash.String())
+			return entry.Hash, nil
+		}
+	}
+
+	// Final component not found
+	logger.Debug("Final path component not found",
+		"component", finalComponent,
+		"fullPath", path)
 	return hash.Zero, nil
 }

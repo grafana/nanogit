@@ -115,6 +115,22 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(otherContent).NotTo(Equal(newContent))
 		})
+		It("should fail to create a file if it already exists", func() {
+			client, _, local, _ := QuickSetup()
+			fileName := "test.txt"
+			originalContent := []byte("original content")
+			// Ensure the file exists in the repo
+			local.CreateFile(fileName, string(originalContent))
+			local.Git("add", fileName)
+			local.Git("commit", "-m", "Add test.txt")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+			// Try to create the same file again
+			_, err := writer.CreateBlob(ctx, fileName, []byte("new content"))
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectAlreadyExists))
+		})
 
 		It("should create a nested file", func() {
 			client, _, local, _ := QuickSetup()
@@ -164,6 +180,11 @@ var _ = Describe("Writer Operations", func() {
 			Expect(subdirTree.Entries[0].Type).To(Equal(protocol.ObjectTypeBlob))
 			Expect(subdirTree.Entries[0].Mode).To(Equal(uint32(0o100644)))
 
+			// Verify GetTree fails for a file
+			_, err = writer.GetTree(ctx, "dir/subdir/file.txt")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrUnexpectedObjectType)).To(BeTrue())
+
 			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
@@ -205,6 +226,19 @@ var _ = Describe("Writer Operations", func() {
 			_, err := client.NewStagedWriter(ctx, nanogit.Ref{Name: "refs/heads/nonexistent", Hash: hash.Zero})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
+		})
+		It("should return ErrEmptyPath for BlobExists and CreateBlob if path is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			exists, err := writer.BlobExists(ctx, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrEmptyPath))
+			Expect(exists).To(BeFalse())
+
+			_, err = writer.CreateBlob(ctx, "", []byte("test"))
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrEmptyPath))
 		})
 	})
 
@@ -255,6 +289,14 @@ var _ = Describe("Writer Operations", func() {
 			otherContent, err := os.ReadFile(filepath.Join(local.Path, "initial.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(otherContent).NotTo(Equal(updatedContent))
+		})
+		It("should fail with ErrEmptyPath if the path is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.UpdateBlob(ctx, "", []byte("some content"))
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrEmptyPath)).To(BeTrue())
 		})
 
 		It("should update a nested file", func() {
@@ -408,6 +450,31 @@ var _ = Describe("Writer Operations", func() {
 
 			verifyCommitAuthorship(local)
 		})
+		It("should fail with ErrEmptyPath if the path is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.DeleteBlob(ctx, "")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrEmptyPath)).To(BeTrue())
+		})
+
+		It("should fail with ErrUnexpectedObjectType if trying to delete a tree as a blob", func() {
+			client, _, local, _ := QuickSetup()
+			local.CreateDirPath("dir")
+			local.CreateFile("dir/file.txt", "file content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add directory and file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Try to delete the directory as if it were a blob
+			_, err := writer.DeleteBlob(ctx, "dir")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrUnexpectedObjectType)).To(BeTrue())
+		})
 
 		It("should handle deleting missing file", func() {
 			client, _, local, _ := QuickSetup()
@@ -472,6 +539,100 @@ var _ = Describe("Writer Operations", func() {
 	})
 
 	Context("Delete Tree Operations", func() {
+		It("should delete the entire tree with empty path", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit initial files and directories
+			local.CreateFile("file1.txt", "file 1 content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/file2.txt", "file 2 content")
+			local.CreateFile("dir/subdir/file3.txt", "file 3 content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files and directories")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			commitMsg := "Delete entire tree (empty path)"
+
+			// Delete the entire tree by passing empty path
+			treeHash, err := writer.DeleteTree(ctx, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo
+			local.Git("pull")
+
+			// The repository should now be empty (no files or directories except .git)
+			files, err := os.ReadDir(local.Path)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Only .git directory should remain
+			var nonGitFiles []string
+			for _, f := range files {
+				if f.Name() != ".git" {
+					nonGitFiles = append(nonGitFiles, f.Name())
+				}
+			}
+			Expect(nonGitFiles).To(BeEmpty())
+
+			verifyCommitAuthorship(local)
+		})
+		It("should delete the entire tree with dot path", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit initial files and directories
+			local.CreateFile("file1.txt", "file 1 content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/file2.txt", "file 2 content")
+			local.CreateFile("dir/subdir/file3.txt", "file 3 content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files and directories")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			commitMsg := "Delete entire tree (dot path)"
+
+			// Delete the entire tree by passing dot path
+			treeHash, err := writer.DeleteTree(ctx, ".")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo
+			local.Git("pull")
+
+			// The repository should now be empty (no files or directories except .git)
+			files, err := os.ReadDir(local.Path)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Only .git directory should remain
+			var nonGitFiles []string
+			for _, f := range files {
+				if f.Name() != ".git" {
+					nonGitFiles = append(nonGitFiles, f.Name())
+				}
+			}
+			Expect(nonGitFiles).To(BeEmpty())
+
+			verifyCommitAuthorship(local)
+		})
 		It("should delete a tree structure containing files", func() {
 			client, _, local, _ := QuickSetup()
 			initCommitFile := "test.txt"
@@ -1158,6 +1319,481 @@ var _ = Describe("Writer Operations", func() {
 				Expect(commit3Files).To(ContainSubstring("file3.txt"))
 				Expect(commit3Files).To(ContainSubstring(initCommitFile))
 			})
+		})
+	})
+	Context("Commit Operations", func() {
+		It("should fail to commit if the tree is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.Commit(ctx, "Empty commit", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+		})
+		It("should fail to commit if the message is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrEmptyCommitMessage))
+		})
+
+		It("should fail to commit if the author is missing email", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			author := testAuthor
+			author.Email = ""
+			_, err = writer.Commit(ctx, "Missing author email", author, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrInvalidAuthor))
+		})
+
+		It("should fail to commit if the author is missing name", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			author := testAuthor
+			author.Name = ""
+			_, err = writer.Commit(ctx, "Missing author name", author, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
+		})
+
+		It("should fail to commit if the committer is missing email", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			committer := testCommitter
+			committer.Email = ""
+			_, err = writer.Commit(ctx, "Missing committer email", testAuthor, committer)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
+		})
+
+		It("should fail to commit if the committer is missing name", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			committer := testCommitter
+			committer.Name = ""
+			_, err = writer.Commit(ctx, "Missing committer name", testAuthor, committer)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
+		})
+
+		It("should update only the relevant branch of the tree when updating a deep file", func() {
+			client, _, local, _ := QuickSetup()
+			// Create a deeper nested directory structure:
+			// root/
+			//   dir1/
+			//     subdir1/
+			//       file1.txt
+			//   dir2/
+			//     subdir2/
+			//       file2.txt
+			//   file3.txt
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir2/subdir2")
+			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
+			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
+			local.CreateFile("file3.txt", "original file3")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial deep nested commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Get the tree hashes before update
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Update a deep file: dir1/subdir1/file1.txt
+			newContent := []byte("updated file1 content")
+			_, err := writer.UpdateBlob(ctx, "dir1/subdir1/file1.txt", newContent)
+			Expect(err).NotTo(HaveOccurred())
+
+			commitMsg := "Update dir1/subdir1/file1.txt"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo to verify
+			local.Git("pull", "origin", "main")
+
+			// Get the tree hashes after update
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Only the relevant branch (dir1/subdir1) should have changed
+			Expect(subdir1TreeHashAfter).NotTo(Equal(subdir1TreeHashBefore))
+			Expect(dir1TreeHashAfter).NotTo(Equal(dir1TreeHashBefore))
+			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
+			Expect(subdir2TreeHashAfter).To(Equal(subdir2TreeHashBefore))
+			Expect(dir2TreeHashAfter).To(Equal(dir2TreeHashBefore))
+
+			// file3.txt should be unchanged
+			content, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file3"))
+
+			// dir2/subdir2/file2.txt should be unchanged
+			content, err = os.ReadFile(filepath.Join(local.Path, "dir2/subdir2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file2"))
+
+			// dir1/subdir1/file1.txt should be updated
+			content, err = os.ReadFile(filepath.Join(local.Path, "dir1/subdir1/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("updated file1 content"))
+		})
+		It("should delete a file deep in the tree and only update relevant trees", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Setup: create a deep directory structure with files
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir2/subdir2")
+			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
+			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
+			local.CreateFile("file3.txt", "original file3")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with deep structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Get the tree hashes before deletion
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Delete a deep file: dir1/subdir1/file1.txt
+			_, err := writer.DeleteBlob(ctx, "dir1/subdir1/file1.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			commitMsg := "Delete dir1/subdir1/file1.txt"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo to verify
+			local.Git("pull", "origin", "main")
+
+			// Get the tree hashes after deletion
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Only the relevant branch (dir1/subdir1) should have changed
+			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
+			Expect(subdir1TreeHashAfter).NotTo(Equal(subdir1TreeHashBefore))
+			Expect(dir1TreeHashAfter).NotTo(Equal(dir1TreeHashBefore))
+			Expect(subdir2TreeHashAfter).To(Equal(subdir2TreeHashBefore))
+			Expect(dir2TreeHashAfter).To(Equal(dir2TreeHashBefore))
+
+			// file3.txt should be unchanged
+			content, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file3"))
+
+			// dir2/subdir2/file2.txt should be unchanged
+			content, err = os.ReadFile(filepath.Join(local.Path, "dir2/subdir2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file2"))
+
+			// dir1/subdir1/file1.txt should be deleted
+			_, err = os.Stat(filepath.Join(local.Path, "dir1/subdir1/file1.txt"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+		It("should create a file deep in nested directories and only update relevant trees", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Setup: create a multi-level directory structure
+			local.CreateDirPath("dirA/dirB")
+			local.CreateDirPath("dirC/dirD")
+			local.CreateFile("dirA/dirB/fileA.txt", "original A")
+			local.CreateFile("dirC/dirD/fileC.txt", "original C")
+			local.CreateFile("rootfile.txt", "root content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial nested structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Get tree hashes before
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dirAHashBefore := local.Git("rev-parse", "HEAD:dirA")
+			dirBHashBefore := local.Git("rev-parse", "HEAD:dirA/dirB")
+			dirCHashBefore := local.Git("rev-parse", "HEAD:dirC")
+			dirDHashBefore := local.Git("rev-parse", "HEAD:dirC/dirD")
+
+			// Create a new file deep in dirA/dirB
+			newFilePath := "dirA/dirB/newdeep.txt"
+			newContent := []byte("deep content")
+			blobHash, err := writer.CreateBlob(ctx, newFilePath, newContent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blobHash).NotTo(BeNil())
+
+			commitMsg := "Add deep file"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo to verify
+			local.Git("pull", "origin", "main")
+
+			commitHash := local.Git("rev-parse", "HEAD")
+			Expect(commitHash).To(Equal(commit.Hash.String()))
+
+			// Get tree hashes after
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dirAHashAfter := local.Git("rev-parse", "HEAD:dirA")
+			dirBHashAfter := local.Git("rev-parse", "HEAD:dirA/dirB")
+			dirCHashAfter := local.Git("rev-parse", "HEAD:dirC")
+			dirDHashAfter := local.Git("rev-parse", "HEAD:dirC/dirD")
+
+			// Only the relevant branch (dirA/dirB) and its parents should have changed
+			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
+			Expect(dirBHashAfter).NotTo(Equal(dirBHashBefore))
+			Expect(dirAHashAfter).NotTo(Equal(dirAHashBefore))
+			Expect(dirCHashAfter).To(Equal(dirCHashBefore))
+			Expect(dirDHashAfter).To(Equal(dirDHashBefore))
+
+			// The new file should exist with correct content
+			content, err := os.ReadFile(filepath.Join(local.Path, newFilePath))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(newContent))
+
+			// Unrelated files should be unchanged
+			content, err = os.ReadFile(filepath.Join(local.Path, "dirC/dirD/fileC.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original C"))
+
+			content, err = os.ReadFile(filepath.Join(local.Path, "dirA/dirB/fileA.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original A"))
+
+			content, err = os.ReadFile(filepath.Join(local.Path, "rootfile.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("root content"))
+		})
+	})
+
+	Describe("Empty tree repository", func() {
+		var (
+			writer nanogit.StagedWriter
+			local  *LocalGitRepo
+		)
+
+		BeforeEach(func() {
+			var client nanogit.Client
+			client, _, local, _ = QuickSetup()
+			// Remove all commits from the main branch in the local repository.
+			// This is done by creating an orphan branch and force-updating main to point to it.
+			// This simulates an "empty" repository state for the main branch.
+			// Create an empty tree object, commit it, and update the main ref.
+			local.Git("checkout", "--orphan", "someorphan")
+			emptyTreeHash := local.Git("mktree") // No input = empty tree
+			commitHash := local.Git("commit-tree", emptyTreeHash, "-m", "Empty commit")
+			local.Git("update-ref", "refs/heads/main", commitHash)
+			local.Git("push", "origin", "main", "--force")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			writer, err = client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should not find any blobs in an empty repository", func() {
+			exists, err := writer.BlobExists(ctx, "text.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("should fail to commit if there are no staged changes", func() {
+			_, err := writer.Commit(ctx, "Empty commit", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToCommit))
+		})
+
+		It("should fail to push if there are no staged objects", func() {
+			err := writer.Push(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToPush))
+		})
+		It("should create a new tree when creating a file in an empty repository", func() {
+			fileName := "hello.txt"
+			content := []byte("Hello, world!")
+
+			// The file should not exist yet
+			exists, err := writer.BlobExists(ctx, fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+
+			// Create the blob
+			_, err = writer.CreateBlob(ctx, fileName, content)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now the blob should exist
+			exists, err = writer.BlobExists(ctx, fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Commit the change
+			commitMsg := "Add hello.txt to empty repo"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			// Push the commit
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull and verify the file exists in the local repo
+			local.Git("pull", "origin", "main")
+			filePath := filepath.Join(local.Path, fileName)
+			readContent, err := os.ReadFile(filePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(readContent).To(Equal(content))
+
+			// The tree for the root should now contain the file
+			treeHash := local.Git("rev-parse", "HEAD^{tree}")
+			Expect(treeHash).NotTo(BeEmpty())
+			lsTree := local.Git("ls-tree", "--name-only", treeHash)
+			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
+		})
+	})
+
+	Describe("Empty branch repository", func() {
+		var (
+			writer nanogit.StagedWriter
+			local  *LocalGitRepo
+		)
+
+		BeforeEach(func() {
+			var client nanogit.Client
+			client, _, local, _ = QuickSetup()
+			// Delete the branch on the remote and locally, then recreate it as an orphan (no history).
+			local.Git("checkout", "--orphan", "temp-empty-branch")
+			local.Git("rm", "-rf", ".")
+			local.Git("commit", "--allow-empty", "-m", "Empty commit")
+			local.Git("branch", "-D", "main")
+			local.Git("branch", "-m", "main")
+			local.Git("push", "origin", "--force", "--set-upstream", "main")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
+			Expect(err).NotTo(HaveOccurred())
+
+			ref := nanogit.Ref{
+				Name: "refs/heads/main",
+				Hash: currentHash,
+			}
+
+			writer, err = client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should not find any blobs in an empty repository", func() {
+			exists, err := writer.BlobExists(ctx, "text.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("should fail to commit if there are no staged changes", func() {
+			_, err := writer.Commit(ctx, "Empty commit", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToCommit))
+		})
+
+		It("should fail to push if there are no staged objects", func() {
+			err := writer.Push(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrNothingToPush))
+		})
+		It("should create a new tree when creating a file in an empty repository", func() {
+			fileName := "hello.txt"
+			content := []byte("Hello, world!")
+
+			// The file should not exist yet
+			exists, err := writer.BlobExists(ctx, fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+
+			// Create the blob
+			_, err = writer.CreateBlob(ctx, fileName, content)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now the blob should exist
+			exists, err = writer.BlobExists(ctx, fileName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Commit the change
+			commitMsg := "Add hello.txt to empty repo"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			// Push the commit
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull and verify the file exists in the local repo
+			local.Git("pull", "origin", "main")
+			filePath := filepath.Join(local.Path, fileName)
+			readContent, err := os.ReadFile(filePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(readContent).To(Equal(content))
+
+			// The tree for the root should now contain the file
+			treeHash := local.Git("rev-parse", "HEAD^{tree}")
+			Expect(treeHash).NotTo(BeEmpty())
+			lsTree := local.Git("ls-tree", "--name-only", treeHash)
+			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
 		})
 	})
 })

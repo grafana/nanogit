@@ -43,6 +43,20 @@ type FakePackfileStorage struct {
 	getAllKeysReturnsOnCall map[int]struct {
 		result1 []hash.Hash
 	}
+	GetByTypeStub        func(hash.Hash, protocol.ObjectType) (*protocol.PackfileObject, bool)
+	getByTypeMutex       sync.RWMutex
+	getByTypeArgsForCall []struct {
+		arg1 hash.Hash
+		arg2 protocol.ObjectType
+	}
+	getByTypeReturns struct {
+		result1 *protocol.PackfileObject
+		result2 bool
+	}
+	getByTypeReturnsOnCall map[int]struct {
+		result1 *protocol.PackfileObject
+		result2 bool
+	}
 	LenStub        func() int
 	lenMutex       sync.RWMutex
 	lenArgsForCall []struct {
@@ -238,6 +252,71 @@ func (fake *FakePackfileStorage) GetAllKeysReturnsOnCall(i int, result1 []hash.H
 	}{result1}
 }
 
+func (fake *FakePackfileStorage) GetByType(arg1 hash.Hash, arg2 protocol.ObjectType) (*protocol.PackfileObject, bool) {
+	fake.getByTypeMutex.Lock()
+	ret, specificReturn := fake.getByTypeReturnsOnCall[len(fake.getByTypeArgsForCall)]
+	fake.getByTypeArgsForCall = append(fake.getByTypeArgsForCall, struct {
+		arg1 hash.Hash
+		arg2 protocol.ObjectType
+	}{arg1, arg2})
+	stub := fake.GetByTypeStub
+	fakeReturns := fake.getByTypeReturns
+	fake.recordInvocation("GetByType", []interface{}{arg1, arg2})
+	fake.getByTypeMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakePackfileStorage) GetByTypeCallCount() int {
+	fake.getByTypeMutex.RLock()
+	defer fake.getByTypeMutex.RUnlock()
+	return len(fake.getByTypeArgsForCall)
+}
+
+func (fake *FakePackfileStorage) GetByTypeCalls(stub func(hash.Hash, protocol.ObjectType) (*protocol.PackfileObject, bool)) {
+	fake.getByTypeMutex.Lock()
+	defer fake.getByTypeMutex.Unlock()
+	fake.GetByTypeStub = stub
+}
+
+func (fake *FakePackfileStorage) GetByTypeArgsForCall(i int) (hash.Hash, protocol.ObjectType) {
+	fake.getByTypeMutex.RLock()
+	defer fake.getByTypeMutex.RUnlock()
+	argsForCall := fake.getByTypeArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakePackfileStorage) GetByTypeReturns(result1 *protocol.PackfileObject, result2 bool) {
+	fake.getByTypeMutex.Lock()
+	defer fake.getByTypeMutex.Unlock()
+	fake.GetByTypeStub = nil
+	fake.getByTypeReturns = struct {
+		result1 *protocol.PackfileObject
+		result2 bool
+	}{result1, result2}
+}
+
+func (fake *FakePackfileStorage) GetByTypeReturnsOnCall(i int, result1 *protocol.PackfileObject, result2 bool) {
+	fake.getByTypeMutex.Lock()
+	defer fake.getByTypeMutex.Unlock()
+	fake.GetByTypeStub = nil
+	if fake.getByTypeReturnsOnCall == nil {
+		fake.getByTypeReturnsOnCall = make(map[int]struct {
+			result1 *protocol.PackfileObject
+			result2 bool
+		})
+	}
+	fake.getByTypeReturnsOnCall[i] = struct {
+		result1 *protocol.PackfileObject
+		result2 bool
+	}{result1, result2}
+}
+
 func (fake *FakePackfileStorage) Len() int {
 	fake.lenMutex.Lock()
 	ret, specificReturn := fake.lenReturnsOnCall[len(fake.lenArgsForCall)]
@@ -302,6 +381,8 @@ func (fake *FakePackfileStorage) Invocations() map[string][][]interface{} {
 	defer fake.getMutex.RUnlock()
 	fake.getAllKeysMutex.RLock()
 	defer fake.getAllKeysMutex.RUnlock()
+	fake.getByTypeMutex.RLock()
+	defer fake.getByTypeMutex.RUnlock()
 	fake.lenMutex.RLock()
 	defer fake.lenMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

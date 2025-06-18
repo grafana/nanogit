@@ -188,6 +188,12 @@ func TestGetRef(t *testing.T) {
 			expectedError: nil, // We'll check for structured error type
 		},
 		{
+			name:          "empty ref line",
+			refToGet:      "",
+			expectedRef:   Ref{},
+			expectedError: ErrEmptyRefName, // We'll check for error or empty result
+		},
+		{
 			name:          "ls-refs request fails",
 			lsRefsResp:    "",
 			refToGet:      "refs/heads/master",
@@ -295,6 +301,15 @@ func TestCreateRef(t *testing.T) {
 			},
 			refExists:     true,
 			expectedError: "reference already exists: refs/heads/main",
+		},
+		{
+			name: "empty ref name",
+			refToCreate: Ref{
+				Name: "",
+				Hash: hashify("1234567890123456789012345678901234567890"),
+			},
+			refExists:     false,
+			expectedError: ErrEmptyRefName.Error(),
 		},
 		{
 			name: "ls-refs request fails",
@@ -437,6 +452,15 @@ func TestUpdateRef(t *testing.T) {
 			expectedError: "reference not found: refs/heads/non-existent",
 		},
 		{
+			name: "empty ref name",
+			refToUpdate: Ref{
+				Name: "",
+				Hash: hashify("1234567890123456789012345678901234567890"),
+			},
+			refExists:     false,
+			expectedError: ErrEmptyRefName.Error(),
+		},
+		{
 			name: "ls-refs request fails",
 			refToUpdate: Ref{
 				Name: "refs/heads/main",
@@ -571,6 +595,12 @@ func TestDeleteRef(t *testing.T) {
 			refToDelete:   "refs/heads/non-existent",
 			refExists:     false,
 			expectedError: "reference not found: refs/heads/non-existent",
+		},
+		{
+			name:          "empty ref name",
+			refToDelete:   "",
+			refExists:     false,
+			expectedError: ErrEmptyRefName.Error(),
 		},
 		{
 			name:          "ls-refs request fails",

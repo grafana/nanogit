@@ -2,7 +2,9 @@ package nanogit
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/grafana/nanogit/log"
@@ -105,26 +107,26 @@ func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*Fl
 
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
-	allTreeObjects, treeHash, err := c.fetchAllTreeObjects(ctx, commitHash)
+	allTreeObjects, rootTree, err := c.fetchAllTreeObjects(ctx, commitHash)
 	if err != nil {
 		return nil, fmt.Errorf("fetch tree objects for commit %s: %w", commitHash.String(), err)
 	}
 
-	flatTree, err := c.flatten(ctx, treeHash, allTreeObjects)
+	flatTree, err := c.flatten(ctx, rootTree, allTreeObjects)
 	if err != nil {
-		return nil, fmt.Errorf("flatten tree %s: %w", treeHash.String(), err)
+		return nil, fmt.Errorf("flatten tree %s: %w", rootTree.Hash.String(), err)
 	}
 
 	logger.Debug("Flat tree retrieved",
 		"commit_hash", commitHash.String(),
-		"tree_hash", treeHash.String(),
+		"tree_hash", rootTree.Hash.String(),
 		"entry_count", len(flatTree.Entries))
 	return flatTree, nil
 }
 
 // fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
 // an initial request and iteratively fetching missing tree objects in batches.
-func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Hash) (storage.PackfileStorage, hash.Hash, error) {
+func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Hash) (storage.PackfileStorage, *protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Fetch tree objects",
 		"commit_hash", commitHash.String())
@@ -146,19 +148,19 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	if err != nil {
 		// TODO: handle this at the client level
 		if strings.Contains(err.Error(), "not our ref") {
-			return nil, hash.Zero, NewObjectNotFoundError(commitHash)
+			return nil, nil, NewObjectNotFoundError(commitHash)
 		}
 
-		return nil, hash.Zero, fmt.Errorf("fetch commit tree %s: %w", commitHash.String(), err)
+		return nil, nil, fmt.Errorf("fetch commit tree %s: %w", commitHash.String(), err)
 	}
 
 	commitObj, exists := initialObjects[commitHash.String()]
 	if !exists {
-		return nil, hash.Zero, NewObjectNotFoundError(commitHash)
+		return nil, nil, NewObjectNotFoundError(commitHash)
 	}
 
 	if commitObj.Type != protocol.ObjectTypeCommit {
-		return nil, hash.Zero, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
+		return nil, nil, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
 	}
 
 	totalObjectsFetched = len(initialObjects)
@@ -187,15 +189,15 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		"blob_count", blobCount,
 		"other_count", otherCount)
 
-	tree, treeHash, err := c.findRootTree(ctx, commitHash, allObjects)
+	rootTree, err := c.findRootTree(ctx, commitHash, allObjects)
 	if err != nil {
-		return nil, hash.Zero, fmt.Errorf("find root tree for commit %s: %w", commitHash.String(), err)
+		return nil, nil, fmt.Errorf("find root tree for commit %s: %w", commitHash.String(), err)
 	}
 
 	pending := []hash.Hash{}
 	retries := []hash.Hash{}
-	if tree == nil {
-		pending = append(pending, treeHash)
+	if rootTree == nil {
+		pending = append(pending, commitObj.Commit.Tree)
 	}
 
 	processedTrees := make(map[string]bool)
@@ -203,7 +205,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 
 	pending, err = c.collectMissingTreeHashes(ctx, initialObjects, allObjects, pending, processedTrees, requestedHashes)
 	if err != nil {
-		return nil, hash.Zero, fmt.Errorf("collect missing trees: %w", err)
+		return nil, nil, fmt.Errorf("collect missing trees: %w", err)
 	}
 
 	logger.Debug("Initial tree analysis completed",
@@ -230,7 +232,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 				"retry_count", len(retries),
 				"processed_count", len(processedTrees),
 				"total_objects", allObjects.Len())
-			return nil, hash.Zero, fmt.Errorf("exceeded maximum batch limit (%d), possible infinite loop", maxBatches)
+			return nil, nil, fmt.Errorf("exceeded maximum batch limit (%d), possible infinite loop", maxBatches)
 		}
 
 		var currentBatch []hash.Hash
@@ -271,7 +273,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 			Done:         true,
 		})
 		if err != nil {
-			return nil, hash.Zero, fmt.Errorf("fetch tree batch: %w", err)
+			return nil, nil, fmt.Errorf("fetch tree batch: %w", err)
 		}
 
 		totalObjectsFetched += len(objects)
@@ -304,7 +306,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 					"hash", hashStr,
 					"max_retries", maxRetries,
 					"total_requests", totalRequests)
-				return nil, hash.Zero, fmt.Errorf("object %s not returned after %d attempts: %w", hashStr, maxRetries, ErrObjectNotFound)
+				return nil, nil, fmt.Errorf("object %s not returned after %d attempts: %w", hashStr, maxRetries, ErrObjectNotFound)
 			}
 
 			if !requestedHashes[hashStr] {
@@ -315,7 +317,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 
 		pending, err = c.collectMissingTreeHashes(ctx, objects, allObjects, pending, processedTrees, requestedHashes)
 		if err != nil {
-			return nil, hash.Zero, fmt.Errorf("collect missing trees from batch: %w", err)
+			return nil, nil, fmt.Errorf("collect missing trees from batch: %w", err)
 		}
 	}
 
@@ -325,7 +327,7 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		"total_objects", totalObjectsFetched,
 		"total_batches", batchNumber)
 
-	return allObjects, treeHash, nil
+	return allObjects, rootTree, nil
 }
 
 // collectMissingTreeHashes processes tree objects and collects missing child tree hashes.
@@ -339,18 +341,6 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 	// Mark current pending hashes as requested
 	for _, h := range pending {
 		requestedHashes[h.String()] = true
-	}
-
-	// We could have the children of the trees we already have, so we need to add them to the allObjects map
-	for _, obj := range objects {
-		if obj.Type != protocol.ObjectTypeTree {
-			continue
-		}
-
-		// Skip if we've already processed this tree for dependencies
-		if processedTrees[obj.Hash.String()] {
-			continue
-		}
 	}
 
 	for _, obj := range objects {
@@ -367,18 +357,18 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 		processedTrees[obj.Hash.String()] = true
 
 		for _, entry := range obj.Tree {
+			// If it's a file, we can ignore it
+			if entry.FileMode&0o40000 == 0 {
+				continue
+			}
+
 			entryHash, err := hash.FromHex(entry.Hash)
 			if err != nil {
 				return nil, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
 			}
 
 			// Skip if we already have this object
-			if _, exists := allObjects.Get(entryHash); exists {
-				continue
-			}
-
-			// If it's a file, we can ignore it
-			if entry.FileMode&0o40000 == 0 {
+			if _, exists := allObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
 				continue
 			}
 
@@ -387,13 +377,7 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 				continue
 			}
 
-			// If it's a directory, we need to add it to the pending list
-			childHash, err := hash.FromHex(entry.Hash)
-			if err != nil {
-				return nil, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
-			}
-
-			pending = append(pending, childHash)
+			pending = append(pending, entryHash)
 			requestedHashes[entry.Hash] = true
 			newTreesFound++
 		}
@@ -411,55 +395,37 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 
 // findRootTree locates the root tree object from the target hash and available objects.
 // It handles both commit and tree target objects, extracting the tree hash and object as needed.
-func (c *httpClient) findRootTree(ctx context.Context, targetHash hash.Hash, allObjects storage.PackfileStorage) (*protocol.PackfileObject, hash.Hash, error) {
+func (c *httpClient) findRootTree(ctx context.Context, commitHash hash.Hash, allObjects storage.PackfileStorage) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	// Find our target object in the response
-	obj, exists := allObjects.Get(targetHash)
+	obj, exists := allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
 	if !exists {
-		return nil, hash.Zero, NewObjectNotFoundError(targetHash)
+		return nil, NewObjectNotFoundError(commitHash)
 	}
 
-	var tree *protocol.PackfileObject
-	var treeHash hash.Hash
-
-	if obj.Type == protocol.ObjectTypeCommit {
-		// Extract tree hash from commit
-		var err error
-		treeHash, err = hash.FromHex(obj.Commit.Tree.String())
-		if err != nil {
-			return nil, hash.Zero, fmt.Errorf("parsing tree hash: %w", err)
-		}
-
-		// Check if the tree object is already in our available objects
-		if treeObj, exists := allObjects.Get(treeHash); exists {
-			tree = treeObj
-		} else {
-			// Tree not in available objects, we'll fetch it later
-			tree = nil
-		}
-
-		logger.Debug("resolved commit to tree",
-			"commit_hash", targetHash.String(),
-			"tree_hash", treeHash.String(),
-			"tree_available", tree != nil)
-	} else {
-		return nil, hash.Zero, NewUnexpectedObjectTypeError(targetHash, protocol.ObjectTypeCommit, obj.Type)
+	// Extract tree hash from commit
+	treeHash, err := hash.FromHex(obj.Commit.Tree.String())
+	if err != nil {
+		return nil, fmt.Errorf("parsing tree hash: %w", err)
 	}
 
-	return tree, treeHash, nil
+	// Check if the tree object is already in our available objects
+	treeObj, exists := allObjects.GetByType(treeHash, protocol.ObjectTypeTree)
+	if !exists {
+		return nil, NewObjectNotFoundError(treeHash)
+	}
+
+	logger.Debug("resolved commit to tree",
+		"commit_hash", commitHash.String(),
+		"tree_hash", treeHash.String(),
+		"tree_available", treeObj != nil)
+
+	return treeObj, nil
 }
 
 // flatten converts collected tree objects into a flat tree structure using breadth-first traversal.
-func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
+func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Flatten tree", "treeHash", treeHash.String())
-
-	// Get the root tree object
-	rootTree, exists := allTreeObjects.Get(treeHash)
-	if !exists {
-		logger.Debug("Root tree not found", "treeHash", treeHash.String())
-		return nil, fmt.Errorf("root tree %s not found in collected objects", treeHash.String())
-	}
+	logger.Debug("Flatten tree", "treeHash", rootTree.Hash.String())
 
 	// Build flat entries iteratively using breadth-first traversal
 	var entries []FlatTreeEntry
@@ -511,7 +477,7 @@ func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObj
 
 			// If this is a tree, add it to the queue for processing
 			if entryType == protocol.ObjectTypeTree {
-				childTree, exists := allTreeObjects.Get(entryHash)
+				childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree)
 				if !exists {
 					logger.Debug("Child tree not found",
 						"hash", entry.Hash,
@@ -530,12 +496,16 @@ func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObj
 			"processedEntries", len(entries))
 	}
 
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Path < entries[j].Path
+	})
+
 	logger.Debug("Tree flattening completed",
-		"treeHash", treeHash.String(),
+		"treeHash", rootTree.Hash.String(),
 		"totalEntries", len(entries))
 	return &FlatTree{
 		Entries: entries,
-		Hash:    treeHash,
+		Hash:    rootTree.Hash,
 	}, nil
 }
 
@@ -696,8 +666,8 @@ func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
 //	    fmt.Printf("%s\n", entry.Name)
 //	}
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
+	// If the path is "." or empty, return the root tree
 	if path == "" || path == "." {
-		// Return the root tree
 		return c.GetTree(ctx, rootHash)
 	}
 
@@ -712,9 +682,11 @@ func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path
 	currentHash := rootHash
 
 	for i, part := range parts {
+		part = strings.TrimSpace(part)
 		if part == "" {
-			continue
+			return nil, errors.New("path component is empty")
 		}
+
 		currentPath := strings.Join(parts[:i+1], "/")
 
 		logger.Debug("Navigate directory",

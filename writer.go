@@ -599,10 +599,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
-	if len(pathParts) == 0 {
-		return errors.New("empty path")
-	}
-
 	// Get the file name and directory parts
 	fileName := pathParts[len(pathParts)-1]
 	dirParts := pathParts[:len(pathParts)-1]
@@ -651,7 +647,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Mode: 0o40000,
 			}
 		} else {
-			existingTree, ok := w.objStorage.Get(existingObj.Hash)
+			existingTree, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
 			if !ok {
 				return fmt.Errorf("get existing tree %s: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 			}
@@ -711,26 +707,18 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 // Returns:
 //   - *protocol.PackfileObject: New tree object with the updated entry
 //   - error: Error if tree creation fails
-func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
+func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Update tree entry",
 		"fileName", current.FileName,
 		"fileMode", fmt.Sprintf("%o", current.FileMode),
 	)
 
-	if obj == nil {
-		return nil, errors.New("object is nil")
-	}
-
-	if obj.Type != protocol.ObjectTypeTree {
-		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
-	}
-
 	// Create a new slice for the updated entries
-	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree))
+	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(treeObj.Tree))
 
 	// Add all entries except the one we're updating
-	for _, entry := range obj.Tree {
+	for _, entry := range treeObj.Tree {
 		if entry.FileName != current.FileName {
 			combinedEntries = append(combinedEntries, entry)
 		}
@@ -738,7 +726,6 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.Packfi
 
 	// Add the new/updated entry
 	combinedEntries = append(combinedEntries, current)
-
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {
 		return nil, fmt.Errorf("build tree object: %w", err)
@@ -749,7 +736,7 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, obj *protocol.Packfi
 
 	logger.Debug("Tree entry updated",
 		"fileName", current.FileName,
-		"oldEntryCount", len(obj.Tree),
+		"oldEntryCount", len(treeObj.Tree),
 		"newEntryCount", len(combinedEntries),
 		"newHash", newObj.Hash.String())
 
@@ -807,7 +794,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
-		treeObj, ok := w.objStorage.Get(existingObj.Hash)
+		treeObj, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
 		if !ok {
 			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 		}
@@ -882,10 +869,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
-	if len(pathParts) == 0 {
-		return errors.New("empty path")
-	}
-
 	// Get the directory name and parent directory parts
 	dirName := pathParts[len(pathParts)-1]
 	parentParts := pathParts[:len(pathParts)-1]
@@ -920,7 +903,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
 
-		treeObj, ok := w.objStorage.Get(existingObj.Hash)
+		treeObj, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
 		if !ok {
 			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
 		}
@@ -998,30 +981,18 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 //   - error: Error if tree creation fails
 //
 // Note: If the target entry is not found, the original object is returned unchanged.
-func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
+func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	var treeHash string
-	if obj != nil {
-		treeHash = obj.Hash.String()
-	}
 
 	logger.Debug("Remove tree entry",
 		"targetFileName", targetFileName,
-		"treeHash", treeHash)
-
-	if obj == nil {
-		return nil, errors.New("object is nil")
-	}
-
-	if obj.Type != protocol.ObjectTypeTree {
-		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
-	}
+		"treeHash", treeObj.Hash.String())
 
 	// Create a new slice excluding the target entry
-	filteredEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree))
+	filteredEntries := make([]protocol.PackfileTreeEntry, 0, len(treeObj.Tree))
 	found := false
 
-	for _, entry := range obj.Tree {
+	for _, entry := range treeObj.Tree {
 		if entry.FileName != targetFileName {
 			filteredEntries = append(filteredEntries, entry)
 		} else {
@@ -1032,10 +1003,10 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.Packfi
 	if !found {
 		logger.Debug("Entry not found in tree",
 			"targetFileName", targetFileName,
-			"treeHash", obj.Hash.String())
+			"treeHash", treeObj.Hash.String())
 		// Entry not found in tree, but this might be okay for intermediate trees
 		// Return the original object unchanged
-		return obj, nil
+		return treeObj, nil
 	}
 
 	// Build new tree object with the filtered entries
@@ -1045,10 +1016,9 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.Packfi
 	}
 
 	w.writer.AddObject(newObj)
-
 	logger.Debug("Tree entry removed",
 		"targetFileName", targetFileName,
-		"oldEntryCount", len(obj.Tree),
+		"oldEntryCount", len(treeObj.Tree),
 		"newEntryCount", len(filteredEntries),
 		"newHash", newObj.Hash.String())
 
