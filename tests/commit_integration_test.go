@@ -451,6 +451,15 @@ var _ = Describe("Commits", func() {
 				Expect(found).To(BeNumerically(">=", 2), "Should find commits affecting docs directory")
 			})
 
+			It("should fail when path contains empty components", func() {
+				options := nanogit.ListCommitsOptions{
+					Path: "//docs/guide.md", // Invalid path with empty component
+				}
+				_, err := client.ListCommits(ctx, headHash, options)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("path component is empty"))
+			})
+
 			It("should filter commits affecting specific file", func() {
 				options := nanogit.ListCommitsOptions{
 					Path: "src/main.go",
@@ -468,6 +477,7 @@ var _ = Describe("Commits", func() {
 				}
 				Expect(found).To(BeNumerically(">=", 1), "Should find commit affecting src/main.go")
 			})
+
 		})
 
 		Context("time filtering", func() {
