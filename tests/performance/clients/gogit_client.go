@@ -6,20 +6,20 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
-	"github.com/go-git/go-git/v5/plumbing/cache"
-	"github.com/go-git/go-billy/v5/memfs"
 )
 
 // GoGitClient implements the GitClient interface using go-git
 type GoGitClient struct {
 	repos map[string]*git.Repository // Cache repos by URL
-	auths map[string]*http.BasicAuth  // Cache auth info by URL
+	auths map[string]*http.BasicAuth // Cache auth info by URL
 }
 
 // NewGoGitClient creates a new go-git client
@@ -35,12 +35,8 @@ func (c *GoGitClient) Name() string {
 	return "go-git"
 }
 
-// getOrCloneRepo gets a repository from cache or clones it
-func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.Repository, error) {
-	if repo, exists := c.repos[repoURL]; exists {
-		return repo, nil
-	}
-
+// cloneRepo clones a fresh copy of the repository for each operation
+func (c *GoGitClient) cloneRepo(ctx context.Context, repoURL string) (*git.Repository, error) {
 	// Parse URL to extract credentials and clean URL
 	u, err := url.Parse(repoURL)
 	if err != nil {
@@ -61,10 +57,10 @@ func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.
 			Password: password,
 		}
 		cloneOpts.Auth = auth
-		
+
 		// Store auth info for later push operations
 		c.auths[repoURL] = auth
-		
+
 		// Use clean URL without credentials
 		cleanURL := &url.URL{
 			Scheme: u.Scheme,
@@ -76,13 +72,13 @@ func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.
 
 	// Create in-memory filesystem for worktree
 	fs := memfs.New()
-	
+
 	// Create .git directory for storage
 	gitDir, err := fs.Chroot("/.git")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create .git directory: %w", err)
 	}
-	
+
 	// Create storage with filesystem support
 	storage := filesystem.NewStorage(gitDir, cache.NewObjectLRUDefault())
 
@@ -92,7 +88,6 @@ func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	c.repos[repoURL] = repo
 	return repo, nil
 }
 
@@ -125,7 +120,7 @@ func (c *GoGitClient) pushChanges(ctx context.Context, repo *git.Repository, rep
 
 // CreateFile creates a new file in the repository
 func (c *GoGitClient) CreateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL)
+	repo, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -173,7 +168,7 @@ func (c *GoGitClient) CreateFile(ctx context.Context, repoURL, path, content, me
 
 // UpdateFile updates an existing file in the repository
 func (c *GoGitClient) UpdateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL)
+	repo, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -213,12 +208,17 @@ func (c *GoGitClient) UpdateFile(ctx context.Context, repoURL, path, content, me
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
+	// Push changes to remote
+	if err := c.pushChanges(ctx, repo, repoURL); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
+	}
+
 	return nil
 }
 
 // DeleteFile deletes a file from the repository
 func (c *GoGitClient) DeleteFile(ctx context.Context, repoURL, path, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL)
+	repo, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func (c *GoGitClient) DeleteFile(ctx context.Context, repoURL, path, message str
 
 // CompareCommits compares two commits and returns the differences
 func (c *GoGitClient) CompareCommits(ctx context.Context, repoURL, base, head string) (*CommitComparison, error) {
-	repo, err := c.getOrCloneRepo(ctx, repoURL)
+	repo, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +342,7 @@ func (c *GoGitClient) CompareCommits(ctx context.Context, repoURL, base, head st
 
 // GetFlatTree returns a flat listing of all files in the repository at a given ref
 func (c *GoGitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*TreeResult, error) {
-	repo, err := c.getOrCloneRepo(ctx, repoURL)
+	repo, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +394,7 @@ func (c *GoGitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*Tr
 
 // BulkCreateFiles creates multiple files in a single commit
 func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files []FileChange, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL)
+	repo, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -412,13 +412,13 @@ func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files
 			if err != nil {
 				return fmt.Errorf("failed to create file %s: %w", fileChange.Path, err)
 			}
-			
+
 			if _, err := file.Write([]byte(fileChange.Content)); err != nil {
 				file.Close()
 				return fmt.Errorf("failed to write file %s: %w", fileChange.Path, err)
 			}
 			file.Close()
-			
+
 			if _, err := worktree.Add(fileChange.Path); err != nil {
 				return fmt.Errorf("failed to add file %s: %w", fileChange.Path, err)
 			}
@@ -427,7 +427,7 @@ func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files
 			if err := worktree.Filesystem.Remove(fileChange.Path); err != nil {
 				return fmt.Errorf("failed to remove file %s: %w", fileChange.Path, err)
 			}
-			
+
 			if _, err := worktree.Add(fileChange.Path); err != nil {
 				return fmt.Errorf("failed to stage deletion %s: %w", fileChange.Path, err)
 			}
@@ -452,3 +452,4 @@ func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files
 
 	return nil
 }
+

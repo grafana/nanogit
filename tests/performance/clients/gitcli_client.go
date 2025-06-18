@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // GitCLIClient implements the GitClient interface using git CLI commands
@@ -41,18 +42,17 @@ func (c *GitCLIClient) Name() string {
 	return "git-cli"
 }
 
-// getOrCloneRepo gets the local path for a repository, cloning if necessary
-func (c *GitCLIClient) getOrCloneRepo(ctx context.Context, repoURL string) (string, error) {
-	if localPath, exists := c.repos[repoURL]; exists {
-		return localPath, nil
-	}
-
-	// Create local directory for this repo
+// cloneRepo clones a fresh copy of the repository for each operation
+func (c *GitCLIClient) cloneRepo(ctx context.Context, repoURL string) (string, error) {
+	// Create unique directory for this repo clone
 	repoName := filepath.Base(repoURL)
 	if strings.HasSuffix(repoName, ".git") {
 		repoName = repoName[:len(repoName)-4]
 	}
-	localPath := filepath.Join(c.workDir, repoName)
+
+	// Add timestamp to make directory unique for each clone
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
+	localPath := filepath.Join(c.workDir, fmt.Sprintf("%s-%s", repoName, timestamp))
 
 	// Clone repository
 	cmd := exec.CommandContext(ctx, "git", "clone", repoURL, localPath)
@@ -60,7 +60,6 @@ func (c *GitCLIClient) getOrCloneRepo(ctx context.Context, repoURL string) (stri
 		return "", fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	c.repos[repoURL] = localPath
 	return localPath, nil
 }
 
@@ -84,7 +83,7 @@ func (c *GitCLIClient) runGitCommandWithOutput(ctx context.Context, repoPath str
 
 // CreateFile creates a new file in the repository
 func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -119,7 +118,7 @@ func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, m
 
 // UpdateFile updates an existing file in the repository
 func (c *GitCLIClient) UpdateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -149,7 +148,7 @@ func (c *GitCLIClient) UpdateFile(ctx context.Context, repoURL, path, content, m
 
 // DeleteFile deletes a file from the repository
 func (c *GitCLIClient) DeleteFile(ctx context.Context, repoURL, path, message string) error {
-	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
@@ -174,7 +173,7 @@ func (c *GitCLIClient) DeleteFile(ctx context.Context, repoURL, path, message st
 
 // CompareCommits compares two commits and returns the differences
 func (c *GitCLIClient) CompareCommits(ctx context.Context, repoURL, base, head string) (*CommitComparison, error) {
-	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +230,7 @@ func (c *GitCLIClient) CompareCommits(ctx context.Context, repoURL, base, head s
 
 // GetFlatTree returns a flat listing of all files in the repository at a given ref
 func (c *GitCLIClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*TreeResult, error) {
-	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +274,7 @@ func (c *GitCLIClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*T
 
 // BulkCreateFiles creates multiple files in a single commit
 func (c *GitCLIClient) BulkCreateFiles(ctx context.Context, repoURL string, files []FileChange, message string) error {
-	repoPath, err := c.getOrCloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepo(ctx, repoURL)
 	if err != nil {
 		return err
 	}
