@@ -562,9 +562,9 @@ func (w *PackfileWriter) WritePackfile(refName string, oldRefHash hash.Hash) ([]
 	}
 
 	// Write number of objects
-	numObjects := len(w.objects)
+	numObjects := uint64(len(w.objects))
 	if numObjects > 0xFFFFFFFF {
-		return nil, fmt.Errorf("too many objects for packfile: %d (max: %d)", numObjects, 0xFFFFFFFF)
+		return nil, fmt.Errorf("too many objects for packfile: %d (max: %d)", numObjects, uint64(0xFFFFFFFF))
 	}
 	if err := binary.Write(&w.buf, binary.BigEndian, uint32(numObjects)); err != nil {
 		return nil, fmt.Errorf("writing object count: %w", err)
