@@ -432,8 +432,12 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		commit, ok := objects[currentHash.String()]
 		if !ok || commit.Type != protocol.ObjectTypeCommit {
 			commit, ok = allObjects.Get(currentHash)
-			if !ok || commit.Type != protocol.ObjectTypeCommit {
-				return nil, fmt.Errorf("commit %s not found", currentHash.String())
+			if !ok {
+				return nil, NewObjectNotFoundError(currentHash)
+			}
+
+			if commit.Type != protocol.ObjectTypeCommit {
+				return nil, NewUnexpectedObjectTypeError(currentHash, protocol.ObjectTypeCommit, commit.Type)
 			}
 		}
 
@@ -618,9 +622,12 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		commit, ok = objects[commitHash.String()]
 		if !ok || commit.Type != protocol.ObjectTypeCommit {
 			commit, ok = allObjects.Get(commitHash)
-			if !ok || commit.Type != protocol.ObjectTypeCommit {
-				logger.Debug("Commit not found", "commitHash", commitHash.String())
-				return hash.Zero, fmt.Errorf("commit %s not found", commitHash.String())
+			if !ok {
+				return hash.Zero, fmt.Errorf("commit not found in cache: %w", NewObjectNotFoundError(commitHash))
+			}
+
+			if commit.Type != protocol.ObjectTypeCommit {
+				return hash.Zero, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commit.Type)
 			}
 		}
 	}
