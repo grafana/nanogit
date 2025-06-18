@@ -34,7 +34,7 @@ func TestGlobalErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			require.NotNil(t, tt.err)
+			require.Error(t, tt.err)
 			require.Equal(t, tt.msg, tt.err.Error())
 		})
 	}
@@ -83,7 +83,7 @@ func TestObjectNotFoundError(t *testing.T) {
 		require.False(t, errors.As(wrappedErr, &targetErr))
 
 		// But this should work with direct error
-		require.True(t, errors.As(originalErr, &targetErr))
+		require.ErrorAs(t, originalErr, &targetErr)
 		require.Equal(t, testHash, targetErr.ObjectID)
 	})
 }
