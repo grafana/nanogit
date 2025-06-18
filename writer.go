@@ -869,10 +869,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
-	if len(pathParts) == 0 {
-		return errors.New("empty path")
-	}
-
 	// Get the directory name and parent directory parts
 	dirName := pathParts[len(pathParts)-1]
 	parentParts := pathParts[:len(pathParts)-1]
@@ -985,30 +981,18 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 //   - error: Error if tree creation fails
 //
 // Note: If the target entry is not found, the original object is returned unchanged.
-func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
+func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	var treeHash string
-	if obj != nil {
-		treeHash = obj.Hash.String()
-	}
 
 	logger.Debug("Remove tree entry",
 		"targetFileName", targetFileName,
-		"treeHash", treeHash)
-
-	if obj == nil {
-		return nil, errors.New("object is nil")
-	}
-
-	if obj.Type != protocol.ObjectTypeTree {
-		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
-	}
+		"treeHash", treeObj.Hash.String())
 
 	// Create a new slice excluding the target entry
-	filteredEntries := make([]protocol.PackfileTreeEntry, 0, len(obj.Tree))
+	filteredEntries := make([]protocol.PackfileTreeEntry, 0, len(treeObj.Tree))
 	found := false
 
-	for _, entry := range obj.Tree {
+	for _, entry := range treeObj.Tree {
 		if entry.FileName != targetFileName {
 			filteredEntries = append(filteredEntries, entry)
 		} else {
@@ -1019,10 +1003,10 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.Packfi
 	if !found {
 		logger.Debug("Entry not found in tree",
 			"targetFileName", targetFileName,
-			"treeHash", obj.Hash.String())
+			"treeHash", treeObj.Hash.String())
 		// Entry not found in tree, but this might be okay for intermediate trees
 		// Return the original object unchanged
-		return obj, nil
+		return treeObj, nil
 	}
 
 	// Build new tree object with the filtered entries
@@ -1032,10 +1016,9 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, obj *protocol.Packfi
 	}
 
 	w.writer.AddObject(newObj)
-
 	logger.Debug("Tree entry removed",
 		"targetFileName", targetFileName,
-		"oldEntryCount", len(obj.Tree),
+		"oldEntryCount", len(treeObj.Tree),
 		"newEntryCount", len(filteredEntries),
 		"newHash", newObj.Hash.String())
 

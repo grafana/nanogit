@@ -1401,6 +1401,224 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
 		})
+
+		It("should update only the relevant branch of the tree when updating a deep file", func() {
+			client, _, local, _ := QuickSetup()
+			// Create a deeper nested directory structure:
+			// root/
+			//   dir1/
+			//     subdir1/
+			//       file1.txt
+			//   dir2/
+			//     subdir2/
+			//       file2.txt
+			//   file3.txt
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir2/subdir2")
+			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
+			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
+			local.CreateFile("file3.txt", "original file3")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial deep nested commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Get the tree hashes before update
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Update a deep file: dir1/subdir1/file1.txt
+			newContent := []byte("updated file1 content")
+			_, err := writer.UpdateBlob(ctx, "dir1/subdir1/file1.txt", newContent)
+			Expect(err).NotTo(HaveOccurred())
+
+			commitMsg := "Update dir1/subdir1/file1.txt"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo to verify
+			local.Git("pull", "origin", "main")
+
+			// Get the tree hashes after update
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Only the relevant branch (dir1/subdir1) should have changed
+			Expect(subdir1TreeHashAfter).NotTo(Equal(subdir1TreeHashBefore))
+			Expect(dir1TreeHashAfter).NotTo(Equal(dir1TreeHashBefore))
+			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
+			Expect(subdir2TreeHashAfter).To(Equal(subdir2TreeHashBefore))
+			Expect(dir2TreeHashAfter).To(Equal(dir2TreeHashBefore))
+
+			// file3.txt should be unchanged
+			content, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file3"))
+
+			// dir2/subdir2/file2.txt should be unchanged
+			content, err = os.ReadFile(filepath.Join(local.Path, "dir2/subdir2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file2"))
+
+			// dir1/subdir1/file1.txt should be updated
+			content, err = os.ReadFile(filepath.Join(local.Path, "dir1/subdir1/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("updated file1 content"))
+		})
+		It("should delete a file deep in the tree and only update relevant trees", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Setup: create a deep directory structure with files
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir2/subdir2")
+			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
+			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
+			local.CreateFile("file3.txt", "original file3")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with deep structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Get the tree hashes before deletion
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Delete a deep file: dir1/subdir1/file1.txt
+			_, err := writer.DeleteBlob(ctx, "dir1/subdir1/file1.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			commitMsg := "Delete dir1/subdir1/file1.txt"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo to verify
+			local.Git("pull", "origin", "main")
+
+			// Get the tree hashes after deletion
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2/subdir2")
+
+			// Only the relevant branch (dir1/subdir1) should have changed
+			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
+			Expect(subdir1TreeHashAfter).NotTo(Equal(subdir1TreeHashBefore))
+			Expect(dir1TreeHashAfter).NotTo(Equal(dir1TreeHashBefore))
+			Expect(subdir2TreeHashAfter).To(Equal(subdir2TreeHashBefore))
+			Expect(dir2TreeHashAfter).To(Equal(dir2TreeHashBefore))
+
+			// file3.txt should be unchanged
+			content, err := os.ReadFile(filepath.Join(local.Path, "file3.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file3"))
+
+			// dir2/subdir2/file2.txt should be unchanged
+			content, err = os.ReadFile(filepath.Join(local.Path, "dir2/subdir2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original file2"))
+
+			// dir1/subdir1/file1.txt should be deleted
+			_, err = os.Stat(filepath.Join(local.Path, "dir1/subdir1/file1.txt"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+		It("should create a file deep in nested directories and only update relevant trees", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Setup: create a multi-level directory structure
+			local.CreateDirPath("dirA/dirB")
+			local.CreateDirPath("dirC/dirD")
+			local.CreateFile("dirA/dirB/fileA.txt", "original A")
+			local.CreateFile("dirC/dirD/fileC.txt", "original C")
+			local.CreateFile("rootfile.txt", "root content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial nested structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Get tree hashes before
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dirAHashBefore := local.Git("rev-parse", "HEAD:dirA")
+			dirBHashBefore := local.Git("rev-parse", "HEAD:dirA/dirB")
+			dirCHashBefore := local.Git("rev-parse", "HEAD:dirC")
+			dirDHashBefore := local.Git("rev-parse", "HEAD:dirC/dirD")
+
+			// Create a new file deep in dirA/dirB
+			newFilePath := "dirA/dirB/newdeep.txt"
+			newContent := []byte("deep content")
+			blobHash, err := writer.CreateBlob(ctx, newFilePath, newContent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blobHash).NotTo(BeNil())
+
+			commitMsg := "Add deep file"
+			commit, err := writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pull changes to local repo to verify
+			local.Git("pull", "origin", "main")
+
+			commitHash := local.Git("rev-parse", "HEAD")
+			Expect(commitHash).To(Equal(commit.Hash.String()))
+
+			// Get tree hashes after
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dirAHashAfter := local.Git("rev-parse", "HEAD:dirA")
+			dirBHashAfter := local.Git("rev-parse", "HEAD:dirA/dirB")
+			dirCHashAfter := local.Git("rev-parse", "HEAD:dirC")
+			dirDHashAfter := local.Git("rev-parse", "HEAD:dirC/dirD")
+
+			// Only the relevant branch (dirA/dirB) and its parents should have changed
+			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
+			Expect(dirBHashAfter).NotTo(Equal(dirBHashBefore))
+			Expect(dirAHashAfter).NotTo(Equal(dirAHashBefore))
+			Expect(dirCHashAfter).To(Equal(dirCHashBefore))
+			Expect(dirDHashAfter).To(Equal(dirDHashBefore))
+
+			// The new file should exist with correct content
+			content, err := os.ReadFile(filepath.Join(local.Path, newFilePath))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(newContent))
+
+			// Unrelated files should be unchanged
+			content, err = os.ReadFile(filepath.Join(local.Path, "dirC/dirD/fileC.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original C"))
+
+			content, err = os.ReadFile(filepath.Join(local.Path, "dirA/dirB/fileA.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("original A"))
+
+			content, err = os.ReadFile(filepath.Join(local.Path, "rootfile.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("root content"))
+		})
 	})
 
 	Describe("Empty tree repository", func() {
