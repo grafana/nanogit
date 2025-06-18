@@ -297,16 +297,13 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating multiple commits")
-				for i := 1; i <= 5; i++ {
+				for i := 1; i <= 120; i++ {
 					local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
 					local.Git("add", fmt.Sprintf("file%d.txt", i))
 					local.Git("commit", "-m", fmt.Sprintf("Add file%d", i))
-					if i == 1 {
-						local.Git("push", "-u", "origin", "main", "--force")
-					} else {
-						local.Git("push", "origin", "main")
-					}
 				}
+
+				local.Git("push", "-u", "origin", "main", "--force")
 
 				var err error
 				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
@@ -322,8 +319,30 @@ var _ = Describe("Commits", func() {
 				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commits).To(HaveLen(2))
-				Expect(commits[0].Message).To(Equal("Add file5"))
-				Expect(commits[1].Message).To(Equal("Add file4"))
+				Expect(commits[0].Message).To(Equal("Add file120"))
+				Expect(commits[1].Message).To(Equal("Add file119"))
+			})
+			It("should default to page 1 if page is zero", func() {
+				options := nanogit.ListCommitsOptions{
+					PerPage: 2,
+					Page:    0,
+				}
+
+				commits, err := client.ListCommits(ctx, headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commits).To(HaveLen(2))
+				Expect(commits[0].Message).To(Equal("Add file120"))
+				Expect(commits[1].Message).To(Equal("Add file119"))
+			})
+			It("should return no error and an empty slice if requesting a page that does not exist", func() {
+				options := nanogit.ListCommitsOptions{
+					PerPage: 100,
+					Page:    100, // Deliberately high page number, should be out of range
+				}
+
+				commits, err := client.ListCommits(ctx, headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commits).To(BeEmpty(), "Should return an empty slice for non-existent page")
 			})
 
 			It("should support second page", func() {
@@ -335,8 +354,48 @@ var _ = Describe("Commits", func() {
 				commits, err := client.ListCommits(ctx, headHash, options)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commits).To(HaveLen(2))
-				Expect(commits[0].Message).To(Equal("Add file3"))
-				Expect(commits[1].Message).To(Equal("Add file2"))
+				Expect(commits[0].Message).To(Equal("Add file118"))
+				Expect(commits[1].Message).To(Equal("Add file117"))
+			})
+
+			It("should return all pages until the end", func() {
+				const perPage = 50
+				var (
+					allCommits []nanogit.Commit
+					lastBatch  []nanogit.Commit
+					page       = 1
+				)
+
+				for {
+					options := nanogit.ListCommitsOptions{
+						PerPage: perPage,
+						Page:    page,
+					}
+					commits, err := client.ListCommits(ctx, headHash, options)
+					Expect(err).NotTo(HaveOccurred())
+					allCommits = append(allCommits, commits...)
+
+					if len(commits) < perPage {
+						lastBatch = commits
+						break // last page reached
+					}
+					page++
+				}
+
+				Expect(len(allCommits)).To(Equal(121))
+				Expect(page).To(Equal(3))
+				Expect(lastBatch).To(HaveLen(21))
+			})
+
+			It("should default to 100 items per page if more than 100 is requested", func() {
+				options := nanogit.ListCommitsOptions{
+					PerPage: 101,
+					Page:    1,
+				}
+
+				commits, err := client.ListCommits(ctx, headHash, options)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(commits).To(HaveLen(100))
 			})
 		})
 
