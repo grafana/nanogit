@@ -19,7 +19,7 @@ test-unit:
 
 .PHONY: test-integration
 test-integration:
-	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p -focus "Integration"
+	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p -focus "Integration" ./tests
 
 .PHONY: test-providers
 test-providers:
