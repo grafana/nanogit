@@ -1321,4 +1321,85 @@ var _ = Describe("Writer Operations", func() {
 			})
 		})
 	})
+	Context("Commit Operations", func() {
+		It("should fail to commit if the tree is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.Commit(ctx, "Empty commit", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+		})
+		It("should fail to commit if the message is empty", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "", testAuthor, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrEmptyCommitMessage))
+		})
+
+		It("should fail to commit if the author is missing email", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			author := testAuthor
+			author.Email = ""
+			_, err = writer.Commit(ctx, "Missing author email", author, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrInvalidAuthor))
+		})
+
+		It("should fail to commit if the author is missing name", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			author := testAuthor
+			author.Name = ""
+			_, err = writer.Commit(ctx, "Missing author name", author, testCommitter)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
+		})
+
+		It("should fail to commit if the committer is missing email", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			committer := testCommitter
+			committer.Email = ""
+			_, err = writer.Commit(ctx, "Missing committer email", testAuthor, committer)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
+		})
+
+		It("should fail to commit if the committer is missing name", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Add a file so the tree is not empty
+			_, err := writer.CreateBlob(ctx, "file.txt", []byte("content"))
+			Expect(err).NotTo(HaveOccurred())
+
+			committer := testCommitter
+			committer.Name = ""
+			_, err = writer.Commit(ctx, "Missing committer name", testAuthor, committer)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrInvalidAuthor)).To(BeTrue())
+		})
+	})
 })
