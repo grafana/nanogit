@@ -136,29 +136,35 @@ func TestFileOperationsPerformance(t *testing.T) {
 
 			for _, client := range suite.clients {
 				t.Run(client.Name(), func(t *testing.T) {
-					// Test file creation
-					suite.collector.RecordOperation(
-						client.Name(), "CreateFile", tc.name, tc.repoSize, tc.fileCount,
-						func() error {
-							return client.CreateFile(ctx, repo.AuthURL(), "test/new_file.txt", "test content", "Add test file")
-						},
-					)
+					// Run each operation 5 times for better statistical data
+					for i := 0; i < 5; i++ {
+						// Test file creation
+						suite.collector.RecordOperation(
+							client.Name(), "CreateFile", tc.name, tc.repoSize, tc.fileCount,
+							func() error {
+								filename := fmt.Sprintf("test/new_file_%d.txt", i)
+								return client.CreateFile(ctx, repo.AuthURL(), filename, "test content", "Add test file")
+							},
+						)
 
-					// Test file update
-					suite.collector.RecordOperation(
-						client.Name(), "UpdateFile", tc.name, tc.repoSize, tc.fileCount,
-						func() error {
-							return client.UpdateFile(ctx, repo.AuthURL(), "test/new_file.txt", "updated content", "Update test file")
-						},
-					)
+						// Test file update
+						suite.collector.RecordOperation(
+							client.Name(), "UpdateFile", tc.name, tc.repoSize, tc.fileCount,
+							func() error {
+								filename := fmt.Sprintf("test/new_file_%d.txt", i)
+								return client.UpdateFile(ctx, repo.AuthURL(), filename, "updated content", "Update test file")
+							},
+						)
 
-					// Test file deletion
-					suite.collector.RecordOperation(
-						client.Name(), "DeleteFile", tc.name, tc.repoSize, tc.fileCount,
-						func() error {
-							return client.DeleteFile(ctx, repo.AuthURL(), "test/new_file.txt", "Delete test file")
-						},
-					)
+						// Test file deletion
+						suite.collector.RecordOperation(
+							client.Name(), "DeleteFile", tc.name, tc.repoSize, tc.fileCount,
+							func() error {
+								filename := fmt.Sprintf("test/new_file_%d.txt", i)
+								return client.DeleteFile(ctx, repo.AuthURL(), filename, "Delete test file")
+							},
+						)
+					}
 				})
 			}
 		})
