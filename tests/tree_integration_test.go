@@ -139,6 +139,81 @@ var _ = Describe("Trees", func() {
 		})
 	})
 
+	Context("GetFlatTree complex structure", func() {
+		var (
+			client     nanogit.Client
+			local      *LocalGitRepo
+			commitHash hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository with complex directory structure")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating a complex directory structure with files")
+			local.CreateDirPath("dir1/subdir1/subsubdir1")
+			local.CreateDirPath("dir1/subdir2")
+			local.CreateDirPath("dir2/subdir1")
+			local.CreateDirPath("dir3")
+
+			local.CreateFile("dir1/subdir1/subsubdir1/file1.txt", "content1")
+			local.CreateFile("dir1/subdir1/file2.txt", "content2")
+			local.CreateFile("dir1/subdir2/file3.txt", "content3")
+			local.CreateFile("dir2/subdir1/file4.txt", "content4")
+			local.CreateFile("dir2/file5.txt", "content5")
+			local.CreateFile("dir3/file6.txt", "content6")
+			local.CreateFile("root.txt", "root content")
+
+			By("Adding and committing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with complex tree structure")
+
+			By("Creating and switching to main branch")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the tree hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should retrieve flat tree structure successfully", func() {
+			flatTree, err := client.GetFlatTree(ctx, commitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(flatTree).NotTo(BeNil())
+
+			expectedEntries := []struct {
+				path string
+				mode uint32
+				typ  protocol.ObjectType
+			}{
+				{"dir1", 16384, protocol.ObjectTypeTree},
+				{"dir1/subdir1", 16384, protocol.ObjectTypeTree},
+				{"dir1/subdir1/file2.txt", 33188, protocol.ObjectTypeBlob},
+				{"dir1/subdir1/subsubdir1", 16384, protocol.ObjectTypeTree},
+				{"dir1/subdir1/subsubdir1/file1.txt", 33188, protocol.ObjectTypeBlob},
+				{"dir1/subdir2", 16384, protocol.ObjectTypeTree},
+				{"dir1/subdir2/file3.txt", 33188, protocol.ObjectTypeBlob},
+				{"dir2", 16384, protocol.ObjectTypeTree},
+				{"dir2/file5.txt", 33188, protocol.ObjectTypeBlob},
+				{"dir2/subdir1", 16384, protocol.ObjectTypeTree},
+				{"dir2/subdir1/file4.txt", 33188, protocol.ObjectTypeBlob},
+				{"dir3", 16384, protocol.ObjectTypeTree},
+				{"dir3/file6.txt", 33188, protocol.ObjectTypeBlob},
+				{"root.txt", 33188, protocol.ObjectTypeBlob},
+				{"test.txt", 33188, protocol.ObjectTypeBlob},
+			}
+
+			Expect(flatTree.Entries).To(HaveLen(len(expectedEntries)))
+			for i, expected := range expectedEntries {
+				actual := flatTree.Entries[i]
+				Expect(actual.Path).To(Equal(expected.path))
+				Expect(actual.Mode).To(Equal(expected.mode))
+				Expect(actual.Type).To(Equal(expected.typ))
+			}
+		})
+	})
 	Context("GetTree operations", func() {
 		var (
 			client   nanogit.Client

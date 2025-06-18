@@ -3,6 +3,7 @@ package nanogit
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/grafana/nanogit/log"
@@ -506,6 +507,10 @@ func (c *httpClient) flatten(ctx context.Context, treeHash hash.Hash, allTreeObj
 			"remaining", len(queue),
 			"processedEntries", len(entries))
 	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Path < entries[j].Path
+	})
 
 	logger.Debug("Tree flattening completed",
 		"treeHash", treeHash.String(),
