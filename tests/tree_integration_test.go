@@ -325,6 +325,17 @@ var _ = Describe("Trees", func() {
 			}
 			Expect(entryNames).To(ConsistOf("test.txt", "root.txt", "dir1", "dir2"))
 		})
+		It("should fail if treeHash does not exist", func() {
+			nonexistentHash := hash.MustFromHex("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0")
+			_, err := client.GetTreeByPath(ctx, nonexistentHash, "dir2")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
+		})
+		It("should fail if path component is empty", func() {
+			_, err := client.GetTreeByPath(ctx, treeHash, "dir1//file1.txt")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("path component is empty"))
+		})
 
 		It("should get root tree with dot path", func() {
 			tree, err := client.GetTreeByPath(ctx, treeHash, ".")
