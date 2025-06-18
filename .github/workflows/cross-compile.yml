@@ -1,0 +1,53 @@
+name: Cross-compilation targets
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read # to clone repo
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ensure-target-compiles:
+    strategy:
+      matrix:
+        include:
+          - GOOS: windows
+            GOARCH: amd64
+          - GOOS: windows
+            GOARCH: arm64
+          - GOOS: darwin
+            GOARCH: amd64
+          - GOOS: darwin
+            GOARCH: arm64
+          - GOOS: linux
+            GOARCH: amd64
+          - GOOS: linux
+            GOARCH: arm64
+          - GOOS: linux
+            GOARCH: arm
+            GOARM: 6
+          - GOOS: linux
+            GOARCH: arm
+            GOARM: 7
+
+    name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} ${{ matrix.GOARM || '' }}
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - name: Install Git
+        run: apk add --no-cache git
+      - uses: actions/checkout@v4
+      - name: Ensure builds
+        env:
+          GOOS: ${{ matrix.GOOS }}
+          GOARCH: ${{ matrix.GOARCH }}
+          GOARM: ${{ matrix.GOARM || '' }}
+        run: go build ./...
