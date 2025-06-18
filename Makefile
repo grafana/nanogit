@@ -28,4 +28,36 @@ test-providers:
 test: test-unit test-integration
 
 test-coverage:
-	go run github.com/onsi/ginkgo/v2/ginkgo --race --randomize-all --randomize-suites --fail-on-pending -p --coverprofile=coverage.txt --covermode=atomic --coverpkg=./... -r
+	@echo "Running unit tests with coverage..."
+	go run github.com/onsi/ginkgo/v2/ginkgo \
+		--p \
+		--race \
+		--randomize-all \
+		--randomize-suites \
+		--fail-on-pending \
+		--cover \
+		--coverpkg=./... \
+		--coverprofile=unit.cov \
+		./... \
+		-- -test.short
+
+	@echo "Running integration tests with coverage..."
+	go run github.com/onsi/ginkgo/v2/ginkgo \
+		--p \
+		--race \
+		--randomize-all \
+		--randomize-suites \
+		--fail-on-pending \
+		--cover \
+		--coverpkg=./... \
+		--coverprofile=integration.cov \
+		./tests
+
+	@echo "Merging coverage profiles..."
+	@echo "mode: set" > coverage.txt
+	@tail -n +2 unit.cov >> coverage.txt || true
+	@tail -n +2 integration.cov >> coverage.txt || true
+	@echo "Combined coverage written to coverage.txt"
+
+test-coverage-html:
+	go tool cover -html=coverage.txt

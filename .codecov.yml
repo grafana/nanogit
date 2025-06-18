@@ -10,4 +10,5 @@ coverage:
         threshold: 1%
 
 ignore:
-  - "internal/testhelpers/*" 
+  - "mocks/"
+  - "**/mocks/"
