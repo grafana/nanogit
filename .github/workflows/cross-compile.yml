@@ -32,7 +32,7 @@ jobs:
           GOARCH: arm
           GOARM: 7
 
-    name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }}${{ matrix.GOARCH && ('v' + matrix.GOARCH) || '' }}
+    name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} ${{ matrix.GOARM || '' }}
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
