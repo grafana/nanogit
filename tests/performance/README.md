@@ -29,21 +29,25 @@ This package provides comprehensive performance benchmarking for comparing nanog
 ## Test Scenarios
 
 ### 1. File Operations
+
 - **CreateFile**: Create new files at various path depths
 - **UpdateFile**: Modify existing file content
 - **DeleteFile**: Remove files from repository
 
 ### 2. CompareCommits
+
 - Adjacent commits (single file changes)
 - Distant commits (multiple commits apart)
 - Large diffs (many file changes)
 
 ### 3. GetFlatTree
+
 - Small trees (50 files)
-- Medium trees (500 files)  
+- Medium trees (500 files)
 - Large trees (2000+ files)
 
 ### 4. Bulk Operations
+
 - Bulk file creation (10, 100, 1000 files)
 - Mixed operations (create/update/delete)
 
@@ -76,10 +80,12 @@ go test -bench=. -cpuprofile=cpu.prof -memprofile=mem.prof ./tests/performance
 ### Environment Setup
 
 #### Prerequisites
+
 - **Docker**: Required for testcontainers
 - **Git CLI**: Required for git-cli client testing
 
 #### Configuration
+
 ```bash
 # Enable performance tests (required)
 export RUN_PERFORMANCE_TESTS=true
@@ -110,7 +116,7 @@ repositories, err := server.ProvisionTestRepositories(ctx)
 
 // Standard repository specifications:
 // - Small: 50 files, 10 commits, 3 directory levels
-// - Medium: 500 files, 100 commits, 5 directory levels  
+// - Medium: 500 files, 100 commits, 5 directory levels
 // - Large: 2000 files, 500 commits, 8 directory levels
 ```
 
@@ -204,6 +210,6 @@ type RepoSpec struct {
 - **Additional Operations**: Support for merge, rebase, and branch operations
 - **Performance Baselines**: Establish and track performance regression thresholds
 - **Historical Tracking**: Store and compare performance trends over time
-- **Multiple Git Servers**: Support for different Git server implementations
 - **Resource Monitoring**: Track CPU, disk I/O, and network usage
 - **Parallel Testing**: Run multiple client tests concurrently
+

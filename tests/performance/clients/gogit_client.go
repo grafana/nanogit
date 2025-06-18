@@ -3,11 +3,13 @@ package clients
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
 )
@@ -35,10 +37,37 @@ func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string) (*git.
 		return repo, nil
 	}
 
-	// Clone repository into memory
-	repo, err := git.CloneContext(ctx, memory.NewStorage(), nil, &git.CloneOptions{
+	// Parse URL to extract credentials and clean URL
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid repository URL: %w", err)
+	}
+
+	// Prepare clone options
+	cloneOpts := &git.CloneOptions{
 		URL: repoURL,
-	})
+	}
+
+	// Add authentication if present in URL
+	if u.User != nil {
+		username := u.User.Username()
+		password, _ := u.User.Password()
+		cloneOpts.Auth = &http.BasicAuth{
+			Username: username,
+			Password: password,
+		}
+		
+		// Use clean URL without credentials
+		cleanURL := &url.URL{
+			Scheme: u.Scheme,
+			Host:   u.Host,
+			Path:   u.Path,
+		}
+		cloneOpts.URL = cleanURL.String()
+	}
+
+	// Clone repository into memory
+	repo, err := git.CloneContext(ctx, memory.NewStorage(), nil, cloneOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
