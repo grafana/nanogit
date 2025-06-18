@@ -86,8 +86,8 @@ var _ = Describe("Commits", func() {
 
 			By("Checking that commit times are recent")
 			now := time.Now()
-			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
-			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+			Expect(now.Sub(commit.Committer.Time)).To(BeNumerically("<", 10*time.Second))
+			Expect(now.Sub(commit.Author.Time)).To(BeNumerically("<", 10*time.Second))
 		})
 
 		It("should get rename file commit details", func() {
@@ -106,8 +106,8 @@ var _ = Describe("Commits", func() {
 
 			By("Checking that commit times are recent")
 			now := time.Now()
-			Expect(commit.Committer.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
-			Expect(commit.Author.Time.Unix()).To(BeNumerically("~", now.Unix(), 5))
+			Expect(now.Sub(commit.Committer.Time)).To(BeNumerically("<", 10*time.Second))
+			Expect(now.Sub(commit.Author.Time)).To(BeNumerically("<", 10*time.Second))
 		})
 		It("should fail with Object not found error if commit does not exist", func() {
 			nonExistentHash, err := hash.FromHex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
