@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -279,8 +280,10 @@ func (s *GitServer) ProvisionTestRepositories(ctx context.Context) ([]*Repositor
 			return nil, fmt.Errorf("failed to create %s repository: %w", spec.Name, err)
 		}
 
-		// Note: Test data generation will be handled separately 
-		// to avoid circular import dependencies
+		// Create initial commit so repository is not empty
+		if err := s.createInitialCommit(ctx, repo); err != nil {
+			return nil, fmt.Errorf("failed to create initial commit for %s repository: %w", spec.Name, err)
+		}
 
 		repositories[i] = repo
 	}
@@ -302,6 +305,54 @@ func (s *GitServer) Cleanup(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// createInitialCommit creates an initial commit in the repository to make it non-empty
+func (s *GitServer) createInitialCommit(ctx context.Context, repo *Repository) error {
+	httpClient := &http.Client{}
+	
+	// Create initial README file via API
+	createFileURL := fmt.Sprintf("http://%s:%s/api/v1/repos/%s/%s/contents/README.md", 
+		s.Host, s.Port, repo.Owner, repo.Name)
+	
+	readmeContent := fmt.Sprintf("# %s\n\nTest repository for performance benchmarking.", repo.Name)
+	
+	// Base64 encode the content
+	encodedContent := base64.StdEncoding.EncodeToString([]byte(readmeContent))
+	
+	jsonData := []byte(fmt.Sprintf(`{
+		"message": "Initial commit",
+		"content": "%s",
+		"author": {
+			"name": "Performance Test",
+			"email": "test@example.com"
+		},
+		"committer": {
+			"name": "Performance Test", 
+			"email": "test@example.com"
+		}
+	}`, encodedContent))
+	
+	req, err := http.NewRequestWithContext(ctx, "POST", createFileURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(repo.User.Username, repo.User.Password)
+	
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create initial file: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to create initial file, status: %d, body: %s", resp.StatusCode, string(body))
+	}
+	
 	return nil
 }
 
