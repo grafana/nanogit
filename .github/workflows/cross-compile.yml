@@ -17,24 +17,25 @@ jobs:
   ensure-target-compiles:
     strategy:
       matrix:
-        - GOOS: windows
-          GOARCH: amd64
-        - GOOS: windows
-          GOARCH: arm64
-        - GOOS: darwin
-          GOARCH: amd64
-        - GOOS: darwin
-          GOARCH: aarch64
-        - GOOS: linux
-          GOARCH: amd64
-        - GOOS: linux
-          GOARCH: aarch64
-        - GOOS: linux
-          GOARCH: arm
-          GOARM: 6
-        - GOOS: linux
-          GOARCH: arm
-          GOARM: 7
+        include:
+          - GOOS: windows
+            GOARCH: amd64
+          - GOOS: windows
+            GOARCH: arm64
+          - GOOS: darwin
+            GOARCH: amd64
+          - GOOS: darwin
+            GOARCH: aarch64
+          - GOOS: linux
+            GOARCH: amd64
+          - GOOS: linux
+            GOARCH: aarch64
+          - GOOS: linux
+            GOARCH: arm
+            GOARM: 6
+          - GOOS: linux
+            GOARCH: arm
+            GOARM: 7
 
     name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} ${{ matrix.GOARM || '' }}
     runs-on: ubuntu-latest
