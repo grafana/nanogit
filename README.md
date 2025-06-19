@@ -64,7 +64,7 @@ This are some of the performance differences between nanogit and go-git in some 
 | CompareCommits (XL repo)                  | 111x faster | 114x less    |
 | GetFlatTree (XL repo)                     | 303x faster | 137x less    |
 
-For detailed performance metrics, see the [latest performance report](test/performance/LAST_REPORT.md).
+For detailed performance metrics, see the [latest performance report](perf/LAST_REPORT.md).
 
 ## Getting Started
 
