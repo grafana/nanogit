@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -175,12 +176,17 @@ func (m *MetricsCollector) generateTextSummary() string {
 	text += fmt.Sprintf("Generated: %s\n", time.Now().Format(time.RFC3339))
 	text += fmt.Sprintf("Total Benchmarks: %d\n\n", len(m.results))
 
+	// Add comparison tables at the top
+	text += m.generateComparisonTables(summary)
+
 	// Sort operations by name
 	operations := make([]string, 0, len(summary))
 	for operation := range summary {
 		operations = append(operations, operation)
 	}
 	sort.Strings(operations)
+
+	text += "=== DETAILED RESULTS ===\n\n"
 
 	for _, operation := range operations {
 		opSummary := summary[operation]
@@ -207,6 +213,291 @@ func (m *MetricsCollector) generateTextSummary() string {
 	}
 
 	return text
+}
+
+// generateComparisonTables creates comparison tables for all clients
+func (m *MetricsCollector) generateComparisonTables(summary map[string]OperationSummary) string {
+	text := "=== PERFORMANCE COMPARISON TABLES ===\n\n"
+	
+	// Get all operations and clients
+	operations := make([]string, 0, len(summary))
+	clientSet := make(map[string]bool)
+	
+	for operation, opSummary := range summary {
+		operations = append(operations, operation)
+		for client := range opSummary.ClientStats {
+			clientSet[client] = true
+		}
+	}
+	
+	sort.Strings(operations)
+	clients := make([]string, 0, len(clientSet))
+	for client := range clientSet {
+		clients = append(clients, client)
+	}
+	sort.Strings(clients)
+	
+	// Table 1: Average Duration Comparison
+	text += "1. AVERAGE DURATION COMPARISON\n"
+	text += m.generateDurationTable(summary, operations, clients)
+	text += "\n"
+	
+	// Table 2: Average Memory Comparison  
+	text += "2. AVERAGE MEMORY USAGE COMPARISON\n"
+	text += m.generateMemoryTable(summary, operations, clients)
+	text += "\n"
+	
+	// Table 3: Nanogit Performance vs Others (Duration)
+	text += "3. NANOGIT DURATION PERFORMANCE vs OTHERS\n"
+	text += "(Shows how many times faster/slower nanogit is)\n"
+	text += m.generateNanogitComparisonTable(summary, operations, clients, "duration")
+	text += "\n"
+	
+	// Table 4: Nanogit Performance vs Others (Memory)
+	text += "4. NANOGIT MEMORY USAGE vs OTHERS\n"
+	text += "(Shows how many times less/more memory nanogit uses)\n"
+	text += m.generateNanogitComparisonTable(summary, operations, clients, "memory")
+	text += "\n"
+	
+	return text
+}
+
+// generateDurationTable creates a duration comparison table
+func (m *MetricsCollector) generateDurationTable(summary map[string]OperationSummary, operations, clients []string) string {
+	// Calculate column widths
+	maxOpWidth := 20
+	for _, op := range operations {
+		if len(op) > maxOpWidth {
+			maxOpWidth = len(op)
+		}
+	}
+	
+	colWidth := 12
+	
+	// Header
+	text := fmt.Sprintf("%-*s", maxOpWidth, "Scenario")
+	for _, client := range clients {
+		text += fmt.Sprintf(" %*s", colWidth, client)
+	}
+	text += fmt.Sprintf(" %*s", colWidth, "Best")
+	text += "\n"
+	
+	// Separator
+	text += fmt.Sprintf("%s", strings.Repeat("-", maxOpWidth))
+	for range clients {
+		text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
+	}
+	text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
+	text += "\n"
+	
+	// Data rows
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		text += fmt.Sprintf("%-*s", maxOpWidth, operation)
+		
+		bestDuration := time.Duration(0)
+		bestClient := ""
+		durations := make(map[string]time.Duration)
+		
+		for _, client := range clients {
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				duration := stats.AvgDuration
+				durations[client] = duration
+				text += fmt.Sprintf(" %*s", colWidth, formatDuration(duration))
+				
+				if bestDuration == 0 || duration < bestDuration {
+					bestDuration = duration
+					bestClient = client
+				}
+			} else {
+				text += fmt.Sprintf(" %*s", colWidth, "N/A")
+			}
+		}
+		
+		text += fmt.Sprintf(" %*s", colWidth, bestClient)
+		text += "\n"
+	}
+	
+	return text
+}
+
+// generateMemoryTable creates a memory comparison table
+func (m *MetricsCollector) generateMemoryTable(summary map[string]OperationSummary, operations, clients []string) string {
+	// Calculate column widths
+	maxOpWidth := 20
+	for _, op := range operations {
+		if len(op) > maxOpWidth {
+			maxOpWidth = len(op)
+		}
+	}
+	
+	colWidth := 12
+	
+	// Header
+	text := fmt.Sprintf("%-*s", maxOpWidth, "Scenario")
+	for _, client := range clients {
+		text += fmt.Sprintf(" %*s", colWidth, client)
+	}
+	text += fmt.Sprintf(" %*s", colWidth, "Best")
+	text += "\n"
+	
+	// Separator
+	text += fmt.Sprintf("%s", strings.Repeat("-", maxOpWidth))
+	for range clients {
+		text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
+	}
+	text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
+	text += "\n"
+	
+	// Data rows
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		text += fmt.Sprintf("%-*s", maxOpWidth, operation)
+		
+		bestMemory := int64(0)
+		bestClient := ""
+		
+		for _, client := range clients {
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				memory := stats.AvgMemory
+				text += fmt.Sprintf(" %*s", colWidth, formatBytes(memory))
+				
+				if bestMemory == 0 || memory < bestMemory {
+					bestMemory = memory
+					bestClient = client
+				}
+			} else {
+				text += fmt.Sprintf(" %*s", colWidth, "N/A")
+			}
+		}
+		
+		text += fmt.Sprintf(" %*s", colWidth, bestClient)
+		text += "\n"
+	}
+	
+	return text
+}
+
+// generateNanogitComparisonTable creates a comparison table showing nanogit performance vs others
+func (m *MetricsCollector) generateNanogitComparisonTable(summary map[string]OperationSummary, operations, clients []string, metric string) string {
+	// Calculate column widths
+	maxOpWidth := 20
+	for _, op := range operations {
+		if len(op) > maxOpWidth {
+			maxOpWidth = len(op)
+		}
+	}
+	
+	colWidth := 12
+	
+	// Header
+	text := fmt.Sprintf("%-*s", maxOpWidth, "Scenario")
+	for _, client := range clients {
+		if client != "nanogit" {
+			text += fmt.Sprintf(" %*s", colWidth, "vs "+client)
+		}
+	}
+	text += "\n"
+	
+	// Separator
+	text += fmt.Sprintf("%s", strings.Repeat("-", maxOpWidth))
+	for _, client := range clients {
+		if client != "nanogit" {
+			text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
+		}
+	}
+	text += "\n"
+	
+	// Data rows
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		nanogitStats, nanogitExists := opSummary.ClientStats["nanogit"]
+		if !nanogitExists {
+			continue
+		}
+		
+		text += fmt.Sprintf("%-*s", maxOpWidth, operation)
+		
+		for _, client := range clients {
+			if client == "nanogit" {
+				continue
+			}
+			
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				var nanogitValue, otherValue float64
+				
+				if metric == "duration" {
+					nanogitValue = float64(nanogitStats.AvgDuration.Nanoseconds())
+					otherValue = float64(stats.AvgDuration.Nanoseconds())
+				} else { // memory
+					nanogitValue = float64(nanogitStats.AvgMemory)
+					otherValue = float64(stats.AvgMemory)
+				}
+				
+				var multiplier float64
+				var displayText string
+				
+				if nanogitValue != 0 && otherValue != 0 {
+					if metric == "duration" {
+						// For duration: how many times faster is nanogit
+						multiplier = otherValue / nanogitValue
+						if multiplier >= 1.0 {
+							displayText = fmt.Sprintf("%.1fx faster", multiplier)
+						} else {
+							// nanogit is slower
+							multiplier = nanogitValue / otherValue
+							displayText = fmt.Sprintf("%.1fx slower", multiplier)
+						}
+					} else { // memory
+						// For memory: how many times less memory does nanogit use
+						if nanogitValue < otherValue {
+							multiplier = otherValue / nanogitValue
+							displayText = fmt.Sprintf("%.1fx less", multiplier)
+						} else {
+							// nanogit uses more memory
+							multiplier = nanogitValue / otherValue
+							displayText = fmt.Sprintf("%.1fx more", multiplier)
+						}
+					}
+				} else {
+					displayText = "N/A"
+				}
+				
+				text += fmt.Sprintf(" %*s", colWidth, displayText)
+			} else {
+				text += fmt.Sprintf(" %*s", colWidth, "N/A")
+			}
+		}
+		
+		text += "\n"
+	}
+	
+	return text
+}
+
+// formatDuration formats duration for table display
+func formatDuration(d time.Duration) string {
+	if d < time.Microsecond {
+		return fmt.Sprintf("%.0fns", float64(d.Nanoseconds()))
+	} else if d < time.Millisecond {
+		return fmt.Sprintf("%.1fμs", float64(d.Nanoseconds())/1000)
+	} else if d < time.Second {
+		return fmt.Sprintf("%.1fms", float64(d.Nanoseconds())/1000000)
+	} else {
+		return fmt.Sprintf("%.2fs", d.Seconds())
+	}
 }
 
 // Helper functions for statistical calculations
