@@ -400,36 +400,55 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 	}, nil
 }
 
+// PackfileStorageMode defines how packfile objects are stored during staging.
+type PackfileStorageMode int
+
+const (
+	// PackfileStorageAuto automatically chooses between memory and disk based on object count.
+	// Uses memory for small operations (<=10 objects) and disk for larger operations.
+	PackfileStorageAuto PackfileStorageMode = iota
+	
+	// PackfileStorageMemory always stores objects in memory for maximum performance.
+	// Best for small operations but can use significant memory for bulk operations.
+	PackfileStorageMemory
+	
+	// PackfileStorageDisk always stores objects in temporary files on disk.
+	// Best for bulk operations to minimize memory usage.
+	PackfileStorageDisk
+)
+
 // PackfileWriter helps create Git objects and pack them into a packfile.
 // It maintains state about the objects being written and handles the packfile format.
-// Uses memory for small operations (<= 10 objects) and temp file for bulk operations.
+// Storage behavior is configurable via PackfileStorageMode.
 type PackfileWriter struct {
 	// Track object hashes to avoid duplicates
 	objectHashes map[string]bool
-	// Small operations: store objects in memory
+	// Memory storage: store objects in memory
 	memoryObjects []PackfileObject
-	// Bulk operations: temporary file for streaming packfile data
+	// Disk storage: temporary file for streaming packfile data
 	tempFile *os.File
 	// Track if we have any commit (required for push)
 	hasCommit bool
 	// Track the last commit hash for reference updates
 	lastCommitHash hash.Hash
+	// Storage mode configuration
+	storageMode PackfileStorageMode
 
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
 }
 
 const (
-	// MemoryThreshold is the maximum number of objects to keep in memory
-	// before switching to file-based storage
+	// MemoryThreshold is the default threshold for auto mode
 	MemoryThreshold = 10
 )
 
-// NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm.
-func NewPackfileWriter(algo crypto.Hash) *PackfileWriter {
+// NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm and storage mode.
+func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *PackfileWriter {
 	return &PackfileWriter{
 		objectHashes:  make(map[string]bool),
 		memoryObjects: make([]PackfileObject, 0),
+		storageMode:   storageMode,
 		algo:          algo,
 	}
 }
@@ -744,25 +763,45 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 	return nil
 }
 
-// addObject adds an object using the appropriate storage method.
-// Uses memory for small operations and file for bulk operations.
-func (w *PackfileWriter) addObject(obj PackfileObject) error {
-	// If we're still under the memory threshold and no temp file exists, use memory
-	if len(w.objectHashes) < MemoryThreshold && w.tempFile == nil {
-		w.memoryObjects = append(w.memoryObjects, obj)
+// addObject adds an object using the appropriate storage method based on the storage mode.
+func (pw *PackfileWriter) addObject(obj PackfileObject) error {
+	switch pw.storageMode {
+	case PackfileStorageMemory:
+		// Always use memory storage
+		pw.memoryObjects = append(pw.memoryObjects, obj)
 		return nil
-	}
-
-	// Switch to file storage for bulk operations
-	if w.tempFile == nil {
-		// First time switching to file - migrate existing memory objects
-		if err := w.migrateToFile(); err != nil {
-			return fmt.Errorf("migrating to file storage: %w", err)
+		
+	case PackfileStorageDisk:
+		// Always use file storage
+		if pw.tempFile == nil {
+			// First object - create temp file
+			if err := pw.ensureTempFile(); err != nil {
+				return fmt.Errorf("creating temp file: %w", err)
+			}
 		}
-	}
+		return pw.writeObjectToFile(obj)
+		
+	case PackfileStorageAuto:
+		// Auto mode: use memory for small operations, file for bulk operations
+		if len(pw.objectHashes) < MemoryThreshold && pw.tempFile == nil {
+			pw.memoryObjects = append(pw.memoryObjects, obj)
+			return nil
+		}
 
-	// Write to temp file
-	return w.writeObjectToFile(obj)
+		// Switch to file storage for bulk operations
+		if pw.tempFile == nil {
+			// First time switching to file - migrate existing memory objects
+			if err := pw.migrateToFile(); err != nil {
+				return fmt.Errorf("migrating to file storage: %w", err)
+			}
+		}
+
+		// Write to temp file
+		return pw.writeObjectToFile(obj)
+		
+	default:
+		return fmt.Errorf("unknown storage mode: %v", pw.storageMode)
+	}
 }
 
 // migrateToFile creates a temp file and writes all memory objects to it.

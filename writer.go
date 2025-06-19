@@ -42,11 +42,18 @@ import (
 //
 //	// Push to remote
 //	return writer.Push(ctx)
-func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
+func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...WriterOption) (StagedWriter, error) {
+	// Apply writer options
+	opts, err := applyWriterOptions(options)
+	if err != nil {
+		return nil, fmt.Errorf("apply writer options: %w", err)
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Initialize staged writer",
 		"ref_name", ref.Name,
-		"ref_hash", ref.Hash.String())
+		"ref_hash", ref.Hash.String(),
+		"storage_mode", opts.StorageMode)
 
 	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
@@ -76,7 +83,20 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		"tree_hash", treeObj.Hash.String(),
 		"entry_count", len(entries))
 
-	writer := protocol.NewPackfileWriter(crypto.SHA1)
+	// Convert writer storage mode to protocol storage mode
+	var protocolStorageMode protocol.PackfileStorageMode
+	switch opts.StorageMode {
+	case PackfileStorageMemory:
+		protocolStorageMode = protocol.PackfileStorageMemory
+	case PackfileStorageDisk:
+		protocolStorageMode = protocol.PackfileStorageDisk
+	case PackfileStorageAuto:
+		protocolStorageMode = protocol.PackfileStorageAuto
+	default:
+		protocolStorageMode = protocol.PackfileStorageAuto
+	}
+
+	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode)
 	return &stagedWriter{
 		client:      c,
 		ref:         ref,
@@ -85,6 +105,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		lastTree:    treeObj,
 		objStorage:  objStorage,
 		treeEntries: entries,
+		storageMode: protocolStorageMode,
 	}, nil
 }
 
@@ -113,6 +134,8 @@ type stagedWriter struct {
 	objStorage storage.PackfileStorage
 	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
+	// Storage mode for packfile writer
+	storageMode protocol.PackfileStorageMode
 }
 
 // BlobExists checks if a blob exists at the given path in the repository.
@@ -593,7 +616,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 
 	logger.Debug("Packfile streamed successfully")
 
-	w.writer = protocol.NewPackfileWriter(crypto.SHA1)
+	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
 	w.ref.Hash = w.lastCommit.Hash
 
 	logger.Debug("Push completed",

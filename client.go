@@ -73,7 +73,7 @@ type Client interface {
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
 	// Write operations
-	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
+	NewStagedWriter(ctx context.Context, ref Ref, options ...WriterOption) (StagedWriter, error)
 }
 
 // httpClient is the private implementation of the Client interface.
