@@ -404,8 +404,8 @@ func ParsePackfile(payload []byte) (*PackfileReader, error) {
 type PackfileStorageMode int
 
 const (
-	// PackfileStorageAuto automatically chooses between memory and disk based on object count.
-	// Uses memory for small operations (<=10 objects) and disk for larger operations.
+	// PackfileStorageAuto automatically chooses between memory and disk based on object count and total size.
+	// Uses memory for small operations (<=10 objects or <=5MB) and disk for larger operations.
 	PackfileStorageAuto PackfileStorageMode = iota
 	
 	// PackfileStorageMemory always stores objects in memory for maximum performance.
@@ -433,14 +433,18 @@ type PackfileWriter struct {
 	lastCommitHash hash.Hash
 	// Storage mode configuration
 	storageMode PackfileStorageMode
+	// Track total byte size of objects for auto mode threshold
+	totalBytes int
 
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
 }
 
 const (
-	// MemoryThreshold is the default threshold for auto mode
+	// MemoryThreshold is the default object count threshold for auto mode
 	MemoryThreshold = 10
+	// MemoryBytesThreshold is the default byte size threshold for auto mode (5MB)
+	MemoryBytesThreshold = 5 * 1024 * 1024
 )
 
 // NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm and storage mode.
@@ -769,6 +773,7 @@ func (pw *PackfileWriter) addObject(obj PackfileObject) error {
 	case PackfileStorageMemory:
 		// Always use memory storage
 		pw.memoryObjects = append(pw.memoryObjects, obj)
+		pw.totalBytes += len(obj.Data)
 		return nil
 		
 	case PackfileStorageDisk:
@@ -779,12 +784,15 @@ func (pw *PackfileWriter) addObject(obj PackfileObject) error {
 				return fmt.Errorf("creating temp file: %w", err)
 			}
 		}
+		pw.totalBytes += len(obj.Data)
 		return pw.writeObjectToFile(obj)
 		
 	case PackfileStorageAuto:
 		// Auto mode: use memory for small operations, file for bulk operations
-		if len(pw.objectHashes) < MemoryThreshold && pw.tempFile == nil {
+		// Check both object count and total byte size thresholds
+		if len(pw.objectHashes) < MemoryThreshold && pw.totalBytes < MemoryBytesThreshold && pw.tempFile == nil {
 			pw.memoryObjects = append(pw.memoryObjects, obj)
+			pw.totalBytes += len(obj.Data)
 			return nil
 		}
 
@@ -797,6 +805,7 @@ func (pw *PackfileWriter) addObject(obj PackfileObject) error {
 		}
 
 		// Write to temp file
+		pw.totalBytes += len(obj.Data)
 		return pw.writeObjectToFile(obj)
 		
 	default:
