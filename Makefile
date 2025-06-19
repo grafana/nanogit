@@ -78,7 +78,7 @@ test-perf-setup:
 # Run all performance tests with all clients
 test-perf-all:
 	@echo "Running all performance tests (this may take a while)..."
-	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m .
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m  -run "Performance" .
 
 # Consistency tests - verify all clients produce identical results
 test-perf-consistency:
