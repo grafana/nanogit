@@ -12,23 +12,15 @@ import (
 )
 
 // NanogitClient implements the GitClient interface using nanogit
-type NanogitClient struct {
-	clients map[string]nanogit.Client // Cache clients by repo URL
-}
+type NanogitClient struct{}
 
 // NewNanogitClient creates a new nanogit client
 func NewNanogitClient() *NanogitClient {
-	return &NanogitClient{
-		clients: make(map[string]nanogit.Client),
-	}
+	return &NanogitClient{}
 }
 
-// getOrCreateClient gets a client for the repository, creating one if needed
-func (c *NanogitClient) getOrCreateClient(repoURL string) (nanogit.Client, error) {
-	if client, exists := c.clients[repoURL]; exists {
-		return client, nil
-	}
-
+// createClient gets a client for the repository, creating one if needed
+func (c *NanogitClient) createClient(repoURL string) (nanogit.Client, error) {
 	// Parse URL to extract credentials
 	u, err := url.Parse(repoURL)
 	if err != nil {
@@ -54,7 +46,6 @@ func (c *NanogitClient) getOrCreateClient(repoURL string) (nanogit.Client, error
 		return nil, fmt.Errorf("failed to create nanogit client: %w", err)
 	}
 
-	c.clients[repoURL] = client
 	return client, nil
 }
 
@@ -80,7 +71,7 @@ func (c *NanogitClient) Name() string {
 
 // CreateFile creates a new file in the repository
 func (c *NanogitClient) CreateFile(ctx context.Context, repoURL, path, content, message string) error {
-	client, err := c.getOrCreateClient(repoURL)
+	client, err := c.createClient(repoURL)
 	if err != nil {
 		return err
 	}
@@ -129,7 +120,7 @@ func (c *NanogitClient) CreateFile(ctx context.Context, repoURL, path, content, 
 
 // UpdateFile updates an existing file in the repository
 func (c *NanogitClient) UpdateFile(ctx context.Context, repoURL, path, content, message string) error {
-	client, err := c.getOrCreateClient(repoURL)
+	client, err := c.createClient(repoURL)
 	if err != nil {
 		return err
 	}
@@ -178,7 +169,7 @@ func (c *NanogitClient) UpdateFile(ctx context.Context, repoURL, path, content, 
 
 // DeleteFile deletes a file from the repository
 func (c *NanogitClient) DeleteFile(ctx context.Context, repoURL, path, message string) error {
-	client, err := c.getOrCreateClient(repoURL)
+	client, err := c.createClient(repoURL)
 	if err != nil {
 		return err
 	}
@@ -227,7 +218,7 @@ func (c *NanogitClient) DeleteFile(ctx context.Context, repoURL, path, message s
 
 // CompareCommits compares two commits and returns the differences
 func (c *NanogitClient) CompareCommits(ctx context.Context, repoURL, base, head string) (*CommitComparison, error) {
-	client, err := c.getOrCreateClient(repoURL)
+	client, err := c.createClient(repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +329,7 @@ func (c *NanogitClient) resolveCommitRef(ctx context.Context, client nanogit.Cli
 
 // GetFlatTree returns a flat listing of all files in the repository at a given ref
 func (c *NanogitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*TreeResult, error) {
-	client, err := c.getOrCreateClient(repoURL)
+	client, err := c.createClient(repoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -349,14 +340,8 @@ func (c *NanogitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*
 		return nil, fmt.Errorf("failed to get ref %s: %w", ref, err)
 	}
 
-	// Get the commit to get its tree hash
-	commit, err := client.GetCommit(ctx, gitRef.Hash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get commit: %w", err)
-	}
-
 	// Get the flat tree
-	flatTree, err := client.GetFlatTree(ctx, commit.Tree)
+	flatTree, err := client.GetFlatTree(ctx, gitRef.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flat tree: %w", err)
 	}
@@ -380,7 +365,7 @@ func (c *NanogitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*
 
 // BulkCreateFiles creates multiple files in a single commit
 func (c *NanogitClient) BulkCreateFiles(ctx context.Context, repoURL string, files []FileChange, message string) error {
-	client, err := c.getOrCreateClient(repoURL)
+	client, err := c.createClient(repoURL)
 	if err != nil {
 		return err
 	}
