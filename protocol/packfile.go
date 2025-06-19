@@ -719,36 +719,6 @@ func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRef
 	return nil
 }
 
-// writeObjectToBuf writes a single object to the specified buffer.
-// The object format is:
-// - Type and size (variable length)
-// - Compressed object data
-func (w *PackfileWriter) writeObjectToBuf(buf *bytes.Buffer, obj PackfileObject) error {
-	// Write type and size
-	size := len(obj.Data)
-	firstByte := byte(obj.Type)<<4 | byte(size&0x0f)
-	size >>= 4
-
-	for size > 0 {
-		firstByte |= 0x80
-		buf.WriteByte(firstByte)
-		firstByte = byte(size & 0x7f)
-		size >>= 7
-	}
-	buf.WriteByte(firstByte)
-
-	// Compress and write data
-	zw := zlib.NewWriter(buf)
-	if _, err := zw.Write(obj.Data); err != nil {
-		return fmt.Errorf("compressing object data: %w", err)
-	}
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("closing zlib writer: %w", err)
-	}
-
-	return nil
-}
-
 // writeObjectToWriter writes a single object to the specified writer.
 // The object format is:
 // - Type and size (variable length)
@@ -823,7 +793,7 @@ func (pw *PackfileWriter) addObject(obj PackfileObject) error {
 		// Write to temp file
 		pw.totalBytes += len(obj.Data)
 		return pw.writeObjectToFile(obj)
-		
+
 	default:
 		return fmt.Errorf("unknown storage mode: %v", pw.storageMode)
 	}
