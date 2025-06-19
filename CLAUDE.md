@@ -28,6 +28,12 @@ make test-integration  # Run integration tests (requires Docker)
 make test-providers    # Test against real Git providers (GitHub, GitLab, etc.)
 make test-coverage     # Generate coverage reports
 make test-coverage-html # View coverage in browser
+
+# Performance tests (in tests/performance/ directory)
+cd tests/performance && make test-perf-setup    # One-time setup for performance tests
+cd tests/performance && make test-perf-simple   # Quick consistency tests
+cd tests/performance && make test-perf-all      # Full performance benchmark suite
+cd tests/performance && make help               # See all performance testing targets
 ```
 
 ## Architecture Overview
@@ -67,6 +73,15 @@ make test-coverage-html # View coverage in browser
 - Real Git server testing using Testcontainers with Gitea
 - Provider compatibility tests against GitHub, GitLab, Bitbucket
 - Requires Docker for execution
+
+**Performance Tests** (`tests/performance/`):
+- Separate Go module with dedicated Makefile
+- Multi-client benchmarking (nanogit vs go-git vs git CLI)
+- Containerized testing with realistic repository data
+- Multiple repository sizes and operation types
+- Network latency simulation capabilities
+- Comprehensive metrics collection and reporting
+- See `tests/performance/README.md` for detailed documentation
 
 ## Development Notes
 

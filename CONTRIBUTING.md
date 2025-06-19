@@ -193,6 +193,49 @@ ginkgo -p
 
 **Note**: Integration tests require Docker to be running on your machine.
 
+#### Performance Tests
+
+nanogit includes a comprehensive performance testing suite to benchmark and compare nanogit against go-git and git CLI across various Git operations. These tests help ensure that performance improvements don't introduce regressions and provide insights into nanogit's relative performance.
+
+**Location**: `tests/performance/` (separate Go module)
+
+**Key Features**:
+- Containerized testing with Gitea servers for isolation
+- Multi-client comparison (nanogit, go-git, git CLI)
+- Multiple repository sizes (small, medium, large, xlarge)
+- Realistic test scenarios with pre-generated repository data
+- Network latency simulation for real-world conditions
+- Comprehensive metrics collection and reporting
+
+**Quick Start**:
+```bash
+# Generate test repository data (one-time setup)
+cd tests/performance && make test-perf-setup
+
+# Run basic consistency tests
+make test-perf-simple
+
+# Run all performance benchmarks  
+make test-perf-all
+```
+
+**Common Targets**:
+- `test-perf-simple` - Quick consistency verification (~3 min)
+- `test-perf-consistency` - Full client comparison (~5 min)
+- `test-perf-file-ops` - File operations benchmarks (~8 min)
+- `test-perf-tree` - Tree listing performance (~4 min)
+- `test-perf-bulk` - Bulk operations performance (~7 min)
+- `test-perf-small` - All tests on small repositories only (~3 min)
+
+**Requirements**:
+- Docker (for testcontainers)
+- Git CLI (for git-cli client testing)
+- Separate Go module in `tests/performance/`
+
+For detailed documentation, usage examples, and configuration options, see [tests/performance/README.md](tests/performance/README.md).
+
+**Note**: Performance tests are resource-intensive and disabled by default. They require `RUN_PERFORMANCE_TESTS=true` environment variable and Docker to be running.
+
 #### Provider Tests
 
 Provider tests validate nanogit's compatibility with various Git hosting services (GitHub, GitLab, etc.) by executing real-world workflows. These end-to-end tests ensure the client library functions correctly with actual Git providers, catching any significant integration issues or breaking changes.

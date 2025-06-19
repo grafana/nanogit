@@ -13,6 +13,7 @@ The performance tests are in a **separate Go module** (`tests/performance/go.mod
 
 ### Core Components
 
+- **Makefile**: Dedicated Makefile with all performance testing targets
 - **go.mod**: Separate module with performance testing dependencies
 - **types.go**: Common interfaces and data structures
 - **metrics.go**: Performance metrics collection and reporting
@@ -123,7 +124,15 @@ Focus testing on individual Git client implementations:
 
 **Important**: These tests require Docker and are disabled by default.
 
+Performance tests have a **dedicated Makefile** in the `tests/performance/` directory for better organization:
+
 ```bash
+# Change to performance testing directory
+cd tests/performance
+
+# See all available targets
+make help
+
 # First-time setup: Generate test repository archives (required)
 make test-perf-setup
 
@@ -151,6 +160,15 @@ make test-perf-xlarge           # All performance tests for xlarge repositories 
 # Complete test suites
 make test-perf                  # Core performance tests (consistency + file ops)
 make test-perf-all              # All performance tests (may take 30+ minutes)
+
+# Return to root directory when done
+cd ../..
+```
+
+**From Root Directory**: The main Makefile now redirects to the performance Makefile:
+```bash
+# This will show instructions to use the performance Makefile
+make test-perf
 ```
 
 ### Manual Test Execution
@@ -183,7 +201,7 @@ go test -bench=. -cpuprofile=cpu.prof -memprofile=mem.prof .
 cd ../..
 ```
 
-**Note**: The performance tests are in a separate Go module (`tests/performance/go.mod`) to avoid dependency conflicts with the main nanogit module. The make targets automatically handle the directory change.
+**Note**: The performance tests are in a separate Go module (`tests/performance/go.mod`) to avoid dependency conflicts with the main nanogit module. Performance tests now have their own dedicated Makefile for better organization and isolation.
 
 ### Environment Setup
 
