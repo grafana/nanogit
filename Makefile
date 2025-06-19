@@ -65,6 +65,7 @@ test-coverage-html:
 # Performance Testing Targets
 .PHONY: test-perf test-perf-consistency test-perf-simple test-perf-nanogit test-perf-gogit test-perf-cli
 .PHONY: test-perf-file-ops test-perf-compare test-perf-tree test-perf-bulk test-perf-all test-perf-setup
+.PHONY: test-perf-small test-perf-medium test-perf-large test-perf-xlarge
 
 # Setup performance test data (one-time setup)
 test-perf-setup:
@@ -118,6 +119,23 @@ test-perf-cli:
 	@echo "Running performance tests for git-cli client only..."
 	@echo "Note: This runs consistency tests which include git-cli comparisons"
 	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run TestSimpleClientConsistency . | grep -E "(git-cli|PASS|FAIL|RUN)"
+
+# Repository size-specific tests (run all test types for specific repo sizes)
+test-perf-small:
+	@echo "Running performance tests for small repositories only..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run "TestFileOperationsPerformance.*small|TestCompareCommitsPerformance.*small|TestGetFlatTreePerformance.*small|TestBulkOperationsPerformance.*small" .
+
+test-perf-medium:
+	@echo "Running performance tests for medium repositories only..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 20m -run "TestFileOperationsPerformance.*medium|TestCompareCommitsPerformance.*medium|TestGetFlatTreePerformance.*medium|TestBulkOperationsPerformance.*medium" .
+
+test-perf-large:
+	@echo "Running performance tests for large repositories only..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 25m -run "TestFileOperationsPerformance.*large|TestCompareCommitsPerformance.*large|TestGetFlatTreePerformance.*large|TestBulkOperationsPerformance.*large" .
+
+test-perf-xlarge:
+	@echo "Running performance tests for xlarge repositories only..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m -run "TestFileOperationsPerformance.*xlarge|TestCompareCommitsPerformance.*xlarge|TestGetFlatTreePerformance.*xlarge|TestBulkOperationsPerformance.*xlarge" .
 
 # Full performance benchmark suite (combines all test types)
 test-perf: test-perf-consistency test-perf-file-ops

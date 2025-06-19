@@ -109,6 +109,10 @@ Focus testing on individual Git client implementations:
 | `test-perf-compare` | Performance | ~10 min | Commit comparison benchmarks |
 | `test-perf-tree` | Performance | ~10 min | Tree listing benchmarks |
 | `test-perf-bulk` | Performance | ~15 min | Bulk operations benchmarks |
+| `test-perf-small` | Size-specific | ~15 min | All performance tests for small repositories only |
+| `test-perf-medium` | Size-specific | ~20 min | All performance tests for medium repositories only |
+| `test-perf-large` | Size-specific | ~25 min | All performance tests for large repositories only |
+| `test-perf-xlarge` | Size-specific | ~30 min | All performance tests for xlarge repositories only |
 | `test-perf` | Combined | ~25 min | Core tests (consistency + file ops) |
 | `test-perf-all` | Complete | ~30+ min | All performance tests |
 
@@ -136,6 +140,12 @@ make test-perf-bulk             # Bulk file operations
 make test-perf-nanogit          # Tests focusing on nanogit client
 make test-perf-gogit            # Tests focusing on go-git client
 make test-perf-cli              # Tests focusing on git-cli client
+
+# Repository size-specific tests (run all test types for specific repo sizes)
+make test-perf-small            # All performance tests for small repositories only
+make test-perf-medium           # All performance tests for medium repositories only  
+make test-perf-large            # All performance tests for large repositories only
+make test-perf-xlarge           # All performance tests for xlarge repositories only
 
 # Complete test suites
 make test-perf                  # Core performance tests (consistency + file ops)
