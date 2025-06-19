@@ -343,14 +343,14 @@ func (c *NanogitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*
 		return nil, err
 	}
 
-	// Resolve the ref to a commit hash
-	commitHash, err := c.resolveCommitRef(ctx, client, ref)
+	// Use GetRef to resolve the reference directly
+	gitRef, err := client.GetRef(ctx, ref)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve ref %s: %w", ref, err)
+		return nil, fmt.Errorf("failed to get ref %s: %w", ref, err)
 	}
 
 	// Get the commit to get its tree hash
-	commit, err := client.GetCommit(ctx, commitHash)
+	commit, err := client.GetCommit(ctx, gitRef.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commit: %w", err)
 	}
