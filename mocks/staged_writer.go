@@ -24,9 +24,10 @@ type FakeStagedWriter struct {
 		result1 bool
 		result2 error
 	}
-	CleanupStub        func() error
+	CleanupStub        func(context.Context) error
 	cleanupMutex       sync.RWMutex
 	cleanupArgsForCall []struct {
+		arg1 context.Context
 	}
 	cleanupReturns struct {
 		result1 error
@@ -202,17 +203,18 @@ func (fake *FakeStagedWriter) BlobExistsReturnsOnCall(i int, result1 bool, resul
 	}{result1, result2}
 }
 
-func (fake *FakeStagedWriter) Cleanup() error {
+func (fake *FakeStagedWriter) Cleanup(arg1 context.Context) error {
 	fake.cleanupMutex.Lock()
 	ret, specificReturn := fake.cleanupReturnsOnCall[len(fake.cleanupArgsForCall)]
 	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct {
-	}{})
+		arg1 context.Context
+	}{arg1})
 	stub := fake.CleanupStub
 	fakeReturns := fake.cleanupReturns
-	fake.recordInvocation("Cleanup", []interface{}{})
+	fake.recordInvocation("Cleanup", []interface{}{arg1})
 	fake.cleanupMutex.Unlock()
 	if stub != nil {
-		return stub()
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -226,10 +228,17 @@ func (fake *FakeStagedWriter) CleanupCallCount() int {
 	return len(fake.cleanupArgsForCall)
 }
 
-func (fake *FakeStagedWriter) CleanupCalls(stub func() error) {
+func (fake *FakeStagedWriter) CleanupCalls(stub func(context.Context) error) {
 	fake.cleanupMutex.Lock()
 	defer fake.cleanupMutex.Unlock()
 	fake.CleanupStub = stub
+}
+
+func (fake *FakeStagedWriter) CleanupArgsForCall(i int) context.Context {
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
+	argsForCall := fake.cleanupArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeStagedWriter) CleanupReturns(result1 error) {

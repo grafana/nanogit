@@ -49,7 +49,7 @@ type StagedWriter interface {
 	// Cleanup releases any resources held by the writer and clears all staged changes.
 	// This should be called when the writer is no longer needed or to cancel all pending changes.
 	// After calling Cleanup, the writer should not be used for further operations.
-	Cleanup() error
+	Cleanup(ctx context.Context) error
 }
 
 // Client defines the interface for interacting with a Git repository.

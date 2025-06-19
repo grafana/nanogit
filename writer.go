@@ -1071,7 +1071,10 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 //   - Resets the writer state
 //
 // After calling Cleanup, the writer should not be used for further operations.
-func (w *stagedWriter) Cleanup() error {
+func (w *stagedWriter) Cleanup(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+	logger.Debug("Cleaning up staged writer")
+
 	// Clean up the packfile writer (removes temp files)
 	if err := w.writer.Cleanup(); err != nil {
 		return fmt.Errorf("cleanup packfile writer: %w", err)
@@ -1083,5 +1086,6 @@ func (w *stagedWriter) Cleanup() error {
 	// Reset writer state
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
 	
+	logger.Debug("Staged writer cleanup completed")
 	return nil
 }
