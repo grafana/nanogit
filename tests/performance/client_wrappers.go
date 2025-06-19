@@ -8,10 +8,10 @@ import (
 
 // ClientWrapper wraps the client implementations to handle type conversions
 type ClientWrapper struct {
-	name     string
-	nanogit  *clients.NanogitClient
-	gogit    *clients.GoGitClient
-	gitcli   *clients.GitCLIClient
+	name    string
+	nanogit *clients.NanogitClient
+	gogit   *clients.GoGitClient
+	gitcli  *clients.GitCLIClient
 }
 
 func NewNanogitClientWrapper() GitClient {
@@ -116,7 +116,7 @@ func (w *ClientWrapper) GetFlatTree(ctx context.Context, repoURL, ref string) (*
 
 func (w *ClientWrapper) BulkCreateFiles(ctx context.Context, repoURL string, files []FileChange, message string) error {
 	clientFiles := convertFileChanges(files)
-	
+
 	switch {
 	case w.nanogit != nil:
 		return w.nanogit.BulkCreateFiles(ctx, repoURL, clientFiles, message)

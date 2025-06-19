@@ -31,14 +31,14 @@ func (m *MetricsCollector) RecordOperation(client, operation, scenario, repoSize
 	var memBefore, memAfter runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memBefore)
-	
+
 	start := time.Now()
 	err := fn()
 	duration := time.Since(start)
-	
+
 	runtime.ReadMemStats(&memAfter)
 	memUsed := int64(memAfter.Alloc - memBefore.Alloc)
-	
+
 	result := BenchmarkResult{
 		Client:     client,
 		Operation:  operation,
@@ -49,11 +49,11 @@ func (m *MetricsCollector) RecordOperation(client, operation, scenario, repoSize
 		RepoSize:   repoSize,
 		FileCount:  fileCount,
 	}
-	
+
 	if err != nil {
 		result.Error = err.Error()
 	}
-	
+
 	m.RecordBenchmark(result)
 }
 
@@ -69,7 +69,7 @@ func (m *MetricsCollector) GenerateReport() *PerformanceReport {
 		Summary:   m.generateSummary(),
 		Results:   m.results,
 	}
-	
+
 	return report
 }
 
@@ -78,27 +78,27 @@ func (m *MetricsCollector) SaveReport(outputDir string) error {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	report := m.GenerateReport()
-	
+
 	// Save JSON report
 	jsonFile := fmt.Sprintf("%s/performance_report_%s.json", outputDir, time.Now().Format("20060102_150405"))
 	jsonData, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal report: %w", err)
 	}
-	
+
 	if err := os.WriteFile(jsonFile, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write JSON report: %w", err)
 	}
-	
+
 	// Save text summary
 	textFile := fmt.Sprintf("%s/performance_summary_%s.txt", outputDir, time.Now().Format("20060102_150405"))
 	textData := m.generateTextSummary()
 	if err := os.WriteFile(textFile, []byte(textData), 0644); err != nil {
 		return fmt.Errorf("failed to write text report: %w", err)
 	}
-	
+
 	fmt.Printf("Reports saved to:\n  JSON: %s\n  Text: %s\n", jsonFile, textFile)
 	return nil
 }
@@ -106,34 +106,34 @@ func (m *MetricsCollector) SaveReport(outputDir string) error {
 // generateSummary creates performance summary statistics
 func (m *MetricsCollector) generateSummary() map[string]OperationSummary {
 	summary := make(map[string]OperationSummary)
-	
+
 	// Group results by operation
 	operationGroups := make(map[string][]BenchmarkResult)
 	for _, result := range m.results {
 		key := fmt.Sprintf("%s_%s", result.Operation, result.Scenario)
 		operationGroups[key] = append(operationGroups[key], result)
 	}
-	
+
 	// Calculate statistics for each operation
 	for operation, results := range operationGroups {
 		if len(results) == 0 {
 			continue
 		}
-		
+
 		clientStats := make(map[string]ClientStats)
-		
+
 		// Group by client
 		clientGroups := make(map[string][]BenchmarkResult)
 		for _, result := range results {
 			clientGroups[result.Client] = append(clientGroups[result.Client], result)
 		}
-		
+
 		// Calculate stats per client
 		for client, clientResults := range clientGroups {
 			durations := make([]time.Duration, 0, len(clientResults))
 			memories := make([]int64, 0, len(clientResults))
 			successCount := 0
-			
+
 			for _, result := range clientResults {
 				durations = append(durations, result.Duration)
 				memories = append(memories, result.MemoryUsed)
@@ -141,71 +141,71 @@ func (m *MetricsCollector) generateSummary() map[string]OperationSummary {
 					successCount++
 				}
 			}
-			
+
 			sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
 			sort.Slice(memories, func(i, j int) bool { return memories[i] < memories[j] })
-			
+
 			stats := ClientStats{
-				Count:        len(clientResults),
-				SuccessRate:  float64(successCount) / float64(len(clientResults)),
-				AvgDuration:  calculateAverage(durations),
+				Count:          len(clientResults),
+				SuccessRate:    float64(successCount) / float64(len(clientResults)),
+				AvgDuration:    calculateAverage(durations),
 				MedianDuration: calculateMedian(durations),
-				P95Duration:  calculatePercentile(durations, 0.95),
-				AvgMemory:    calculateAverageMemory(memories),
-				MedianMemory: calculateMedianMemory(memories),
+				P95Duration:    calculatePercentile(durations, 0.95),
+				AvgMemory:      calculateAverageMemory(memories),
+				MedianMemory:   calculateMedianMemory(memories),
 			}
-			
+
 			clientStats[client] = stats
 		}
-		
+
 		summary[operation] = OperationSummary{
-			Operation:    operation,
-			ClientStats:  clientStats,
+			Operation:   operation,
+			ClientStats: clientStats,
 		}
 	}
-	
+
 	return summary
 }
 
 // generateTextSummary creates a human-readable text summary
 func (m *MetricsCollector) generateTextSummary() string {
 	summary := m.generateSummary()
-	
+
 	text := fmt.Sprintf("Performance Benchmark Report\n")
 	text += fmt.Sprintf("Generated: %s\n", time.Now().Format(time.RFC3339))
 	text += fmt.Sprintf("Total Benchmarks: %d\n\n", len(m.results))
-	
+
 	// Sort operations by name
 	operations := make([]string, 0, len(summary))
 	for operation := range summary {
 		operations = append(operations, operation)
 	}
 	sort.Strings(operations)
-	
+
 	for _, operation := range operations {
 		opSummary := summary[operation]
 		text += fmt.Sprintf("=== %s ===\n", operation)
-		
+
 		// Sort clients by name
 		clients := make([]string, 0, len(opSummary.ClientStats))
 		for client := range opSummary.ClientStats {
 			clients = append(clients, client)
 		}
 		sort.Strings(clients)
-		
+
 		for _, client := range clients {
 			stats := opSummary.ClientStats[client]
 			text += fmt.Sprintf("\n%s:\n", client)
 			text += fmt.Sprintf("  Runs: %d\n", stats.Count)
 			text += fmt.Sprintf("  Success Rate: %.2f%%\n", stats.SuccessRate*100)
-			text += fmt.Sprintf("  Duration - Avg: %v, Median: %v, P95: %v\n", 
+			text += fmt.Sprintf("  Duration - Avg: %v, Median: %v, P95: %v\n",
 				stats.AvgDuration, stats.MedianDuration, stats.P95Duration)
-			text += fmt.Sprintf("  Memory - Avg: %s, Median: %s\n", 
+			text += fmt.Sprintf("  Memory - Avg: %s, Median: %s\n",
 				formatBytes(stats.AvgMemory), formatBytes(stats.MedianMemory))
 		}
 		text += "\n"
 	}
-	
+
 	return text
 }
 
@@ -280,14 +280,14 @@ func formatBytes(bytes int64) string {
 
 // Report structures
 type PerformanceReport struct {
-	Timestamp time.Time                    `json:"timestamp"`
-	Summary   map[string]OperationSummary  `json:"summary"`
-	Results   []BenchmarkResult            `json:"results"`
+	Timestamp time.Time                   `json:"timestamp"`
+	Summary   map[string]OperationSummary `json:"summary"`
+	Results   []BenchmarkResult           `json:"results"`
 }
 
 type OperationSummary struct {
-	Operation   string                  `json:"operation"`
-	ClientStats map[string]ClientStats  `json:"client_stats"`
+	Operation   string                 `json:"operation"`
+	ClientStats map[string]ClientStats `json:"client_stats"`
 }
 
 type ClientStats struct {

@@ -73,4 +73,3 @@ type BenchmarkConfig struct {
 	FileCount int
 	Timeout   time.Duration
 }
-

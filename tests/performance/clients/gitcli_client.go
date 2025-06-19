@@ -325,23 +325,28 @@ func (c *GitCLIClient) BulkCreateFiles(ctx context.Context, repoURL string, file
 		if _, err := c.runGitCommand(ctx, repoPath, "commit", "-m", message); err != nil {
 			return fmt.Errorf("failed to commit bulk changes: %w", err)
 		}
-	}
 
-	// If this is the first commit and we actually committed something, set up the main branch and push to establish the repository
-	if isFirstCommit && len(strings.TrimSpace(string(statusOutput))) > 0 {
-		// Set up main branch
-		if _, err := c.runGitCommand(ctx, repoPath, "branch", "-M", "main"); err != nil {
-			return fmt.Errorf("failed to rename branch to main: %w", err)
-		}
+		// If this is the first commit, set up the main branch and push to establish the repository
+		if isFirstCommit {
+			// Set up main branch
+			if _, err := c.runGitCommand(ctx, repoPath, "branch", "-M", "main"); err != nil {
+				return fmt.Errorf("failed to rename branch to main: %w", err)
+			}
 
-		// Push to origin to establish the repository
-		if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main", "--force"); err != nil {
-			return fmt.Errorf("failed to push initial commit: %w", err)
-		}
+			// Push to origin to establish the repository
+			if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main", "--force"); err != nil {
+				return fmt.Errorf("failed to push initial commit: %w", err)
+			}
 
-		// Set up tracking
-		if _, err := c.runGitCommand(ctx, repoPath, "branch", "--set-upstream-to=origin/main", "main"); err != nil {
-			return fmt.Errorf("failed to set upstream: %w", err)
+			// Set up tracking
+			if _, err := c.runGitCommand(ctx, repoPath, "branch", "--set-upstream-to=origin/main", "main"); err != nil {
+				return fmt.Errorf("failed to set upstream: %w", err)
+			}
+		} else {
+			// For subsequent commits, just push to the existing main branch
+			if _, err := c.runGitCommandWithOutput(ctx, repoPath, "push", "origin", "main"); err != nil {
+				return fmt.Errorf("failed to push bulk changes: %w", err)
+			}
 		}
 	}
 

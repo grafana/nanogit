@@ -8,7 +8,7 @@ func convertCommitComparison(c *clients.CommitComparison) *CommitComparison {
 	if c == nil {
 		return nil
 	}
-	
+
 	files := make([]FileChangeSummary, len(c.Files))
 	for i, f := range c.Files {
 		files[i] = FileChangeSummary{
@@ -18,7 +18,7 @@ func convertCommitComparison(c *clients.CommitComparison) *CommitComparison {
 			Deletions: f.Deletions,
 		}
 	}
-	
+
 	return &CommitComparison{
 		FilesChanged: c.FilesChanged,
 		Additions:    c.Additions,
@@ -31,7 +31,7 @@ func convertTreeResult(t *clients.TreeResult) *TreeResult {
 	if t == nil {
 		return nil
 	}
-	
+
 	files := make([]TreeFile, len(t.Files))
 	for i, f := range t.Files {
 		files[i] = TreeFile{
@@ -40,7 +40,7 @@ func convertTreeResult(t *clients.TreeResult) *TreeResult {
 			Type: f.Type,
 		}
 	}
-	
+
 	return &TreeResult{
 		Files: files,
 		Count: t.Count,

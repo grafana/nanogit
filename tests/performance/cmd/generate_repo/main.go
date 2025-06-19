@@ -529,11 +529,11 @@ func generateExistingFilePath(spec RepoSpec, commitIndex, fileIndex int) string 
 	// Generate paths that match the initial file structure
 	baseDirs := []string{"dashboards", "alerts", "datasources", "folders", "assets", "docs"}
 	baseDir := baseDirs[rand.Intn(len(baseDirs))]
-	
+
 	// Generate a file index that should exist in the initial structure
 	existingIndex := rand.Intn(spec.FileCount)
 	filename := generateFilename(existingIndex, spec)
-	
+
 	// Sometimes add subdirectory
 	if rand.Float32() < 0.6 {
 		var subDirs []string
@@ -550,7 +550,7 @@ func generateExistingFilePath(spec RepoSpec, commitIndex, fileIndex int) string 
 		subDir := subDirs[rand.Intn(len(subDirs))]
 		return fmt.Sprintf("%s/%s/%s", baseDir, subDir, filename)
 	}
-	
+
 	return fmt.Sprintf("%s/%s", baseDir, filename)
 }
 
