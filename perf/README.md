@@ -5,7 +5,7 @@ Comprehensive performance benchmarking comparing nanogit, go-git, and git CLI us
 ## Quick Start
 
 ```bash
-cd tests/performance
+cd perf
 
 # One-time setup
 make test-perf-setup
@@ -44,7 +44,7 @@ make help                  # See all available targets
 
 - **Docker**: For testcontainers
 - **Git CLI**: For git-cli client testing
-- **Separate Go module**: `tests/performance/go.mod`
+- **Separate Go module**: `perf/go.mod`
 
 ## Configuration
 
@@ -71,7 +71,7 @@ export PERF_TEST_REPOS=small,medium
 Pre-generated Git repository archives provide fast, consistent testing:
 
 ```bash
-cd tests/performance
+cd perf
 go run ./cmd/generate_repo
 ```
 
@@ -86,7 +86,7 @@ Each archive contains a complete Git repository with realistic file structure, v
 ## Manual Execution
 
 ```bash
-cd tests/performance
+cd perf
 export RUN_PERFORMANCE_TESTS=true
 
 # Run specific tests

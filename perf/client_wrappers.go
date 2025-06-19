@@ -3,7 +3,7 @@ package performance
 import (
 	"context"
 
-	"github.com/grafana/nanogit/tests/performance/clients"
+	"github.com/grafana/nanogit/perf/clients"
 )
 
 // ClientWrapper wraps the client implementations to handle type conversions

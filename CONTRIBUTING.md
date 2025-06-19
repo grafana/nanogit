@@ -197,7 +197,7 @@ ginkgo -p
 
 nanogit includes a comprehensive performance testing suite to benchmark and compare nanogit against go-git and git CLI across various Git operations. These tests help ensure that performance improvements don't introduce regressions and provide insights into nanogit's relative performance.
 
-**Location**: `tests/performance/` (separate Go module)
+**Location**: `perf/` (separate Go module)
 
 **Key Features**:
 - Containerized testing with Gitea servers for isolation
@@ -210,7 +210,7 @@ nanogit includes a comprehensive performance testing suite to benchmark and comp
 **Quick Start**:
 ```bash
 # Generate test repository data (one-time setup)
-cd tests/performance && make test-perf-setup
+cd perf && make test-perf-setup
 
 # Run basic consistency tests
 make test-perf-simple
@@ -230,9 +230,9 @@ make test-perf-all
 **Requirements**:
 - Docker (for testcontainers)
 - Git CLI (for git-cli client testing)
-- Separate Go module in `tests/performance/`
+- Separate Go module in `perf/`
 
-For detailed documentation, usage examples, and configuration options, see [tests/performance/README.md](tests/performance/README.md).
+For detailed documentation, usage examples, and configuration options, see [perf/README.md](perf/README.md).
 
 **Note**: Performance tests are resource-intensive and disabled by default. They require `RUN_PERFORMANCE_TESTS=true` environment variable and Docker to be running.
 

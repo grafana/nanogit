@@ -1,6 +1,6 @@
 package performance
 
-import "github.com/grafana/nanogit/tests/performance/clients"
+import "github.com/grafana/nanogit/perf/clients"
 
 // Convert client types to performance types to avoid import cycles
 

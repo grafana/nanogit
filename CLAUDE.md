@@ -29,11 +29,11 @@ make test-providers    # Test against real Git providers (GitHub, GitLab, etc.)
 make test-coverage     # Generate coverage reports
 make test-coverage-html # View coverage in browser
 
-# Performance tests (in tests/performance/ directory)
-cd tests/performance && make test-perf-setup    # One-time setup for performance tests
-cd tests/performance && make test-perf-simple   # Quick consistency tests
-cd tests/performance && make test-perf-all      # Full performance benchmark suite
-cd tests/performance && make help               # See all performance testing targets
+# Performance tests (in perf/ directory)
+cd perf && make test-perf-setup    # One-time setup for performance tests
+cd perf && make test-perf-simple   # Quick consistency tests
+cd perf && make test-perf-all      # Full performance benchmark suite
+cd perf && make help               # See all performance testing targets
 ```
 
 ## Architecture Overview
@@ -74,7 +74,7 @@ cd tests/performance && make help               # See all performance testing ta
 - Provider compatibility tests against GitHub, GitLab, Bitbucket
 - Requires Docker for execution
 
-**Performance Tests** (`tests/performance/`):
+**Performance Tests** (`perf/`):
 - Separate Go module with dedicated Makefile
 - Multi-client benchmarking (nanogit vs go-git vs git CLI)
 - Containerized testing with realistic repository data
