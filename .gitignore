@@ -6,3 +6,4 @@ unit.cov
 integration.cov
 node_modules
 yarn.lock
+reports

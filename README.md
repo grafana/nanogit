@@ -11,31 +11,32 @@ nanogit is a lightweight Git implementation designed for cloud environments, wit
 
 ## Features
 
-* Support any HTTPS Git service that supports the Git Smart HTTP Protocol (version 2).
-* Secure HTTPS-based operations for Git objects (blobs, commits, trees, deltas)
-* Remote Git reference management via HTTPS
-* File system operations over HTTPS
-* Commit comparison and diffing capabilities
-* Authentication support (Basic Auth and API tokens)
-* SHA-1 repository compatibility
+- Support any HTTPS Git service that supports the Git Smart HTTP Protocol (version 2).
+- Secure HTTPS-based operations for Git objects (blobs, commits, trees, deltas)
+- Remote Git reference management via HTTPS
+- File system operations over HTTPS
+- Commit comparison and diffing capabilities
+- Authentication support (Basic Auth and API tokens)
+- SHA-1 repository compatibility
 
 ## Non-Goals
 
 The following features are explicitly not supported:
 
-* `git://` and Git-over-SSH protocols
-* File protocol (local Git operations)
-* Commit signing and signature verification
-* Full Git clones
-* Git hooks
-* Git configuration management
-* Direct .git directory access
-* "Dumb" servers
-* Complex permissions (all objects use mode 0644)
+- `git://` and Git-over-SSH protocols
+- File protocol (local Git operations)
+- Commit signing and signature verification
+- Full Git clones
+- Git hooks
+- Git configuration management
+- Direct .git directory access
+- "Dumb" servers
+- Complex permissions (all objects use mode 0644)
 
 ## Why nanogit?
 
 While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, nanogit is designed for cloud-native, multitenant environments requiring minimal, stateless operations.
+
 | Feature        | nanogit                                                | go-git                 |
 | -------------- | ------------------------------------------------------ | ---------------------- |
 | Protocol       | HTTPS-only                                             | All protocols          |
@@ -46,12 +47,25 @@ While [go-git](https://github.com/go-git/go-git) is a mature Git implementation,
 
 Choose nanogit for lightweight cloud services requiring stateless operations and minimal resources. Use go-git when you need full Git functionality, local operations, or advanced features.
 
+This are some of the performance differences between nanogit and go-git in some of the measured scenarios:
+
+| Scenario                                      | Speed Improvement | Memory Usage Improvement                         |
+| --------------------------------------------- | ----------------- | ------------------------------------------------ |
+| **CreateFile (XL repo)**                      | 262x faster       | 195x less memory                                 |
+| **UpdateFile (XL repo)**                      | 275x faster       | 180x less memory                                 |
+| **DeleteFile (XL repo)**                      | 269x faster       | 212x less memory                                 |
+| **BulkCreateFiles (1000 files, medium repo)** | 89x faster        | 24x more memory (regression, easy fix I believe) |
+| **CompareCommits (XL repo)**                  | 111x faster       | 114x less memory                                 |
+| **GetFlatTree (XL repo)**                     | 303x faster       | 137x less memory                                 |
+
+For detailed performance metrics, see the [latest performance report](test/performance/LAST_REPORT.md).
+
 ## Getting Started
 
 ### Prerequisites
 
-* Go 1.24 or later.
-* Git (for development)
+- Go 1.24 or later.
+- Git (for development)
 
 ### Installation
 
@@ -83,7 +97,7 @@ author := nanogit.Author{
     Time:  time.Now(),
 }
 committer := nanogit.Committer{
-    Name:  "Deploy Bot", 
+    Name:  "Deploy Bot",
     Email: "deploy@example.com",
     Time:  time.Now(),
 }
@@ -95,7 +109,6 @@ writer.Push(ctx)
 ## Storage and Caching
 
 nanogit offers a flexible storage system for managing Git objects with multiple implementation options. Git objects (commits, trees, blobs) are immutable by design - once created, their content and hash remain constant. This immutability enables efficient caching and sharing of objects across repositories. Local caching of these objects is crucial for performance as it reduces network requests and speeds up common operations like diffing, merging, and history traversal.
-
 
 ### Flexibility on context caching
 
@@ -112,7 +125,9 @@ nanogit provides flexibility in how Git objects are cached through context-based
 The context-based approach enables fine-grained control over object caching while maintaining clean separation of concerns.
 
 ### In-Memory Storage
+
 The default implementation uses an in-memory cache for Git objects, optimized for:
+
 - Stateless operations requiring minimal resource footprint
 - Temporary caching during Git operations
 - High-performance read/write operations
@@ -120,6 +135,7 @@ The default implementation uses an in-memory cache for Git objects, optimized fo
 ### Custom Storage Implementations
 
 The storage system is built with extensibility in mind through a well-defined interface. This allows you to:
+
 - Implement custom storage backends (Redis, disk, etc.)
 - Optimize storage for specific use cases
 - Scale storage independently of the Git operations
@@ -153,26 +169,27 @@ This project is currently in active development. While it's open source, it's im
 
 Want to learn how Git works? The following resources are useful:
 
-* [Git on the Server - The Protocols](https://git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols)
-* [Git Protocol v2](https://git-scm.com/docs/protocol-v2)
-* [Pack Protocol](https://git-scm.com/docs/pack-protocol)
-* [Git HTTP Backend](https://git-scm.com/docs/git-http-backend)
-* [HTTP Protocol](https://git-scm.com/docs/http-protocol)
-* [Git Protocol HTTP](https://git-scm.com/docs/gitprotocol-http)
-* [Git Protocol v2](https://git-scm.com/docs/gitprotocol-v2)
-* [Git Protocol Pack](https://git-scm.com/docs/gitprotocol-pack)
-* [Git Protocol Common](https://git-scm.com/docs/gitprotocol-common)
+- [Git on the Server - The Protocols](https://git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols)
+- [Git Protocol v2](https://git-scm.com/docs/protocol-v2)
+- [Pack Protocol](https://git-scm.com/docs/pack-protocol)
+- [Git HTTP Backend](https://git-scm.com/docs/git-http-backend)
+- [HTTP Protocol](https://git-scm.com/docs/http-protocol)
+- [Git Protocol HTTP](https://git-scm.com/docs/gitprotocol-http)
+- [Git Protocol v2](https://git-scm.com/docs/gitprotocol-v2)
+- [Git Protocol Pack](https://git-scm.com/docs/gitprotocol-pack)
+- [Git Protocol Common](https://git-scm.com/docs/gitprotocol-common)
 
 ## Security
 
-If you find a security vulnerability, please report it to security@grafana.com. For more information, see our [Security Policy](SECURITY.md).
+If you find a security vulnerability, please report it to <security@grafana.com>. For more information, see our [Security Policy](SECURITY.md).
 
 ## Support
 
-* GitHub Issues: [Create an issue](https://github.com/grafana/nanogit/issues)
-* Community: [Grafana Community Forums](https://community.grafana.com)
+- GitHub Issues: [Create an issue](https://github.com/grafana/nanogit/issues)
+- Community: [Grafana Community Forums](https://community.grafana.com)
 
 ## Acknowledgments
 
-* The Grafana team for their support and guidance
-* The open source community for their valuable feedback and contributions
+- The Grafana team for their support and guidance
+- The open source community for their valuable feedback and contributions
+
