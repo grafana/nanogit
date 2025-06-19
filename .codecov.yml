@@ -21,3 +21,5 @@ ignore:
   - "log/mocks/"
   - "log/noop.go"
   - "storage/noop.go"
+  - "perf/"
+

@@ -45,6 +45,11 @@ type StagedWriter interface {
 	// This is the final step that makes changes visible to others.
 	// It will update the reference to point to the last commit.
 	Push(ctx context.Context) error
+
+	// Cleanup releases any resources held by the writer and clears all staged changes.
+	// This should be called when the writer is no longer needed or to cancel all pending changes.
+	// After calling Cleanup, the writer should not be used for further operations.
+	Cleanup(ctx context.Context) error
 }
 
 // Client defines the interface for interacting with a Git repository.
@@ -73,7 +78,7 @@ type Client interface {
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
 	// Write operations
-	NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error)
+	NewStagedWriter(ctx context.Context, ref Ref, options ...WriterOption) (StagedWriter, error)
 }
 
 // httpClient is the private implementation of the Client interface.

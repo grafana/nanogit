@@ -24,6 +24,17 @@ type FakeStagedWriter struct {
 		result1 bool
 		result2 error
 	}
+	CleanupStub        func(context.Context) error
+	cleanupMutex       sync.RWMutex
+	cleanupArgsForCall []struct {
+		arg1 context.Context
+	}
+	cleanupReturns struct {
+		result1 error
+	}
+	cleanupReturnsOnCall map[int]struct {
+		result1 error
+	}
 	CommitStub        func(context.Context, string, nanogit.Author, nanogit.Committer) (*nanogit.Commit, error)
 	commitMutex       sync.RWMutex
 	commitArgsForCall []struct {
@@ -190,6 +201,67 @@ func (fake *FakeStagedWriter) BlobExistsReturnsOnCall(i int, result1 bool, resul
 		result1 bool
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeStagedWriter) Cleanup(arg1 context.Context) error {
+	fake.cleanupMutex.Lock()
+	ret, specificReturn := fake.cleanupReturnsOnCall[len(fake.cleanupArgsForCall)]
+	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.CleanupStub
+	fakeReturns := fake.cleanupReturns
+	fake.recordInvocation("Cleanup", []interface{}{arg1})
+	fake.cleanupMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeStagedWriter) CleanupCallCount() int {
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
+	return len(fake.cleanupArgsForCall)
+}
+
+func (fake *FakeStagedWriter) CleanupCalls(stub func(context.Context) error) {
+	fake.cleanupMutex.Lock()
+	defer fake.cleanupMutex.Unlock()
+	fake.CleanupStub = stub
+}
+
+func (fake *FakeStagedWriter) CleanupArgsForCall(i int) context.Context {
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
+	argsForCall := fake.cleanupArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeStagedWriter) CleanupReturns(result1 error) {
+	fake.cleanupMutex.Lock()
+	defer fake.cleanupMutex.Unlock()
+	fake.CleanupStub = nil
+	fake.cleanupReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeStagedWriter) CleanupReturnsOnCall(i int, result1 error) {
+	fake.cleanupMutex.Lock()
+	defer fake.cleanupMutex.Unlock()
+	fake.CleanupStub = nil
+	if fake.cleanupReturnsOnCall == nil {
+		fake.cleanupReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.cleanupReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeStagedWriter) Commit(arg1 context.Context, arg2 string, arg3 nanogit.Author, arg4 nanogit.Committer) (*nanogit.Commit, error) {
@@ -662,6 +734,8 @@ func (fake *FakeStagedWriter) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.blobExistsMutex.RLock()
 	defer fake.blobExistsMutex.RUnlock()
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
 	fake.commitMutex.RLock()
 	defer fake.commitMutex.RUnlock()
 	fake.createBlobMutex.RLock()

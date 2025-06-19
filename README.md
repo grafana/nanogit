@@ -7,17 +7,23 @@
 
 ## Overview
 
-nanogit is a lightweight Git implementation designed for cloud environments, with a focus on HTTPS-based operations. It provides a subset of Git functionality optimized for reading and writing Git objects over HTTPS.
+nanogit is a lightweight, cloud-native Git implementation designed for applications that need efficient Git operations over HTTPS without the complexity and resource overhead of traditional Git implementations.
 
 ## Features
 
-- Support any HTTPS Git service that supports the Git Smart HTTP Protocol (version 2).
-- Secure HTTPS-based operations for Git objects (blobs, commits, trees, deltas)
-- Remote Git reference management via HTTPS
-- File system operations over HTTPS
-- Commit comparison and diffing capabilities
-- Authentication support (Basic Auth and API tokens)
-- SHA-1 repository compatibility
+- **HTTPS-only Git operations** - Works with any Git service supporting Smart HTTP Protocol v2 (GitHub, GitLab, Bitbucket, etc.), eliminating the need for SSH key management in cloud environments
+
+- **Stateless architecture** - No local .git directory dependency, making it perfect for serverless functions, containers, and microservices where persistent local state isn't available or desired
+
+- **Memory-optimized design** - Streaming packfile operations and configurable writing modes minimize memory usage, crucial for bulk operations and memory-constrained environments
+
+- **Flexible storage architecture** - Pluggable object storage and configurable writing modes allow optimization for different deployment patterns, from high-performance in-memory operations to memory-efficient disk-based processing
+
+- **Cloud-native authentication** - Built-in support for Basic Auth and API tokens, designed for automated workflows and CI/CD systems without interactive authentication
+
+- **Essential Git operations** - Focused on core functionality (read/write objects, commit operations, diffing) without the complexity of full Git implementations, reducing attack surface and resource requirements
+
+- **High performance** - Significantly faster than traditional Git implementations for common cloud operations, with up to 300x speed improvements for certain scenarios
 
 ## Non-Goals
 
@@ -40,7 +46,7 @@ While [go-git](https://github.com/go-git/go-git) is a mature Git implementation,
 | Feature        | nanogit                                                | go-git                 |
 | -------------- | ------------------------------------------------------ | ---------------------- |
 | Protocol       | HTTPS-only                                             | All protocols          |
-| Storage        | Stateless, configurable storage (memory, disk, custom) | Local disk operations  |
+| Storage        | Stateless, configurable object storage + writing modes | Local disk operations  |
 | Scope          | Essential operations only                              | Full Git functionality |
 | Use Case       | Cloud services, multitenant                            | General purpose        |
 | Resource Usage | Minimal footprint                                      | Full Git features      |
@@ -49,14 +55,14 @@ Choose nanogit for lightweight cloud services requiring stateless operations and
 
 This are some of the performance differences between nanogit and go-git in some of the measured scenarios:
 
-| Scenario                                      | Speed Improvement | Memory Usage Improvement                         |
-| --------------------------------------------- | ----------------- | ------------------------------------------------ |
-| **CreateFile (XL repo)**                      | 262x faster       | 195x less memory                                 |
-| **UpdateFile (XL repo)**                      | 275x faster       | 180x less memory                                 |
-| **DeleteFile (XL repo)**                      | 269x faster       | 212x less memory                                 |
-| **BulkCreateFiles (1000 files, medium repo)** | 89x faster        | 24x more memory (regression, easy fix I believe) |
-| **CompareCommits (XL repo)**                  | 111x faster       | 114x less memory                                 |
-| **GetFlatTree (XL repo)**                     | 303x faster       | 137x less memory                                 |
+| Scenario                                  | Speed       | Memory Usage |
+| ----------------------------------------- | ----------- | ------------ |
+| CreateFile (XL repo)                      | 262x faster | 195x less    |
+| UpdateFile (XL repo)                      | 275x faster | 180x less    |
+| DeleteFile (XL repo)                      | 269x faster | 212x less    |
+| BulkCreateFiles (1000 files, medium repo) | 50x faster  | 9x less      |
+| CompareCommits (XL repo)                  | 111x faster | 114x less    |
+| GetFlatTree (XL repo)                     | 303x faster | 137x less    |
 
 For detailed performance metrics, see the [latest performance report](test/performance/LAST_REPORT.md).
 
@@ -106,42 +112,43 @@ commit, err := writer.Commit(ctx, "Add feature and update docs", author, committ
 writer.Push(ctx)
 ```
 
-## Storage and Caching
+### Configurable Writing Modes
 
-nanogit offers a flexible storage system for managing Git objects with multiple implementation options. Git objects (commits, trees, blobs) are immutable by design - once created, their content and hash remain constant. This immutability enables efficient caching and sharing of objects across repositories. Local caching of these objects is crucial for performance as it reduces network requests and speeds up common operations like diffing, merging, and history traversal.
+nanogit provides flexible writing modes to optimize memory usage during write operations:
 
-### Flexibility on context caching
+```go
+// Auto mode (default) - smart memory/disk switching
+writer, err := client.NewStagedWriter(ctx, ref)
 
-nanogit provides flexibility in how Git objects are cached through context-based storage configuration. This allows different parts of your application to use different storage strategies:
+// Memory mode - maximum performance
+writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithMemoryStorage())
 
-- Use in-memory storage for temporary operations
-- Implement persistent storage for long-running processes
-- Configure different storage backends per request
-- Share storage across multiple operations
-- Optimize storage based on specific use cases
-- Scale storage independently of Git operations
-- Persist Git objects across service restarts
+// Disk mode - minimal memory usage for bulk operations
+writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithDiskStorage())
+```
 
-The context-based approach enables fine-grained control over object caching while maintaining clean separation of concerns.
+For detailed information about writing modes, performance characteristics, and use cases, see [Storage Architecture Documentation](STORAGE_ARCHITECTURE.md).
 
-### In-Memory Storage
+## Storage Architecture
 
-The default implementation uses an in-memory cache for Git objects, optimized for:
+nanogit features a flexible two-layer storage architecture that separates concerns and allows independent optimization:
 
-- Stateless operations requiring minimal resource footprint
-- Temporary caching during Git operations
-- High-performance read/write operations
+1. **Writing modes**: Control temporary storage during packfile creation (memory/disk/auto)
+2. **Object storage**: Handle long-term caching and retrieval of Git objects (pluggable backends)
 
-### Custom Storage Implementations
+### Object Storage and Caching
 
-The storage system is built with extensibility in mind through a well-defined interface. This allows you to:
+nanogit provides context-based object storage with pluggable backends. The default in-memory implementation is optimized for stateless operations, but you can implement custom backends for persistent caching:
 
-- Implement custom storage backends (Redis, disk, etc.)
-- Optimize storage for specific use cases
-- Scale storage independently of the Git operations
-- Persist Git objects across service restarts
+```go
+// Custom storage example
+ctx = storage.ToContext(ctx, myRedisStorage)
+client, err := nanogit.NewHTTPClient(repo, options...)
+```
 
-To implement a custom storage backend, simply implement the `PackfileStorage` interface and put it using `storage.ToContext`.
+This enables sharing Git object cache across multiple repositories, persistent caching across service restarts, and optimization for specific deployment patterns.
+
+For detailed information about storage architecture, writing modes, and custom implementations, see [Storage Architecture Documentation](STORAGE_ARCHITECTURE.md).
 
 ## Testing
 
@@ -192,4 +199,3 @@ If you find a security vulnerability, please report it to <security@grafana.com>
 
 - The Grafana team for their support and guidance
 - The open source community for their valuable feedback and contributions
-

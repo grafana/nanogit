@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/grafana/nanogit/log"
@@ -12,6 +13,9 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
 )
+
+// ErrWriterCleanedUp is returned when trying to use a writer after cleanup has been called.
+var ErrWriterCleanedUp = errors.New("writer has been cleaned up and can no longer be used")
 
 // NewStagedWriter creates a new StagedWriter for staging changes to a Git reference.
 // It initializes the writer with the current state of the specified reference,
@@ -41,11 +45,18 @@ import (
 //
 //	// Push to remote
 //	return writer.Push(ctx)
-func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter, error) {
+func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...WriterOption) (StagedWriter, error) {
+	// Apply writer options
+	opts, err := applyWriterOptions(options)
+	if err != nil {
+		return nil, fmt.Errorf("apply writer options: %w", err)
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Initialize staged writer",
 		"ref_name", ref.Name,
-		"ref_hash", ref.Hash.String())
+		"ref_hash", ref.Hash.String(),
+		"storage_mode", opts.StorageMode)
 
 	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
@@ -75,7 +86,20 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		"tree_hash", treeObj.Hash.String(),
 		"entry_count", len(entries))
 
-	writer := protocol.NewPackfileWriter(crypto.SHA1)
+	// Convert writer storage mode to protocol storage mode
+	var protocolStorageMode protocol.PackfileStorageMode
+	switch opts.StorageMode {
+	case PackfileStorageMemory:
+		protocolStorageMode = protocol.PackfileStorageMemory
+	case PackfileStorageDisk:
+		protocolStorageMode = protocol.PackfileStorageDisk
+	case PackfileStorageAuto:
+		protocolStorageMode = protocol.PackfileStorageAuto
+	default:
+		protocolStorageMode = protocol.PackfileStorageAuto
+	}
+
+	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode)
 	return &stagedWriter{
 		client:      c,
 		ref:         ref,
@@ -84,6 +108,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref) (StagedWriter
 		lastTree:    treeObj,
 		objStorage:  objStorage,
 		treeEntries: entries,
+		storageMode: protocolStorageMode,
 	}, nil
 }
 
@@ -112,6 +137,18 @@ type stagedWriter struct {
 	objStorage storage.PackfileStorage
 	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
+	// Storage mode for packfile writer
+	storageMode protocol.PackfileStorageMode
+	// Track if cleanup has been called
+	isCleanedUp bool
+}
+
+// checkCleanupState returns an error if the writer has been cleaned up.
+func (w *stagedWriter) checkCleanupState() error {
+	if w.isCleanedUp {
+		return ErrWriterCleanedUp
+	}
+	return nil
 }
 
 // BlobExists checks if a blob exists at the given path in the repository.
@@ -130,6 +167,10 @@ type stagedWriter struct {
 //
 //	exists, err := writer.BlobExists(ctx, "src/main.go")
 func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return false, err
+	}
+
 	if path == "" {
 		return false, ErrEmptyPath
 	}
@@ -165,6 +206,10 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 //
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
@@ -220,6 +265,10 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
@@ -274,6 +323,10 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
@@ -330,6 +383,10 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 //	    fmt.Printf("Found %s: %s\n", entry.Type, entry.Name)
 //	}
 func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return nil, err
+	}
+
 	existing, ok := w.treeEntries[path]
 	if !ok {
 		return nil, NewPathNotFoundError(path)
@@ -389,6 +446,10 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 //
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	logger := log.FromContext(ctx)
 	if path == "" || path == "." {
 		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
@@ -477,6 +538,10 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 //	}
 //	commit, err := writer.Commit(ctx, "Add new features", author, author)
 func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return nil, err
+	}
+
 	if message == "" {
 		return nil, ErrEmptyCommitMessage
 	}
@@ -555,6 +620,10 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 //	    log.Printf("Failed to push changes: %v", err)
 //	}
 func (w *stagedWriter) Push(ctx context.Context) error {
+	if err := w.checkCleanupState(); err != nil {
+		return err
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Push changes",
 		"ref_name", w.ref.Name,
@@ -565,18 +634,34 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 		return ErrNothingToPush
 	}
 
-	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
+	// Create a pipe to stream packfile data directly from WritePackfile to ReceivePack
+	pipeReader, pipeWriter := io.Pipe()
+	
+	// Channel to capture any error from WritePackfile goroutine
+	writeErrChan := make(chan error, 1)
+	
+	// Start WritePackfile in a goroutine, writing to the pipe
+	go func() {
+		defer pipeWriter.Close()
+		err := w.writer.WritePackfile(pipeWriter, w.ref.Name, w.ref.Hash)
+		writeErrChan <- err
+	}()
+	
+	// Call ReceivePack with the pipe reader (this will stream the data)
+	_, err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
-		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, err)
-	}
-
-	logger.Debug("Packfile prepared", "packfile_size", len(packfile))
-
-	if _, err := w.client.ReceivePack(ctx, packfile); err != nil {
+		pipeReader.Close() // Close reader to unblock the writer goroutine
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
+	
+	// Check for any error from the WritePackfile goroutine
+	if writeErr := <-writeErrChan; writeErr != nil {
+		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, writeErr)
+	}
 
-	w.writer = protocol.NewPackfileWriter(crypto.SHA1)
+	logger.Debug("Packfile streamed successfully")
+
+	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
 	w.ref.Hash = w.lastCommit.Hash
 
 	logger.Debug("Push completed",
@@ -630,6 +715,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			}
 
 			w.writer.AddObject(treeObj)
+			w.objStorage.Add(&treeObj)
 			logger.Debug("add new tree object", "path", currentPath, "hash", treeObj.Hash.String(), "child", current.Hash, "child_path", current.FileName)
 
 			// Add this tree to the parent's entries
@@ -639,7 +725,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Hash:     treeObj.Hash.String(),
 			}
 
-			w.objStorage.Add(&treeObj)
 			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
 				Hash: treeObj.Hash,
@@ -664,7 +749,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				Hash:     newObj.Hash.String(),
 			}
 
-			w.objStorage.Add(newObj)
 			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
 				Hash: newObj.Hash,
@@ -680,8 +764,8 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 		}
 
 		w.writer.AddObject(newRoot)
-		w.lastTree = &newRoot
 		w.objStorage.Add(&newRoot)
+		w.lastTree = &newRoot
 
 		return nil
 	}
@@ -733,6 +817,7 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.Pa
 
 	w.writer.AddObject(newObj)
 	w.objStorage.Add(&newObj)
+	w.objStorage.Delete(treeObj.Hash)
 
 	logger.Debug("Tree entry updated",
 		"fileName", current.FileName,
@@ -772,7 +857,6 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("remove file from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
-		w.objStorage.Add(newRootObj)
 		logger.Debug("removed file from root", "file", fileName, "new_root_hash", newRootObj.Hash.String())
 		return nil
 	}
@@ -830,7 +914,6 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		updatedChildHash = newObj.Hash
 
 		// Update our references
-		w.objStorage.Add(newObj)
 		w.treeEntries[currentPath] = &FlatTreeEntry{
 			Path: currentPath,
 			Hash: newObj.Hash,
@@ -881,7 +964,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			return fmt.Errorf("remove directory from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
-		w.objStorage.Add(newRootObj)
 		logger.Debug("removed directory from root", "dir", dirName, "new_root_hash", newRootObj.Hash.String())
 		return nil
 	}
@@ -939,7 +1021,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		updatedChildHash = newObj.Hash
 
 		// Update our references
-		w.objStorage.Add(newObj)
 		w.treeEntries[currentPath] = &FlatTreeEntry{
 			Path: currentPath,
 			Hash: newObj.Hash,
@@ -1016,6 +1097,9 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 	}
 
 	w.writer.AddObject(newObj)
+	w.objStorage.Add(&newObj)
+	w.objStorage.Delete(treeObj.Hash)
+
 	logger.Debug("Tree entry removed",
 		"targetFileName", targetFileName,
 		"oldEntryCount", len(treeObj.Tree),
@@ -1023,4 +1107,37 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 		"newHash", newObj.Hash.String())
 
 	return &newObj, nil
+}
+
+// Cleanup releases all resources held by the writer and clears staged changes.
+// This method:
+//   - Cleans up the underlying PackfileWriter (removes temp files)
+//   - Clears all staged tree entries from memory
+//   - Resets the writer state
+//
+// After calling Cleanup, the writer should not be used for further operations.
+func (w *stagedWriter) Cleanup(ctx context.Context) error {
+	if w.isCleanedUp {
+		return ErrWriterCleanedUp
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Cleaning up staged writer")
+
+	// Clean up the packfile writer (removes temp files)
+	if err := w.writer.Cleanup(); err != nil {
+		return fmt.Errorf("cleanup packfile writer: %w", err)
+	}
+
+	// Clear all staged changes from memory
+	w.treeEntries = make(map[string]*FlatTreeEntry)
+	
+	// Reset writer state
+	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
+	
+	// Mark as cleaned up to prevent further use
+	w.isCleanedUp = true
+	
+	logger.Debug("Staged writer cleanup completed")
+	return nil
 }

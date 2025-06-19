@@ -190,11 +190,12 @@ type FakeClient struct {
 		result1 []nanogit.Ref
 		result2 error
 	}
-	NewStagedWriterStub        func(context.Context, nanogit.Ref) (nanogit.StagedWriter, error)
+	NewStagedWriterStub        func(context.Context, nanogit.Ref, ...nanogit.WriterOption) (nanogit.StagedWriter, error)
 	newStagedWriterMutex       sync.RWMutex
 	newStagedWriterArgsForCall []struct {
 		arg1 context.Context
 		arg2 nanogit.Ref
+		arg3 []nanogit.WriterOption
 	}
 	newStagedWriterReturns struct {
 		result1 nanogit.StagedWriter
@@ -1074,19 +1075,20 @@ func (fake *FakeClient) ListRefsReturnsOnCall(i int, result1 []nanogit.Ref, resu
 	}{result1, result2}
 }
 
-func (fake *FakeClient) NewStagedWriter(arg1 context.Context, arg2 nanogit.Ref) (nanogit.StagedWriter, error) {
+func (fake *FakeClient) NewStagedWriter(arg1 context.Context, arg2 nanogit.Ref, arg3 ...nanogit.WriterOption) (nanogit.StagedWriter, error) {
 	fake.newStagedWriterMutex.Lock()
 	ret, specificReturn := fake.newStagedWriterReturnsOnCall[len(fake.newStagedWriterArgsForCall)]
 	fake.newStagedWriterArgsForCall = append(fake.newStagedWriterArgsForCall, struct {
 		arg1 context.Context
 		arg2 nanogit.Ref
-	}{arg1, arg2})
+		arg3 []nanogit.WriterOption
+	}{arg1, arg2, arg3})
 	stub := fake.NewStagedWriterStub
 	fakeReturns := fake.newStagedWriterReturns
-	fake.recordInvocation("NewStagedWriter", []interface{}{arg1, arg2})
+	fake.recordInvocation("NewStagedWriter", []interface{}{arg1, arg2, arg3})
 	fake.newStagedWriterMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3...)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -1100,17 +1102,17 @@ func (fake *FakeClient) NewStagedWriterCallCount() int {
 	return len(fake.newStagedWriterArgsForCall)
 }
 
-func (fake *FakeClient) NewStagedWriterCalls(stub func(context.Context, nanogit.Ref) (nanogit.StagedWriter, error)) {
+func (fake *FakeClient) NewStagedWriterCalls(stub func(context.Context, nanogit.Ref, ...nanogit.WriterOption) (nanogit.StagedWriter, error)) {
 	fake.newStagedWriterMutex.Lock()
 	defer fake.newStagedWriterMutex.Unlock()
 	fake.NewStagedWriterStub = stub
 }
 
-func (fake *FakeClient) NewStagedWriterArgsForCall(i int) (context.Context, nanogit.Ref) {
+func (fake *FakeClient) NewStagedWriterArgsForCall(i int) (context.Context, nanogit.Ref, []nanogit.WriterOption) {
 	fake.newStagedWriterMutex.RLock()
 	defer fake.newStagedWriterMutex.RUnlock()
 	argsForCall := fake.newStagedWriterArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeClient) NewStagedWriterReturns(result1 nanogit.StagedWriter, result2 error) {

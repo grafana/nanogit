@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,7 +21,7 @@ type RawClient interface {
 	IsAuthorized(ctx context.Context) (bool, error)
 	SmartInfo(ctx context.Context, service string) ([]byte, error)
 	UploadPack(ctx context.Context, data []byte) ([]byte, error)
-	ReceivePack(ctx context.Context, data []byte) ([]byte, error)
+	ReceivePack(ctx context.Context, data io.Reader) ([]byte, error)
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }

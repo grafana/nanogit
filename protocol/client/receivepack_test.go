@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
@@ -123,7 +124,7 @@ func TestReceivePack(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			response, err := client.ReceivePack(context.Background(), []byte("test data"))
+			response, err := client.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
