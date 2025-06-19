@@ -123,19 +123,19 @@ test-perf-cli:
 # Repository size-specific tests (run all test types for specific repo sizes)
 test-perf-small:
 	@echo "Running performance tests for small repositories only..."
-	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run "TestFileOperationsPerformance.*small|TestCompareCommitsPerformance.*small|TestGetFlatTreePerformance.*small|TestBulkOperationsPerformance.*small" .
+	cd tests/performance && PERF_TEST_REPOS=small RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run "TestFileOperationsPerformance|TestCompareCommitsPerformance|TestGetFlatTreePerformance|TestBulkOperationsPerformance" .
 
 test-perf-medium:
 	@echo "Running performance tests for medium repositories only..."
-	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 20m -run "TestFileOperationsPerformance.*medium|TestCompareCommitsPerformance.*medium|TestGetFlatTreePerformance.*medium|TestBulkOperationsPerformance.*medium" .
+	cd tests/performance && PERF_TEST_REPOS=medium RUN_PERFORMANCE_TESTS=true go test -v -timeout 20m -run "TestFileOperationsPerformance|TestCompareCommitsPerformance|TestGetFlatTreePerformance|TestBulkOperationsPerformance" .
 
 test-perf-large:
 	@echo "Running performance tests for large repositories only..."
-	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 25m -run "TestFileOperationsPerformance.*large|TestCompareCommitsPerformance.*large|TestGetFlatTreePerformance.*large|TestBulkOperationsPerformance.*large" .
+	cd tests/performance && PERF_TEST_REPOS=large RUN_PERFORMANCE_TESTS=true go test -v -timeout 25m -run "TestFileOperationsPerformance|TestCompareCommitsPerformance|TestGetFlatTreePerformance|TestBulkOperationsPerformance" .
 
 test-perf-xlarge:
 	@echo "Running performance tests for xlarge repositories only..."
-	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m -run "TestFileOperationsPerformance.*xlarge|TestCompareCommitsPerformance.*xlarge|TestGetFlatTreePerformance.*xlarge|TestBulkOperationsPerformance.*xlarge" .
+	cd tests/performance && PERF_TEST_REPOS=xlarge RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m -run "TestFileOperationsPerformance|TestCompareCommitsPerformance|TestGetFlatTreePerformance|TestBulkOperationsPerformance" .
 
 # Full performance benchmark suite (combines all test types)
 test-perf: test-perf-consistency test-perf-file-ops

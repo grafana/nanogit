@@ -31,7 +31,8 @@ The performance tests are in a **separate Go module** (`tests/performance/go.mod
 ### Self-Contained Testing
 
 - Uses testcontainers to spin up Gitea servers automatically
-- Generates test repositories with realistic data patterns
+- **One-time Setup**: Repository extraction and container provisioning happens once per test run in TestMain
+- Generates test repositories with realistic data patterns (done once during setup)
 - Simulates network latency for more realistic benchmarks
 - No external dependencies on GitHub or other services
 
@@ -100,21 +101,21 @@ Focus testing on individual Git client implementations:
 | Make Target | Purpose | Runtime | Description |
 |-------------|---------|---------|-------------|
 | `test-perf-setup` | Setup | 1-2 min | Generate test repository archives (one-time) |
-| `test-perf-simple` | Consistency | ~5 min | Basic client functionality verification |
-| `test-perf-consistency` | Consistency | ~10 min | Full cross-client comparison |
-| `test-perf-nanogit` | Client-specific | ~5 min | Focus on nanogit client testing |
-| `test-perf-gogit` | Client-specific | ~5 min | Focus on go-git client testing |
-| `test-perf-cli` | Client-specific | ~5 min | Focus on git-cli client testing |
-| `test-perf-file-ops` | Performance | ~15 min | File operations benchmarks |
-| `test-perf-compare` | Performance | ~10 min | Commit comparison benchmarks |
-| `test-perf-tree` | Performance | ~10 min | Tree listing benchmarks |
-| `test-perf-bulk` | Performance | ~15 min | Bulk operations benchmarks |
-| `test-perf-small` | Size-specific | ~15 min | All performance tests for small repositories only |
-| `test-perf-medium` | Size-specific | ~20 min | All performance tests for medium repositories only |
-| `test-perf-large` | Size-specific | ~25 min | All performance tests for large repositories only |
-| `test-perf-xlarge` | Size-specific | ~30 min | All performance tests for xlarge repositories only |
-| `test-perf` | Combined | ~25 min | Core tests (consistency + file ops) |
-| `test-perf-all` | Complete | ~30+ min | All performance tests |
+| `test-perf-simple` | Consistency | ~3 min | Basic client functionality verification |
+| `test-perf-consistency` | Consistency | ~5 min | Full cross-client comparison |
+| `test-perf-nanogit` | Client-specific | ~3 min | Focus on nanogit client testing |
+| `test-perf-gogit` | Client-specific | ~3 min | Focus on go-git client testing |
+| `test-perf-cli` | Client-specific | ~3 min | Focus on git-cli client testing |
+| `test-perf-file-ops` | Performance | ~8 min | File operations benchmarks |
+| `test-perf-compare` | Performance | ~5 min | Commit comparison benchmarks |
+| `test-perf-tree` | Performance | ~4 min | Tree listing benchmarks |
+| `test-perf-bulk` | Performance | ~7 min | Bulk operations benchmarks |
+| `test-perf-small` | Size-specific | ~3 min | All performance tests for small repositories only |
+| `test-perf-medium` | Size-specific | ~5 min | All performance tests for medium repositories only |
+| `test-perf-large` | Size-specific | ~7 min | All performance tests for large repositories only |
+| `test-perf-xlarge` | Size-specific | ~10 min | All performance tests for xlarge repositories only |
+| `test-perf` | Combined | ~15 min | Core tests (consistency + file ops) |
+| `test-perf-all` | Complete | ~20 min | All performance tests |
 
 ## Usage
 
@@ -199,6 +200,11 @@ export RUN_PERFORMANCE_TESTS=true
 
 # Optional: Network latency simulation (milliseconds)
 export PERF_TEST_LATENCY_MS=100  # Simulates 100ms network latency
+
+# Optional: Select specific repositories to provision (comma-separated)
+export PERF_TEST_REPOS=small,medium  # Only provision small and medium repos
+# Available sizes: small, medium, large, xlarge
+# If not set, all repositories are provisioned
 
 # Tests are self-contained - no external repos needed!
 ```
@@ -315,15 +321,23 @@ type RepoSpec struct {
 ### Performance Considerations
 
 - Tests run in isolated Docker containers with controlled environments
+- **Optimized Setup**: Repository extraction and container setup happens once per test run (in TestMain), not per test function
+- **Shared Infrastructure**: All test functions reuse the same Gitea container and mounted repositories
 - Memory measurements include GC cycles for accuracy
 - Multiple iterations provide statistical significance
 - Network latency can be simulated for realistic testing
 - Results are cached and aggregated for reporting
 
-### Go-Git Optimizations
+### Infrastructure Optimizations
 
-The go-git client has been optimized for better performance:
+**Benchmark Suite Setup**:
+- **Global Suite**: Uses a shared BenchmarkSuite instance across all test functions via TestMain
+- **One-time Repository Setup**: Repository extraction, mounting, and container provisioning happens once per test run
+- **Selective Repository Provisioning**: Only extracts repositories needed for the specific test run (controlled by `PERF_TEST_REPOS`)
+- **Shared Gitea Container**: All tests reuse the same containerized Gitea server instance
+- **Reduced Test Runtime**: Eliminates 1-2 minutes of setup overhead per test function
 
+**Go-Git Client Optimizations**:
 - **Shallow Clones**: Uses `--depth=1` for file operations to minimize data transfer
 - **Single Branch**: Only clones the default branch with `SingleBranch: true`
 - **No Repository Caching**: Fresh clone for each operation ensures consistent test conditions

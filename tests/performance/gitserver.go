@@ -312,6 +312,41 @@ func (s *GitServer) ProvisionTestRepositories(ctx context.Context) ([]*Repositor
 	return repositories, nil
 }
 
+// ProvisionSelectedRepositories extracts and mounts only the specified repositories
+func (s *GitServer) ProvisionSelectedRepositories(ctx context.Context, repoSizes []string) ([]*Repository, error) {
+	specs := GetStandardSpecs()
+	repositories := make([]*Repository, 0)
+	
+	// Create a map of available specs for easy lookup
+	specMap := make(map[string]*RepoSpec)
+	for _, spec := range specs {
+		specMap[spec.Name] = &spec
+	}
+
+	for _, repoSize := range repoSizes {
+		spec, exists := specMap[repoSize]
+		if !exists {
+			return nil, fmt.Errorf("repository size %s not found in available specs", repoSize)
+		}
+
+		// Create user for this repository
+		user, err := s.CreateUser(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create user for %s repository: %w", spec.Name, err)
+		}
+
+		// Extract and mount pre-created repository
+		repo, err := s.extractAndMountRepository(ctx, spec.Name, user)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract and mount %s repository: %w", spec.Name, err)
+		}
+
+		repositories = append(repositories, repo)
+	}
+
+	return repositories, nil
+}
+
 // extractAndMountRepository extracts a pre-created repository archive and mounts it in Gitea
 func (s *GitServer) extractAndMountRepository(ctx context.Context, repoName string, user *User) (*Repository, error) {
 	// Path to the archive file
