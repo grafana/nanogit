@@ -55,14 +55,14 @@ Choose nanogit for lightweight cloud services requiring stateless operations and
 
 This are some of the performance differences between nanogit and go-git in some of the measured scenarios:
 
-| Scenario                                      | Speed Improvement | Memory Usage Improvement                         |
-| --------------------------------------------- | ----------------- | ------------------------------------------------ |
-| **CreateFile (XL repo)**                      | 262x faster       | 195x less memory                                 |
-| **UpdateFile (XL repo)**                      | 275x faster       | 180x less memory                                 |
-| **DeleteFile (XL repo)**                      | 269x faster       | 212x less memory                                 |
-| **BulkCreateFiles (1000 files, medium repo)** | 89x faster        | 24x more memory (regression, easy fix I believe) |
-| **CompareCommits (XL repo)**                  | 111x faster       | 114x less memory                                 |
-| **GetFlatTree (XL repo)**                     | 303x faster       | 137x less memory                                 |
+| Scenario                                  | Speed       | Memory Usage |
+| ----------------------------------------- | ----------- | ------------ |
+| CreateFile (XL repo)                      | 262x faster | 195x less    |
+| UpdateFile (XL repo)                      | 275x faster | 180x less    |
+| DeleteFile (XL repo)                      | 269x faster | 212x less    |
+| BulkCreateFiles (1000 files, medium repo) | 50x faster  | 9x less      |
+| CompareCommits (XL repo)                  | 111x faster | 114x less    |
+| GetFlatTree (XL repo)                     | 303x faster | 137x less    |
 
 For detailed performance metrics, see the [latest performance report](test/performance/LAST_REPORT.md).
 
@@ -199,4 +199,3 @@ If you find a security vulnerability, please report it to <security@grafana.com>
 
 - The Grafana team for their support and guidance
 - The open source community for their valuable feedback and contributions
-
