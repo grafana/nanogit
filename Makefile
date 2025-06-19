@@ -38,7 +38,7 @@ test-coverage:
 		--cover \
 		--coverpkg=./... \
 		--coverprofile=unit.cov \
-		./... \
+		. ./log ./mocks ./options ./protocol ./storage \
 		-- -test.short
 
 	@echo "Running integration tests with coverage..."
@@ -61,3 +61,12 @@ test-coverage:
 
 test-coverage-html:
 	go tool cover -html=coverage.txt
+
+# Performance Testing 
+# For performance tests, use the dedicated Makefile in perf/
+# Example: cd perf && make test-perf-all
+.PHONY: test-perf
+test-perf:
+	@echo "Performance tests have been moved to perf/Makefile"
+	@echo "Run: cd perf && make test-perf-all"
+	@echo "Or see: cd perf && make help"
