@@ -30,10 +30,10 @@ func determineRequiredRepositories() []string {
 			return result
 		}
 	}
-	
+
 	// Get test run arguments
 	args := os.Args
-	
+
 	// Look for -run flag patterns that indicate specific repository sizes
 	for i, arg := range args {
 		if arg == "-run" && i+1 < len(args) {
@@ -45,7 +45,7 @@ func determineRequiredRepositories() []string {
 			return result
 		}
 	}
-	
+
 	// Default: provision all repositories if no specific pattern found
 	return []string{"small", "medium", "large", "xlarge"}
 }
@@ -53,12 +53,12 @@ func determineRequiredRepositories() []string {
 // extractRepoSizesFromPattern extracts repository sizes from test name patterns
 func extractRepoSizesFromPattern(pattern string) []string {
 	repoSizes := make(map[string]bool)
-	
+
 	// Check for size-specific patterns - be more thorough
 	pattern = strings.ToLower(pattern)
-	
+
 	// Look for explicit size mentions in various contexts:
-	// - ".*small" patterns 
+	// - ".*small" patterns
 	// - "small_repo" patterns
 	// - "TestFunctionName.*small" patterns
 	if strings.Contains(pattern, "small") {
@@ -75,7 +75,7 @@ func extractRepoSizesFromPattern(pattern string) []string {
 			repoSizes["large"] = true
 		}
 	}
-	
+
 	// Convert map to slice
 	result := make([]string, 0, len(repoSizes))
 	// Maintain consistent order
@@ -84,27 +84,27 @@ func extractRepoSizesFromPattern(pattern string) []string {
 			result = append(result, size)
 		}
 	}
-	
+
 	// If no specific sizes found, check if it's a known size-specific make target pattern
 	if len(result) == 0 {
 		// Check for patterns that match our make targets
 		makeTargetPatterns := map[string][]string{
-			"testfileoperationsperformance.*small|testcomparecommitsperformance.*small|testgetflattreeperformance.*small|testbulkoperationsperformance.*small": {"small"},
+			"testfileoperationsperformance.*small|testcomparecommitsperformance.*small|testgetflattreeperformance.*small|testbulkoperationsperformance.*small":     {"small"},
 			"testfileoperationsperformance.*medium|testcomparecommitsperformance.*medium|testgetflattreeperformance.*medium|testbulkoperationsperformance.*medium": {"medium"},
-			"testfileoperationsperformance.*large|testcomparecommitsperformance.*large|testgetflattreeperformance.*large|testbulkoperationsperformance.*large": {"large"},
+			"testfileoperationsperformance.*large|testcomparecommitsperformance.*large|testgetflattreeperformance.*large|testbulkoperationsperformance.*large":     {"large"},
 			"testfileoperationsperformance.*xlarge|testcomparecommitsperformance.*xlarge|testgetflattreeperformance.*xlarge|testbulkoperationsperformance.*xlarge": {"xlarge"},
 		}
-		
+
 		for makePattern, sizes := range makeTargetPatterns {
 			if strings.Contains(pattern, makePattern) {
 				return sizes
 			}
 		}
-		
+
 		// Default: provision all repositories if no specific pattern found
 		return []string{"small", "medium", "large", "xlarge"}
 	}
-	
+
 	return result
 }
 
@@ -339,16 +339,44 @@ func TestCompareCommitsPerformance(t *testing.T) {
 	suite := getGlobalSuite()
 	require.NotNil(t, suite, "Global suite not initialized - TestMain should have set this up")
 
-	allTestCases := []struct {
+	// Define repository sizes and commit ranges to test
+	repoSizes := []string{"small", "medium", "large", "xlarge"}
+	commitRanges := []struct {
+		name       string
+		steps      int
+		baseCommit string
+		headCommit string
+	}{
+		{"adjacent_commits", 1, "HEAD~1", "HEAD"},
+		{"few_commits", 5, "HEAD~5", "HEAD"},
+		{"max_commits", 10, "HEAD~10", "HEAD"},
+	}
+
+	// Generate test cases dynamically
+	var allTestCases []struct {
 		name         string
 		repoSize     string
 		baseCommit   string
 		headCommit   string
 		expectedDiff int
-	}{
-		{"adjacent_commits", "medium", "HEAD~1", "HEAD", 1},
-		{"distant_commits", "medium", "HEAD~10", "HEAD", 10},
-		{"large_diff", "large", "HEAD~20", "HEAD", 20},
+	}
+
+	for _, repoSize := range repoSizes {
+		for _, commitRange := range commitRanges {
+			allTestCases = append(allTestCases, struct {
+				name         string
+				repoSize     string
+				baseCommit   string
+				headCommit   string
+				expectedDiff int
+			}{
+				name:         fmt.Sprintf("%s_%s", commitRange.name, repoSize),
+				repoSize:     repoSize,
+				baseCommit:   commitRange.baseCommit,
+				headCommit:   commitRange.headCommit,
+				expectedDiff: commitRange.steps,
+			})
+		}
 	}
 
 	// Only run test cases for repositories that are actually available
@@ -408,15 +436,35 @@ func TestGetFlatTreePerformance(t *testing.T) {
 	suite := getGlobalSuite()
 	require.NotNil(t, suite, "Global suite not initialized - TestMain should have set this up")
 
-	allTestCases := []struct {
+	// Define repository sizes and expected file counts for tree operations
+	repoSizes := []string{"small", "medium", "large", "xlarge"}
+	repoFileCount := map[string]int{
+		"small":  50,
+		"medium": 500,
+		"large":  2000,
+		"xlarge": 10000,
+	}
+
+	// Generate test cases dynamically
+	var allTestCases []struct {
 		name      string
 		repoSize  string
 		ref       string
 		fileCount int
-	}{
-		{"small_tree", "small", "HEAD", 50},
-		{"medium_tree", "medium", "HEAD", 500},
-		{"large_tree", "large", "HEAD", 2000},
+	}
+
+	for _, repoSize := range repoSizes {
+		allTestCases = append(allTestCases, struct {
+			name      string
+			repoSize  string
+			ref       string
+			fileCount int
+		}{
+			name:      fmt.Sprintf("%s_tree", repoSize),
+			repoSize:  repoSize,
+			ref:       "HEAD",
+			fileCount: repoFileCount[repoSize],
+		})
 	}
 
 	// Only run test cases for repositories that are actually available
@@ -475,14 +523,34 @@ func TestBulkOperationsPerformance(t *testing.T) {
 	suite := getGlobalSuite()
 	require.NotNil(t, suite, "Global suite not initialized - TestMain should have set this up")
 
-	allTestCases := []struct {
+	// Define repository sizes and file counts to test
+	repoSizes := []string{"small", "medium", "large", "xlarge"}
+	fileCounts := []int{100, 1000}
+
+	// Generate test cases dynamically
+	var allTestCases []struct {
 		name      string
 		repoSize  string
 		fileCount int
-	}{
-		{"bulk_10_files", "small", 10},
-		{"bulk_100_files", "medium", 100},
-		{"bulk_1000_files", "large", 1000},
+	}
+
+	for _, repoSize := range repoSizes {
+		if repoSize == "xlarge" || repoSize == "large" {
+			// Skip xlarge for bulk operations to avoid excessive load
+			continue
+		}
+
+		for _, fileCount := range fileCounts {
+			allTestCases = append(allTestCases, struct {
+				name      string
+				repoSize  string
+				fileCount int
+			}{
+				name:      fmt.Sprintf("bulk_%d_files_%s", fileCount, repoSize),
+				repoSize:  repoSize,
+				fileCount: fileCount,
+			})
+		}
 	}
 
 	// Only run test cases for repositories that are actually available
@@ -538,7 +606,7 @@ func generateTestFiles(count int) []FileChange {
 
 	for i := 0; i < count; i++ {
 		files[i] = FileChange{
-			Path:    fmt.Sprintf("bulk/file_%04d.txt", i),
+			Path:    fmt.Sprintf("bulk/file_%d%04d.txt", count, i),
 			Content: fmt.Sprintf("This is test file number %d\nGenerated for bulk operation testing\n", i),
 			Action:  "create",
 		}
@@ -555,7 +623,7 @@ func TestMain(m *testing.M) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Get network latency from environment (default 0ms)
 	latencyMs := 0
 	if envLatency := os.Getenv("PERF_TEST_LATENCY_MS"); envLatency != "" {
@@ -568,13 +636,13 @@ func TestMain(m *testing.M) {
 	// Determine which repositories are needed based on test patterns
 	requiredRepos := determineRequiredRepositories()
 	fmt.Printf("Setting up global benchmark suite with repositories: %v (this may take 1-2 minutes)...\n", requiredRepos)
-	
+
 	// Create global suite with only required repositories
 	globalSuiteMux.Lock()
 	var err error
 	globalSuite, err = NewBenchmarkSuiteWithSelectedRepos(ctx, networkLatency, requiredRepos)
 	globalSuiteMux.Unlock()
-	
+
 	if err != nil {
 		fmt.Printf("Failed to create global benchmark suite: %v\n", err)
 		os.Exit(1)

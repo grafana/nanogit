@@ -66,6 +66,9 @@ test-coverage-html:
 .PHONY: test-perf test-perf-consistency test-perf-simple test-perf-nanogit test-perf-gogit test-perf-cli
 .PHONY: test-perf-file-ops test-perf-compare test-perf-tree test-perf-bulk test-perf-all test-perf-setup
 .PHONY: test-perf-small test-perf-medium test-perf-large test-perf-xlarge
+.PHONY: test-perf-tree-small test-perf-tree-medium test-perf-tree-large test-perf-tree-xlarge
+.PHONY: test-perf-bulk-small test-perf-bulk-medium test-perf-bulk-large test-perf-bulk-xlarge
+.PHONY: test-perf-compare-small test-perf-compare-medium test-perf-compare-large test-perf-compare-xlarge
 
 # Setup performance test data (one-time setup)
 test-perf-setup:
@@ -136,6 +139,59 @@ test-perf-large:
 test-perf-xlarge:
 	@echo "Running performance tests for xlarge repositories only..."
 	cd tests/performance && PERF_TEST_REPOS=xlarge RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m -run "TestFileOperationsPerformance|TestCompareCommitsPerformance|TestGetFlatTreePerformance|TestBulkOperationsPerformance" .
+
+# Repository size-specific FlatTree benchmarks
+test-perf-tree-small:
+	@echo "Running FlatTree performance tests for small repositories..."
+	cd tests/performance && PERF_TEST_REPOS=small RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestGetFlatTreePerformance/small_tree" .
+
+test-perf-tree-medium:
+	@echo "Running FlatTree performance tests for medium repositories..."
+	cd tests/performance && PERF_TEST_REPOS=medium RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestGetFlatTreePerformance/medium_tree" .
+
+test-perf-tree-large:
+	@echo "Running FlatTree performance tests for large repositories..."
+	cd tests/performance && PERF_TEST_REPOS=large RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run "TestGetFlatTreePerformance/large_tree" .
+
+test-perf-tree-xlarge:
+	@echo "Running FlatTree performance tests for xlarge repositories..."
+	cd tests/performance && PERF_TEST_REPOS=xlarge RUN_PERFORMANCE_TESTS=true go test -v -timeout 20m -run "TestGetFlatTreePerformance/xlarge_tree" .
+
+# Repository size-specific Bulk Operations benchmarks
+test-perf-bulk-small:
+	@echo "Running Bulk Operations performance tests for small repositories..."
+	cd tests/performance && PERF_TEST_REPOS=small RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestBulkOperationsPerformance/bulk_.*_small" .
+
+test-perf-bulk-medium:
+	@echo "Running Bulk Operations performance tests for medium repositories..."
+	cd tests/performance && PERF_TEST_REPOS=medium RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run "TestBulkOperationsPerformance/bulk_.*_medium" .
+
+# Note: Bulk operations skip large and xlarge repositories to avoid excessive load
+test-perf-bulk-large:
+	@echo "Bulk Operations tests skip large repositories - use test-perf-bulk instead for full coverage"
+	@echo "Available bulk operations: small, medium only"
+
+test-perf-bulk-xlarge:
+	@echo "Bulk Operations tests skip xlarge repositories - use test-perf-bulk instead for full coverage"
+	@echo "Available bulk operations: small, medium only"
+
+# Repository size-specific Compare Commits benchmarks
+test-perf-compare-small:
+	@echo "Running Compare Commits performance tests for small repositories..."
+	cd tests/performance && PERF_TEST_REPOS=small RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestCompareCommitsPerformance/.*_small" .
+
+test-perf-compare-medium:
+	@echo "Running Compare Commits performance tests for medium repositories..."
+	cd tests/performance && PERF_TEST_REPOS=medium RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestCompareCommitsPerformance/.*_medium" .
+
+# Note: Compare Commits tests skip large and xlarge repositories to avoid excessive load  
+test-perf-compare-large:
+	@echo "Compare Commits tests skip large repositories - use test-perf-compare instead for full coverage"
+	@echo "Available compare commits: small, medium only"
+
+test-perf-compare-xlarge:
+	@echo "Compare Commits tests skip xlarge repositories - use test-perf-compare instead for full coverage"
+	@echo "Available compare commits: small, medium only"
 
 # Full performance benchmark suite (combines all test types)
 test-perf: test-perf-consistency test-perf-file-ops
