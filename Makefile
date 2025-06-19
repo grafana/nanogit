@@ -61,3 +61,64 @@ test-coverage:
 
 test-coverage-html:
 	go tool cover -html=coverage.txt
+
+# Performance Testing Targets
+.PHONY: test-perf test-perf-consistency test-perf-simple test-perf-nanogit test-perf-gogit test-perf-cli
+.PHONY: test-perf-file-ops test-perf-compare test-perf-tree test-perf-bulk test-perf-all test-perf-setup
+
+# Setup performance test data (one-time setup)
+test-perf-setup:
+	@echo "Setting up performance test data..."
+	cd tests/performance && go run ./cmd/generate_repo
+
+# Run all performance tests with all clients
+test-perf-all:
+	@echo "Running all performance tests (this may take a while)..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 30m .
+
+# Consistency tests - verify all clients produce identical results
+test-perf-consistency:
+	@echo "Running client consistency tests..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestClientConsistency|TestSimpleClientConsistency" .
+
+# Simple consistency tests only
+test-perf-simple:
+	@echo "Running simple client consistency tests..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 5m -run TestSimpleClientConsistency .
+
+# Individual performance test suites
+test-perf-file-ops:
+	@echo "Running file operations performance tests..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run TestFileOperationsPerformance .
+
+test-perf-compare:
+	@echo "Running commit comparison performance tests..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run TestCompareCommitsPerformance .
+
+test-perf-tree:
+	@echo "Running tree listing performance tests..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run TestGetFlatTreePerformance .
+
+test-perf-bulk:
+	@echo "Running bulk operations performance tests..."
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run TestBulkOperationsPerformance .
+
+# Client-specific tests (run consistency tests with specific client filtering)
+test-perf-nanogit:
+	@echo "Running performance tests for nanogit client only..."
+	@echo "Note: This runs consistency tests which include nanogit comparisons"
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run TestSimpleClientConsistency . | grep -E "(nanogit|PASS|FAIL|RUN)"
+
+test-perf-gogit:
+	@echo "Running performance tests for go-git client only..."
+	@echo "Note: This runs consistency tests which include go-git comparisons"
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run TestSimpleClientConsistency . | grep -E "(go-git|PASS|FAIL|RUN)"
+
+test-perf-cli:
+	@echo "Running performance tests for git-cli client only..."
+	@echo "Note: This runs consistency tests which include git-cli comparisons"
+	cd tests/performance && RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run TestSimpleClientConsistency . | grep -E "(git-cli|PASS|FAIL|RUN)"
+
+# Full performance benchmark suite (combines all test types)
+test-perf: test-perf-consistency test-perf-file-ops
+	@echo "Core performance testing completed"

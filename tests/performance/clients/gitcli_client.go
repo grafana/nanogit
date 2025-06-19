@@ -14,8 +14,7 @@ import (
 
 // GitCLIClient implements the GitClient interface using git CLI commands
 type GitCLIClient struct {
-	workDir string            // Base directory for git operations
-	repos   map[string]string // Map of repoURL to local path
+	workDir string // Base directory for git operations
 }
 
 // NewGitCLIClient creates a new git CLI client
@@ -28,7 +27,6 @@ func NewGitCLIClient() (*GitCLIClient, error) {
 
 	return &GitCLIClient{
 		workDir: workDir,
-		repos:   make(map[string]string),
 	}, nil
 }
 

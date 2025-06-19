@@ -19,15 +19,13 @@ import (
 
 // GoGitClient implements the GitClient interface using go-git with optimizations
 type GoGitClient struct {
-	repos map[string]*git.Repository // Cache repos by URL
 	auths map[string]*http.BasicAuth // Cache auth info by URL
-	mutex sync.RWMutex               // Protect concurrent access to caches
+	mutex sync.RWMutex               // Protect concurrent access to auth cache
 }
 
 // NewGoGitClient creates a new go-git client
 func NewGoGitClient() *GoGitClient {
 	return &GoGitClient{
-		repos: make(map[string]*git.Repository),
 		auths: make(map[string]*http.BasicAuth),
 	}
 }
@@ -37,32 +35,9 @@ func (c *GoGitClient) Name() string {
 	return "go-git"
 }
 
-// getOrCloneRepo gets a cached repository or clones it with optimizations
-func (c *GoGitClient) getOrCloneRepo(ctx context.Context, repoURL string, shallow bool) (*git.Repository, error) {
-	c.mutex.RLock()
-	if repo, exists := c.repos[repoURL]; exists {
-		c.mutex.RUnlock()
-		// Update the cached repo if needed
-		return c.updateCachedRepo(ctx, repo, repoURL)
-	}
-	c.mutex.RUnlock()
-
-	// Clone the repository with optimizations
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Double-check after acquiring write lock
-	if repo, exists := c.repos[repoURL]; exists {
-		return c.updateCachedRepo(ctx, repo, repoURL)
-	}
-
-	repo, err := c.cloneRepoOptimized(ctx, repoURL, shallow)
-	if err != nil {
-		return nil, err
-	}
-
-	c.repos[repoURL] = repo
-	return repo, nil
+// cloneRepoFresh clones a fresh repository for each operation (no caching)
+func (c *GoGitClient) cloneRepoFresh(ctx context.Context, repoURL string, shallow bool) (*git.Repository, error) {
+	return c.cloneRepoOptimized(ctx, repoURL, shallow)
 }
 
 // cloneRepoOptimized clones repository with shallow clone and other optimizations
@@ -129,31 +104,6 @@ func (c *GoGitClient) cloneRepoOptimized(ctx context.Context, repoURL string, sh
 	return repo, nil
 }
 
-// updateCachedRepo ensures the cached repository is up to date
-func (c *GoGitClient) updateCachedRepo(ctx context.Context, repo *git.Repository, repoURL string) (*git.Repository, error) {
-	// For file operations, we typically want the latest state
-	// Try to fetch latest changes
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return repo, nil // Return cached repo if worktree is not available
-	}
-
-	// Create pull options
-	pullOpts := &git.PullOptions{
-		RemoteName: "origin",
-		Force:      true, // Force pull to overwrite local changes
-	}
-
-	// Add authentication if available
-	if auth, exists := c.auths[repoURL]; exists {
-		pullOpts.Auth = auth
-	}
-
-	// Try to pull latest changes (ignore errors for performance)
-	_ = worktree.PullContext(ctx, pullOpts)
-
-	return repo, nil
-}
 
 // pushChanges pushes local changes to the remote repository
 func (c *GoGitClient) pushChanges(ctx context.Context, repo *git.Repository, repoURL string) error {
@@ -184,7 +134,7 @@ func (c *GoGitClient) pushChanges(ctx context.Context, repo *git.Repository, rep
 
 // CreateFile creates a new file in the repository
 func (c *GoGitClient) CreateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL, true) // Use shallow clone for file operations
+	repo, err := c.cloneRepoFresh(ctx, repoURL, true) // Use shallow clone for file operations
 	if err != nil {
 		return err
 	}
@@ -232,7 +182,7 @@ func (c *GoGitClient) CreateFile(ctx context.Context, repoURL, path, content, me
 
 // UpdateFile updates an existing file in the repository
 func (c *GoGitClient) UpdateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL, true) // Use shallow clone for file operations
+	repo, err := c.cloneRepoFresh(ctx, repoURL, true) // Use shallow clone for file operations
 	if err != nil {
 		return err
 	}
@@ -282,7 +232,7 @@ func (c *GoGitClient) UpdateFile(ctx context.Context, repoURL, path, content, me
 
 // DeleteFile deletes a file from the repository
 func (c *GoGitClient) DeleteFile(ctx context.Context, repoURL, path, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL, true) // Use shallow clone for file operations
+	repo, err := c.cloneRepoFresh(ctx, repoURL, true) // Use shallow clone for file operations
 	if err != nil {
 		return err
 	}
@@ -323,7 +273,7 @@ func (c *GoGitClient) DeleteFile(ctx context.Context, repoURL, path, message str
 
 // CompareCommits compares two commits and returns the differences
 func (c *GoGitClient) CompareCommits(ctx context.Context, repoURL, base, head string) (*CommitComparison, error) {
-	repo, err := c.getOrCloneRepo(ctx, repoURL, false) // Don't use shallow clone for commit comparison
+	repo, err := c.cloneRepoFresh(ctx, repoURL, false) // Don't use shallow clone for commit comparison
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +356,7 @@ func (c *GoGitClient) CompareCommits(ctx context.Context, repoURL, base, head st
 
 // GetFlatTree returns a flat listing of all files in the repository at a given ref
 func (c *GoGitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*TreeResult, error) {
-	repo, err := c.getOrCloneRepo(ctx, repoURL, true) // Use shallow clone for tree listing
+	repo, err := c.cloneRepoFresh(ctx, repoURL, true) // Use shallow clone for tree listing
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +408,7 @@ func (c *GoGitClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*Tr
 
 // BulkCreateFiles creates multiple files in a single commit
 func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files []FileChange, message string) error {
-	repo, err := c.getOrCloneRepo(ctx, repoURL, true) // Use shallow clone for bulk operations
+	repo, err := c.cloneRepoFresh(ctx, repoURL, true) // Use shallow clone for bulk operations
 	if err != nil {
 		return err
 	}
