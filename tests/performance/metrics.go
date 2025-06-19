@@ -93,14 +93,14 @@ func (m *MetricsCollector) SaveReport(outputDir string) error {
 		return fmt.Errorf("failed to write JSON report: %w", err)
 	}
 
-	// Save text summary
-	textFile := fmt.Sprintf("%s/performance_summary_%s.txt", outputDir, time.Now().Format("20060102_150405"))
-	textData := m.generateTextSummary()
-	if err := os.WriteFile(textFile, []byte(textData), 0644); err != nil {
-		return fmt.Errorf("failed to write text report: %w", err)
+	// Save markdown summary
+	markdownFile := fmt.Sprintf("%s/performance_summary_%s.md", outputDir, time.Now().Format("20060102_150405"))
+	markdownData := m.generateMarkdownSummary()
+	if err := os.WriteFile(markdownFile, []byte(markdownData), 0644); err != nil {
+		return fmt.Errorf("failed to write markdown report: %w", err)
 	}
 
-	fmt.Printf("Reports saved to:\n  JSON: %s\n  Text: %s\n", jsonFile, textFile)
+	fmt.Printf("Reports saved to:\n  JSON: %s\n  Markdown: %s\n", jsonFile, markdownFile)
 	return nil
 }
 
@@ -211,6 +211,66 @@ func (m *MetricsCollector) generateTextSummary() string {
 		}
 		text += "\n"
 	}
+
+	return text
+}
+
+// generateMarkdownSummary creates a markdown summary with tables and emojis
+func (m *MetricsCollector) generateMarkdownSummary() string {
+	summary := m.generateSummary()
+
+	text := "# 🚀 Performance Benchmark Report\n\n"
+	text += fmt.Sprintf("**Generated:** %s  \n", time.Now().Format(time.RFC3339))
+	text += fmt.Sprintf("**Total Benchmarks:** %d\n\n", len(m.results))
+
+	// Get all operations and clients
+	operations := make([]string, 0, len(summary))
+	clientSet := make(map[string]bool)
+	
+	for operation, opSummary := range summary {
+		operations = append(operations, operation)
+		for client := range opSummary.ClientStats {
+			clientSet[client] = true
+		}
+	}
+	
+	sort.Strings(operations)
+	clients := make([]string, 0, len(clientSet))
+	for client := range clientSet {
+		clients = append(clients, client)
+	}
+	sort.Strings(clients)
+
+	// Performance Overview Table
+	text += "## 📊 Performance Overview\n\n"
+	text += m.generateMarkdownOverviewTable(summary, operations, clients)
+	text += "\n"
+
+	// Duration Comparison Table
+	text += "## ⚡ Duration Comparison\n\n"
+	text += m.generateMarkdownDurationTable(summary, operations, clients)
+	text += "\n"
+
+	// Memory Comparison Table
+	text += "## 💾 Memory Usage Comparison\n\n"
+	text += "*Note: git-cli uses disk storage rather than keeping data in memory, so memory comparisons focus on in-memory clients (nanogit vs go-git)*\n\n"
+	text += m.generateMarkdownMemoryTable(summary, operations, clients)
+	text += "\n"
+
+	// Nanogit Performance Analysis
+	text += "## 🎯 Nanogit Performance Analysis\n\n"
+	text += "### ⚡ Speed Comparison\n\n"
+	text += m.generateMarkdownNanogitTable(summary, operations, clients, "duration")
+	text += "\n"
+	
+	text += "### 💾 Memory Comparison\n\n"
+	text += "*Note: git-cli uses minimal memory as it stores data on disk, not in memory*\n\n"
+	text += m.generateMarkdownNanogitTable(summary, operations, clients, "memory")
+	text += "\n"
+
+	// Detailed Statistics
+	text += "## 📈 Detailed Statistics\n\n"
+	text += m.generateMarkdownDetailedStats(summary, operations, clients)
 
 	return text
 }
@@ -567,6 +627,308 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// generateMarkdownOverviewTable creates a performance overview table
+func (m *MetricsCollector) generateMarkdownOverviewTable(summary map[string]OperationSummary, operations, clients []string) string {
+	text := "| Operation | Speed Winner | Duration | In-Memory Winner | Memory Usage |\n"
+	text += "|-----------|--------------|----------|------------------|-------------|\n"
+	
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		// Find best duration (fastest)
+		bestDuration := time.Duration(0)
+		bestDurationClient := ""
+		
+		// Find best memory among in-memory clients (nanogit, go-git) - exclude git-cli
+		bestMemory := int64(0)
+		bestMemoryClient := ""
+		
+		for client, stats := range opSummary.ClientStats {
+			// Speed comparison - all clients
+			if bestDuration == 0 || stats.AvgDuration < bestDuration {
+				bestDuration = stats.AvgDuration
+				bestDurationClient = client
+			}
+			
+			// Memory comparison - only in-memory clients (exclude git-cli as it uses disk)
+			if client != "git-cli" {
+				if bestMemory == 0 || stats.AvgMemory < bestMemory {
+					bestMemory = stats.AvgMemory
+					bestMemoryClient = client
+				}
+			}
+		}
+		
+		// Speed winner emoji
+		speedEmoji := "🥇"
+		if bestDurationClient == "nanogit" {
+			speedEmoji = "🚀"
+		} else if bestDurationClient == "go-git" {
+			speedEmoji = "🐹"
+		} else {
+			speedEmoji = "⚡"
+		}
+		
+		// Memory winner emoji (among in-memory clients)
+		memoryEmoji := "🥇"
+		if bestMemoryClient == "nanogit" {
+			memoryEmoji = "💚"
+		} else if bestMemoryClient == "go-git" {
+			memoryEmoji = "🐹"
+		}
+		
+		text += fmt.Sprintf("| %s | %s %s | %s | %s %s | %s |\n", 
+			operation, speedEmoji, bestDurationClient, formatDuration(bestDuration),
+			memoryEmoji, bestMemoryClient, formatBytes(bestMemory))
+	}
+	
+	return text
+}
+
+// generateMarkdownDurationTable creates a duration comparison table
+func (m *MetricsCollector) generateMarkdownDurationTable(summary map[string]OperationSummary, operations, clients []string) string {
+	text := "| Operation |"
+	for _, client := range clients {
+		text += fmt.Sprintf(" %s |", client)
+	}
+	text += "\n|-----------|"
+	for range clients {
+		text += "-----------|"
+	}
+	text += "\n"
+	
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		text += fmt.Sprintf("| %s |", operation)
+		
+		// Find best duration for emoji
+		bestDuration := time.Duration(0)
+		for _, stats := range opSummary.ClientStats {
+			if bestDuration == 0 || stats.AvgDuration < bestDuration {
+				bestDuration = stats.AvgDuration
+			}
+		}
+		
+		for _, client := range clients {
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				emoji := ""
+				if stats.AvgDuration == bestDuration {
+					emoji = " 🏆"
+				} else if stats.AvgDuration < bestDuration*2 {
+					emoji = " ✅"
+				} else if stats.AvgDuration > bestDuration*5 {
+					emoji = " 🐌"
+				}
+				text += fmt.Sprintf(" %s%s |", formatDuration(stats.AvgDuration), emoji)
+			} else {
+				text += " N/A |"
+			}
+		}
+		text += "\n"
+	}
+	
+	return text
+}
+
+// generateMarkdownMemoryTable creates a memory comparison table
+func (m *MetricsCollector) generateMarkdownMemoryTable(summary map[string]OperationSummary, operations, clients []string) string {
+	text := "| Operation |"
+	for _, client := range clients {
+		text += fmt.Sprintf(" %s |", client)
+	}
+	text += "\n|-----------|"
+	for range clients {
+		text += "-----------|"
+	}
+	text += "\n"
+	
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		text += fmt.Sprintf("| %s |", operation)
+		
+		// Find best memory among in-memory clients (exclude git-cli)
+		bestMemory := int64(0)
+		for client, stats := range opSummary.ClientStats {
+			if client != "git-cli" && (bestMemory == 0 || stats.AvgMemory < bestMemory) {
+				bestMemory = stats.AvgMemory
+			}
+		}
+		
+		for _, client := range clients {
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				emoji := ""
+				if client == "git-cli" {
+					emoji = " 💾" // disk storage
+				} else if stats.AvgMemory == bestMemory {
+					emoji = " 🏆" // winner among in-memory clients
+				} else if stats.AvgMemory < bestMemory*2 {
+					emoji = " ✅"
+				} else if stats.AvgMemory > bestMemory*5 {
+					emoji = " 🔥"
+				}
+				text += fmt.Sprintf(" %s%s |", formatBytes(stats.AvgMemory), emoji)
+			} else {
+				text += " N/A |"
+			}
+		}
+		text += "\n"
+	}
+	
+	return text
+}
+
+// generateMarkdownNanogitTable creates a nanogit comparison table
+func (m *MetricsCollector) generateMarkdownNanogitTable(summary map[string]OperationSummary, operations, clients []string, metric string) string {
+	text := "| Operation |"
+	for _, client := range clients {
+		if client != "nanogit" {
+			text += fmt.Sprintf(" vs %s |", client)
+		}
+	}
+	text += "\n|-----------|"
+	for _, client := range clients {
+		if client != "nanogit" {
+			text += "-----------|"
+		}
+	}
+	text += "\n"
+	
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		nanogitStats, nanogitExists := opSummary.ClientStats["nanogit"]
+		if !nanogitExists {
+			continue
+		}
+		
+		text += fmt.Sprintf("| %s |", operation)
+		
+		for _, client := range clients {
+			if client == "nanogit" {
+				continue
+			}
+			
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				var nanogitValue, otherValue float64
+				
+				if metric == "duration" {
+					nanogitValue = float64(nanogitStats.AvgDuration.Nanoseconds())
+					otherValue = float64(stats.AvgDuration.Nanoseconds())
+				} else { // memory
+					nanogitValue = float64(nanogitStats.AvgMemory)
+					otherValue = float64(stats.AvgMemory)
+				}
+				
+				var multiplier float64
+				var displayText string
+				var emoji string
+				
+				if nanogitValue != 0 && otherValue != 0 {
+					if metric == "duration" {
+						multiplier = otherValue / nanogitValue
+						if multiplier >= 2.0 {
+							displayText = fmt.Sprintf("%.1fx faster", multiplier)
+							emoji = " 🚀"
+						} else if multiplier >= 1.1 {
+							displayText = fmt.Sprintf("%.1fx faster", multiplier)
+							emoji = " ✅"
+						} else if multiplier < 0.9 {
+							multiplier = nanogitValue / otherValue
+							displayText = fmt.Sprintf("%.1fx slower", multiplier)
+							emoji = " 🐌"
+						} else {
+							displayText = "~same"
+							emoji = " ⚖️"
+						}
+					} else { // memory
+						if client == "git-cli" {
+							// Special handling for git-cli as it uses disk storage
+							multiplier = nanogitValue / otherValue
+							displayText = fmt.Sprintf("%.1fx more", multiplier)
+							emoji = " 💾" // disk icon to indicate different storage approach
+						} else if nanogitValue < otherValue {
+							multiplier = otherValue / nanogitValue
+							if multiplier >= 2.0 {
+								displayText = fmt.Sprintf("%.1fx less", multiplier)
+								emoji = " 💚"
+							} else {
+								displayText = fmt.Sprintf("%.1fx less", multiplier)
+								emoji = " ✅"
+							}
+						} else {
+							multiplier = nanogitValue / otherValue
+							if multiplier >= 2.0 {
+								displayText = fmt.Sprintf("%.1fx more", multiplier)
+								emoji = " 🔥"
+							} else {
+								displayText = fmt.Sprintf("%.1fx more", multiplier)
+								emoji = " ⚠️"
+							}
+						}
+					}
+				} else {
+					displayText = "N/A"
+					emoji = ""
+				}
+				
+				text += fmt.Sprintf(" %s%s |", displayText, emoji)
+			} else {
+				text += " N/A |"
+			}
+		}
+		text += "\n"
+	}
+	
+	return text
+}
+
+// generateMarkdownDetailedStats creates detailed statistics table
+func (m *MetricsCollector) generateMarkdownDetailedStats(summary map[string]OperationSummary, operations, clients []string) string {
+	text := ""
+	
+	for _, operation := range operations {
+		opSummary, exists := summary[operation]
+		if !exists {
+			continue
+		}
+		
+		text += fmt.Sprintf("### %s\n\n", operation)
+		text += "| Client | Runs | Success | Avg Duration | P95 Duration | Avg Memory | Median Memory |\n"
+		text += "|--------|------|---------|--------------|--------------|------------|---------------|\n"
+		
+		for _, client := range clients {
+			if stats, exists := opSummary.ClientStats[client]; exists {
+				successEmoji := "✅"
+				if stats.SuccessRate < 1.0 {
+					successEmoji = "⚠️"
+				}
+				
+				text += fmt.Sprintf("| %s | %d | %s %.1f%% | %s | %s | %s | %s |\n",
+					client, stats.Count, successEmoji, stats.SuccessRate*100,
+					formatDuration(stats.AvgDuration), formatDuration(stats.P95Duration),
+					formatBytes(stats.AvgMemory), formatBytes(stats.MedianMemory))
+			}
+		}
+		text += "\n"
+	}
+	
+	return text
 }
 
 // Report structures
