@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/grafana/nanogit/log"
@@ -565,16 +566,32 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 		return ErrNothingToPush
 	}
 
-	packfile, err := w.writer.WritePackfile(w.ref.Name, w.ref.Hash)
+	// Create a pipe to stream packfile data directly from WritePackfile to ReceivePack
+	pipeReader, pipeWriter := io.Pipe()
+	
+	// Channel to capture any error from WritePackfile goroutine
+	writeErrChan := make(chan error, 1)
+	
+	// Start WritePackfile in a goroutine, writing to the pipe
+	go func() {
+		defer pipeWriter.Close()
+		err := w.writer.WritePackfile(pipeWriter, w.ref.Name, w.ref.Hash)
+		writeErrChan <- err
+	}()
+	
+	// Call ReceivePack with the pipe reader (this will stream the data)
+	_, err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
-		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, err)
-	}
-
-	logger.Debug("Packfile prepared", "packfile_size", len(packfile))
-
-	if _, err := w.client.ReceivePack(ctx, packfile); err != nil {
+		pipeReader.Close() // Close reader to unblock the writer goroutine
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
+	
+	// Check for any error from the WritePackfile goroutine
+	if writeErr := <-writeErrChan; writeErr != nil {
+		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, writeErr)
+	}
+
+	logger.Debug("Packfile streamed successfully")
 
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1)
 	w.ref.Hash = w.lastCommit.Hash

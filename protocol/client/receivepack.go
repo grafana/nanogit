@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,17 +11,15 @@ import (
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-func (c *rawClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error) {
-	body := bytes.NewReader(data)
+func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) ([]byte, error) {
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
 	logger := log.FromContext(ctx)
 	logger.Debug("Receive-pack", "url", u.String())
-	logger.Debug("Receive-pack raw request", "requestBody", string(data))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), data)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +47,6 @@ func (c *rawClient) ReceivePack(ctx context.Context, data []byte) ([]byte, error
 	logger.Debug("Receive-pack response",
 		"status", res.StatusCode,
 		"statusText", res.Status,
-		"requestSize", len(data),
 		"responseSize", len(responseBody))
 	logger.Debug("Receive-pack raw response", "responseBody", string(responseBody))
 

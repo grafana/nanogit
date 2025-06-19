@@ -3,6 +3,7 @@ package mocks
 
 import (
 	"context"
+	"io"
 	"sync"
 
 	"github.com/grafana/nanogit/protocol"
@@ -51,11 +52,11 @@ type FakeRawClient struct {
 		result1 []protocol.RefLine
 		result2 error
 	}
-	ReceivePackStub        func(context.Context, []byte) ([]byte, error)
+	ReceivePackStub        func(context.Context, io.Reader) ([]byte, error)
 	receivePackMutex       sync.RWMutex
 	receivePackArgsForCall []struct {
 		arg1 context.Context
-		arg2 []byte
+		arg2 io.Reader
 	}
 	receivePackReturns struct {
 		result1 []byte
@@ -291,21 +292,16 @@ func (fake *FakeRawClient) LsRefsReturnsOnCall(i int, result1 []protocol.RefLine
 	}{result1, result2}
 }
 
-func (fake *FakeRawClient) ReceivePack(arg1 context.Context, arg2 []byte) ([]byte, error) {
-	var arg2Copy []byte
-	if arg2 != nil {
-		arg2Copy = make([]byte, len(arg2))
-		copy(arg2Copy, arg2)
-	}
+func (fake *FakeRawClient) ReceivePack(arg1 context.Context, arg2 io.Reader) ([]byte, error) {
 	fake.receivePackMutex.Lock()
 	ret, specificReturn := fake.receivePackReturnsOnCall[len(fake.receivePackArgsForCall)]
 	fake.receivePackArgsForCall = append(fake.receivePackArgsForCall, struct {
 		arg1 context.Context
-		arg2 []byte
-	}{arg1, arg2Copy})
+		arg2 io.Reader
+	}{arg1, arg2})
 	stub := fake.ReceivePackStub
 	fakeReturns := fake.receivePackReturns
-	fake.recordInvocation("ReceivePack", []interface{}{arg1, arg2Copy})
+	fake.recordInvocation("ReceivePack", []interface{}{arg1, arg2})
 	fake.receivePackMutex.Unlock()
 	if stub != nil {
 		return stub(arg1, arg2)
@@ -322,13 +318,13 @@ func (fake *FakeRawClient) ReceivePackCallCount() int {
 	return len(fake.receivePackArgsForCall)
 }
 
-func (fake *FakeRawClient) ReceivePackCalls(stub func(context.Context, []byte) ([]byte, error)) {
+func (fake *FakeRawClient) ReceivePackCalls(stub func(context.Context, io.Reader) ([]byte, error)) {
 	fake.receivePackMutex.Lock()
 	defer fake.receivePackMutex.Unlock()
 	fake.ReceivePackStub = stub
 }
 
-func (fake *FakeRawClient) ReceivePackArgsForCall(i int) (context.Context, []byte) {
+func (fake *FakeRawClient) ReceivePackArgsForCall(i int) (context.Context, io.Reader) {
 	fake.receivePackMutex.RLock()
 	defer fake.receivePackMutex.RUnlock()
 	argsForCall := fake.receivePackArgsForCall[i]

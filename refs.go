@@ -1,8 +1,8 @@
 package nanogit
 
 import (
+	"bytes"
 	"context"
-
 	"errors"
 	"fmt"
 
@@ -163,7 +163,7 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("format ref create request for %q: %w", ref.Name, err)
 	}
 
-	_, err = c.ReceivePack(ctx, pkt)
+	_, err = c.ReceivePack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return fmt.Errorf("send ref create request for %q: %w", ref.Name, err)
 	}
@@ -219,7 +219,7 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("format ref update request for %q: %w", ref.Name, err)
 	}
 
-	_, err = c.ReceivePack(ctx, pkt)
+	_, err = c.ReceivePack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return fmt.Errorf("send ref update request for %q: %w", ref.Name, err)
 	}
@@ -272,7 +272,7 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 		return fmt.Errorf("format ref delete request for %q: %w", refName, err)
 	}
 
-	_, err = c.ReceivePack(ctx, pkt)
+	_, err = c.ReceivePack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return fmt.Errorf("send ref delete request for %q: %w", refName, err)
 	}

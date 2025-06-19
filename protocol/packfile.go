@@ -585,7 +585,7 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 	return h, nil
 }
 
-// WritePackfile writes all objects to a packfile and returns the packfile data.
+// WritePackfile writes all objects to a packfile, streaming directly to the provided writer.
 // The packfile format is:
 // - Reference update command: <old-value> <new-value> <ref-name>\000<capabilities>\n
 // - Flush packet (0000)
@@ -594,91 +594,90 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 // - 4-byte number of objects
 // - Object entries
 // - 20-byte SHA1 of the packfile
-func (w *PackfileWriter) WritePackfile(refName string, oldRefHash hash.Hash) ([]byte, error) {
+func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRefHash hash.Hash) error {
 	// Block if no commit was registered
-	if !w.hasCommit {
-		return nil, errors.New("no commit object found in packfile")
+	if !pw.hasCommit {
+		return errors.New("no commit object found in packfile")
 	}
 
 	// If no objects at all, return error
-	if len(w.objectHashes) == 0 {
-		return nil, errors.New("no objects to write")
+	if len(pw.objectHashes) == 0 {
+		return errors.New("no objects to write")
 	}
-
-	// Build packfile header
-	var buf bytes.Buffer
-	
-	// Write signature
-	if _, err := buf.WriteString("PACK"); err != nil {
-		return nil, fmt.Errorf("writing packfile signature: %w", err)
-	}
-
-	// Write version (2)
-	if err := binary.Write(&buf, binary.BigEndian, uint32(2)); err != nil {
-		return nil, fmt.Errorf("writing packfile version: %w", err)
-	}
-
-	// Write number of objects
-	numObjects := uint64(len(w.objectHashes))
-	if numObjects > 0xFFFFFFFF {
-		return nil, fmt.Errorf("too many objects for packfile: %d (max: %d)", numObjects, uint64(0xFFFFFFFF))
-	}
-	if err := binary.Write(&buf, binary.BigEndian, uint32(numObjects)); err != nil {
-		return nil, fmt.Errorf("writing object count: %w", err)
-	}
-
-	// Write object data - either from memory or temp file
-	if w.tempFile != nil {
-		// Using file storage - read from temp file
-		if _, err := w.tempFile.Seek(0, io.SeekStart); err != nil {
-			return nil, fmt.Errorf("seeking to start of temp file: %w", err)
-		}
-		
-		if _, err := io.Copy(&buf, w.tempFile); err != nil {
-			return nil, fmt.Errorf("copying objects from temp file: %w", err)
-		}
-	} else {
-		// Using memory storage - write from memory objects
-		for _, obj := range w.memoryObjects {
-			if err := w.writeObjectToBuf(&buf, obj); err != nil {
-				return nil, fmt.Errorf("writing memory object: %w", err)
-			}
-		}
-	}
-
-	// Compute and write packfile hash
-	packHash := w.algo.New()
-	if _, err := packHash.Write(buf.Bytes()); err != nil {
-		return nil, fmt.Errorf("writing to pack hash: %w", err)
-	}
-	if _, err := buf.Write(packHash.Sum(nil)); err != nil {
-		return nil, fmt.Errorf("writing pack hash: %w", err)
-	}
-
-	// Get the packfile data
-	packfileData := buf.Bytes()
 
 	// Create the complete message with reference update command
 	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n0000<packfile data>
 	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
-		oldRefHash.String(),        // old value (current ref hash)
-		w.lastCommitHash.String(),  // new value (the last commit hash)
-		refName)                    // ref name (from parameter)
+		oldRefHash.String(),           // old value (current ref hash)
+		pw.lastCommitHash.String(),    // new value (the last commit hash)
+		refName)                       // ref name (from parameter)
 
 	// Calculate the length of the ref update line (including the 4 bytes of length)
 	refUpdateLen := len(refUpdate) + 4
 	refUpdateLine := fmt.Sprintf("%04x%s", refUpdateLen, refUpdate)
 
-	// Combine everything
-	completeData := make([]byte, 0, len(refUpdateLine)+4+len(packfileData))
-	completeData = append(completeData, []byte(refUpdateLine)...)
-	completeData = append(completeData, []byte("0000")...) // flush packet
-	completeData = append(completeData, packfileData...)
+	// First write the reference update command
+	if _, err := writer.Write([]byte(refUpdateLine)); err != nil {
+		return fmt.Errorf("writing ref update line: %w", err)
+	}
+
+	// Write flush packet
+	if _, err := writer.Write([]byte("0000")); err != nil {
+		return fmt.Errorf("writing flush packet: %w", err)
+	}
+
+	// Now stream the packfile data
+	// We need to compute the hash as we write, so use io.MultiWriter
+	packHash := pw.algo.New()
+	hashWriter := io.MultiWriter(writer, packHash)
+	
+	// Write packfile header
+	if _, err := hashWriter.Write([]byte("PACK")); err != nil {
+		return fmt.Errorf("writing packfile signature: %w", err)
+	}
+
+	// Write version (2)
+	if err := binary.Write(hashWriter, binary.BigEndian, uint32(2)); err != nil {
+		return fmt.Errorf("writing packfile version: %w", err)
+	}
+
+	// Write number of objects
+	numObjects := uint64(len(pw.objectHashes))
+	if numObjects > 0xFFFFFFFF {
+		return fmt.Errorf("too many objects for packfile: %d (max: %d)", numObjects, uint64(0xFFFFFFFF))
+	}
+	if err := binary.Write(hashWriter, binary.BigEndian, uint32(numObjects)); err != nil {
+		return fmt.Errorf("writing object count: %w", err)
+	}
+
+	// Write object data - either from memory or temp file
+	if pw.tempFile != nil {
+		// Using file storage - read from temp file
+		if _, err := pw.tempFile.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("seeking to start of temp file: %w", err)
+		}
+		
+		if _, err := io.Copy(hashWriter, pw.tempFile); err != nil {
+			return fmt.Errorf("copying objects from temp file: %w", err)
+		}
+	} else {
+		// Using memory storage - write from memory objects
+		for _, obj := range pw.memoryObjects {
+			if err := pw.writeObjectToWriter(hashWriter, obj); err != nil {
+				return fmt.Errorf("writing memory object: %w", err)
+			}
+		}
+	}
+
+	// Write the packfile hash
+	if _, err := writer.Write(packHash.Sum(nil)); err != nil {
+		return fmt.Errorf("writing pack hash: %w", err)
+	}
 
 	// Clean up temp file after successful write
-	w.Cleanup()
+	pw.Cleanup()
 
-	return completeData, nil
+	return nil
 }
 
 // writeObjectToBuf writes a single object to the specified buffer.
@@ -701,6 +700,40 @@ func (w *PackfileWriter) writeObjectToBuf(buf *bytes.Buffer, obj PackfileObject)
 
 	// Compress and write data
 	zw := zlib.NewWriter(buf)
+	if _, err := zw.Write(obj.Data); err != nil {
+		return fmt.Errorf("compressing object data: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("closing zlib writer: %w", err)
+	}
+
+	return nil
+}
+
+// writeObjectToWriter writes a single object to the specified writer.
+// The object format is:
+// - Type and size (variable length)
+// - Compressed object data
+func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObject) error {
+	// Write type and size
+	size := len(obj.Data)
+	firstByte := byte(obj.Type)<<4 | byte(size&0x0f)
+	size >>= 4
+
+	for size > 0 {
+		firstByte |= 0x80
+		if _, err := writer.Write([]byte{firstByte}); err != nil {
+			return fmt.Errorf("writing object header: %w", err)
+		}
+		firstByte = byte(size & 0x7f)
+		size >>= 7
+	}
+	if _, err := writer.Write([]byte{firstByte}); err != nil {
+		return fmt.Errorf("writing object header: %w", err)
+	}
+
+	// Compress and write data
+	zw := zlib.NewWriter(writer)
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
