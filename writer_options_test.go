@@ -74,9 +74,9 @@ func TestMultipleOptions(t *testing.T) {
 
 func TestPackfileStorageMode(t *testing.T) {
 	t.Run("constants have expected values", func(t *testing.T) {
-		assert.Equal(t, PackfileStorageMode(0), PackfileStorageAuto)
-		assert.Equal(t, PackfileStorageMode(1), PackfileStorageMemory)
-		assert.Equal(t, PackfileStorageMode(2), PackfileStorageDisk)
+		assert.Equal(t, PackfileStorageAuto, PackfileStorageMode(0))
+		assert.Equal(t, PackfileStorageMemory, PackfileStorageMode(1))
+		assert.Equal(t, PackfileStorageDisk, PackfileStorageMode(2))
 	})
 }
 

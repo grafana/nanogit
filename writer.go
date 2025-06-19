@@ -1063,3 +1063,25 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 
 	return &newObj, nil
 }
+
+// Cleanup releases all resources held by the writer and clears staged changes.
+// This method:
+//   - Cleans up the underlying PackfileWriter (removes temp files)
+//   - Clears all staged tree entries from memory
+//   - Resets the writer state
+//
+// After calling Cleanup, the writer should not be used for further operations.
+func (w *stagedWriter) Cleanup() error {
+	// Clean up the packfile writer (removes temp files)
+	if err := w.writer.Cleanup(); err != nil {
+		return fmt.Errorf("cleanup packfile writer: %w", err)
+	}
+
+	// Clear all staged changes from memory
+	w.treeEntries = make(map[string]*FlatTreeEntry)
+	
+	// Reset writer state
+	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
+	
+	return nil
+}

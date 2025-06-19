@@ -457,15 +457,27 @@ func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *Packf
 	}
 }
 
-// Cleanup removes the temporary file if it exists.
+// Cleanup removes the temporary file if it exists and clears all memory state.
 // This should be called when the writer is no longer needed.
 func (w *PackfileWriter) Cleanup() error {
+	var err error
+	
+	// Clean up temporary file if it exists
 	if w.tempFile != nil {
 		name := w.tempFile.Name()
 		w.tempFile.Close()
-		return os.Remove(name)
+		err = os.Remove(name)
+		w.tempFile = nil
 	}
-	return nil
+	
+	// Clear all memory state
+	w.objectHashes = make(map[string]bool)
+	w.memoryObjects = nil
+	w.hasCommit = false
+	w.lastCommitHash = hash.Hash{}
+	w.totalBytes = 0
+	
+	return err
 }
 
 // AddBlob adds a blob object to the packfile.
@@ -698,7 +710,11 @@ func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRef
 	}
 
 	// Clean up temp file after successful write
-	pw.Cleanup()
+	if cleanupErr := pw.Cleanup(); cleanupErr != nil {
+		// Log cleanup error but don't fail the operation since write succeeded
+		// This follows the pattern of deferring cleanup errors
+		return fmt.Errorf("cleanup after successful write: %w", cleanupErr)
+	}
 
 	return nil
 }

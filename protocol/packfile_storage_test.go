@@ -12,9 +12,9 @@ import (
 
 func TestPackfileStorageMode(t *testing.T) {
 	t.Run("constants have expected values", func(t *testing.T) {
-		assert.Equal(t, PackfileStorageMode(0), PackfileStorageAuto)
-		assert.Equal(t, PackfileStorageMode(1), PackfileStorageMemory)
-		assert.Equal(t, PackfileStorageMode(2), PackfileStorageDisk)
+		assert.Equal(t, PackfileStorageAuto, PackfileStorageMode(0))
+		assert.Equal(t, PackfileStorageMemory, PackfileStorageMode(1))
+		assert.Equal(t, PackfileStorageDisk, PackfileStorageMode(2))
 	})
 }
 
@@ -43,7 +43,7 @@ func TestNewPackfileWriter(t *testing.T) {
 
 func TestPackfileWriter_StorageMode_Memory(t *testing.T) {
 	writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory)
-	defer writer.Cleanup()
+	defer func() { _ = writer.Cleanup() }()
 
 	// Add multiple objects - should all go to memory
 	for i := 0; i < 20; i++ {
@@ -63,7 +63,7 @@ func TestPackfileWriter_StorageMode_Memory(t *testing.T) {
 
 func TestPackfileWriter_StorageMode_Disk(t *testing.T) {
 	writer := NewPackfileWriter(crypto.SHA1, PackfileStorageDisk)
-	defer writer.Cleanup()
+	defer func() { _ = writer.Cleanup() }()
 
 	// Add single object - should go to disk
 	obj := PackfileObject{
@@ -85,7 +85,7 @@ func TestPackfileWriter_StorageMode_Disk(t *testing.T) {
 
 func TestPackfileWriter_StorageMode_Auto(t *testing.T) {
 	writer := NewPackfileWriter(crypto.SHA1, PackfileStorageAuto)
-	defer writer.Cleanup()
+	defer func() { _ = writer.Cleanup() }()
 
 	// Add objects below threshold - should use memory
 	// We test the behavior as if objects were added through normal flow
@@ -132,7 +132,7 @@ func TestPackfileWriter_StorageMode_Auto(t *testing.T) {
 
 func TestPackfileWriter_StorageMode_UnknownMode(t *testing.T) {
 	writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMode(999))
-	defer writer.Cleanup()
+	defer func() { _ = writer.Cleanup() }()
 
 	obj := PackfileObject{
 		Type: ObjectTypeBlob,
@@ -167,7 +167,7 @@ func TestPackfileWriter_Cleanup(t *testing.T) {
 		
 		// Cleanup should remove file
 		err = writer.Cleanup()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		
 		// File should be gone
 		_, err = os.Stat(tempFileName)
