@@ -19,6 +19,9 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// ErrPackfileWriterCleanedUp is returned when trying to use a PackfileWriter after cleanup has been called.
+var ErrPackfileWriterCleanedUp = errors.New("packfile writer has been cleaned up and can no longer be used")
+
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
 // Review it once we have some more integration testing so that we don't break things unintentionally.
 
@@ -435,6 +438,8 @@ type PackfileWriter struct {
 	storageMode PackfileStorageMode
 	// Track total byte size of objects for auto mode threshold
 	totalBytes int
+	// Track if cleanup has been called
+	isCleanedUp bool
 
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
@@ -457,9 +462,21 @@ func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *Packf
 	}
 }
 
+// checkCleanupState returns an error if the writer has been cleaned up.
+func (w *PackfileWriter) checkCleanupState() error {
+	if w.isCleanedUp {
+		return ErrPackfileWriterCleanedUp
+	}
+	return nil
+}
+
 // Cleanup removes the temporary file if it exists and clears all memory state.
 // This should be called when the writer is no longer needed.
 func (w *PackfileWriter) Cleanup() error {
+	if w.isCleanedUp {
+		return ErrPackfileWriterCleanedUp
+	}
+
 	var err error
 	
 	// Clean up temporary file if it exists
@@ -477,12 +494,19 @@ func (w *PackfileWriter) Cleanup() error {
 	w.lastCommitHash = hash.Hash{}
 	w.totalBytes = 0
 	
+	// Mark as cleaned up to prevent further use
+	w.isCleanedUp = true
+	
 	return err
 }
 
 // AddBlob adds a blob object to the packfile.
 // The blob contains the raw file contents.
 func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Hash{}, err
+	}
+
 	// Compute hash immediately for deduplication
 	h, err := Object(w.algo, ObjectTypeBlob, data)
 	if err != nil {
@@ -551,6 +575,11 @@ func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObj
 
 // AddObject adds an object to the packfile.
 func (w *PackfileWriter) AddObject(obj PackfileObject) {
+	if err := w.checkCleanupState(); err != nil {
+		// Log error but don't fail - this maintains the original interface
+		return
+	}
+
 	if w.objectHashes[obj.Hash.String()] {
 		return
 	}
@@ -566,12 +595,19 @@ func (w *PackfileWriter) AddObject(obj PackfileObject) {
 
 // HasObjects returns true if the writer has any objects staged for writing.
 func (w *PackfileWriter) HasObjects() bool {
+	if err := w.checkCleanupState(); err != nil {
+		return false
+	}
 	return len(w.objectHashes) > 0
 }
 
 // AddCommit adds a commit object to the packfile.
 // The commit references a tree and optionally a parent commit.
 func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Hash{}, err
+	}
+
 	// Build commit data
 	var data bytes.Buffer
 	fmt.Fprintf(&data, "tree %s\n", tree.String())
@@ -630,6 +666,10 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 // - Object entries
 // - 20-byte SHA1 of the packfile
 func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRefHash hash.Hash) error {
+	if err := pw.checkCleanupState(); err != nil {
+		return err
+	}
+
 	// Block if no commit was registered
 	if !pw.hasCommit {
 		return errors.New("no commit object found in packfile")

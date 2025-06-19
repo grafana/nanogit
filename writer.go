@@ -14,6 +14,9 @@ import (
 	"github.com/grafana/nanogit/storage"
 )
 
+// ErrWriterCleanedUp is returned when trying to use a writer after cleanup has been called.
+var ErrWriterCleanedUp = errors.New("writer has been cleaned up and can no longer be used")
+
 // NewStagedWriter creates a new StagedWriter for staging changes to a Git reference.
 // It initializes the writer with the current state of the specified reference,
 // allowing you to stage multiple changes (create/update/delete blobs and trees)
@@ -136,6 +139,16 @@ type stagedWriter struct {
 	treeEntries map[string]*FlatTreeEntry
 	// Storage mode for packfile writer
 	storageMode protocol.PackfileStorageMode
+	// Track if cleanup has been called
+	isCleanedUp bool
+}
+
+// checkCleanupState returns an error if the writer has been cleaned up.
+func (w *stagedWriter) checkCleanupState() error {
+	if w.isCleanedUp {
+		return ErrWriterCleanedUp
+	}
+	return nil
 }
 
 // BlobExists checks if a blob exists at the given path in the repository.
@@ -154,6 +167,10 @@ type stagedWriter struct {
 //
 //	exists, err := writer.BlobExists(ctx, "src/main.go")
 func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return false, err
+	}
+
 	if path == "" {
 		return false, ErrEmptyPath
 	}
@@ -189,6 +206,10 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 //
 //	hash, err := writer.CreateBlob(ctx, "src/main.go", []byte("package main\n"))
 func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
@@ -244,6 +265,10 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []byte) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
@@ -298,6 +323,10 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 //
 //	hash, err := writer.DeleteBlob(ctx, "old-file.txt")
 func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
@@ -354,6 +383,10 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 //	    fmt.Printf("Found %s: %s\n", entry.Type, entry.Name)
 //	}
 func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return nil, err
+	}
+
 	existing, ok := w.treeEntries[path]
 	if !ok {
 		return nil, NewPathNotFoundError(path)
@@ -413,6 +446,10 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 //
 //	hash, err := writer.DeleteTree(ctx, "old-directory")
 func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
 	logger := log.FromContext(ctx)
 	if path == "" || path == "." {
 		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
@@ -501,6 +538,10 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 //	}
 //	commit, err := writer.Commit(ctx, "Add new features", author, author)
 func (w *stagedWriter) Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return nil, err
+	}
+
 	if message == "" {
 		return nil, ErrEmptyCommitMessage
 	}
@@ -579,6 +620,10 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 //	    log.Printf("Failed to push changes: %v", err)
 //	}
 func (w *stagedWriter) Push(ctx context.Context) error {
+	if err := w.checkCleanupState(); err != nil {
+		return err
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Push changes",
 		"ref_name", w.ref.Name,
@@ -1072,6 +1117,10 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 //
 // After calling Cleanup, the writer should not be used for further operations.
 func (w *stagedWriter) Cleanup(ctx context.Context) error {
+	if w.isCleanedUp {
+		return ErrWriterCleanedUp
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Cleaning up staged writer")
 
@@ -1085,6 +1134,9 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 	
 	// Reset writer state
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
+	
+	// Mark as cleaned up to prevent further use
+	w.isCleanedUp = true
 	
 	logger.Debug("Staged writer cleanup completed")
 	return nil
