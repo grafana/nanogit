@@ -40,8 +40,8 @@ func (c *GitCLIClient) Name() string {
 	return "git-cli"
 }
 
-// cloneRepo clones a fresh copy of the repository for each operation
-func (c *GitCLIClient) cloneRepo(ctx context.Context, repoURL string) (string, error) {
+// cloneRepoOptimized clones repository with optional shallow clone and other optimizations
+func (c *GitCLIClient) cloneRepoOptimized(ctx context.Context, repoURL string, shallow bool) (string, error) {
 	// Create unique directory for this repo clone
 	repoName := filepath.Base(repoURL)
 	if strings.HasSuffix(repoName, ".git") {
@@ -52,8 +52,22 @@ func (c *GitCLIClient) cloneRepo(ctx context.Context, repoURL string) (string, e
 	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
 	localPath := filepath.Join(c.workDir, fmt.Sprintf("%s-%s", repoName, timestamp))
 
-	// Clone repository
-	cmd := exec.CommandContext(ctx, "git", "clone", repoURL, localPath)
+	// Build git clone command with optimizations
+	args := []string{"clone"}
+	
+	// Add shallow clone if requested
+	if shallow {
+		args = append(args, "--depth=1")
+	}
+	
+	// Always use single branch for better performance
+	args = append(args, "--single-branch")
+	
+	// Add repository URL and local path
+	args = append(args, repoURL, localPath)
+
+	// Clone repository with optimizations
+	cmd := exec.CommandContext(ctx, "git", args...)
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to clone repository: %w", err)
 	}
@@ -81,7 +95,7 @@ func (c *GitCLIClient) runGitCommandWithOutput(ctx context.Context, repoPath str
 
 // CreateFile creates a new file in the repository
 func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repoPath, err := c.cloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepoOptimized(ctx, repoURL, true) // Use shallow clone for file operations
 	if err != nil {
 		return err
 	}
@@ -116,7 +130,7 @@ func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, m
 
 // UpdateFile updates an existing file in the repository
 func (c *GitCLIClient) UpdateFile(ctx context.Context, repoURL, path, content, message string) error {
-	repoPath, err := c.cloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepoOptimized(ctx, repoURL, true) // Use shallow clone for file operations
 	if err != nil {
 		return err
 	}
@@ -146,7 +160,7 @@ func (c *GitCLIClient) UpdateFile(ctx context.Context, repoURL, path, content, m
 
 // DeleteFile deletes a file from the repository
 func (c *GitCLIClient) DeleteFile(ctx context.Context, repoURL, path, message string) error {
-	repoPath, err := c.cloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepoOptimized(ctx, repoURL, true) // Use shallow clone for file operations
 	if err != nil {
 		return err
 	}
@@ -171,7 +185,7 @@ func (c *GitCLIClient) DeleteFile(ctx context.Context, repoURL, path, message st
 
 // CompareCommits compares two commits and returns the differences
 func (c *GitCLIClient) CompareCommits(ctx context.Context, repoURL, base, head string) (*CommitComparison, error) {
-	repoPath, err := c.cloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepoOptimized(ctx, repoURL, false) // Don't use shallow clone for commit comparison
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +242,7 @@ func (c *GitCLIClient) CompareCommits(ctx context.Context, repoURL, base, head s
 
 // GetFlatTree returns a flat listing of all files in the repository at a given ref
 func (c *GitCLIClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*TreeResult, error) {
-	repoPath, err := c.cloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepoOptimized(ctx, repoURL, true) // Use shallow clone for tree listing
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +286,7 @@ func (c *GitCLIClient) GetFlatTree(ctx context.Context, repoURL, ref string) (*T
 
 // BulkCreateFiles creates multiple files in a single commit
 func (c *GitCLIClient) BulkCreateFiles(ctx context.Context, repoURL string, files []FileChange, message string) error {
-	repoPath, err := c.cloneRepo(ctx, repoURL)
+	repoPath, err := c.cloneRepoOptimized(ctx, repoURL, true) // Use shallow clone for bulk operations
 	if err != nil {
 		return err
 	}
