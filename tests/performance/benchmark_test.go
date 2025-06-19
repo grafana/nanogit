@@ -54,8 +54,7 @@ func NewBenchmarkSuite(ctx context.Context, networkLatency time.Duration) (*Benc
 		gitServer:    gitServer,
 		repositories: repositories,
 		config: BenchmarkConfig{
-			Iterations: 3,
-			Timeout:    5 * time.Minute,
+			Timeout: 10 * time.Minute,
 		},
 	}, nil
 }
@@ -107,7 +106,8 @@ func TestFileOperationsPerformance(t *testing.T) {
 	}{
 		{"small_repo", "small", 50},
 		{"medium_repo", "medium", 500},
-		// {"large_repo", "large", 2000},
+		{"large_repo", "large", 2000},
+		{"xlarge_repo", "xlarge", 10000},
 	}
 
 	for _, tc := range testCases {
@@ -120,8 +120,8 @@ func TestFileOperationsPerformance(t *testing.T) {
 
 			for _, client := range suite.clients {
 				t.Run(client.Name(), func(t *testing.T) {
-					// Run each operation 5 times for better statistical data
-					for i := 0; i < 5; i++ {
+					// Run each operation 3 times for better statistical data
+					for i := 0; i < 3; i++ {
 						// Test file creation
 						suite.collector.RecordOperation(
 							client.Name(), "CreateFile", tc.name, tc.repoSize, tc.fileCount,

@@ -54,23 +54,23 @@ type TreeFile struct {
 
 // BenchmarkResult represents the result of a single benchmark run
 type BenchmarkResult struct {
-	Client       string        `json:"client"`
-	Operation    string        `json:"operation"`
-	Scenario     string        `json:"scenario"`
-	Duration     time.Duration `json:"duration"`
-	MemoryUsed   int64         `json:"memory_used"`
-	Success      bool          `json:"success"`
-	Error        string        `json:"error,omitempty"`
-	RepoSize     string        `json:"repo_size"`
-	FileCount    int           `json:"file_count"`
+	Client       string                 `json:"client"`
+	Operation    string                 `json:"operation"`
+	Scenario     string                 `json:"scenario"`
+	Duration     time.Duration          `json:"duration"`
+	MemoryUsed   int64                  `json:"memory_used"`
+	Success      bool                   `json:"success"`
+	Error        string                 `json:"error,omitempty"`
+	RepoSize     string                 `json:"repo_size"`
+	FileCount    int                    `json:"file_count"`
 	ExtraMetrics map[string]interface{} `json:"extra_metrics,omitempty"`
 }
 
 // BenchmarkConfig represents configuration for a benchmark run
 type BenchmarkConfig struct {
-	RepoURL     string
-	RepoSize    string // "small", "medium", "large"
-	FileCount   int
-	Iterations  int
-	Timeout     time.Duration
+	RepoURL   string
+	RepoSize  string // "small", "medium", "large"
+	FileCount int
+	Timeout   time.Duration
 }
+

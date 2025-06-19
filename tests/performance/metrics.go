@@ -175,10 +175,26 @@ func (m *MetricsCollector) generateTextSummary() string {
 	text += fmt.Sprintf("Generated: %s\n", time.Now().Format(time.RFC3339))
 	text += fmt.Sprintf("Total Benchmarks: %d\n\n", len(m.results))
 	
-	for operation, opSummary := range summary {
+	// Sort operations by name
+	operations := make([]string, 0, len(summary))
+	for operation := range summary {
+		operations = append(operations, operation)
+	}
+	sort.Strings(operations)
+	
+	for _, operation := range operations {
+		opSummary := summary[operation]
 		text += fmt.Sprintf("=== %s ===\n", operation)
 		
-		for client, stats := range opSummary.ClientStats {
+		// Sort clients by name
+		clients := make([]string, 0, len(opSummary.ClientStats))
+		for client := range opSummary.ClientStats {
+			clients = append(clients, client)
+		}
+		sort.Strings(clients)
+		
+		for _, client := range clients {
+			stats := opSummary.ClientStats[client]
 			text += fmt.Sprintf("\n%s:\n", client)
 			text += fmt.Sprintf("  Runs: %d\n", stats.Count)
 			text += fmt.Sprintf("  Success Rate: %.2f%%\n", stats.SuccessRate*100)
