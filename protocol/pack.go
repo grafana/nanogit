@@ -54,6 +54,22 @@ var EmptyPack = []byte{
 var (
 	// ErrDataTooLarge is returned when attempting to create a packet with data larger than MaxPktLineDataSize.
 	ErrDataTooLarge = errors.New("the data field is too large")
+	
+	// ErrPackParseError is returned when parsing a Git packet fails.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrPackParseError = errors.New("pack parse error")
+	
+	// ErrGitServerError is returned when the Git server reports an error.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrGitServerError = errors.New("git server error")
+	
+	// ErrGitReferenceUpdateError is returned when a Git reference update fails.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrGitReferenceUpdateError = errors.New("git reference update error")
+	
+	// ErrGitUnpackError is returned when Git pack unpacking fails.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrGitUnpackError = errors.New("git unpack error")
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -117,28 +133,72 @@ const (
 	ResponseEndPacket = SpecialPack("0002")
 )
 
-// PackParseError represents an error that occurred while parsing a packet.
-// It includes the problematic line and the underlying error.
+// PackParseError provides structured information about a Git packet parsing error.
 type PackParseError struct {
 	Line []byte
 	Err  error
 }
 
-// Error implements the error interface for ParseError.
+// GitServerError provides structured information about a Git server error.
+type GitServerError struct {
+	Line      []byte
+	ErrorType string // "ERR", "error", "fatal"
+	Message   string
+}
+
+// GitReferenceUpdateError provides structured information about a Git reference update failure.
+type GitReferenceUpdateError struct {
+	Line    []byte
+	RefName string
+	Reason  string
+}
+
+// GitUnpackError provides structured information about a Git pack unpacking error.
+type GitUnpackError struct {
+	Line    []byte
+	Message string
+}
+
 func (e *PackParseError) Error() string {
 	if e.Err == nil {
 		return fmt.Sprintf("error parsing line %q", e.Line)
 	}
-
 	return fmt.Sprintf("error parsing line %q: %s", e.Line, e.Err.Error())
 }
 
-// Unwrap returns the underlying error.
+// Unwrap enables errors.Is() compatibility with ErrPackParseError
 func (e *PackParseError) Unwrap() error {
 	return e.Err
 }
 
-// NewPacketParseError creates a new PacketParseError with the given line and error.
+func (e *GitServerError) Error() string {
+	return fmt.Sprintf("git server %s: %s", e.ErrorType, e.Message)
+}
+
+// Unwrap enables errors.Is() compatibility with ErrGitServerError
+func (e *GitServerError) Unwrap() error {
+	return ErrGitServerError
+}
+
+func (e *GitReferenceUpdateError) Error() string {
+	return fmt.Sprintf("reference update failed for %s: %s", e.RefName, e.Reason)
+}
+
+// Unwrap enables errors.Is() compatibility with ErrGitReferenceUpdateError
+func (e *GitReferenceUpdateError) Unwrap() error {
+	return ErrGitReferenceUpdateError
+}
+
+func (e *GitUnpackError) Error() string {
+	return "pack unpack failed: " + e.Message
+}
+
+// Unwrap enables errors.Is() compatibility with ErrGitUnpackError
+func (e *GitUnpackError) Unwrap() error {
+	return ErrGitUnpackError
+}
+
+// NewPackParseError creates a new PackParseError with the given line and error.
 func NewPackParseError(line []byte, err error) *PackParseError {
 	return &PackParseError{
 		Line: line,
@@ -146,9 +206,50 @@ func NewPackParseError(line []byte, err error) *PackParseError {
 	}
 }
 
+// NewGitServerError creates a new GitServerError with the specified details.
+func NewGitServerError(line []byte, errorType, message string) *GitServerError {
+	return &GitServerError{
+		Line:      line,
+		ErrorType: errorType,
+		Message:   message,
+	}
+}
+
+// NewGitReferenceUpdateError creates a new GitReferenceUpdateError with the specified details.
+func NewGitReferenceUpdateError(line []byte, refName, reason string) *GitReferenceUpdateError {
+	return &GitReferenceUpdateError{
+		Line:    line,
+		RefName: refName,
+		Reason:  reason,
+	}
+}
+
+// NewGitUnpackError creates a new GitUnpackError with the specified details.
+func NewGitUnpackError(line []byte, message string) *GitUnpackError {
+	return &GitUnpackError{
+		Line:    line,
+		Message: message,
+	}
+}
+
 // IsPackParseError checks if an error is a PackParseError.
 func IsPackParseError(err error) bool {
 	return errors.As(err, new(*PackParseError))
+}
+
+// IsGitServerError checks if an error is a GitServerError.
+func IsGitServerError(err error) bool {
+	return errors.As(err, new(*GitServerError))
+}
+
+// IsGitReferenceUpdateError checks if an error is a GitReferenceUpdateError.
+func IsGitReferenceUpdateError(err error) bool {
+	return errors.As(err, new(*GitReferenceUpdateError))
+}
+
+// IsGitUnpackError checks if an error is a GitUnpackError.
+func IsGitUnpackError(err error) bool {
+	return errors.As(err, new(*GitUnpackError))
 }
 
 // FormatPacks converts a sequence of packets into their wire format.
@@ -174,21 +275,75 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// ParsePack parses a sequence of packets from a byte slice.
-// It returns:
-//   - lines: The parsed packet lines
-//   - remainder: Any remaining bytes that couldn't be parsed
-//   - err: Any error that occurred during parsing
+// ParsePack parses a sequence of Git protocol packets from a byte slice according to the
+// Git Smart HTTP protocol specification (https://git-scm.com/docs/gitprotocol-pack).
 //
-// The function handles:
-//   - Regular packets with data
-//   - Special packets (flush, delimiter, response end)
-//   - Error packets (starting with "ERR ")
-//   - Git error messages (starting with "error:" or "fatal:")
-//   - Reference update failures (starting with "ng ")
-//   - Empty packets
+// Git uses a packet-line format where each packet is prefixed with a 4-byte hex length field.
+// The length includes the 4-byte length field itself, so the actual data is (length - 4) bytes.
 //
-// TODO: Accept an io.Reader to the function, and return a new kind of reader.
+// Returns:
+//   - lines: Successfully parsed packet data (without length prefixes)
+//   - remainder: Unparsed bytes remaining in the input (may be incomplete packets)
+//   - err: Error encountered during parsing (if any)
+//
+// Packet Types Handled:
+//
+// Regular Data Packets:
+//   - Format: 4-byte hex length + data
+//   - Example: "0009hello" (length=9, data="hello")
+//   - Returned in lines slice
+//
+// Special Control Packets:
+//   - Flush packet: "0000" - indicates end of message
+//   - Delimiter packet: "0001" - separates message sections (protocol v2)
+//   - Response end packet: "0002" - indicates end of response (protocol v2)
+//   - Empty packet: "0004" - should not be sent but is handled gracefully
+//
+// Server Error Packets (terminate parsing and return structured errors):
+//
+//   1. ERR Packets:
+//      - Format: length + "ERR " + message
+//      - Example: "000dERR hello" 
+//      - Returns: GitServerError with ErrorType="ERR"
+//      - Spec: RFC gitprotocol-pack error-line format
+//
+//   2. Git Error/Fatal Messages:
+//      - Format: length + "error:" + message or length + "fatal:" + message
+//      - Examples: "0015error: bad object", "0014fatal: fsck failed"
+//      - Returns: GitServerError with ErrorType="error" or "fatal"
+//      - Special case: Messages containing "unpack" return GitUnpackError
+//      - Source: Git side-band channel 3 (error messages)
+//
+//   3. Reference Update Failures:
+//      - Format: length + "ng " + refname + " " + reason
+//      - Example: "0020ng refs/heads/main failed"
+//      - Returns: GitReferenceUpdateError with parsed refname and reason
+//      - Spec: Git report-status protocol "ng" (no good) responses
+//
+//   4. Unpack Status Messages:
+//      - Format: length + "unpack " + status
+//      - Examples: "000bunpack ok", "0019unpack index-pack failed"
+//      - Success: Continues parsing (adds to lines)
+//      - Failure: Returns GitUnpackError
+//      - Spec: Git report-status protocol unpack status
+//
+// Error Conditions:
+//   - Invalid hex length field: Returns PackParseError
+//   - Truncated packets: Returns PackParseError  
+//   - Malformed packet data: Returns PackParseError
+//
+// Protocol Compliance:
+//   - Implements Git packet-line format per gitprotocol-common
+//   - Handles error reporting per gitprotocol-pack
+//   - Supports Git protocol v1 and v2 control packets
+//   - Compatible with Git Smart HTTP protocol error handling
+//
+// Example Usage:
+//   data := []byte("0009hello000dERR failed0000")
+//   lines, remainder, err := ParsePack(data)
+//   // Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
+//
+// TODO: Accept an io.Reader to enable streaming packet parsing.
 func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 	// There should be at least 4 bytes in the packet.
 	for len(b) >= 4 {
@@ -231,7 +386,8 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			// transfer process defined in this protocol is
 			// terminated.
 
-			return lines, b[length:], fmt.Errorf("error pack: %s", b[8:length])
+			message := string(b[8:length])
+			return lines, b[length:], NewGitServerError(b[:length], "ERR", message)
 
 		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")):
 			// Handle Git error and fatal messages.
@@ -242,7 +398,22 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			// Example from user: "error: object xxx: treeNotSorted: not properly sorted"
 			//                   "fatal: fsck error in packed object"
 
-			return lines, b[length:], fmt.Errorf("git error: %s", b[4:length])
+			fullMessage := string(b[4:length])
+			var errorType, message string
+			if bytes.HasPrefix(b[4:], []byte("error:")) {
+				errorType = "error"
+				message = fullMessage[6:] // Remove "error:" prefix
+			} else {
+				errorType = "fatal"
+				message = fullMessage[6:] // Remove "fatal:" prefix
+			}
+			
+			// Check if this is an unpack error
+			if bytes.Contains(b[4:length], []byte("unpack")) {
+				return lines, b[length:], NewGitUnpackError(b[:length], message)
+			}
+			
+			return lines, b[length:], NewGitServerError(b[:length], errorType, message)
 
 		case bytes.HasPrefix(b[4:], []byte("ng ")):
 			// Handle reference update failure packets.
@@ -252,7 +423,34 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			//
 			// Example from user: "ng refs/heads/robertoonboarding failed"
 
-			return lines, b[length:], fmt.Errorf("reference update failed: %s", b[7:length])
+			parts := bytes.SplitN(b[7:length], []byte(" "), 2)
+			var refName, reason string
+			if len(parts) >= 1 {
+				refName = string(parts[0])
+			}
+			if len(parts) >= 2 {
+				reason = string(parts[1])
+			} else {
+				reason = "update failed"
+			}
+			
+			return lines, b[length:], NewGitReferenceUpdateError(b[:length], refName, reason)
+
+		case bytes.HasPrefix(b[4:], []byte("unpack ")):
+			// Handle unpack status messages.
+			// Format: "unpack <status-msg>"
+			// This is part of the report-status protocol for push operations.
+			//
+			// Examples: "unpack ok" or "unpack [error-message]"
+
+			unpackContent := string(b[11:length]) // Skip "unpack "
+			if unpackContent != "ok" {
+				return lines, b[length:], NewGitUnpackError(b[:length], unpackContent)
+			}
+			// If unpack ok, continue processing normally
+			lines = append(lines, b[4:length])
+			b = b[length:]
+			continue
 		}
 
 		// The length includes the first 4 bytes as well, so we should be good with this.
