@@ -389,6 +389,7 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			message := string(b[8:length])
 			return lines, b[length:], NewGitServerError(b[:length], "ERR", message)
 
+
 		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")):
 			// Handle Git error and fatal messages.
 			// These can appear in responses when the server encounters errors during processing.
