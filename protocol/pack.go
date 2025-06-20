@@ -184,6 +184,8 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //   - Regular packets with data
 //   - Special packets (flush, delimiter, response end)
 //   - Error packets (starting with "ERR ")
+//   - Git error messages (starting with "error:" or "fatal:")
+//   - Reference update failures (starting with "ng ")
 //   - Empty packets
 //
 // TODO: Accept an io.Reader to the function, and return a new kind of reader.
@@ -230,6 +232,27 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			// terminated.
 
 			return lines, b[length:], fmt.Errorf("error pack: %s", b[8:length])
+
+		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")):
+			// Handle Git error and fatal messages.
+			// These can appear in responses when the server encounters errors during processing.
+			// According to Git protocol v2 documentation, side-band channel 3 is used for
+			// "fatal error message just before stream aborts".
+			//
+			// Example from user: "error: object xxx: treeNotSorted: not properly sorted"
+			//                   "fatal: fsck error in packed object"
+
+			return lines, b[length:], fmt.Errorf("git error: %s", b[4:length])
+
+		case bytes.HasPrefix(b[4:], []byte("ng ")):
+			// Handle reference update failure packets.
+			// "ng" means "no good" - indicating a reference update failed.
+			// Format: "ng <refname> <error-msg>"
+			// This is part of the report-status protocol.
+			//
+			// Example from user: "ng refs/heads/robertoonboarding failed"
+
+			return lines, b[length:], fmt.Errorf("reference update failed: %s", b[7:length])
 		}
 
 		// The length includes the first 4 bytes as well, so we should be good with this.

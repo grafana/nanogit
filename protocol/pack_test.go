@@ -198,6 +198,107 @@ func TestParsePacket(t *testing.T) {
 				err:       errors.New("error packet: hello"),
 			},
 		},
+		"git error packet": {
+			input: func() []byte {
+				message := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return pkt
+			}(),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       errors.New("git error: error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"),
+			},
+		},
+		"fatal error packet": {
+			input: func() []byte {
+				message := "fatal: fsck error occurred"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return pkt
+			}(),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       errors.New("git error: fatal: fsck error occurred"),
+			},
+		},
+		"reference update failure": {
+			input: func() []byte {
+				message := "ng refs/heads/robertoonboarding failed"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return pkt
+			}(),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       errors.New("reference update failed: refs/heads/robertoonboarding failed"),
+			},
+		},
+		"user example scenario": {
+			// This simulates the exact example provided by the user
+			input: func() []byte {
+				message1 := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
+				pkt1, _ := protocol.PackLine(message1).Marshal()
+				message2 := "001dunpack index-pack failed\n"
+				pkt2, _ := protocol.PackLine(message2).Marshal()
+				message3 := "ng refs/heads/robertoonboarding failed\n"
+				pkt3, _ := protocol.PackLine(message3).Marshal()
+				pkt4 := []byte("0009000000000000")
+				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
+			}(),
+			expected: expected{
+				lines: nil,
+				remainder: func() []byte {
+					message2 := "001dunpack index-pack failed\n"
+					pkt2, _ := protocol.PackLine(message2).Marshal()
+					message3 := "ng refs/heads/robertoonboarding failed\n"
+					pkt3, _ := protocol.PackLine(message3).Marshal()
+					pkt4 := []byte("0009000000000000")
+					return append(append(pkt2, pkt3...), pkt4...)
+				}(),
+				err: errors.New("git error: error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"),
+			},
+		},
+		"multiple error types in sequence": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("ERR hello").Marshal()
+				pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
+				return append(append(pkt1, pkt2...), pkt3...)
+			}(),
+			expected: expected{
+				lines: toBytesSlice("hello"),
+				remainder: func() []byte {
+					pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
+					return pkt3
+				}(),
+				err: errors.New("error pack: hello"),
+			},
+		},
+		"lines + git error": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("error: some error").Marshal()
+				return append(pkt1, pkt2...)
+			}(),
+			expected: expected{
+				lines:     toBytesSlice("hello"),
+				remainder: []byte{},
+				err:       errors.New("git error: error: some error"),
+			},
+		},
+		"lines + reference failure": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("ng refs/heads/main failed").Marshal()
+				return append(pkt1, pkt2...)
+			}(),
+			expected: expected{
+				lines:     toBytesSlice("hello"),
+				remainder: []byte{},
+				err:       errors.New("reference update failed: refs/heads/main failed"),
+			},
+		},
 	}
 
 	for name, tc := range testcases {
