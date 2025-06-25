@@ -299,6 +299,20 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //   - Response end packet: "0002" - indicates end of response (protocol v2)
 //   - Empty packet: "0004" - should not be sent but is handled gracefully
 //
+// Side-band Multiplexing:
+//   Git protocol v2 uses side-band multiplexing to allow multiple communication channels
+//   within a single stream. Each packet may be prefixed with a single byte indicating
+//   the side-band channel:
+//   - Channel 1 (0x01): Packfile data
+//   - Channel 2 (0x02): Progress messages and non-fatal errors (displayed on stderr)
+//   - Channel 3 (0x03): Fatal error messages that terminate the connection
+//   
+//   When side-band multiplexing is active, error messages may appear as:
+//   - "0015\x02error: message" (channel 2 - progress/error info)
+//   - "0015\x03fatal: message" (channel 3 - fatal errors)
+//   
+//   Per Git protocol v2 spec: https://git-scm.com/docs/protocol-v2#_packfile_negotiation
+//
 // Server Error Packets (terminate parsing and return structured errors):
 //
 //   1. ERR Packets:
@@ -308,11 +322,15 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //      - Spec: RFC gitprotocol-pack error-line format
 //
 //   2. Git Error/Fatal Messages:
-//      - Format: length + "error:" + message or length + "fatal:" + message
-//      - Examples: "0015error: bad object", "0014fatal: fsck failed"
+//      - Direct format: length + "error:" + message or length + "fatal:" + message
+//      - Side-band format: length + 0x02 + "error:" + message or length + 0x02 + "fatal:" + message
+//      - Examples: "0015error: bad object", "0016\x02error: bad object"
 //      - Returns: GitServerError with ErrorType="error" or "fatal"
 //      - Special case: Messages containing "unpack" return GitUnpackError
-//      - Source: Git side-band channel 3 (error messages)
+//      - Source: Direct error messages or Git side-band channel 2 (progress/error messages)
+//      - Note: Side-band channel 2 is used for progress info and error messages that should
+//        be displayed to the user (typically on stderr). The leading 0x02 byte indicates
+//        side-band channel 2 per Git protocol v2 specification.
 //
 //   3. Reference Update Failures:
 //      - Format: length + "ng " + refname + " " + reason
@@ -392,23 +410,33 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 
 
 		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")) ||
-			 (len(b) > 5 && (bytes.HasPrefix(b[5:], []byte("error:")) || bytes.HasPrefix(b[5:], []byte("fatal:")))):
+			 (len(b) > 5 && b[4] == 0x02 && (bytes.HasPrefix(b[5:], []byte("error:")) || bytes.HasPrefix(b[5:], []byte("fatal:")))) ||
+			 (len(b) > 5 && b[4] == 0x03 && (bytes.HasPrefix(b[5:], []byte("error:")) || bytes.HasPrefix(b[5:], []byte("fatal:")))):
 			// Handle Git error and fatal messages.
 			// These can appear in responses when the server encounters errors during processing.
-			// According to Git protocol v2 documentation, side-band channel 3 is used for
-			// "fatal error message just before stream aborts".
+			// 
+			// Formats supported:
+			//   1. Direct: "error: message" or "fatal: message"
+			//   2. Side-band channel 2: 0x02 + "error: message" (progress/error info)
+			//   3. Side-band channel 3: 0x03 + "fatal: message" (fatal errors)
 			//
-			// Example from user: "error: object xxx: treeNotSorted: not properly sorted"
-			//                   "fatal: fsck error in packed object"
-
+			// Per Git protocol v2: side-band channel 2 is for progress messages and errors
+			// displayed to the user, while channel 3 is for fatal errors that terminate
+			// the connection.
+			//
+			// Examples: "0015error: bad object"
+			//           "0016\x02error: bad object" (side-band channel 2)
+			//           "0016\x03fatal: fsck failed" (side-band channel 3)
 
 			// Determine the offset where the error/fatal message starts
 			var messageStart int
 			var fullMessage string
 			if bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")) {
+				// Direct format: no side-band prefix
 				messageStart = 4
 				fullMessage = string(b[4:length])
 			} else {
+				// Side-band format: skip the side-band channel byte (0x02 or 0x03)
 				messageStart = 5
 				fullMessage = string(b[5:length])
 			}
