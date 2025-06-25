@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -251,4 +252,112 @@ func TestProviders(t *testing.T) {
 	require.Equal(t, "Delete test file", commits[0].Message)
 	require.Equal(t, updateCommit.Hash, commits[1].Hash)
 	require.Equal(t, "Update test file", commits[1].Message)
+}
+
+func TestProvidersLargeBlob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping testproviders suite in short mode")
+		return
+	}
+
+	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" || os.Getenv("TEST_USER") == "" {
+		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN or TEST_USER not set")
+		return
+	}
+
+	ctx := log.ToContext(context.Background(), NewTestLogger(t.Logf))
+	client, err := nanogit.NewHTTPClient(
+		os.Getenv("TEST_REPO"),
+		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
+	)
+	require.NoError(t, err)
+	
+	auth, err := client.IsAuthorized(ctx)
+	require.NoError(t, err)
+	require.True(t, auth)
+
+	exists, err := client.RepoExists(ctx)
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	// Read the xlarge dashboard file
+	dashboardPath := filepath.Join("..", "perf", "cmd", "generate_dashboards", "generated_dashboards", "xlarge-dashboard.json")
+	dashboardContent, err := os.ReadFile(dashboardPath)
+	require.NoError(t, err)
+	require.Greater(t, len(dashboardContent), 3000000, "Dashboard should be larger than 3MB")
+
+	branchName := fmt.Sprintf("test-large-blob-%d", time.Now().Unix())
+	mainRef, err := client.GetRef(ctx, "refs/heads/main")
+	require.NoError(t, err)
+	
+	err = client.CreateRef(ctx, nanogit.Ref{
+		Name: "refs/heads/" + branchName,
+		Hash: mainRef.Hash,
+	})
+	require.NoError(t, err)
+	
+	t.Cleanup(func() {
+		err = client.DeleteRef(ctx, "refs/heads/"+branchName)
+		require.NoError(t, err)
+	})
+
+	branchRef, err := client.GetRef(ctx, "refs/heads/"+branchName)
+	require.NoError(t, err)
+
+	writer, err := client.NewStagedWriter(ctx, branchRef)
+	require.NoError(t, err)
+
+	author := nanogit.Author{
+		Name:  "Test User",
+		Email: "test@example.com",
+		Time:  time.Now(),
+	}
+	committer := nanogit.Committer{
+		Name:  "Test User",
+		Email: "test@example.com", 
+		Time:  time.Now(),
+	}
+
+	t.Log("Creating large blob (3.7MB dashboard)...")
+	blobHash, err := writer.CreateBlob(ctx, "xlarge-dashboard.json", dashboardContent)
+	require.NoError(t, err)
+
+	t.Log("Committing large blob...")
+	commit, err := writer.Commit(ctx, "Add xlarge dashboard for large blob testing", author, committer)
+	require.NoError(t, err)
+
+	t.Log("Pushing to remote repository...")
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+
+	t.Log("Verifying commit was pushed...")
+	branchRef, err = client.GetRef(ctx, "refs/heads/"+branchName)
+	require.NoError(t, err)
+	require.Equal(t, commit.Hash, branchRef.Hash)
+
+	t.Log("Testing GetBlob with large blob...")
+	retrievedBlob, err := client.GetBlob(ctx, blobHash)
+	require.NoError(t, err)
+	require.Equal(t, dashboardContent, retrievedBlob.Content)
+	require.Equal(t, blobHash, retrievedBlob.Hash)
+	require.Greater(t, len(retrievedBlob.Content), 3000000, "Retrieved blob should maintain size")
+
+	t.Log("Testing GetBlobByPath with large blob...")
+	retrievedFile, err := client.GetBlobByPath(ctx, commit.Tree, "xlarge-dashboard.json")
+	require.NoError(t, err)
+	require.Equal(t, dashboardContent, retrievedFile.Content)
+	require.Equal(t, blobHash, retrievedFile.Hash)
+	require.Greater(t, len(retrievedFile.Content), 3000000, "Retrieved file should maintain size")
+
+	t.Log("Verifying content is valid JSON dashboard...")
+	contentStr := string(retrievedFile.Content)
+	require.Contains(t, contentStr, "\"title\"")
+	require.Contains(t, contentStr, "\"panels\"")
+	require.Contains(t, contentStr, "\"templating\"")
+	require.True(t, 
+		contentStr == string(dashboardContent) && 
+		(len(contentStr) > 3000000),
+		"Content should match original and be large")
+
+	t.Logf("Successfully tested large blob operations with %d bytes", len(retrievedFile.Content))
 }
