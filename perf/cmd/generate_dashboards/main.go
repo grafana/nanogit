@@ -274,7 +274,7 @@ func generateDashboard(spec DashboardGeneratorSpec) KubernetesDashboard {
 	dashboardName := fmt.Sprintf("%s-dashboard-%d", spec.Name, rand.Intn(10000))
 	
 	dashboard := KubernetesDashboard{
-		APIVersion: "dashboard.grafana.app/v1alpha1",
+		APIVersion: "dashboard.grafana.app/v1beta1",
 		Kind:       "Dashboard",
 		Metadata: Metadata{
 			Name: dashboardName,

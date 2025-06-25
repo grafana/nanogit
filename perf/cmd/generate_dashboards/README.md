@@ -57,7 +57,7 @@ The tool will create a `generated_dashboards/` directory containing four Kuberne
 ## Generated Content Features
 
 ### Kubernetes Resource Structure
-- **apiVersion**: `dashboard.grafana.app/v1alpha1`
+- **apiVersion**: `dashboard.grafana.app/v1beta1`
 - **kind**: `Dashboard`
 - **metadata**: Simple metadata with only name field
 - **spec**: Dashboard specification containing panels, templating, etc.
