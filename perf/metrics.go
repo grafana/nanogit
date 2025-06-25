@@ -226,14 +226,14 @@ func (m *MetricsCollector) generateMarkdownSummary() string {
 	// Get all operations and clients
 	operations := make([]string, 0, len(summary))
 	clientSet := make(map[string]bool)
-	
+
 	for operation, opSummary := range summary {
 		operations = append(operations, operation)
 		for client := range opSummary.ClientStats {
 			clientSet[client] = true
 		}
 	}
-	
+
 	sort.Strings(operations)
 	clients := make([]string, 0, len(clientSet))
 	for client := range clientSet {
@@ -262,7 +262,7 @@ func (m *MetricsCollector) generateMarkdownSummary() string {
 	text += "### ⚡ Speed Comparison\n\n"
 	text += m.generateMarkdownNanogitTable(summary, operations, clients, "duration")
 	text += "\n"
-	
+
 	text += "### 💾 Memory Comparison\n\n"
 	text += "*Note: git-cli uses minimal memory as it stores data on disk, not in memory*\n\n"
 	text += m.generateMarkdownNanogitTable(summary, operations, clients, "memory")
@@ -278,47 +278,47 @@ func (m *MetricsCollector) generateMarkdownSummary() string {
 // generateComparisonTables creates comparison tables for all clients
 func (m *MetricsCollector) generateComparisonTables(summary map[string]OperationSummary) string {
 	text := "=== PERFORMANCE COMPARISON TABLES ===\n\n"
-	
+
 	// Get all operations and clients
 	operations := make([]string, 0, len(summary))
 	clientSet := make(map[string]bool)
-	
+
 	for operation, opSummary := range summary {
 		operations = append(operations, operation)
 		for client := range opSummary.ClientStats {
 			clientSet[client] = true
 		}
 	}
-	
+
 	sort.Strings(operations)
 	clients := make([]string, 0, len(clientSet))
 	for client := range clientSet {
 		clients = append(clients, client)
 	}
 	sort.Strings(clients)
-	
+
 	// Table 1: Average Duration Comparison
 	text += "1. AVERAGE DURATION COMPARISON\n"
 	text += m.generateDurationTable(summary, operations, clients)
 	text += "\n"
-	
-	// Table 2: Average Memory Comparison  
+
+	// Table 2: Average Memory Comparison
 	text += "2. AVERAGE MEMORY USAGE COMPARISON\n"
 	text += m.generateMemoryTable(summary, operations, clients)
 	text += "\n"
-	
+
 	// Table 3: Nanogit Performance vs Others (Duration)
 	text += "3. NANOGIT DURATION PERFORMANCE vs OTHERS\n"
 	text += "(Shows how many times faster/slower nanogit is)\n"
 	text += m.generateNanogitComparisonTable(summary, operations, clients, "duration")
 	text += "\n"
-	
+
 	// Table 4: Nanogit Performance vs Others (Memory)
 	text += "4. NANOGIT MEMORY USAGE vs OTHERS\n"
 	text += "(Shows how many times less/more memory nanogit uses)\n"
 	text += m.generateNanogitComparisonTable(summary, operations, clients, "memory")
 	text += "\n"
-	
+
 	return text
 }
 
@@ -331,9 +331,9 @@ func (m *MetricsCollector) generateDurationTable(summary map[string]OperationSum
 			maxOpWidth = len(op)
 		}
 	}
-	
+
 	colWidth := 12
-	
+
 	// Header
 	text := fmt.Sprintf("%-*s", maxOpWidth, "Scenario")
 	for _, client := range clients {
@@ -341,7 +341,7 @@ func (m *MetricsCollector) generateDurationTable(summary map[string]OperationSum
 	}
 	text += fmt.Sprintf(" %*s", colWidth, "Best")
 	text += "\n"
-	
+
 	// Separator
 	text += fmt.Sprintf("%s", strings.Repeat("-", maxOpWidth))
 	for range clients {
@@ -349,26 +349,26 @@ func (m *MetricsCollector) generateDurationTable(summary map[string]OperationSum
 	}
 	text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
 	text += "\n"
-	
+
 	// Data rows
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("%-*s", maxOpWidth, operation)
-		
+
 		bestDuration := time.Duration(0)
 		bestClient := ""
 		durations := make(map[string]time.Duration)
-		
+
 		for _, client := range clients {
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				duration := stats.AvgDuration
 				durations[client] = duration
 				text += fmt.Sprintf(" %*s", colWidth, formatDuration(duration))
-				
+
 				if bestDuration == 0 || duration < bestDuration {
 					bestDuration = duration
 					bestClient = client
@@ -377,11 +377,11 @@ func (m *MetricsCollector) generateDurationTable(summary map[string]OperationSum
 				text += fmt.Sprintf(" %*s", colWidth, "N/A")
 			}
 		}
-		
+
 		text += fmt.Sprintf(" %*s", colWidth, bestClient)
 		text += "\n"
 	}
-	
+
 	return text
 }
 
@@ -394,9 +394,9 @@ func (m *MetricsCollector) generateMemoryTable(summary map[string]OperationSumma
 			maxOpWidth = len(op)
 		}
 	}
-	
+
 	colWidth := 12
-	
+
 	// Header
 	text := fmt.Sprintf("%-*s", maxOpWidth, "Scenario")
 	for _, client := range clients {
@@ -404,7 +404,7 @@ func (m *MetricsCollector) generateMemoryTable(summary map[string]OperationSumma
 	}
 	text += fmt.Sprintf(" %*s", colWidth, "Best")
 	text += "\n"
-	
+
 	// Separator
 	text += fmt.Sprintf("%s", strings.Repeat("-", maxOpWidth))
 	for range clients {
@@ -412,24 +412,24 @@ func (m *MetricsCollector) generateMemoryTable(summary map[string]OperationSumma
 	}
 	text += fmt.Sprintf(" %s", strings.Repeat("-", colWidth))
 	text += "\n"
-	
+
 	// Data rows
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("%-*s", maxOpWidth, operation)
-		
+
 		bestMemory := int64(0)
 		bestClient := ""
-		
+
 		for _, client := range clients {
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				memory := stats.AvgMemory
 				text += fmt.Sprintf(" %*s", colWidth, formatBytes(memory))
-				
+
 				if bestMemory == 0 || memory < bestMemory {
 					bestMemory = memory
 					bestClient = client
@@ -438,11 +438,11 @@ func (m *MetricsCollector) generateMemoryTable(summary map[string]OperationSumma
 				text += fmt.Sprintf(" %*s", colWidth, "N/A")
 			}
 		}
-		
+
 		text += fmt.Sprintf(" %*s", colWidth, bestClient)
 		text += "\n"
 	}
-	
+
 	return text
 }
 
@@ -455,9 +455,9 @@ func (m *MetricsCollector) generateNanogitComparisonTable(summary map[string]Ope
 			maxOpWidth = len(op)
 		}
 	}
-	
+
 	colWidth := 12
-	
+
 	// Header
 	text := fmt.Sprintf("%-*s", maxOpWidth, "Scenario")
 	for _, client := range clients {
@@ -466,7 +466,7 @@ func (m *MetricsCollector) generateNanogitComparisonTable(summary map[string]Ope
 		}
 	}
 	text += "\n"
-	
+
 	// Separator
 	text += fmt.Sprintf("%s", strings.Repeat("-", maxOpWidth))
 	for _, client := range clients {
@@ -475,29 +475,29 @@ func (m *MetricsCollector) generateNanogitComparisonTable(summary map[string]Ope
 		}
 	}
 	text += "\n"
-	
+
 	// Data rows
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		nanogitStats, nanogitExists := opSummary.ClientStats["nanogit"]
 		if !nanogitExists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("%-*s", maxOpWidth, operation)
-		
+
 		for _, client := range clients {
 			if client == "nanogit" {
 				continue
 			}
-			
+
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				var nanogitValue, otherValue float64
-				
+
 				if metric == "duration" {
 					nanogitValue = float64(nanogitStats.AvgDuration.Nanoseconds())
 					otherValue = float64(stats.AvgDuration.Nanoseconds())
@@ -505,10 +505,10 @@ func (m *MetricsCollector) generateNanogitComparisonTable(summary map[string]Ope
 					nanogitValue = float64(nanogitStats.AvgMemory)
 					otherValue = float64(stats.AvgMemory)
 				}
-				
+
 				var multiplier float64
 				var displayText string
-				
+
 				if nanogitValue != 0 && otherValue != 0 {
 					if metric == "duration" {
 						// For duration: how many times faster is nanogit
@@ -534,16 +534,16 @@ func (m *MetricsCollector) generateNanogitComparisonTable(summary map[string]Ope
 				} else {
 					displayText = "N/A"
 				}
-				
+
 				text += fmt.Sprintf(" %*s", colWidth, displayText)
 			} else {
 				text += fmt.Sprintf(" %*s", colWidth, "N/A")
 			}
 		}
-		
+
 		text += "\n"
 	}
-	
+
 	return text
 }
 
@@ -633,28 +633,28 @@ func formatBytes(bytes int64) string {
 func (m *MetricsCollector) generateMarkdownOverviewTable(summary map[string]OperationSummary, operations, clients []string) string {
 	text := "| Operation | Speed Winner | Duration | In-Memory Winner | Memory Usage |\n"
 	text += "|-----------|--------------|----------|------------------|-------------|\n"
-	
+
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		// Find best duration (fastest)
 		bestDuration := time.Duration(0)
 		bestDurationClient := ""
-		
+
 		// Find best memory among in-memory clients (nanogit, go-git) - exclude git-cli
 		bestMemory := int64(0)
 		bestMemoryClient := ""
-		
+
 		for client, stats := range opSummary.ClientStats {
 			// Speed comparison - all clients
 			if bestDuration == 0 || stats.AvgDuration < bestDuration {
 				bestDuration = stats.AvgDuration
 				bestDurationClient = client
 			}
-			
+
 			// Memory comparison - only in-memory clients (exclude git-cli as it uses disk)
 			if client != "git-cli" {
 				if bestMemory == 0 || stats.AvgMemory < bestMemory {
@@ -663,7 +663,7 @@ func (m *MetricsCollector) generateMarkdownOverviewTable(summary map[string]Oper
 				}
 			}
 		}
-		
+
 		// Speed winner emoji
 		speedEmoji := "🥇"
 		if bestDurationClient == "nanogit" {
@@ -673,7 +673,7 @@ func (m *MetricsCollector) generateMarkdownOverviewTable(summary map[string]Oper
 		} else {
 			speedEmoji = "⚡"
 		}
-		
+
 		// Memory winner emoji (among in-memory clients)
 		memoryEmoji := "🥇"
 		if bestMemoryClient == "nanogit" {
@@ -681,12 +681,12 @@ func (m *MetricsCollector) generateMarkdownOverviewTable(summary map[string]Oper
 		} else if bestMemoryClient == "go-git" {
 			memoryEmoji = "🐹"
 		}
-		
-		text += fmt.Sprintf("| %s | %s %s | %s | %s %s | %s |\n", 
+
+		text += fmt.Sprintf("| %s | %s %s | %s | %s %s | %s |\n",
 			operation, speedEmoji, bestDurationClient, formatDuration(bestDuration),
 			memoryEmoji, bestMemoryClient, formatBytes(bestMemory))
 	}
-	
+
 	return text
 }
 
@@ -701,15 +701,15 @@ func (m *MetricsCollector) generateMarkdownDurationTable(summary map[string]Oper
 		text += "-----------|"
 	}
 	text += "\n"
-	
+
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("| %s |", operation)
-		
+
 		// Find best duration for emoji
 		bestDuration := time.Duration(0)
 		for _, stats := range opSummary.ClientStats {
@@ -717,7 +717,7 @@ func (m *MetricsCollector) generateMarkdownDurationTable(summary map[string]Oper
 				bestDuration = stats.AvgDuration
 			}
 		}
-		
+
 		for _, client := range clients {
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				emoji := ""
@@ -735,7 +735,7 @@ func (m *MetricsCollector) generateMarkdownDurationTable(summary map[string]Oper
 		}
 		text += "\n"
 	}
-	
+
 	return text
 }
 
@@ -750,15 +750,15 @@ func (m *MetricsCollector) generateMarkdownMemoryTable(summary map[string]Operat
 		text += "-----------|"
 	}
 	text += "\n"
-	
+
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("| %s |", operation)
-		
+
 		// Find best memory among in-memory clients (exclude git-cli)
 		bestMemory := int64(0)
 		for client, stats := range opSummary.ClientStats {
@@ -766,7 +766,7 @@ func (m *MetricsCollector) generateMarkdownMemoryTable(summary map[string]Operat
 				bestMemory = stats.AvgMemory
 			}
 		}
-		
+
 		for _, client := range clients {
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				emoji := ""
@@ -786,7 +786,7 @@ func (m *MetricsCollector) generateMarkdownMemoryTable(summary map[string]Operat
 		}
 		text += "\n"
 	}
-	
+
 	return text
 }
 
@@ -805,28 +805,28 @@ func (m *MetricsCollector) generateMarkdownNanogitTable(summary map[string]Opera
 		}
 	}
 	text += "\n"
-	
+
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		nanogitStats, nanogitExists := opSummary.ClientStats["nanogit"]
 		if !nanogitExists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("| %s |", operation)
-		
+
 		for _, client := range clients {
 			if client == "nanogit" {
 				continue
 			}
-			
+
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				var nanogitValue, otherValue float64
-				
+
 				if metric == "duration" {
 					nanogitValue = float64(nanogitStats.AvgDuration.Nanoseconds())
 					otherValue = float64(stats.AvgDuration.Nanoseconds())
@@ -834,11 +834,11 @@ func (m *MetricsCollector) generateMarkdownNanogitTable(summary map[string]Opera
 					nanogitValue = float64(nanogitStats.AvgMemory)
 					otherValue = float64(stats.AvgMemory)
 				}
-				
+
 				var multiplier float64
 				var displayText string
 				var emoji string
-				
+
 				if nanogitValue != 0 && otherValue != 0 {
 					if metric == "duration" {
 						multiplier = otherValue / nanogitValue
@@ -886,7 +886,7 @@ func (m *MetricsCollector) generateMarkdownNanogitTable(summary map[string]Opera
 					displayText = "N/A"
 					emoji = ""
 				}
-				
+
 				text += fmt.Sprintf(" %s%s |", displayText, emoji)
 			} else {
 				text += " N/A |"
@@ -894,31 +894,31 @@ func (m *MetricsCollector) generateMarkdownNanogitTable(summary map[string]Opera
 		}
 		text += "\n"
 	}
-	
+
 	return text
 }
 
 // generateMarkdownDetailedStats creates detailed statistics table
 func (m *MetricsCollector) generateMarkdownDetailedStats(summary map[string]OperationSummary, operations, clients []string) string {
 	text := ""
-	
+
 	for _, operation := range operations {
 		opSummary, exists := summary[operation]
 		if !exists {
 			continue
 		}
-		
+
 		text += fmt.Sprintf("### %s\n\n", operation)
 		text += "| Client | Runs | Success | Avg Duration | P95 Duration | Avg Memory | Median Memory |\n"
 		text += "|--------|------|---------|--------------|--------------|------------|---------------|\n"
-		
+
 		for _, client := range clients {
 			if stats, exists := opSummary.ClientStats[client]; exists {
 				successEmoji := "✅"
 				if stats.SuccessRate < 1.0 {
 					successEmoji = "⚠️"
 				}
-				
+
 				text += fmt.Sprintf("| %s | %d | %s %.1f%% | %s | %s | %s | %s |\n",
 					client, stats.Count, successEmoji, stats.SuccessRate*100,
 					formatDuration(stats.AvgDuration), formatDuration(stats.P95Duration),
@@ -927,7 +927,7 @@ func (m *MetricsCollector) generateMarkdownDetailedStats(summary map[string]Oper
 		}
 		text += "\n"
 	}
-	
+
 	return text
 }
 

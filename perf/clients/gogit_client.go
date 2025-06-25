@@ -104,7 +104,6 @@ func (c *GoGitClient) cloneRepoOptimized(ctx context.Context, repoURL string, sh
 	return repo, nil
 }
 
-
 // pushChanges pushes local changes to the remote repository
 func (c *GoGitClient) pushChanges(ctx context.Context, repo *git.Repository, repoURL string) error {
 	// Parse URL to get clean URL for push

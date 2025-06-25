@@ -93,61 +93,104 @@ func ParseRefName(in string) (RefName, error) {
 	}
 
 	rn := RefName{FullName: in}
-	if !strings.HasPrefix(in, "refs/") {
-		return rn, errors.New("ref name does not include refs/ prefix")
-	}
-	in = in[len("refs/"):]
-
-	sepIdx := strings.IndexRune(in, '/')
-	if sepIdx == -1 {
-		return rn, errors.New("ref name does not include a category")
+	
+	refPath, err := validateRefPrefix(in)
+	if err != nil {
+		return rn, err
 	}
 
-	// The performance of this function could be improved, possibly by
-	// implementing a state machine, but we need a reference point first.
-
-	if strings.Contains(in, "..") {
-		return rn, errors.New("ref cannot have two consecutive dots `..` anywhere")
+	sepIdx, err := validateRefCategory(refPath)
+	if err != nil {
+		return rn, err
 	}
 
-	if strings.Contains(in, "//") {
-		return rn, errors.New("ref cannot contain multiple consecutive slashes")
+	err = validateRefStructure(refPath)
+	if err != nil {
+		return rn, err
 	}
 
-	if strings.Contains(in, "@{") {
-		return rn, errors.New("ref cannot contain a sequence `@{`")
+	err = validateRefComponents(refPath)
+	if err != nil {
+		return rn, err
 	}
 
-	if strings.HasSuffix(in, ".") {
-		return rn, errors.New("ref cannot end with a dot `.`")
-	}
-
-	for _, component := range strings.Split(in, "/") {
-		if component == "" {
-			return rn, errors.New("ref components cannot be empty")
-		}
-
-		if strings.HasPrefix(component, ".") {
-			return rn, errors.New("ref components cannot begin with a dot `.` or end with the sequence .lock")
-		}
-
-		if strings.HasSuffix(component, ".lock") {
-			return rn, errors.New("ref components cannot end with the sequence `.lock`")
-		}
-
-		hasInvalidRunes := strings.ContainsFunc(component, func(r rune) bool {
-			return r < 0o040 || r == 0o177 || r == ' ' || r == '~' || r == '^' || r == ':' || r == '?' || r == '*' || r == '[' || r == '\\'
-		})
-
-		if hasInvalidRunes {
-			return rn, errors.New("ref components cannot contain control characters, spaces, `~`, `^`, `:`, `?`, `*`, `[`, `DEL`, or a backslash")
-		}
-	}
-
-	rn.Category = in[:sepIdx]
-	rn.Location = in[sepIdx+1:]
+	rn.Category = refPath[:sepIdx]
+	rn.Location = refPath[sepIdx+1:]
 
 	return rn, nil
+}
+
+// validateRefPrefix checks if the ref has the required "refs/" prefix
+func validateRefPrefix(in string) (string, error) {
+	if !strings.HasPrefix(in, "refs/") {
+		return "", errors.New("ref name does not include refs/ prefix")
+	}
+	return in[len("refs/"):], nil
+}
+
+// validateRefCategory checks if the ref has a valid category
+func validateRefCategory(refPath string) (int, error) {
+	sepIdx := strings.IndexRune(refPath, '/')
+	if sepIdx == -1 {
+		return 0, errors.New("ref name does not include a category")
+	}
+	return sepIdx, nil
+}
+
+// validateRefStructure validates the overall structure of the ref
+func validateRefStructure(refPath string) error {
+	if strings.Contains(refPath, "..") {
+		return errors.New("ref cannot have two consecutive dots `..` anywhere")
+	}
+
+	if strings.Contains(refPath, "//") {
+		return errors.New("ref cannot contain multiple consecutive slashes")
+	}
+
+	if strings.Contains(refPath, "@{") {
+		return errors.New("ref cannot contain a sequence `@{`")
+	}
+
+	if strings.HasSuffix(refPath, ".") {
+		return errors.New("ref cannot end with a dot `.`")
+	}
+
+	return nil
+}
+
+// validateRefComponents validates each component of the ref path
+func validateRefComponents(refPath string) error {
+	for _, component := range strings.Split(refPath, "/") {
+		if err := validateSingleComponent(component); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateSingleComponent validates a single ref component
+func validateSingleComponent(component string) error {
+	if component == "" {
+		return errors.New("ref components cannot be empty")
+	}
+
+	if strings.HasPrefix(component, ".") {
+		return errors.New("ref components cannot begin with a dot `.` or end with the sequence .lock")
+	}
+
+	if strings.HasSuffix(component, ".lock") {
+		return errors.New("ref components cannot end with the sequence `.lock`")
+	}
+
+	hasInvalidRunes := strings.ContainsFunc(component, func(r rune) bool {
+		return r < 0o040 || r == 0o177 || r == ' ' || r == '~' || r == '^' || r == ':' || r == '?' || r == '*' || r == '[' || r == '\\'
+	})
+
+	if hasInvalidRunes {
+		return errors.New("ref components cannot contain control characters, spaces, `~`, `^`, `:`, `?`, `*`, `[`, `DEL`, or a backslash")
+	}
+
+	return nil
 }
 
 // ZeroHash represents the all-zeros SHA-1 hash used in Git to represent a non-existent object

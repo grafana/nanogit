@@ -83,15 +83,15 @@ func TestPackfileStorageMode(t *testing.T) {
 func TestWriterOptionFunction(t *testing.T) {
 	t.Run("option function modifies options correctly", func(t *testing.T) {
 		opts := &WriterOptions{StorageMode: PackfileStorageAuto}
-		
+
 		err := WithMemoryStorage()(opts)
 		require.NoError(t, err)
 		assert.Equal(t, PackfileStorageMemory, opts.StorageMode)
-		
+
 		err = WithDiskStorage()(opts)
 		require.NoError(t, err)
 		assert.Equal(t, PackfileStorageDisk, opts.StorageMode)
-		
+
 		err = WithAutoStorage()(opts)
 		require.NoError(t, err)
 		assert.Equal(t, PackfileStorageAuto, opts.StorageMode)

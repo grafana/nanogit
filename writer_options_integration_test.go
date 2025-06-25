@@ -53,7 +53,7 @@ func TestStagedWriter_StorageOptions(t *testing.T) {
 			// the actual storage behavior without a real Git server,
 			// but we can verify the options are accepted
 			ctx := context.Background()
-			
+
 			// Create a dummy ref for testing
 			ref := nanogit.Ref{
 				Name: "refs/heads/test",
@@ -63,13 +63,13 @@ func TestStagedWriter_StorageOptions(t *testing.T) {
 			// This would normally work with a real client, but for this test
 			// we just verify the options pattern works
 			options := example.options
-			
+
 			// Verify the options can be applied
 			if options != nil {
 				writerOpts, err := applyWriterOptionsHelper(options)
 				require.NoError(t, err)
 				assert.NotNil(t, writerOpts)
-				
+
 				// Verify the expected storage mode based on options
 				switch example.name {
 				case "explicit auto mode":
@@ -82,7 +82,7 @@ func TestStagedWriter_StorageOptions(t *testing.T) {
 			}
 
 			t.Logf("✓ Options for %s work correctly", example.name)
-			
+
 			// Example of how users would call this in real code:
 			// client, err := nanogit.NewHTTPClient("https://github.com/user/repo")
 			// writer, err := client.NewStagedWriter(ctx, ref, example.options...)
@@ -98,7 +98,7 @@ func applyWriterOptionsHelper(options []nanogit.WriterOption) (*nanogit.WriterOp
 	opts := &nanogit.WriterOptions{
 		StorageMode: nanogit.PackfileStorageAuto, // Default
 	}
-	
+
 	for _, option := range options {
 		if option == nil {
 			continue
@@ -107,7 +107,7 @@ func applyWriterOptionsHelper(options []nanogit.WriterOption) (*nanogit.WriterOp
 			return nil, err
 		}
 	}
-	
+
 	return opts, nil
 }
 
@@ -120,7 +120,7 @@ func TestWriterOptionsUsageExamples(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, nanogit.PackfileStorageMemory, opts.StorageMode)
-		
+
 		// In real usage:
 		// writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithMemoryStorage())
 	})
@@ -132,7 +132,7 @@ func TestWriterOptionsUsageExamples(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, nanogit.PackfileStorageDisk, opts.StorageMode)
-		
+
 		// In real usage:
 		// writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithDiskStorage())
 	})
@@ -144,7 +144,7 @@ func TestWriterOptionsUsageExamples(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, nanogit.PackfileStorageAuto, opts.StorageMode)
-		
+
 		// In real usage:
 		// writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithAutoStorage())
 		// or simply:

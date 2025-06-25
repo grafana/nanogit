@@ -12,7 +12,7 @@ import (
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) ([]byte, error) {
+func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response []byte, err error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
@@ -33,7 +33,11 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) ([]byte, er
 		return nil, err
 	}
 
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil {
+			err = fmt.Errorf("close response body: %w", closeErr)
+		}
+	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)

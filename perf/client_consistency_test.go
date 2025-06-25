@@ -290,7 +290,7 @@ func (c *ClientConsistencyTest) testCreateNewFileConsistency(t *testing.T, ctx c
 		// We can't guarantee exact file count equality since clients run sequentially and add files
 		// Just verify that no original files were lost and the new file was added
 		require.GreaterOrEqual(t, len(result.allFiles), len(referenceResult.allFiles),
-			"File count should not decrease between %s (%d files) and %s (%d files)", 
+			"File count should not decrease between %s (%d files) and %s (%d files)",
 			referenceClient, len(referenceResult.allFiles), clientName, len(result.allFiles))
 	}
 }

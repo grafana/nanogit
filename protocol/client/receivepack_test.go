@@ -201,7 +201,7 @@ func TestReceivePack(t *testing.T) {
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				
+
 				// For Git protocol errors, we should still get the response body
 				// even when there's an error, since it contains the error details
 				if tt.statusCode == http.StatusOK && tt.responseBody != "" {

@@ -142,7 +142,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, remote, local, _ := QuickSetup()
 
 			By("Setting up competing operations to trigger server validation errors")
-			
+
 			// Get current state
 			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -205,10 +205,10 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				Name: "refs/heads/main",
 				Hash: currentHash,
 			}
-			
+
 			writer1, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
-			
+
 			writer2, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
 
