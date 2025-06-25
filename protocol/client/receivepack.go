@@ -53,9 +53,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) ([]byte, er
 	// Check for Git protocol errors in receive-pack response
 	if _, _, err := protocol.ParsePack(responseBody); err != nil {
 		logger.Debug("Protocol error detected in receive-pack response", "error", err.Error())
-		return nil, fmt.Errorf("parse pack: %w", err)
-	} else {
-		logger.Debug("Receive-pack response parsed successfully", "responseSize", len(responseBody), "error", err)
+		return responseBody, err
 	}
 
 	return responseBody, nil

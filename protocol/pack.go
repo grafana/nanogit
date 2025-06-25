@@ -349,6 +349,7 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 	for len(b) >= 4 {
 		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
 
+
 		switch {
 		case err != nil:
 			return nil, b, NewPackParseError(b, fmt.Errorf("parsing line length: %w", err))
@@ -390,7 +391,8 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			return lines, b[length:], NewGitServerError(b[:length], "ERR", message)
 
 
-		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")):
+		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")) ||
+			 (len(b) > 5 && (bytes.HasPrefix(b[5:], []byte("error:")) || bytes.HasPrefix(b[5:], []byte("fatal:")))):
 			// Handle Git error and fatal messages.
 			// These can appear in responses when the server encounters errors during processing.
 			// According to Git protocol v2 documentation, side-band channel 3 is used for
@@ -399,9 +401,20 @@ func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 			// Example from user: "error: object xxx: treeNotSorted: not properly sorted"
 			//                   "fatal: fsck error in packed object"
 
-			fullMessage := string(b[4:length])
+
+			// Determine the offset where the error/fatal message starts
+			var messageStart int
+			var fullMessage string
+			if bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")) {
+				messageStart = 4
+				fullMessage = string(b[4:length])
+			} else {
+				messageStart = 5
+				fullMessage = string(b[5:length])
+			}
+			
 			var errorType, message string
-			if bytes.HasPrefix(b[4:], []byte("error:")) {
+			if bytes.HasPrefix(b[messageStart:], []byte("error:")) {
 				errorType = "error"
 				message = fullMessage[6:] // Remove "error:" prefix
 			} else {
