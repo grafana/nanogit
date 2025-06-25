@@ -15,44 +15,42 @@ go run main.go
 
 The tool will create a `generated_dashboards/` directory containing four dashboard files:
 
-- `small-dashboard.json` (~18KB)
-- `medium-dashboard.json` (~54KB) 
-- `large-dashboard.json` (~144KB)
-- `xlarge-dashboard.json` (~462KB)
+- `small-dashboard.json` (~23KB)
+- `medium-dashboard.json` (~161KB) 
+- `large-dashboard.json` (~748KB)
+- `xlarge-dashboard.json` (~3.7MB)
 
 ## Dashboard Size Categories
 
-### Small Dashboard (~15-25KB target)
+### Small Dashboard (~23KB actual)
 - **8 panels** - Basic monitoring setup
 - **3 template variables** - Simple filtering
 - **Single datasource** - Prometheus only
+- **Features**: Basic panel configurations, simple queries
 - **Use case**: Small team dashboard, service overview
 - **Real-world equivalent**: Basic application monitoring, simple infrastructure overview
 
-### Medium Dashboard (~50-100KB target)
-- **25 panels** - Comprehensive monitoring
-- **8 template variables** - Multi-dimensional filtering
+### Medium Dashboard (~161KB actual)
+- **35 panels** - Comprehensive monitoring
+- **12 template variables** - Multi-dimensional filtering
 - **3 datasources** - Prometheus, Loki, Tempo
-- **Annotations enabled** - Deployment tracking
-- **Basic alerts** - Error rate monitoring
+- **Features**: Complex queries, enhanced panel options, annotations
 - **Use case**: Department dashboard, multi-service monitoring
 - **Real-world equivalent**: Full-stack application monitoring, team KPI dashboard
 
-### Large Dashboard (~200-400KB target)
-- **60 panels** - Enterprise-scale monitoring
-- **15 template variables** - Complex filtering and grouping
+### Large Dashboard (~748KB actual)
+- **85 panels** - Enterprise-scale monitoring
+- **20 template variables** - Complex filtering and grouping
 - **5 datasources** - Multiple observability tools
-- **Advanced features** - Complex queries, custom visualizations
-- **Alert rules** - Comprehensive alerting
+- **Features**: Field overrides, complex thresholds, advanced visualizations
 - **Use case**: Enterprise service monitoring, multi-team dashboard
 - **Real-world equivalent**: Platform monitoring, business intelligence dashboard
 
-### XLarge Dashboard (~800KB-1.5MB target)
-- **150+ panels** - Massive monitoring setup
-- **25+ template variables** - Extensive filtering capabilities
+### XLarge Dashboard (~3.7MB actual)
+- **220+ panels** - Massive monitoring setup
+- **35+ template variables** - Extensive filtering capabilities
 - **8+ datasources** - Full observability stack
-- **Complex configurations** - Advanced panel options, overrides
-- **Extensive metadata** - Rich descriptions, links, annotations
+- **Features**: Data transformations, extensive overrides, complex queries, rich metadata
 - **Use case**: Global enterprise monitoring, multi-region dashboards
 - **Real-world equivalent**: Corporate-wide monitoring, compliance dashboards
 

@@ -313,7 +313,7 @@ func generatePanels(spec DashboardSpec) []Panel {
 				Y: y,
 			},
 			Targets:       generateTargets(spec, panelType),
-			FieldConfig:   generateFieldConfig(panelType),
+			FieldConfig:   generateFieldConfig(panelType, spec.SizeCategory),
 			Options:       generatePanelOptions(panelType, spec),
 			Transparent:   rand.Float32() < 0.1,
 			Datasource:    chooseDatasource(spec.DataSources),
@@ -436,13 +436,42 @@ func generateQuery(datasourceType, panelType string) string {
 	case "prometheus":
 		metrics := []string{"cpu_usage", "memory_usage", "disk_usage", "network_io", "http_requests_total", "response_time"}
 		metric := metrics[rand.Intn(len(metrics))]
-		return fmt.Sprintf("rate(%s[5m])", metric)
+		// Generate complex PromQL queries for larger dashboards
+		complexQueries := []string{
+			fmt.Sprintf("rate(%s[5m])", metric),
+			fmt.Sprintf("histogram_quantile(0.95, sum(rate(%s_bucket[5m])) by (le, instance, job))", metric),
+			fmt.Sprintf("sum(rate(%s[5m])) by (instance) / ignoring(instance) group_left sum(rate(%s[5m]))", metric, metric),
+			fmt.Sprintf("avg_over_time(%s[1h:5m]) > bool 0.8", metric),
+			fmt.Sprintf("increase(%s[24h]) / scalar(count(up{job=~\".+\"}))", metric),
+			fmt.Sprintf("topk(10, sum by (instance) (rate(%s[5m])))", metric),
+			fmt.Sprintf("predict_linear(%s[1h], 3600) > bool 100", metric),
+			fmt.Sprintf("delta(%s[5m]) / delta(%s[5m] offset 5m) - 1", metric, metric),
+		}
+		return complexQueries[rand.Intn(len(complexQueries))]
 	case "loki":
-		return `{job="app"} |= "error" | json | rate[5m]`
+		complexLokiQueries := []string{
+			`{job="app"} |= "error" | json | rate[5m]`,
+			`sum(rate({namespace="production",job=~".*"} |~ "(?i)error|exception|fatal" | json | line_format "{{.timestamp}} {{.level}} {{.message}}" [5m])) by (job)`,
+			`topk(10, sum by (service) (count_over_time({environment="prod"} |= "timeout" | json | __error__ = "" [1h])))`,
+			`rate({job="nginx"} | json | status >= 400 | unwrap bytes | sum_over_time[1m])`,
+			`histogram_quantile(0.99, sum(rate({app="frontend"} | json | unwrap response_time [5m])) by (le))`,
+		}
+		return complexLokiQueries[rand.Intn(len(complexLokiQueries))]
 	case "tempo":
-		return `{service.name="frontend"}`
+		tempoQueries := []string{
+			`{service.name="frontend"}`,
+			`{service.name="api" && http.status_code >= 400}`,
+			`{duration > 1s && service.name=~".*backend.*"}`,
+			`{span.name="database_query" && status=error}`,
+		}
+		return tempoQueries[rand.Intn(len(tempoQueries))]
 	case "elasticsearch":
-		return `{"query": {"match_all": {}}}`
+		elasticsearchQueries := []string{
+			`{"query": {"match_all": {}}}`,
+			`{"query": {"bool": {"must": [{"range": {"@timestamp": {"gte": "now-1h"}}}, {"match": {"level": "ERROR"}}], "filter": [{"term": {"service.keyword": "api"}}]}}, "aggs": {"error_counts": {"terms": {"field": "error.type.keyword", "size": 10}}}}`,
+			`{"query": {"query_string": {"query": "(status:>=400 AND service:frontend) OR (level:ERROR AND component:database)"}}, "sort": [{"@timestamp": {"order": "desc"}}]}`,
+		}
+		return elasticsearchQueries[rand.Intn(len(elasticsearchQueries))]
 	default:
 		return "up"
 	}
@@ -462,25 +491,116 @@ func chooseDatasource(datasources []string) Datasource {
 	}
 }
 
-func generateFieldConfig(panelType string) FieldConfig {
+func generateFieldConfig(panelType string, sizeCategory string) FieldConfig {
+	// Generate more complex thresholds for larger dashboards
+	thresholds := []Threshold{
+		{Color: "green", Value: nil},
+		{Color: "yellow", Value: float64Ptr(60)},
+		{Color: "red", Value: float64Ptr(80)},
+	}
+	
+	if sizeCategory == "large" || sizeCategory == "xlarge" {
+		thresholds = append(thresholds, 
+			Threshold{Color: "dark-red", Value: float64Ptr(95)},
+			Threshold{Color: "purple", Value: float64Ptr(100)},
+		)
+	}
+	
+	// Generate field mappings for larger dashboards
+	mappings := []interface{}{}
+	if sizeCategory == "large" || sizeCategory == "xlarge" {
+		mappings = []interface{}{
+			map[string]interface{}{
+				"options": map[string]interface{}{
+					"0": map[string]interface{}{"text": "Offline", "color": "red"},
+					"1": map[string]interface{}{"text": "Online", "color": "green"},
+					"2": map[string]interface{}{"text": "Maintenance", "color": "yellow"},
+					"3": map[string]interface{}{"text": "Error", "color": "dark-red"},
+				},
+				"type": "value",
+			},
+			map[string]interface{}{
+				"options": map[string]interface{}{
+					"from": 100,
+					"to":   200,
+					"result": map[string]interface{}{"text": "High Load", "color": "orange"},
+				},
+				"type": "range",
+			},
+		}
+	}
+	
 	return FieldConfig{
 		Defaults: FieldDefaults{
 			Color: map[string]interface{}{
 				"mode": "palette-classic",
+				"seriesBy": "last",
 			},
 			Custom: generateCustomConfig(panelType),
-			Mappings: []interface{}{},
+			Mappings: mappings,
 			Thresholds: Thresholds{
 				Mode: "absolute",
-				Steps: []Threshold{
-					{Color: "green", Value: nil},
-					{Color: "red", Value: float64Ptr(80)},
-				},
+				Steps: thresholds,
 			},
 			Unit: chooseUnit(panelType),
+			Min: float64Ptr(0),
+			Max: float64Ptr(100),
+			Decimals: intPtr(2),
+			DisplayName: "${__field.displayName} - Custom Label",
+			Description: "Detailed field description with comprehensive information about the metric, its calculation method, and business context.",
 		},
-		Overrides: []map[string]interface{}{},
+		Overrides: generateLargeFieldOverrides(sizeCategory),
 	}
+}
+
+func generateLargeFieldOverrides(sizeCategory string) []map[string]interface{} {
+	if sizeCategory == "small" {
+		return []map[string]interface{}{}
+	}
+	
+	overrideCount := 2
+	if sizeCategory == "large" {
+		overrideCount = 5
+	} else if sizeCategory == "xlarge" {
+		overrideCount = 12
+	}
+	
+	overrides := make([]map[string]interface{}, overrideCount)
+	for i := 0; i < overrideCount; i++ {
+		overrides[i] = map[string]interface{}{
+			"matcher": map[string]interface{}{
+				"id":      "byName",
+				"options": fmt.Sprintf("Series %d", i+1),
+			},
+			"properties": []map[string]interface{}{
+				{
+					"id": "color",
+					"value": map[string]interface{}{
+						"mode":  "fixed",
+						"fixedColor": fmt.Sprintf("rgb(%d, %d, %d)", rand.Intn(255), rand.Intn(255), rand.Intn(255)),
+					},
+				},
+				{
+					"id": "custom.lineWidth",
+					"value": rand.Intn(5) + 1,
+				},
+				{
+					"id": "custom.fillOpacity",
+					"value": rand.Intn(50) + 10,
+				},
+				{
+					"id": "displayName",
+					"value": fmt.Sprintf("Custom Display Name for Series %d with Extended Description", i+1),
+				},
+				{
+					"id": "custom.axisLabel",
+					"value": fmt.Sprintf("Custom Axis Label %d (Units: requests/sec)", i+1),
+				},
+			},
+		}
+	}
+	
+	return overrides
 }
 
 func generateCustomConfig(panelType string) map[string]interface{} {
@@ -551,11 +671,39 @@ func generatePanelOptions(panelType string, spec DashboardSpec) map[string]inter
 			"placement":   "bottom",
 			"calcs":       []string{},
 		}
+		
+		// Add complexity for larger dashboards
+		if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
+			options["tooltip"] = map[string]interface{}{
+				"mode": "multi",
+				"sort": "desc",
+			}
+			options["legend"] = map[string]interface{}{
+				"displayMode": "table",
+				"placement":   "right",
+				"calcs":       []string{"lastNotNull", "max", "min", "mean", "count"},
+				"values":      []string{"value", "percent"},
+			}
+		}
+		
 	case "table":
 		options["showHeader"] = true
 		options["sortBy"] = []map[string]interface{}{
 			{"desc": true, "displayName": "Value"},
 		}
+		
+		if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
+			options["sortBy"] = []map[string]interface{}{
+				{"desc": true, "displayName": "Value"},
+				{"desc": false, "displayName": "Time"},
+				{"desc": true, "displayName": "Instance"},
+			}
+			options["footer"] = map[string]interface{}{
+				"show": true,
+				"reducer": []string{"sum", "count", "mean"},
+			}
+		}
+		
 	case "gauge":
 		options["reduceOptions"] = map[string]interface{}{
 			"values": false,
@@ -565,15 +713,81 @@ func generatePanelOptions(panelType string, spec DashboardSpec) map[string]inter
 		options["orientation"] = "auto"
 		options["showThresholdLabels"] = false
 		options["showThresholdMarkers"] = true
+		
+		if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
+			options["reduceOptions"] = map[string]interface{}{
+				"values": true,
+				"calcs":  []string{"lastNotNull", "max", "min", "mean", "sum"},
+				"fields": "/^(cpu|memory|disk)_.*$/",
+			}
+		}
 	}
 	
-	// Add more complexity for larger dashboards
+	// Add extensive complexity for XLarge dashboards
 	if spec.SizeCategory == "xlarge" {
 		options["displayMode"] = "table"
 		options["placement"] = "right"
 		options["showLegend"] = true
 		options["sortBy"] = []map[string]interface{}{
 			{"desc": false, "displayName": "Time"},
+			{"desc": true, "displayName": "Value"},
+			{"desc": false, "displayName": "Instance"},
+		}
+		options["overrides"] = []map[string]interface{}{
+			{
+				"matcher": map[string]interface{}{
+					"id": "byName",
+					"options": "Series A",
+				},
+				"properties": []map[string]interface{}{
+					{
+						"id": "custom.displayMode",
+						"value": "gradient-gauge",
+					},
+					{
+						"id": "custom.fillOpacity",
+						"value": 80,
+					},
+				},
+			},
+		}
+		
+		// Add transformations for XLarge dashboards
+		options["transformations"] = []map[string]interface{}{
+			{
+				"id": "seriesToColumns",
+				"options": map[string]interface{}{
+					"byField": "Time",
+				},
+			},
+			{
+				"id": "organize",
+				"options": map[string]interface{}{
+					"excludeByName": map[string]interface{}{
+						"__name__": true,
+						"job":      true,
+					},
+					"indexByName": map[string]interface{}{
+						"Time":     0,
+						"Value":    1,
+						"Instance": 2,
+					},
+					"renameByName": map[string]interface{}{
+						"Value": "Current Value",
+						"Instance": "Server Instance",
+					},
+				},
+			},
+			{
+				"id": "calculateField",
+				"options": map[string]interface{}{
+					"mode": "reduceRow",
+					"reduce": map[string]interface{}{
+						"reducer": "mean",
+					},
+					"replaceFields": false,
+				},
+			},
 		}
 	}
 	
@@ -601,23 +815,16 @@ func generatePanelTitle(panelType string, index int) string {
 }
 
 func generatePanelDescription(panelType string) string {
-	descriptions := map[string][]string{
-		"timeseries": {"Shows the trend over time", "Displays historical data patterns", "Monitors real-time metrics"},
-		"stat":       {"Current value indicator", "Single value metric display", "Key performance indicator"},
-		"gauge":      {"Visual progress indicator", "Shows current level vs threshold", "Capacity utilization display"},
-		"table":      {"Detailed data breakdown", "Structured information display", "Comprehensive data view"},
-		"heatmap":    {"Distribution visualization", "Pattern identification display", "Intensity mapping"},
-		"piechart":   {"Proportion visualization", "Category breakdown display", "Percentage distribution"},
-		"bargauge":   {"Comparative values display", "Multi-metric comparison", "Performance comparison"},
-		"text":       {"Informational content", "Documentation panel", "Instructional text"},
+	// Generate longer, more detailed descriptions to increase file size
+	longDescriptions := []string{
+		"This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+		"Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+		"Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+		"High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+		"Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
 	}
 	
-	desc := descriptions[panelType]
-	if desc == nil {
-		return "Generated panel description"
-	}
-	
-	return desc[rand.Intn(len(desc))]
+	return longDescriptions[rand.Intn(len(longDescriptions))]
 }
 
 func generateAlert(panelType string) *Alert {
@@ -732,6 +939,10 @@ func capitalizeFirst(s string) string {
 
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+func intPtr(i int) *int {
+	return &i
 }
 
 func min(a, b int) int {
