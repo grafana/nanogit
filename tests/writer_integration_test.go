@@ -1796,4 +1796,125 @@ var _ = Describe("Writer Operations", func() {
 			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
 		})
 	})
+
+	Context("Tree Sorting Regression Test", func() {
+		It("should create files in a directory structure that previously caused tree sorting errors", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Recreate the exact tree structure from the bug report
+			// Based on the repository structure that caused the "treeNotSorted" error
+			treeStructure := map[string]string{
+				"another-one.json":                          `{"type": "dashboard", "title": "Another One"}`,
+				"dir1/dir2/dir3/deepinside.json":            `{"deep": "content"}`,
+				"example.json":                              `{"example": "data"}`,
+				"finaltest/folder/bounds.json":              `{"bounds": true}`,
+				"finaltest/folder/nested/timeline.json":     `{"timeline": "data"}`,
+				"finaltest/heatmap.json":                    `{"heatmap": "visualization"}`,
+				"grafana/fix-migration-test.json":           `{"migration": "test"}`,
+				"grafana/new-dashboard-2025-06-16-YCsUH.json": `{"dashboard": "2025-06-16"}`,
+				"grafana/new-dashboard.json":                `{"dashboard": "new"}`,
+				"legacy/legacy-dashboard-inside.json":       `{"legacy": "inside"}`,
+				"legacy-dashboard.json":                     `{"legacy": "root"}`,
+				"one/two/three/inside.json":                 `{"nested": "deep"}`,
+				"README.md":                                 `# Test Repository`,
+				"repofolder/in-repo-folder.json":            `{"repo": "folder"}`,
+				"test2/heatmap.json":                        `{"test2": "heatmap"}`,
+				"testagain/heatmap.json":                    `{"testagain": "heatmap"}`,
+				"testloop/__folder_not_found/aei9icv4lhywwa/bounds.json": `{"testloop": "bounds"}`,
+				"testloop/__folder_not_found/bei9j85bufu2oa/timeline.json": `{"testloop": "timeline"}`,
+				"testloop/heatmap.json":                     `{"testloop": "heatmap"}`,
+				"testo2/folder/bounds.json":                 `{"testo2": "bounds"}`,
+				"testo2/folder/nested/timeline.json":        `{"testo2": "timeline"}`,
+				"testo2/heatmap.json":                       `{"testo2": "heatmap"}`,
+				"whatever/DemoFolder/DemoDeeperFolder/inside-deep-folder.json": `{"demo": "deep"}`,
+				"whatever/DemoFolder/inside-demo-folder.json": `{"demo": "folder"}`,
+				"whatever/git-sync-demo-dashboard.json":     `{"git": "sync"}`,
+			}
+
+			// Create all files in the structure first
+			for filePath, content := range treeStructure {
+				local.CreateDirPath(filepath.Dir(filePath))
+				local.CreateFile(filePath, content)
+			}
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Create complex tree structure")
+			local.Git("branch", "-M", "robertoonboarding")
+			local.Git("push", "-u", "origin", "robertoonboarding", "--force")
+
+			// Get current ref for the robertoonboarding branch
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/robertoonboarding"))
+			Expect(err).NotTo(HaveOccurred())
+
+			ref := nanogit.Ref{
+				Name: "refs/heads/robertoonboarding",
+				Hash: currentHash,
+			}
+
+			// Create the staged writer
+			writer, err := client.NewStagedWriter(ctx, ref)
+			Expect(err).NotTo(HaveOccurred())
+
+			// This is the exact file creation that was causing the tree sorting error
+			newFileName := "robertoonboarding/new-dashboard-2025-06-25-hmYyl.json"
+			newFileContent := []byte(`{
+				"dashboard": {
+					"title": "New Dashboard 2025-06-25",
+					"tags": ["robertoonboarding"],
+					"timezone": "browser",
+					"panels": [],
+					"time": {
+						"from": "now-6h",
+						"to": "now"
+					},
+					"timepicker": {},
+					"templating": {
+						"list": []
+					},
+					"annotations": {
+						"list": []
+					},
+					"refresh": "5s",
+					"schemaVersion": 16,
+					"version": 0
+				}
+			}`)
+
+			// Create the problematic file in the robertoonboarding directory
+			_, err = writer.CreateBlob(ctx, newFileName, newFileContent)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Commit the change
+			commit, err := writer.Commit(ctx, "some commit", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(commit).NotTo(BeNil())
+
+			// This push should NOT fail with "treeNotSorted" error anymore
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the file was created successfully
+			local.Git("pull", "origin", "robertoonboarding")
+			
+			// Check that the new file exists
+			filePath := filepath.Join(local.Path, newFileName)
+			content, err := os.ReadFile(filePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal(newFileContent))
+
+			// Verify the commit was successful
+			latestHash := local.Git("rev-parse", "HEAD")
+			Expect(latestHash).To(Equal(commit.Hash.String()))
+
+			// Verify all original files are still present
+			for originalPath := range treeStructure {
+				_, err := os.Stat(filepath.Join(local.Path, originalPath))
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Verify the tree structure is correctly sorted by checking git fsck passes
+			fsckOutput := local.Git("fsck", "--full")
+			Expect(fsckOutput).NotTo(ContainSubstring("treeNotSorted"))
+			Expect(fsckOutput).NotTo(ContainSubstring("not properly sorted"))
+		})
+	})
 })
