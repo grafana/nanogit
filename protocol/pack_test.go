@@ -187,7 +187,7 @@ func TestParsePacket(t *testing.T) {
 			expected: expected{
 				lines:     nil,
 				remainder: []byte("F00F"),
-				err:       errors.New("error packet: hello"),
+				err:       new(protocol.GitServerError),
 			},
 		},
 		"lines + error packet": {
@@ -195,7 +195,144 @@ func TestParsePacket(t *testing.T) {
 			expected: expected{
 				lines:     toBytesSlice("hello"),
 				remainder: []byte("F00F"),
-				err:       errors.New("error packet: hello"),
+				err:       new(protocol.GitServerError),
+			},
+		},
+		"git error packet": {
+			input: func() []byte {
+				message := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return pkt
+			}(),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       new(protocol.GitServerError),
+			},
+		},
+		"fatal error packet": {
+			input: func() []byte {
+				message := "fatal: fsck error occurred"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return pkt
+			}(),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       new(protocol.GitServerError),
+			},
+		},
+		"reference update failure": {
+			input: func() []byte {
+				message := "ng refs/heads/robertoonboarding failed"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return pkt
+			}(),
+			expected: expected{
+				lines:     nil,
+				remainder: []byte{},
+				err:       new(protocol.GitReferenceUpdateError),
+			},
+		},
+		"user example scenario - original": {
+			// This simulates the first example provided by the user
+			// Single packet 0083 contains error message with newlines, followed by other packets
+			input: func() []byte {
+				// First packet: error message with newlines (matches user's 0083 packet)
+				message1 := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
+				pkt1, _ := protocol.PackLine(message1).Marshal()
+				
+				// Remaining packets as separate packets  
+				message2 := "001dunpack index-pack failed\n"
+				pkt2, _ := protocol.PackLine(message2).Marshal()
+				message3 := "ng refs/heads/robertoonboarding failed\n"
+				pkt3, _ := protocol.PackLine(message3).Marshal()
+				pkt4 := []byte("0009000000000000")
+				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
+			}(),
+			expected: expected{
+				lines: nil,
+				remainder: func() []byte {
+					// After parsing the error packet, the remainder should contain the rest
+					message2 := "001dunpack index-pack failed\n"
+					pkt2, _ := protocol.PackLine(message2).Marshal()
+					message3 := "ng refs/heads/robertoonboarding failed\n"
+					pkt3, _ := protocol.PackLine(message3).Marshal()
+					pkt4 := []byte("0009000000000000")
+					return append(append(pkt2, pkt3...), pkt4...)
+				}(),
+				err: new(protocol.GitServerError),
+			},
+		},
+		"user example scenario - ref lock error": {
+			// This simulates the second example from user debug output
+			// Real-world scenario with ref lock error from receive-pack
+			input: func() []byte {
+				// First packet: error message (0094 = 148 bytes)
+				message1 := "error: cannot lock ref 'refs/heads/main': is at d346cc9cd80dd0bbda023bb29a7ff2d887c75b19 but expected b6ce559b8c2e4834e075696cac5522b379448c13"
+				pkt1, _ := protocol.PackLine(message1).Marshal()
+				
+				// Subsequent packets
+				message2 := "unpack ok"
+				pkt2, _ := protocol.PackLine(message2).Marshal()
+				message3 := "ng refs/heads/main failed to update ref"
+				pkt3, _ := protocol.PackLine(message3).Marshal()
+				pkt4 := []byte("0000")  // flush packet
+				
+				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
+			}(),
+			expected: expected{
+				lines: nil,
+				remainder: func() []byte {
+					// After parsing the error packet, the remainder should contain the rest
+					message2 := "unpack ok"
+					pkt2, _ := protocol.PackLine(message2).Marshal()
+					message3 := "ng refs/heads/main failed to update ref"
+					pkt3, _ := protocol.PackLine(message3).Marshal()
+					pkt4 := []byte("0000")  // flush packet
+					return append(append(pkt2, pkt3...), pkt4...)
+				}(),
+				err: new(protocol.GitServerError),
+			},
+		},
+		"multiple error types in sequence": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("ERR hello").Marshal()
+				pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
+				return append(append(pkt1, pkt2...), pkt3...)
+			}(),
+			expected: expected{
+				lines: toBytesSlice("hello"),
+				remainder: func() []byte {
+					pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
+					return pkt3
+				}(),
+				err: new(protocol.GitServerError),
+			},
+		},
+		"lines + git error": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("error: some error").Marshal()
+				return append(pkt1, pkt2...)
+			}(),
+			expected: expected{
+				lines:     toBytesSlice("hello"),
+				remainder: []byte{},
+				err:       new(protocol.GitServerError),
+			},
+		},
+		"lines + reference failure": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("ng refs/heads/main failed").Marshal()
+				return append(pkt1, pkt2...)
+			}(),
+			expected: expected{
+				lines:     toBytesSlice("hello"),
+				remainder: []byte{},
+				err:       new(protocol.GitReferenceUpdateError),
 			},
 		},
 	}
@@ -302,5 +439,250 @@ func TestPackParseError(t *testing.T) {
 
 		// Test with nil
 		require.False(t, protocol.IsPackParseError(nil), "IsPackParseError should return false for nil")
+	})
+}
+
+func TestGitServerError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		line        []byte
+		errorType   string
+		message     string
+		expectedErr string
+	}{
+		{
+			name:        "ERR packet",
+			line:        []byte("000dERR hello"),
+			errorType:   "ERR",
+			message:     "hello",
+			expectedErr: "git server ERR: hello",
+		},
+		{
+			name:        "error packet",
+			line:        []byte("0012error: some error"),
+			errorType:   "error",
+			message:     " some error",
+			expectedErr: "git server error:  some error",
+		},
+		{
+			name:        "fatal packet",
+			line:        []byte("0011fatal: fatal error"),
+			errorType:   "fatal",
+			message:     " fatal error",
+			expectedErr: "git server fatal:  fatal error",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			
+			err := protocol.NewGitServerError(tt.line, tt.errorType, tt.message)
+			require.Equal(t, tt.expectedErr, err.Error())
+			require.Equal(t, tt.line, err.Line)
+			require.Equal(t, tt.errorType, err.ErrorType)
+			require.Equal(t, tt.message, err.Message)
+			
+			// Test that it's a GitServerError
+			require.True(t, protocol.IsGitServerError(err))
+		})
+	}
+
+	// Test IsGitServerError function
+	t.Run("IsGitServerError", func(t *testing.T) {
+		t.Parallel()
+
+		// Test with a GitServerError
+		serverErr := protocol.NewGitServerError([]byte("test"), "ERR", "test message")
+		require.True(t, protocol.IsGitServerError(serverErr))
+
+		// Test with a wrapped GitServerError
+		wrappedErr := fmt.Errorf("wrapped: %w", serverErr)
+		require.True(t, protocol.IsGitServerError(wrappedErr))
+
+		// Test with a different error type
+		otherErr := errors.New("different error")
+		require.False(t, protocol.IsGitServerError(otherErr))
+
+		// Test with nil
+		require.False(t, protocol.IsGitServerError(nil))
+	})
+}
+
+func TestGitReferenceUpdateError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		line        []byte
+		refName     string
+		reason      string
+		expectedErr string
+	}{
+		{
+			name:        "reference update failed",
+			line:        []byte("0020ng refs/heads/main failed"),
+			refName:     "refs/heads/main",
+			reason:      "failed",
+			expectedErr: "reference update failed for refs/heads/main: failed",
+		},
+		{
+			name:        "reference update with detailed reason",
+			line:        []byte("0030ng refs/heads/feature non-fast-forward"),
+			refName:     "refs/heads/feature",
+			reason:      "non-fast-forward",
+			expectedErr: "reference update failed for refs/heads/feature: non-fast-forward",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			
+			err := protocol.NewGitReferenceUpdateError(tt.line, tt.refName, tt.reason)
+			require.Equal(t, tt.expectedErr, err.Error())
+			require.Equal(t, tt.line, err.Line)
+			require.Equal(t, tt.refName, err.RefName)
+			require.Equal(t, tt.reason, err.Reason)
+			
+			// Test that it's a GitReferenceUpdateError
+			require.True(t, protocol.IsGitReferenceUpdateError(err))
+		})
+	}
+
+	// Test IsGitReferenceUpdateError function
+	t.Run("IsGitReferenceUpdateError", func(t *testing.T) {
+		t.Parallel()
+
+		// Test with a GitReferenceUpdateError
+		refErr := protocol.NewGitReferenceUpdateError([]byte("test"), "refs/heads/main", "failed")
+		require.True(t, protocol.IsGitReferenceUpdateError(refErr))
+
+		// Test with a wrapped GitReferenceUpdateError
+		wrappedErr := fmt.Errorf("wrapped: %w", refErr)
+		require.True(t, protocol.IsGitReferenceUpdateError(wrappedErr))
+
+		// Test with a different error type
+		otherErr := errors.New("different error")
+		require.False(t, protocol.IsGitReferenceUpdateError(otherErr))
+
+		// Test with nil
+		require.False(t, protocol.IsGitReferenceUpdateError(nil))
+	})
+}
+
+func TestGitUnpackError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		line        []byte
+		message     string
+		expectedErr string
+	}{
+		{
+			name:        "unpack failed",
+			line:        []byte("0015unpack failed"),
+			message:     "failed",
+			expectedErr: "pack unpack failed: failed",
+		},
+		{
+			name:        "unpack with detailed message",
+			line:        []byte("0025unpack index-pack failed"),
+			message:     "index-pack failed",
+			expectedErr: "pack unpack failed: index-pack failed",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			
+			err := protocol.NewGitUnpackError(tt.line, tt.message)
+			require.Equal(t, tt.expectedErr, err.Error())
+			require.Equal(t, tt.line, err.Line)
+			require.Equal(t, tt.message, err.Message)
+			
+			// Test that it's a GitUnpackError
+			require.True(t, protocol.IsGitUnpackError(err))
+		})
+	}
+
+	// Test IsGitUnpackError function
+	t.Run("IsGitUnpackError", func(t *testing.T) {
+		t.Parallel()
+
+		// Test with a GitUnpackError
+		unpackErr := protocol.NewGitUnpackError([]byte("test"), "failed")
+		require.True(t, protocol.IsGitUnpackError(unpackErr))
+
+		// Test with a wrapped GitUnpackError
+		wrappedErr := fmt.Errorf("wrapped: %w", unpackErr)
+		require.True(t, protocol.IsGitUnpackError(wrappedErr))
+
+		// Test with a different error type
+		otherErr := errors.New("different error")
+		require.False(t, protocol.IsGitUnpackError(otherErr))
+
+		// Test with nil
+		require.False(t, protocol.IsGitUnpackError(nil))
+	})
+}
+
+func TestParsePackNewErrorTypes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unpack ok", func(t *testing.T) {
+		input := func() []byte {
+			message := "unpack ok"
+			pkt, _ := protocol.PackLine(message).Marshal()
+			return pkt
+		}()
+		
+		lines, remainder, err := protocol.ParsePack(input)
+		require.NoError(t, err)
+		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
+		require.Empty(t, remainder)
+	})
+
+	t.Run("unpack failed", func(t *testing.T) {
+		input := func() []byte {
+			message := "unpack index-pack failed"
+			pkt, _ := protocol.PackLine(message).Marshal()
+			return pkt
+		}()
+		
+		lines, remainder, err := protocol.ParsePack(input)
+		require.Empty(t, lines)
+		require.Empty(t, remainder)
+		require.Error(t, err)
+		require.True(t, protocol.IsGitUnpackError(err))
+		
+		var unpackErr *protocol.GitUnpackError
+		require.ErrorAs(t, err, &unpackErr)
+		require.Equal(t, "index-pack failed", unpackErr.Message)
+	})
+
+	t.Run("fatal with unpack keyword", func(t *testing.T) {
+		input := func() []byte {
+			message := "fatal: unpack failed"
+			pkt, _ := protocol.PackLine(message).Marshal()
+			return pkt
+		}()
+		
+		lines, remainder, err := protocol.ParsePack(input)
+		require.Empty(t, lines)
+		require.Empty(t, remainder)
+		require.Error(t, err)
+		require.True(t, protocol.IsGitUnpackError(err))
+		
+		var unpackErr *protocol.GitUnpackError
+		require.ErrorAs(t, err, &unpackErr)
+		require.Equal(t, " unpack failed", unpackErr.Message)
 	})
 }

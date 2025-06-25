@@ -648,9 +648,20 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	}()
 	
 	// Call ReceivePack with the pipe reader (this will stream the data)
-	_, err := w.client.ReceivePack(ctx, pipeReader)
+	responseBody, err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
 		pipeReader.Close() // Close reader to unblock the writer goroutine
+		
+		// Even if there's an error, the response body may contain useful Git protocol
+		// error details (like reference update failures, unpack errors, etc.)
+		// We should parse and return these as more specific errors when possible
+		if len(responseBody) > 0 {
+			if _, _, parseErr := protocol.ParsePack(responseBody); parseErr != nil {
+				// Return the more specific Git protocol error instead of generic transport error
+				return fmt.Errorf("git protocol error: %w", parseErr)
+			}
+		}
+		
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 	

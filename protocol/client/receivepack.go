@@ -7,12 +7,12 @@ import (
 	"net/http"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
 )
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
 func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) ([]byte, error) {
-
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
@@ -49,6 +49,12 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) ([]byte, er
 		"statusText", res.Status,
 		"responseSize", len(responseBody))
 	logger.Debug("Receive-pack raw response", "responseBody", string(responseBody))
+
+	// Check for Git protocol errors in receive-pack response
+	if _, _, err := protocol.ParsePack(responseBody); err != nil {
+		logger.Debug("Protocol error detected in receive-pack response", "error", err.Error())
+		return responseBody, err
+	}
 
 	return responseBody, nil
 }

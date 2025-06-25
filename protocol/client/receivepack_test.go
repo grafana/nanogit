@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,9 +26,9 @@ func TestReceivePack(t *testing.T) {
 		{
 			name:           "successful response",
 			statusCode:     http.StatusOK,
-			responseBody:   "refs data",
+			responseBody:   "000dunpack ok0000", // Valid Git packet format: unpack ok + flush
 			expectedError:  "",
-			expectedResult: "refs data",
+			expectedResult: "000dunpack ok0000",
 			setupClient:    nil,
 		},
 		{
@@ -69,6 +70,78 @@ func TestReceivePack(t *testing.T) {
 					}).DialContext,
 				},
 			}),
+		},
+		{
+			name:       "git server error response",
+			statusCode: http.StatusOK,
+			responseBody: func() string {
+				message := "error: cannot lock ref 'refs/heads/main': is at d346cc9cd80dd0bbda023bb29a7ff2d887c75b19 but expected b6ce559b8c2e4834e075696cac5522b379448c13"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return string(pkt)
+			}(),
+			expectedError:  "git server error:",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:       "git reference update error",
+			statusCode: http.StatusOK,
+			responseBody: func() string {
+				message := "ng refs/heads/main failed to update ref"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return string(pkt)
+			}(),
+			expectedError:  "reference update failed for refs/heads/main:",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:       "git unpack error",
+			statusCode: http.StatusOK,
+			responseBody: func() string {
+				message := "unpack index-pack failed"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return string(pkt)
+			}(),
+			expectedError:  "pack unpack failed:",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:       "git fatal error with unpack keyword",
+			statusCode: http.StatusOK,
+			responseBody: func() string {
+				message := "fatal: unpack failed due to corrupt data"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return string(pkt)
+			}(),
+			expectedError:  "pack unpack failed:",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:       "git ERR packet",
+			statusCode: http.StatusOK,
+			responseBody: func() string {
+				message := "ERR push declined due to email policy"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return string(pkt)
+			}(),
+			expectedError:  "git server ERR:",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:       "multi-line error like user's first example",
+			statusCode: http.StatusOK,
+			responseBody: func() string {
+				message := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return string(pkt)
+			}(),
+			expectedError:  "git server error:",
+			expectedResult: "",
+			setupClient:    nil,
 		},
 	}
 
@@ -128,7 +201,16 @@ func TestReceivePack(t *testing.T) {
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				require.Empty(t, response)
+				
+				// For Git protocol errors, we should still get the response body
+				// even when there's an error, since it contains the error details
+				if tt.statusCode == http.StatusOK && tt.responseBody != "" {
+					require.NotEmpty(t, response, "should have response body even with Git protocol errors")
+					require.Equal(t, tt.responseBody, string(response))
+				} else {
+					// For transport errors (non-200 status), response should be empty
+					require.Empty(t, response)
+				}
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResult, string(response))
