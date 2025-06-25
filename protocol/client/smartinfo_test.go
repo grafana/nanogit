@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,53 +15,47 @@ import (
 
 func TestSmartInfo(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   string
-		expectedError  string
-		expectedResult string
-		setupClient    options.Option
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError string
+		setupClient   options.Option
 	}{
 		{
-			name:           "successful response",
-			statusCode:     http.StatusOK,
-			responseBody:   "refs data",
-			expectedError:  "",
-			expectedResult: "refs data",
-			setupClient:    nil,
+			name:          "successful response",
+			statusCode:    http.StatusOK,
+			responseBody:  "000eversion 2\n0000", // Valid Git protocol response
+			expectedError: "",
+			setupClient:   nil,
 		},
 		{
-			name:           "not found",
-			statusCode:     http.StatusNotFound,
-			responseBody:   "not found",
-			expectedError:  "got status code 404: 404 Not Found",
-			expectedResult: "",
-			setupClient:    nil,
+			name:          "not found",
+			statusCode:    http.StatusNotFound,
+			responseBody:  "not found",
+			expectedError: "got status code 404: 404 Not Found",
+			setupClient:   nil,
 		},
 		{
-			name:           "server error",
-			statusCode:     http.StatusInternalServerError,
-			responseBody:   "server error",
-			expectedError:  "got status code 500: 500 Internal Server Error",
-			expectedResult: "",
-			setupClient:    nil,
+			name:          "server error",
+			statusCode:    http.StatusInternalServerError,
+			responseBody:  "server error",
+			expectedError: "got status code 500: 500 Internal Server Error",
+			setupClient:   nil,
 		},
 		{
-			name:           "timeout error",
-			statusCode:     0,
-			responseBody:   "",
-			expectedError:  "context deadline exceeded",
-			expectedResult: "",
+			name:          "timeout error",
+			statusCode:    0,
+			responseBody:  "",
+			expectedError: "context deadline exceeded",
 			setupClient: options.WithHTTPClient(&http.Client{
 				Timeout: 1 * time.Nanosecond,
 			}),
 		},
 		{
-			name:           "connection refused",
-			statusCode:     0,
-			responseBody:   "",
-			expectedError:  "i/o timeout",
-			expectedResult: "",
+			name:          "connection refused",
+			statusCode:    0,
+			responseBody:  "",
+			expectedError: "i/o timeout",
 			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
@@ -129,17 +122,12 @@ func TestSmartInfo(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			responseReader, err := client.SmartInfo(context.Background(), "custom-service")
+			err = client.SmartInfo(context.Background(), "custom-service")
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				defer responseReader.Close()
-				responseData, err := io.ReadAll(responseReader)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedResult, string(responseData))
 			}
 		})
 	}

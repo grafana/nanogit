@@ -64,19 +64,17 @@ type FakeRawClient struct {
 	receivePackReturnsOnCall map[int]struct {
 		result1 error
 	}
-	SmartInfoStub        func(context.Context, string) (io.ReadCloser, error)
+	SmartInfoStub        func(context.Context, string) error
 	smartInfoMutex       sync.RWMutex
 	smartInfoArgsForCall []struct {
 		arg1 context.Context
 		arg2 string
 	}
 	smartInfoReturns struct {
-		result1 io.ReadCloser
-		result2 error
+		result1 error
 	}
 	smartInfoReturnsOnCall map[int]struct {
-		result1 io.ReadCloser
-		result2 error
+		result1 error
 	}
 	UploadPackStub        func(context.Context, io.Reader) (io.ReadCloser, error)
 	uploadPackMutex       sync.RWMutex
@@ -352,7 +350,7 @@ func (fake *FakeRawClient) ReceivePackReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeRawClient) SmartInfo(arg1 context.Context, arg2 string) (io.ReadCloser, error) {
+func (fake *FakeRawClient) SmartInfo(arg1 context.Context, arg2 string) error {
 	fake.smartInfoMutex.Lock()
 	ret, specificReturn := fake.smartInfoReturnsOnCall[len(fake.smartInfoArgsForCall)]
 	fake.smartInfoArgsForCall = append(fake.smartInfoArgsForCall, struct {
@@ -367,9 +365,9 @@ func (fake *FakeRawClient) SmartInfo(arg1 context.Context, arg2 string) (io.Read
 		return stub(arg1, arg2)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2
+		return ret.result1
 	}
-	return fakeReturns.result1, fakeReturns.result2
+	return fakeReturns.result1
 }
 
 func (fake *FakeRawClient) SmartInfoCallCount() int {
@@ -378,7 +376,7 @@ func (fake *FakeRawClient) SmartInfoCallCount() int {
 	return len(fake.smartInfoArgsForCall)
 }
 
-func (fake *FakeRawClient) SmartInfoCalls(stub func(context.Context, string) (io.ReadCloser, error)) {
+func (fake *FakeRawClient) SmartInfoCalls(stub func(context.Context, string) error) {
 	fake.smartInfoMutex.Lock()
 	defer fake.smartInfoMutex.Unlock()
 	fake.SmartInfoStub = stub
@@ -391,30 +389,27 @@ func (fake *FakeRawClient) SmartInfoArgsForCall(i int) (context.Context, string)
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRawClient) SmartInfoReturns(result1 io.ReadCloser, result2 error) {
+func (fake *FakeRawClient) SmartInfoReturns(result1 error) {
 	fake.smartInfoMutex.Lock()
 	defer fake.smartInfoMutex.Unlock()
 	fake.SmartInfoStub = nil
 	fake.smartInfoReturns = struct {
-		result1 io.ReadCloser
-		result2 error
-	}{result1, result2}
+		result1 error
+	}{result1}
 }
 
-func (fake *FakeRawClient) SmartInfoReturnsOnCall(i int, result1 io.ReadCloser, result2 error) {
+func (fake *FakeRawClient) SmartInfoReturnsOnCall(i int, result1 error) {
 	fake.smartInfoMutex.Lock()
 	defer fake.smartInfoMutex.Unlock()
 	fake.SmartInfoStub = nil
 	if fake.smartInfoReturnsOnCall == nil {
 		fake.smartInfoReturnsOnCall = make(map[int]struct {
-			result1 io.ReadCloser
-			result2 error
+			result1 error
 		})
 	}
 	fake.smartInfoReturnsOnCall[i] = struct {
-		result1 io.ReadCloser
-		result2 error
-	}{result1, result2}
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeRawClient) UploadPack(arg1 context.Context, arg2 io.Reader) (io.ReadCloser, error) {

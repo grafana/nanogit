@@ -19,8 +19,7 @@ import (
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
 	IsAuthorized(ctx context.Context) (bool, error)
-	// TODO: we don't need to do streaming on this one
-	SmartInfo(ctx context.Context, service string) (io.ReadCloser, error)
+	SmartInfo(ctx context.Context, service string) error
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
 	ReceivePack(ctx context.Context, data io.Reader) error
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)

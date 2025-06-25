@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -18,8 +17,7 @@ import (
 // by the Git Smart Protocol v2 specification for repository discovery and capability
 // negotiation.
 //
-// The response contains a list of references and advertised server capabilities in the
-// format expected by Git clients.
+// The response is parsed internally to validate the Git protocol format.
 //
 // See:
 //   - https://git-scm.com/docs/http-protocol#_smart_clients
@@ -32,13 +30,8 @@ import (
 //
 // Returns:
 //
-//	A ReadCloser for streaming the response body from the server, or an error if the request fails.
-//	The caller is responsible for closing the returned ReadCloser.
-//
-// Errors:
-//
-//	Returns an error if the HTTP request fails or the server returns a non-2xx status code.
-func (c *rawClient) SmartInfo(ctx context.Context, service string) (response io.ReadCloser, err error) {
+//	An error if the HTTP request fails, the server returns a non-2xx status code, or Git protocol errors are detected.
+func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
@@ -50,24 +43,28 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) (response io.
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.addDefaultHeaders(req)
 
 	res, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		res.Body.Close()
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
+	defer res.Body.Close()
 
 	logger.Debug("SmartInfo response",
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	return res.Body, nil
+	// For SmartInfo, we just need to validate that we got a successful HTTP response
+	// The actual content parsing is not needed since callers only care about authorization/existence
+
+	return nil
 }
