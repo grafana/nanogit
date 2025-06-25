@@ -104,7 +104,16 @@ func (c *httpClient) GetRef(ctx context.Context, refName string) (Ref, error) {
 	}
 
 	if len(lines) > 1 {
-		return Ref{}, fmt.Errorf("multiple refs found for %q", refName)
+		// Multiple refs found, try to find exact match
+		for _, line := range lines {
+			if line.RefName == refName {
+				logger.Debug("Ref found via exact match",
+					"ref_name", refName,
+					"ref_hash", line.Hash.String())
+				return Ref{Name: line.RefName, Hash: line.Hash}, nil
+			}
+		}
+		return Ref{}, NewRefNotFoundError(refName)
 	}
 
 	refLine := lines[0]

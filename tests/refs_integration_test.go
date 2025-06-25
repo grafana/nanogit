@@ -103,6 +103,26 @@ var _ = Describe("References", func() {
 			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
 			Expect(notFoundErr.RefName).To(Equal("refs/heads/non-existent"))
 		})
+
+		It("should handle ambiguous ref prefix by exact matching", func() {
+			By("Creating refs with similar prefixes")
+			local.Git("branch", "test")
+			local.Git("push", "origin", "test", "--force")
+			local.Git("branch", "test-longer")
+			local.Git("push", "origin", "test-longer", "--force")
+
+			By("Getting specific ref should work despite prefix ambiguity")
+			ref, err := client.GetRef(ctx, "refs/heads/test")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Name).To(Equal("refs/heads/test"))
+			Expect(ref.Hash).To(Equal(firstCommit))
+
+			By("Getting the longer ref should also work")
+			ref, err = client.GetRef(ctx, "refs/heads/test-longer")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ref.Name).To(Equal("refs/heads/test-longer"))
+			Expect(ref.Hash).To(Equal(firstCommit))
+		})
 	})
 
 	Context("CreateRef operations", func() {
