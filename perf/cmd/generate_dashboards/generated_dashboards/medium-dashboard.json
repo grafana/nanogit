@@ -1,0 +1,5985 @@
+{
+  "apiVersion": "dashboard.grafana.app/v1beta1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "medium-dashboard-5726"
+  },
+  "spec": {
+    "title": "Medium Dashboard - Primary Insights",
+    "tags": [
+      "business",
+      "application",
+      "monitoring",
+      "infrastructure",
+      "devops"
+    ],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Alert Summary",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "topk(10, sum by (service) (count_over_time({environment=\"prod\"} |= \"timeout\" | json | __error__ = \"\" [1h])))",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-825",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(48, 230, 75)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 58
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(215, 254, 144)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 50
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-222",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 2,
+        "title": "Error Rate Heatmap",
+        "type": "heatmap",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-362",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(193, 69, 96)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 32
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(143, 123, 43)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 50
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": true,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-241",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 3,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "avg_over_time(memory_usage[1h:5m]) \u003e bool 0.8",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-988",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(102, 17, 45)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 54
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(5, 253, 21)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 20
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-601",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(response_time_bucket[5m])) by (le, instance, job))",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-751",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "none",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(18, 171, 241)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 44
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(242, 150, 8)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 49
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-440",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m",
+        "alert": {
+          "name": "Alert for timeseries panel",
+          "message": "Alert condition met",
+          "frequency": "10s",
+          "conditions": [],
+          "executionErrorState": "alerting",
+          "noDataState": "no_data",
+          "for": "5m"
+        }
+      },
+      {
+        "id": 5,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "topk(10, sum by (service) (count_over_time({environment=\"prod\"} |= \"timeout\" | json | __error__ = \"\" [1h])))",
+            "refId": "A",
+            "legendFormat": "{{service}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-749",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(61, 242, 114)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 13
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(10, 187, 18)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 56
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-867",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 6,
+        "title": "Network Traffic",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate({app=\"frontend\"} | json | unwrap response_time [5m])) by (le))",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-706",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(251, 82, 180)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 19
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(19, 162, 215)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 32
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-20",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 7,
+        "title": "Response Time",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "{span.name=\"database_query\" \u0026\u0026 status=error}",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-687",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(22, 62, 148)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 44
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(183, 77, 218)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 59
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-106",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m",
+        "alert": {
+          "name": "Alert for timeseries panel",
+          "message": "Alert condition met",
+          "frequency": "10s",
+          "conditions": [],
+          "executionErrorState": "alerting",
+          "noDataState": "no_data",
+          "for": "5m"
+        }
+      },
+      {
+        "id": 8,
+        "title": "Request Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "{service.name=\"frontend\"}",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-838",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(73, 124, 78)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 25
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(164, 170, 184)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 51
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-913",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 9,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "predict_linear(disk_usage[1h], 3600) \u003e bool 100",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-203",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "bytes",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(193, 61, 121)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 33
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(144, 227, 117)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 37
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-283",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 10,
+        "title": "Network Traffic",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "{span.name=\"database_query\" \u0026\u0026 status=error}",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-119",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "none",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(193, 53, 115)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 43
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(153, 0, 12)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 53
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-617",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 11,
+        "title": "Active Users",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "{service.name=\"api\" \u0026\u0026 http.status_code \u003e= 400}",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-99",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(3, 230, 196)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 43
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(87, 75, 228)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 45
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-698",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 12,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "sum(rate({namespace=\"production\",job=~\".*\"} |~ \"(?i)error|exception|fatal\" | json | line_format \"{{.timestamp}} {{.level}} {{.message}}\" [5m])) by (job)",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-904",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(7, 201, 128)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 45
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(3, 120, 147)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 59
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-128",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 13,
+        "title": "Request Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "topk(10, sum by (service) (count_over_time({environment=\"prod\"} |= \"timeout\" | json | __error__ = \"\" [1h])))",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-98",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(206, 90, 16)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 41
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(141, 30, 38)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 37
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-752",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 14,
+        "title": "Service Performance",
+        "type": "bargauge",
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 0,
+          "y": 56
+        },
+        "targets": [
+          {
+            "expr": "{service.name=\"frontend\"}",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-268",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(19, 82, 205)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 39
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(113, 234, 62)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 58
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-30",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 15,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 6,
+          "y": 56
+        },
+        "targets": [
+          {
+            "expr": "{service.name=\"api\" \u0026\u0026 http.status_code \u003e= 400}",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-615",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(60, 171, 81)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 15
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(227, 254, 205)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 46
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-448",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m",
+        "alert": {
+          "name": "Alert for timeseries panel",
+          "message": "Alert condition met",
+          "frequency": "10s",
+          "conditions": [],
+          "executionErrorState": "alerting",
+          "noDataState": "no_data",
+          "for": "5m"
+        }
+      },
+      {
+        "id": 16,
+        "title": "Queue Size",
+        "type": "gauge",
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 18,
+          "y": 56
+        },
+        "targets": [
+          {
+            "expr": "rate(memory_usage[5m])",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-21",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(61, 16, 252)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 53
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(16, 14, 87)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 24
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-910",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 17,
+        "title": "Alert Summary",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 64
+        },
+        "targets": [
+          {
+            "expr": "avg_over_time(network_io[1h:5m]) \u003e bool 0.8",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-7",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(184, 245, 154)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 43
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(180, 118, 14)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 51
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-459",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 18,
+        "title": "Error Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 72
+        },
+        "targets": [
+          {
+            "expr": "predict_linear(http_requests_total[1h], 3600) \u003e bool 100",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-65",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "bytes",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(53, 138, 16)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 37
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(74, 44, 15)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 52
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-68",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 19,
+        "title": "System Load",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 72
+        },
+        "targets": [
+          {
+            "expr": "predict_linear(network_io[1h], 3600) \u003e bool 100",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-397",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "none",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(130, 127, 114)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 57
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(226, 252, 111)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 38
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-38",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m",
+        "alert": {
+          "name": "Alert for stat panel",
+          "message": "Alert condition met",
+          "frequency": "10s",
+          "conditions": [],
+          "executionErrorState": "alerting",
+          "noDataState": "no_data",
+          "for": "5m"
+        }
+      },
+      {
+        "id": 20,
+        "title": "Alert Summary",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 80
+        },
+        "targets": [
+          {
+            "expr": "topk(10, sum by (service) (count_over_time({environment=\"prod\"} |= \"timeout\" | json | __error__ = \"\" [1h])))",
+            "refId": "A",
+            "legendFormat": "{{service}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-936",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "none",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(130, 231, 102)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 36
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(97, 212, 94)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 44
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-59",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 21,
+        "title": "Recent Events",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 88
+        },
+        "targets": [
+          {
+            "expr": "{service.name=\"frontend\"}",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-304",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(230, 112, 187)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 17
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(12, 222, 69)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 33
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-185",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 22,
+        "title": "Request Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 96
+        },
+        "targets": [
+          {
+            "expr": "rate(disk_usage[5m])",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-880",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(206, 59, 18)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 22
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(15, 252, 1)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 43
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-438",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 23,
+        "title": "Request Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 96
+        },
+        "targets": [
+          {
+            "expr": "predict_linear(http_requests_total[1h], 3600) \u003e bool 100",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-845",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(132, 102, 82)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 44
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(102, 140, 83)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 31
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-565",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 24,
+        "title": "Service Information",
+        "type": "text",
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 0,
+          "y": 104
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate({app=\"frontend\"} | json | unwrap response_time [5m])) by (le))",
+            "refId": "A",
+            "legendFormat": "{{service}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "loki",
+              "uid": "loki-uid-394",
+              "name": "loki-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(171, 125, 197)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 18
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(108, 185, 113)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 35
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-702",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 25,
+        "title": "Success Rate",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 104
+        },
+        "targets": [
+          {
+            "expr": "predict_linear(cpu_usage[1h], 3600) \u003e bool 100",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-466",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(107, 134, 244)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 55
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(127, 24, 164)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 28
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-148",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 26,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 112
+        },
+        "targets": [
+          {
+            "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-621",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(47, 104, 173)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 49
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(176, 179, 240)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 38
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-814",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 27,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 112
+        },
+        "targets": [
+          {
+            "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-871",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(90, 183, 84)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 28
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(118, 77, 128)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 26
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-221",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 28,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 120
+        },
+        "targets": [
+          {
+            "expr": "avg_over_time(memory_usage[1h:5m]) \u003e bool 0.8",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-738",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(114, 34, 168)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 32
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(41, 40, 45)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 57
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-594",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 29,
+        "title": "Total Requests",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 120
+        },
+        "targets": [
+          {
+            "expr": "{duration \u003e 1s \u0026\u0026 service.name=~\".*backend.*\"}",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-490",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(243, 243, 200)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 17
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(26, 55, 244)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 28
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-882",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 30,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 128
+        },
+        "targets": [
+          {
+            "expr": "delta(network_io[5m]) / delta(network_io[5m] offset 5m) - 1",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-853",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(37, 167, 106)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 20
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(107, 111, 41)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 59
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-710",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 31,
+        "title": "Network Traffic",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 128
+        },
+        "targets": [
+          {
+            "expr": "{service.name=\"api\" \u0026\u0026 http.status_code \u003e= 400}",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-252",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "reqps",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(243, 97, 142)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 21
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(65, 175, 225)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 36
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-34",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 32,
+        "title": "Error Rate Heatmap",
+        "type": "heatmap",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 136
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(cpu_usage[5m])) by (instance) / ignoring(instance) group_left sum(rate(cpu_usage[5m]))",
+            "refId": "A",
+            "legendFormat": "{{service}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-128",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(235, 199, 192)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 21
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(97, 68, 196)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 42
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": true,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-852",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 33,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 136
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate({app=\"frontend\"} | json | unwrap response_time [5m])) by (le))",
+            "refId": "A",
+            "legendFormat": "Series {{refId}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-713",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(138, 169, 107)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 34
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(144, 196, 65)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 5
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 26
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-801",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 34,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 144
+        },
+        "targets": [
+          {
+            "expr": "rate({job=\"nginx\"} | json | status \u003e= 400 | unwrap bytes | sum_over_time[1m])",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo-uid-907",
+              "name": "tempo-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "bytes",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(66, 95, 13)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 3
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 36
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(23, 0, 222)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 4
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 31
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-uid-569",
+          "name": "loki-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 35,
+        "title": "User Segments",
+        "type": "piechart",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 12,
+          "y": 144
+        },
+        "targets": [
+          {
+            "expr": "delta(disk_usage[5m]) / delta(disk_usage[5m] offset 5m) - 1",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-587",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 1"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(56, 166, 185)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 17
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 1 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 1 (Units: requests/sec)"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Series 2"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "rgb(238, 67, 74)",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 1
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 59
+                },
+                {
+                  "id": "displayName",
+                  "value": "Custom Display Name for Series 2 with Extended Description"
+                },
+                {
+                  "id": "custom.axisLabel",
+                  "value": "Custom Axis Label 2 (Units: requests/sec)"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "tempo",
+          "uid": "tempo-uid-536",
+          "name": "tempo-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m",
+        "alert": {
+          "name": "Alert for piechart panel",
+          "message": "Alert condition met",
+          "frequency": "10s",
+          "conditions": [],
+          "executionErrorState": "alerting",
+          "noDataState": "no_data",
+          "for": "5m"
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "label": "Environment",
+          "description": "Select environment",
+          "query": "label_values(environment)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "label": "Service",
+          "description": "Select service",
+          "query": "label_values(service)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "instance",
+          "type": "query",
+          "label": "Instance",
+          "description": "Select instance",
+          "query": "label_values(instance)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "job",
+          "type": "query",
+          "label": "Job",
+          "description": "Select job",
+          "query": "label_values(job)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "region",
+          "type": "query",
+          "label": "Region",
+          "description": "Select region",
+          "query": "label_values(region)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "cluster",
+          "type": "query",
+          "label": "Cluster",
+          "description": "Select cluster",
+          "query": "label_values(cluster)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "namespace",
+          "type": "query",
+          "label": "Namespace",
+          "description": "Select namespace",
+          "query": "label_values(namespace)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "pod",
+          "type": "query",
+          "label": "Pod",
+          "description": "Select pod",
+          "query": "label_values(pod)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "container",
+          "type": "query",
+          "label": "Container",
+          "description": "Select container",
+          "query": "label_values(container)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "node",
+          "type": "query",
+          "label": "Node",
+          "description": "Select node",
+          "query": "label_values(node)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "environment_1",
+          "type": "query",
+          "label": "Environment_1",
+          "description": "Select environment_1",
+          "query": "label_values(environment_1)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "service_1",
+          "type": "query",
+          "label": "Service_1",
+          "description": "Select service_1",
+          "query": "label_values(service_1)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        }
+      ]
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "refresh": "30s",
+    "schemaVersion": 41,
+    "links": [],
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "enable": true,
+          "hide": false,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "query": "deployment_events",
+          "showLine": true,
+          "lineColor": "rgba(0, 211, 255, 1)",
+          "textFormat": "{{title}}: {{text}}",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-453",
+            "name": "loki-datasource"
+          },
+          "target": {}
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "preload": false
+  }
+}
