@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// DashboardSpec defines the characteristics of a Grafana dashboard
-type DashboardSpec struct {
+// DashboardGeneratorSpec defines the characteristics of a Grafana dashboard
+type DashboardGeneratorSpec struct {
 	Name           string
 	PanelCount     int
 	TemplateVars   int
@@ -23,8 +23,8 @@ type DashboardSpec struct {
 }
 
 // GetDashboardSpecs returns predefined dashboard specifications
-func GetDashboardSpecs() []DashboardSpec {
-	return []DashboardSpec{
+func GetDashboardSpecs() []DashboardGeneratorSpec {
+	return []DashboardGeneratorSpec{
 		{
 			Name:           "small",
 			PanelCount:     8,
@@ -68,9 +68,21 @@ func GetDashboardSpecs() []DashboardSpec {
 	}
 }
 
-// GrafanaDashboard represents a Grafana dashboard JSON structure
-type GrafanaDashboard struct {
-	ID              int                    `json:"id"`
+// KubernetesDashboard represents a Kubernetes Dashboard resource
+type KubernetesDashboard struct {
+	APIVersion string         `json:"apiVersion"`
+	Kind       string         `json:"kind"`
+	Metadata   Metadata       `json:"metadata"`
+	Spec       DashboardSpec  `json:"spec"`
+}
+
+type Metadata struct {
+	Name string `json:"name"`
+}
+
+// DashboardSpec represents the spec section of a Kubernetes Dashboard
+type DashboardSpec struct {
+	ID              int                    `json:"id,omitempty"`
 	Title           string                 `json:"title"`
 	Tags            []string               `json:"tags"`
 	Style           string                 `json:"style"`
@@ -81,15 +93,16 @@ type GrafanaDashboard struct {
 	Timepicker      interface{}            `json:"timepicker"`
 	Refresh         string                 `json:"refresh"`
 	SchemaVersion   int                    `json:"schemaVersion"`
-	Version         int                    `json:"version"`
+	Version         int                    `json:"version,omitempty"`
 	Links           []interface{}          `json:"links"`
 	Annotations     Annotations            `json:"annotations"`
 	Editable        bool                   `json:"editable"`
 	FiscalYearStartMonth int               `json:"fiscalYearStartMonth"`
 	GraphTooltip    int                    `json:"graphTooltip"`
-	HideControls    bool                   `json:"hideControls"`
-	LiveNow         bool                   `json:"liveNow"`
-	WeekStart       string                 `json:"weekStart"`
+	HideControls    bool                   `json:"hideControls,omitempty"`
+	LiveNow         bool                   `json:"liveNow,omitempty"`
+	WeekStart       string                 `json:"weekStart,omitempty"`
+	Preload         bool                   `json:"preload"`
 }
 
 type Panel struct {
@@ -257,34 +270,39 @@ func main() {
 	fmt.Println("Dashboard generation complete!")
 }
 
-func generateDashboard(spec DashboardSpec) GrafanaDashboard {
-	dashboard := GrafanaDashboard{
-		ID:              rand.Intn(1000000),
-		Title:           fmt.Sprintf("%s Dashboard - %s", capitalizeFirst(spec.Name), generateTitle()),
-		Tags:            generateTags(spec),
-		Style:           "dark",
-		Timezone:        "browser",
-		Panels:          generatePanels(spec),
-		Templating:      generateTemplating(spec),
-		Time:            TimeRange{From: "now-1h", To: "now"},
-		Timepicker:      map[string]interface{}{},
-		Refresh:         "30s",
-		SchemaVersion:   30,
-		Version:         rand.Intn(100) + 1,
-		Links:           []interface{}{},
-		Annotations:     generateAnnotations(spec),
-		Editable:        true,
-		FiscalYearStartMonth: 0,
-		GraphTooltip:    0,
-		HideControls:    false,
-		LiveNow:         false,
-		WeekStart:       "",
+func generateDashboard(spec DashboardGeneratorSpec) KubernetesDashboard {
+	dashboardName := fmt.Sprintf("%s-dashboard-%d", spec.Name, rand.Intn(10000))
+	
+	dashboard := KubernetesDashboard{
+		APIVersion: "dashboard.grafana.app/v1alpha1",
+		Kind:       "Dashboard",
+		Metadata: Metadata{
+			Name: dashboardName,
+		},
+		Spec: DashboardSpec{
+			Title:           fmt.Sprintf("%s Dashboard - %s", capitalizeFirst(spec.Name), generateTitle()),
+			Tags:            generateTags(spec),
+			Style:           "dark",
+			Timezone:        "browser",
+			Panels:          generatePanels(spec),
+			Templating:      generateTemplating(spec),
+			Time:            TimeRange{From: "now-1h", To: "now"},
+			Timepicker:      map[string]interface{}{},
+			Refresh:         "30s",
+			SchemaVersion:   41,
+			Links:           []interface{}{},
+			Annotations:     generateAnnotations(spec),
+			Editable:        true,
+			FiscalYearStartMonth: 0,
+			GraphTooltip:    0,
+			Preload:         false,
+		},
 	}
 
 	return dashboard
 }
 
-func generatePanels(spec DashboardSpec) []Panel {
+func generatePanels(spec DashboardGeneratorSpec) []Panel {
 	panels := make([]Panel, spec.PanelCount)
 	
 	x, y := 0, 0
@@ -335,7 +353,7 @@ func generatePanels(spec DashboardSpec) []Panel {
 	return panels
 }
 
-func choosePanelType(spec DashboardSpec) string {
+func choosePanelType(spec DashboardGeneratorSpec) string {
 	types := []string{"timeseries", "stat", "gauge", "table", "heatmap", "piechart", "bargauge", "text"}
 	
 	// Weight towards common types
@@ -395,7 +413,7 @@ func getPanelSize(panelType, sizeCategory string) (int, int) {
 	return w, h
 }
 
-func generateTargets(spec DashboardSpec, panelType string) []Target {
+func generateTargets(spec DashboardGeneratorSpec, panelType string) []Target {
 	targetCount := 1
 	if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
 		targetCount = rand.Intn(3) + 1
@@ -657,7 +675,7 @@ func chooseUnit(panelType string) string {
 	return units[rand.Intn(len(units))]
 }
 
-func generatePanelOptions(panelType string, spec DashboardSpec) map[string]interface{} {
+func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[string]interface{} {
 	options := map[string]interface{}{}
 	
 	switch panelType {
@@ -839,7 +857,7 @@ func generateAlert(panelType string) *Alert {
 	}
 }
 
-func generateTemplating(spec DashboardSpec) Templating {
+func generateTemplating(spec DashboardGeneratorSpec) Templating {
 	vars := make([]TemplateVar, spec.TemplateVars)
 	
 	varNames := []string{"environment", "service", "instance", "job", "region", "cluster", "namespace", "pod", "container", "node"}
@@ -875,7 +893,7 @@ func generateTemplating(spec DashboardSpec) Templating {
 	return Templating{List: vars}
 }
 
-func generateAnnotations(spec DashboardSpec) Annotations {
+func generateAnnotations(spec DashboardGeneratorSpec) Annotations {
 	if !spec.HasAnnotations {
 		return Annotations{List: []Annotation{}}
 	}
@@ -898,7 +916,7 @@ func generateAnnotations(spec DashboardSpec) Annotations {
 	return Annotations{List: annotations}
 }
 
-func generateTags(spec DashboardSpec) []string {
+func generateTags(spec DashboardGeneratorSpec) []string {
 	allTags := []string{"monitoring", "infrastructure", "application", "performance", "alerts", "business", "devops", "sre", "kubernetes", "docker"}
 	
 	tagCount := min(5, len(allTags))
@@ -921,7 +939,7 @@ func generateTitle() string {
 	return fmt.Sprintf("%s %s", adjectives[rand.Intn(len(adjectives))], nouns[rand.Intn(len(nouns))])
 }
 
-func saveDashboard(dashboard GrafanaDashboard, filepath string) error {
+func saveDashboard(dashboard KubernetesDashboard, filepath string) error {
 	data, err := json.MarshalIndent(dashboard, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal dashboard: %w", err)
@@ -929,6 +947,7 @@ func saveDashboard(dashboard GrafanaDashboard, filepath string) error {
 	
 	return os.WriteFile(filepath, data, 0644)
 }
+
 
 func capitalizeFirst(s string) string {
 	if len(s) == 0 {

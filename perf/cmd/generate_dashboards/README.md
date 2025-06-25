@@ -1,10 +1,10 @@
-# Grafana Dashboard Generator
+# Kubernetes Grafana Dashboard Generator
 
-A utility to generate realistic Grafana dashboards of various sizes for performance testing and development purposes.
+A utility to generate realistic Kubernetes Dashboard resources of various sizes for performance testing and development purposes.
 
 ## Overview
 
-This tool creates valid Grafana dashboard JSON files that mimic real-world dashboard complexity and structure. It's designed to help test scenarios involving large dashboards, Git repository performance with varying file sizes, and Grafana import/export operations.
+This tool creates valid Kubernetes Dashboard resources that mimic real-world cloud-native dashboard complexity and structure. It's designed to help test scenarios involving large dashboards, Git repository performance with varying file sizes, and Kubernetes dashboard management operations.
 
 ## Usage
 
@@ -13,48 +13,60 @@ cd perf/cmd/generate_dashboards
 go run main.go
 ```
 
-The tool will create a `generated_dashboards/` directory containing four dashboard files:
+The tool will create a `generated_dashboards/` directory containing four Kubernetes Dashboard resource files:
 
-- `small-dashboard.json` (~23KB)
-- `medium-dashboard.json` (~161KB) 
-- `large-dashboard.json` (~748KB)
-- `xlarge-dashboard.json` (~3.7MB)
+- `small-dashboard.json` (~27KB)
+- `medium-dashboard.json` (~179KB) 
+- `large-dashboard.json` (~810KB)
+- `xlarge-dashboard.json` (~4.0MB)
 
 ## Dashboard Size Categories
 
-### Small Dashboard (~23KB actual)
+### Small Dashboard (~27KB actual)
 - **8 panels** - Basic monitoring setup
 - **3 template variables** - Simple filtering
 - **Single datasource** - Prometheus only
-- **Features**: Basic panel configurations, simple queries
+- **Kubernetes Features**: Basic labels, minimal annotations (no namespace for portability)
 - **Use case**: Small team dashboard, service overview
 - **Real-world equivalent**: Basic application monitoring, simple infrastructure overview
 
-### Medium Dashboard (~161KB actual)
+### Medium Dashboard (~179KB actual)
 - **35 panels** - Comprehensive monitoring
 - **12 template variables** - Multi-dimensional filtering
 - **3 datasources** - Prometheus, Loki, Tempo
-- **Features**: Complex queries, enhanced panel options, annotations
+- **Kubernetes Features**: Team labels, folder organization (no namespace for portability)
 - **Use case**: Department dashboard, multi-service monitoring
 - **Real-world equivalent**: Full-stack application monitoring, team KPI dashboard
 
-### Large Dashboard (~748KB actual)
+### Large Dashboard (~810KB actual)
 - **85 panels** - Enterprise-scale monitoring
 - **20 template variables** - Complex filtering and grouping
 - **5 datasources** - Multiple observability tools
-- **Features**: Field overrides, complex thresholds, advanced visualizations
+- **Kubernetes Features**: Complex labels, compliance annotations (no namespace for portability)
 - **Use case**: Enterprise service monitoring, multi-team dashboard
 - **Real-world equivalent**: Platform monitoring, business intelligence dashboard
 
-### XLarge Dashboard (~3.7MB actual)
+### XLarge Dashboard (~4.0MB actual)
 - **220+ panels** - Massive monitoring setup
 - **35+ template variables** - Extensive filtering capabilities
 - **8+ datasources** - Full observability stack
-- **Features**: Data transformations, extensive overrides, complex queries, rich metadata
+- **Kubernetes Features**: Enterprise labels, extensive metadata (no namespace for portability)
 - **Use case**: Global enterprise monitoring, multi-region dashboards
 - **Real-world equivalent**: Corporate-wide monitoring, compliance dashboards
 
 ## Generated Content Features
+
+### Kubernetes Resource Structure
+- **apiVersion**: `dashboard.grafana.app/v1alpha1`
+- **kind**: `Dashboard`
+- **metadata**: Simple metadata with only name field
+- **spec**: Dashboard specification containing panels, templating, etc.
+
+### Kubernetes Metadata Features
+- **Names**: Unique dashboard names with random suffixes
+- **Minimal metadata**: Only essential fields for maximum portability
+- **No namespace**: Can be deployed to any namespace
+- **No labels/annotations**: Clean, simple structure
 
 ### Panel Types
 - **Timeseries** (40%) - Time-based metrics with realistic queries
@@ -106,13 +118,14 @@ perf/cmd/generate_dashboards/
 
 ## Integration with Performance Testing
 
-These dashboards are designed to work with the nanogit performance testing suite:
+These Kubernetes Dashboard resources are designed to work with the nanogit performance testing suite:
 
 1. **Repository testing** - Use as varied file sizes in Git repositories
-2. **JSON parsing** - Test JSON processing performance with complex structures
-3. **Import/export** - Test Grafana dashboard import performance
-4. **Memory usage** - Analyze memory consumption with large dashboard files
+2. **JSON parsing** - Test JSON processing performance with complex Kubernetes resources
+3. **Kubernetes operations** - Test dashboard deployment and management performance
+4. **Memory usage** - Analyze memory consumption with large dashboard resources
 5. **Network transfer** - Test file transfer performance across different sizes
+6. **GitOps workflows** - Test dashboard-as-code scenarios with large manifests
 
 ## Customization
 
@@ -140,7 +153,15 @@ The tool validates generated dashboards by:
 - Creating proper datasource references
 - Maintaining consistent ID assignments
 
-Each generated file can be directly imported into Grafana for testing or development purposes.
+Each generated file can be directly applied to a Kubernetes cluster with the Grafana operator for testing or development purposes:
+
+```bash
+# Apply to any namespace (defaults to current context namespace)
+kubectl apply -f generated_dashboards/small-dashboard.json
+
+# Or specify a namespace explicitly
+kubectl apply -f generated_dashboards/small-dashboard.json -n monitoring
+```
 
 ## Dependencies
 

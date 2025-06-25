@@ -1,829 +1,880 @@
 {
-  "id": 23278,
-  "title": "Small Dashboard - Development Health",
-  "tags": [
-    "application",
-    "devops",
-    "performance",
-    "kubernetes",
-    "performance"
-  ],
-  "style": "dark",
-  "timezone": "browser",
-  "panels": [
-    {
-      "id": 1,
-      "title": "Network Traffic",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "increase(disk_usage[24h]) / scalar(count(up{job=~\".+\"}))",
-          "refId": "A",
-          "legendFormat": "Series {{refId}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-974",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+  "apiVersion": "dashboard.grafana.app/v1alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "name": "small-dashboard-9329"
+  },
+  "spec": {
+    "title": "Small Dashboard - Comprehensive Analytics",
+    "tags": [
+      "devops",
+      "docker",
+      "docker",
+      "application",
+      "kubernetes"
+    ],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
         },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "visible",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-20",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 2,
-      "title": "Request Rate",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "predict_linear(memory_usage[1h], 3600) \u003e bool 100",
-          "refId": "A",
-          "legendFormat": "{{environment}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-446",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "visible",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-825",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 3,
-      "title": "Memory Usage",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(memory_usage[5m])) by (instance) / ignoring(instance) group_left sum(rate(memory_usage[5m]))",
-          "refId": "A",
-          "legendFormat": "Series {{refId}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-78",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "visible",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-622",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 4,
-      "title": "Load Distribution",
-      "type": "heatmap",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(memory_usage_bucket[5m])) by (le, instance, job))",
-          "refId": "A",
-          "legendFormat": "{{service}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-480",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {},
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
-        },
-        "overrides": []
-      },
-      "options": {},
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-571",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 5,
-      "title": "Success Rate",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 16
-      },
-      "targets": [
-        {
-          "expr": "predict_linear(cpu_usage[1h], 3600) \u003e bool 100",
-          "refId": "A",
-          "legendFormat": "{{environment}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-2",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {
-            "colorMode": "value",
-            "graphMode": "area",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
-        },
-        "overrides": []
-      },
-      "options": {},
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-890",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 6,
-      "title": "Service Status",
-      "type": "table",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "targets": [
-        {
-          "expr": "topk(10, sum by (instance) (rate(response_time[5m])))",
-          "refId": "A",
-          "legendFormat": "Series {{refId}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-475",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {},
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
+        "targets": [
           {
-            "desc": true,
-            "displayName": "Value"
+            "expr": "avg_over_time(disk_usage[1h:5m]) \u003e bool 0.8",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-179",
+              "name": "prometheus-datasource"
+            }
           }
-        ]
-      },
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-519",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 7,
-      "title": "System Overview",
-      "type": "text",
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 0,
-        "y": 32
-      },
-      "targets": [
-        {
-          "expr": "rate(network_io[5m])",
-          "refId": "A",
-          "legendFormat": "{{service}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-713",
-            "name": "prometheus-datasource"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {},
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
               },
-              {
-                "color": "yellow",
-                "value": 60
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
               },
-              {
-                "color": "red",
-                "value": 80
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
               }
-            ]
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ops",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
           },
-          "unit": "ops",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          "overrides": []
         },
-        "overrides": []
-      },
-      "options": {},
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-451",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    },
-    {
-      "id": 8,
-      "title": "Service Status",
-      "type": "table",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 40
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(cpu_usage_bucket[5m])) by (le, instance, job))",
-          "refId": "A",
-          "legendFormat": "{{instance}}",
-          "format": "time_series",
-          "interval": "1m",
-          "intervalFactor": 1,
-          "step": 60,
-          "hide": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-uid-226",
-            "name": "prometheus-datasource"
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
           }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic",
-            "seriesBy": "last"
-          },
-          "custom": {},
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short",
-          "min": 0,
-          "max": 100,
-          "decimals": 2,
-          "displayName": "${__field.displayName} - Custom Label",
-          "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
         },
-        "overrides": []
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-961",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
       },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
+      {
+        "id": 2,
+        "title": "Service Status",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        },
+        "targets": [
           {
-            "desc": true,
-            "displayName": "Value"
+            "expr": "sum(rate(response_time[5m])) by (instance) / ignoring(instance) group_left sum(rate(response_time[5m]))",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-463",
+              "name": "prometheus-datasource"
+            }
           }
-        ]
-      },
-      "transparent": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-uid-47",
-        "name": "prometheus-datasource"
-      },
-      "pluginVersion": "8.5.0",
-      "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
-      "links": [],
-      "maxDataPoints": 300,
-      "interval": "1m"
-    }
-  ],
-  "templating": {
-    "list": [
-      {
-        "name": "environment",
-        "type": "query",
-        "label": "Environment",
-        "description": "Select environment",
-        "query": "label_values(environment)",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
         },
-        "options": [],
-        "refresh": 1,
-        "regex": "",
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": "",
-        "hide": 0
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-73",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
       },
       {
-        "name": "service",
-        "type": "query",
-        "label": "Service",
-        "description": "Select service",
-        "query": "label_values(service)",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
+        "id": 3,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
         },
-        "options": [],
-        "refresh": 1,
-        "regex": "",
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": "",
-        "hide": 0
+        "targets": [
+          {
+            "expr": "sum(rate(disk_usage[5m])) by (instance) / ignoring(instance) group_left sum(rate(disk_usage[5m]))",
+            "refId": "A",
+            "legendFormat": "{{environment}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-858",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-38",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
       },
       {
-        "name": "instance",
-        "type": "query",
-        "label": "Instance",
-        "description": "Select instance",
-        "query": "label_values(instance)",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
+        "id": 4,
+        "title": "Active Users",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 16
         },
-        "options": [],
-        "refresh": 1,
-        "regex": "",
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": "",
-        "hide": 0
+        "targets": [
+          {
+            "expr": "topk(10, sum by (instance) (rate(network_io[5m])))",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-659",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "fields": "",
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "bytes",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
+        },
+        "options": {},
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-296",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 5,
+        "title": "Performance Metrics",
+        "type": "table",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 24
+        },
+        "targets": [
+          {
+            "expr": "increase(network_io[24h]) / scalar(count(up{job=~\".+\"}))",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-632",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-787",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Advanced metrics dashboard panel designed for enterprise-scale monitoring and observability. Features include multi-dimensional data analysis, comparative performance tracking, automated anomaly detection with configurable sensitivity levels, and integration with alerting systems. Supports custom data transformations, field calculations, and advanced visualization options including gradient fills, custom color schemes, and dynamic scaling.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 6,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "increase(response_time[24h]) / scalar(count(up{job=~\".+\"}))",
+            "refId": "A",
+            "legendFormat": "{{service}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-2",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": true,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-366",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "Production-ready monitoring panel with built-in SLA tracking, capacity planning features, and predictive analytics capabilities. Includes support for multiple data sources, custom aggregation functions, and real-time alerting with escalation policies. The panel automatically adapts to different screen sizes and provides export functionality for reports and documentation purposes.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 7,
+        "title": "Network Utilization",
+        "type": "gauge",
+        "gridPos": {
+          "h": 6,
+          "w": 6,
+          "x": 12,
+          "y": 32
+        },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "refId": "A",
+            "legendFormat": "{{job}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-974",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "bytes",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
+        },
+        "options": {
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-909",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
+      },
+      {
+        "id": 8,
+        "title": "Error Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "delta(http_requests_total[5m]) / delta(http_requests_total[5m] offset 5m) - 1",
+            "refId": "A",
+            "legendFormat": "{{instance}}",
+            "format": "time_series",
+            "interval": "1m",
+            "intervalFactor": 1,
+            "step": 60,
+            "hide": false,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus-uid-113",
+              "name": "prometheus-datasource"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic",
+              "seriesBy": "last"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 60
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms",
+            "min": 0,
+            "max": 100,
+            "decimals": 2,
+            "displayName": "${__field.displayName} - Custom Label",
+            "description": "Detailed field description with comprehensive information about the metric, its calculation method, and business context."
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "visible",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "transparent": false,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-uid-361",
+          "name": "prometheus-datasource"
+        },
+        "pluginVersion": "8.5.0",
+        "description": "This panel provides comprehensive monitoring and visualization of key performance indicators across multiple dimensions. It includes advanced filtering capabilities, custom thresholds, and detailed breakdowns by service, environment, and geographical region. The visualization supports real-time data updates with configurable refresh intervals and maintains historical data for trend analysis over extended periods.",
+        "links": [],
+        "maxDataPoints": 300,
+        "interval": "1m"
       }
-    ]
-  },
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
-  "timepicker": {},
-  "refresh": "30s",
-  "schemaVersion": 30,
-  "version": 15,
-  "links": [],
-  "annotations": {
-    "list": []
-  },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "hideControls": false,
-  "liveNow": false,
-  "weekStart": ""
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "label": "Environment",
+          "description": "Select environment",
+          "query": "label_values(environment)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "label": "Service",
+          "description": "Select service",
+          "query": "label_values(service)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        },
+        {
+          "name": "instance",
+          "type": "query",
+          "label": "Instance",
+          "description": "Select instance",
+          "query": "label_values(instance)",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 1,
+          "regex": "",
+          "sort": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": "",
+          "hide": 0
+        }
+      ]
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "refresh": "30s",
+    "schemaVersion": 41,
+    "links": [],
+    "annotations": {
+      "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "preload": false
+  }
 }
