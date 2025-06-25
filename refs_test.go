@@ -185,7 +185,7 @@ func TestGetRef(t *testing.T) {
 			}(),
 			refToGet:      "refs/heads/non-existent",
 			expectedRef:   Ref{},
-			expectedError: nil, // We'll check for structured error type
+			expectedError: &RefNotFoundError{RefName: "refs/heads/non-existent"},
 		},
 		{
 			name:          "empty ref line",
@@ -220,7 +220,7 @@ func TestGetRef(t *testing.T) {
 			}(),
 			refToGet:      "refs/heads/test",
 			expectedRef:   Ref{},
-			expectedError: nil, // We'll check for RefNotFoundError
+			expectedError: &RefNotFoundError{RefName: "refs/heads/test"},
 		},
 		{
 			name:          "ls-refs request fails",
@@ -277,19 +277,18 @@ func TestGetRef(t *testing.T) {
 			ref, err := client.GetRef(context.Background(), tt.refToGet)
 			if tt.expectedError != nil {
 				require.Error(t, err)
-				require.ErrorIs(t, err, tt.expectedError)
+				if refNotFoundErr, ok := tt.expectedError.(*RefNotFoundError); ok {
+					var actualErr *RefNotFoundError
+					require.ErrorAs(t, err, &actualErr)
+					require.Equal(t, refNotFoundErr.RefName, actualErr.RefName)
+				} else {
+					require.ErrorIs(t, err, tt.expectedError)
+				}
 				require.Equal(t, Ref{}, ref)
 			} else if tt.setupClient != nil {
 				// For network timeout cases, just check that we got an error
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "send ls-refs command")
-				require.Equal(t, Ref{}, ref)
-			} else if tt.refToGet == "refs/heads/non-existent" || strings.Contains(tt.name, "no exact match") {
-				// Check for structured RefNotFoundError
-				require.Error(t, err)
-				var notFoundErr *RefNotFoundError
-				require.ErrorAs(t, err, &notFoundErr)
-				require.Equal(t, tt.refToGet, notFoundErr.RefName)
 				require.Equal(t, Ref{}, ref)
 			} else {
 				require.NoError(t, err)
