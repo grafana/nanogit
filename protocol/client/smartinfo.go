@@ -38,7 +38,7 @@ import (
 //
 //	Returns an error if the HTTP request fails, the server returns a non-2xx status code,
 //	or the response body cannot be read.
-func (c *rawClient) SmartInfo(ctx context.Context, service string) ([]byte, error) {
+func (c *rawClient) SmartInfo(ctx context.Context, service string) (response []byte, err error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
@@ -60,7 +60,11 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) ([]byte, erro
 		return nil, err
 	}
 
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil {
+			err = fmt.Errorf("close response body: %w", closeErr)
+		}
+	}()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}

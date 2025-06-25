@@ -91,123 +91,150 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 	deltaSize, payload := deltaHeaderSize(payload)
 	originalDeltaSize := deltaSize
 
-	for deltaSize > 0 &&
-		// Protect against underflows.
-		deltaSize <= originalDeltaSize {
-		// The command and its data depends on the bits in it.
-		//
-		// The following explanation uses diagrams from RFC 1951 (section 3.1): https://www.ietf.org/rfc/rfc1951.txt
-		//
-		// If the last bit ((cmd >> 7) & 1) is unset (zero), this is an instruction to add new data FROM the delta TO the patched source (ie patched parent).
-		// The format is:
-		//	+----------+============+
-		//	| 0xxxxxxx |    data    |
-		//	+----------+============+
-		// The x's define the size of the data to come. It must not be zero.
-		//
-		// If the last bit is set, however, we are instructed to copy data FROM the source TO the patched source.
-		// The format is:
-		//	+----------+---------+---------+---------+---------+-------+-------+-------+
-		//	| 1xxxxxxx | offset1 | offset2 | offset3 | offset4 | size1 | size2 | size3 |
-		//	+----------+---------+---------+---------+---------+-------+-------+-------+
-		// The x's define which of the offsets and sizes are set. offset1 is represented by bit 0 (ie the right-most bit), offset2 by bit 1, etc.
-		// If all size bits are unset or size == 0, size should be set to 0x10000.
-		// If all offset bits are unset, it is defaulted to 0.
-		// If offset bits that aren't next to each other are set (e.g. offset1 and offset3 are set), they are still treated as their appropriate positions. I.e. offset1 would represent bits 0-7, and offset3 bits 16-23.
-		//
-		// If the entire cmd is 0x0, it is reserved and MUST return an error.
+	for deltaSize > 0 && deltaSize <= originalDeltaSize {
 		if len(payload) == 0 {
 			return nil, strError("missing cmd byte")
 		}
+		
 		cmd := payload[0]
 		payload = payload[1:]
-		if cmd&0x80 != 0 { // Copy data instruction
-			var offset, size uint64
-			if (cmd & 0b1) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingOffsetByte
-				}
-				offset |= uint64(payload[0])
-				payload = payload[1:]
-			}
-			if (cmd & 0b10) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingOffsetByte
-				}
-				offset |= uint64(payload[0]) << 8
-				payload = payload[1:]
-			}
-			if (cmd & 0b100) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingOffsetByte
-				}
-				offset |= uint64(payload[0]) << 16
-				payload = payload[1:]
-			}
-			if (cmd & 0b1000) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingOffsetByte
-				}
-				offset |= uint64(payload[0]) << 24
-				payload = payload[1:]
-			}
-
-			if (cmd & 0b10000) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingSizeByte
-				}
-				size |= uint64(payload[0])
-				payload = payload[1:]
-			}
-			if (cmd & 0b100000) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingSizeByte
-				}
-				size |= uint64(payload[0]) << 8
-				payload = payload[1:]
-			}
-			if (cmd & 0b1000000) != 0 {
-				if len(payload) == 0 {
-					return nil, errMissingSizeByte
-				}
-				size |= uint64(payload[0]) << 16
-				payload = payload[1:]
-			}
-			if size == 0 { // documented exception
-				size = 0x10000
-			}
-
-			if size > originalDeltaSize ||
-				offset+size > delta.ExpectedSourceLength ||
-				offset+size < offset {
-				break
-			}
-
-			delta.Changes = append(delta.Changes, DeltaChange{
-				SourceOffset: offset,
-				Length:       size,
-			})
-			deltaSize -= size
-		} else if cmd != 0 { // Add data instruction
-			if uint64(cmd) > originalDeltaSize {
-				break
-			}
-			if len(payload) < int(cmd) {
-				return nil, strError("missing data bytes")
-			}
-
-			delta.Changes = append(delta.Changes, DeltaChange{
-				// We don't have to do anything about cmd's top bit here. It is 0; we only need the 7 others which act as a 7-bit integer size.
-				DeltaData: payload[:cmd],
-			})
-			deltaSize -= uint64(cmd)
-			payload = payload[cmd:]
-		} else { // Cmd == 0; reserved.
-			return nil, strError("payload included a cmd 0x0 (reserved) instruction")
+		
+		change, newPayload, consumedSize, err := parseDeltaCommand(cmd, payload, delta.ExpectedSourceLength, originalDeltaSize)
+		if err != nil {
+			return nil, err
 		}
+		
+		if consumedSize == 0 {
+			break
+		}
+		
+		delta.Changes = append(delta.Changes, change)
+		deltaSize -= consumedSize
+		payload = newPayload
 	}
 
 	return delta, nil
+}
+
+// parseDeltaCommand parses a single delta command and returns the resulting change,
+// remaining payload, consumed size, and any error.
+func parseDeltaCommand(cmd byte, payload []byte, expectedSourceLength, originalDeltaSize uint64) (DeltaChange, []byte, uint64, error) {
+	if cmd&0x80 != 0 {
+		return parseCopyCommand(cmd, payload, expectedSourceLength, originalDeltaSize)
+	} else if cmd != 0 {
+		return parseAddCommand(cmd, payload, originalDeltaSize)
+	} else {
+		return DeltaChange{}, payload, 0, strError("payload included a cmd 0x0 (reserved) instruction")
+	}
+}
+
+// parseCopyCommand parses a copy data instruction from delta command
+func parseCopyCommand(cmd byte, payload []byte, expectedSourceLength, originalDeltaSize uint64) (DeltaChange, []byte, uint64, error) {
+	offset, newPayload, err := parseOffset(cmd, payload)
+	if err != nil {
+		return DeltaChange{}, payload, 0, err
+	}
+	
+	size, finalPayload, err := parseSize(cmd, newPayload)
+	if err != nil {
+		return DeltaChange{}, payload, 0, err
+	}
+	
+	if size == 0 {
+		size = 0x10000
+	}
+	
+	if size > originalDeltaSize || offset+size > expectedSourceLength || offset+size < offset {
+		return DeltaChange{}, payload, 0, nil
+	}
+	
+	change := DeltaChange{
+		SourceOffset: offset,
+		Length:       size,
+	}
+	
+	return change, finalPayload, size, nil
+}
+
+// parseAddCommand parses an add data instruction from delta command
+func parseAddCommand(cmd byte, payload []byte, originalDeltaSize uint64) (DeltaChange, []byte, uint64, error) {
+	if uint64(cmd) > originalDeltaSize {
+		return DeltaChange{}, payload, 0, nil
+	}
+	if len(payload) < int(cmd) {
+		return DeltaChange{}, payload, 0, strError("missing data bytes")
+	}
+	
+	change := DeltaChange{
+		DeltaData: payload[:cmd],
+	}
+	
+	return change, payload[cmd:], uint64(cmd), nil
+}
+
+// parseOffset extracts offset value from copy command
+func parseOffset(cmd byte, payload []byte) (uint64, []byte, error) {
+	var offset uint64
+	
+	if (cmd & 0b1) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingOffsetByte
+		}
+		offset |= uint64(payload[0])
+		payload = payload[1:]
+	}
+	if (cmd & 0b10) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingOffsetByte
+		}
+		offset |= uint64(payload[0]) << 8
+		payload = payload[1:]
+	}
+	if (cmd & 0b100) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingOffsetByte
+		}
+		offset |= uint64(payload[0]) << 16
+		payload = payload[1:]
+	}
+	if (cmd & 0b1000) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingOffsetByte
+		}
+		offset |= uint64(payload[0]) << 24
+		payload = payload[1:]
+	}
+	
+	return offset, payload, nil
+}
+
+// parseSize extracts size value from copy command
+func parseSize(cmd byte, payload []byte) (uint64, []byte, error) {
+	var size uint64
+	
+	if (cmd & 0b10000) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingSizeByte
+		}
+		size |= uint64(payload[0])
+		payload = payload[1:]
+	}
+	if (cmd & 0b100000) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingSizeByte
+		}
+		size |= uint64(payload[0]) << 8
+		payload = payload[1:]
+	}
+	if (cmd & 0b1000000) != 0 {
+		if len(payload) == 0 {
+			return 0, payload, errMissingSizeByte
+		}
+		size |= uint64(payload[0]) << 16
+		payload = payload[1:]
+	}
+	
+	return size, payload, nil
 }
 
 // deltaHeaderSize parses the header of a delta.

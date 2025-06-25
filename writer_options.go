@@ -7,11 +7,11 @@ const (
 	// PackfileStorageAuto automatically chooses between memory and disk based on object count.
 	// Uses memory for small operations (<=10 objects) and disk for larger operations.
 	PackfileStorageAuto PackfileStorageMode = iota
-	
+
 	// PackfileStorageMemory always stores objects in memory for maximum performance.
 	// Best for small operations but can use significant memory for bulk operations.
 	PackfileStorageMemory
-	
+
 	// PackfileStorageDisk always stores objects in temporary files on disk.
 	// Best for bulk operations to minimize memory usage.
 	PackfileStorageDisk

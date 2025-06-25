@@ -54,19 +54,19 @@ var EmptyPack = []byte{
 var (
 	// ErrDataTooLarge is returned when attempting to create a packet with data larger than MaxPktLineDataSize.
 	ErrDataTooLarge = errors.New("the data field is too large")
-	
+
 	// ErrPackParseError is returned when parsing a Git packet fails.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrPackParseError = errors.New("pack parse error")
-	
+
 	// ErrGitServerError is returned when the Git server reports an error.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrGitServerError = errors.New("git server error")
-	
+
 	// ErrGitReferenceUpdateError is returned when a Git reference update fails.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrGitReferenceUpdateError = errors.New("git reference update error")
-	
+
 	// ErrGitUnpackError is returned when Git pack unpacking fails.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrGitUnpackError = errors.New("git unpack error")
@@ -300,54 +300,55 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //   - Empty packet: "0004" - should not be sent but is handled gracefully
 //
 // Side-band Multiplexing:
-//   Git protocol v2 uses side-band multiplexing to allow multiple communication channels
-//   within a single stream. Each packet may be prefixed with a single byte indicating
-//   the side-band channel:
-//   - Channel 1 (0x01): Packfile data
-//   - Channel 2 (0x02): Progress messages and non-fatal errors (displayed on stderr)
-//   - Channel 3 (0x03): Fatal error messages that terminate the connection
-//   
-//   When side-band multiplexing is active, error messages may appear as:
-//   - "0015\x02error: message" (channel 2 - progress/error info)
-//   - "0015\x03fatal: message" (channel 3 - fatal errors)
-//   
-//   Per Git protocol v2 spec: https://git-scm.com/docs/protocol-v2#_packfile_negotiation
+//
+//	Git protocol v2 uses side-band multiplexing to allow multiple communication channels
+//	within a single stream. Each packet may be prefixed with a single byte indicating
+//	the side-band channel:
+//	- Channel 1 (0x01): Packfile data
+//	- Channel 2 (0x02): Progress messages and non-fatal errors (displayed on stderr)
+//	- Channel 3 (0x03): Fatal error messages that terminate the connection
+//
+//	When side-band multiplexing is active, error messages may appear as:
+//	- "0015\x02error: message" (channel 2 - progress/error info)
+//	- "0015\x03fatal: message" (channel 3 - fatal errors)
+//
+//	Per Git protocol v2 spec: https://git-scm.com/docs/protocol-v2#_packfile_negotiation
 //
 // Server Error Packets (terminate parsing and return structured errors):
 //
-//   1. ERR Packets:
-//      - Format: length + "ERR " + message
-//      - Example: "000dERR hello" 
-//      - Returns: GitServerError with ErrorType="ERR"
-//      - Spec: RFC gitprotocol-pack error-line format
+//  1. ERR Packets:
+//     - Format: length + "ERR " + message
+//     - Example: "000dERR hello"
+//     - Returns: GitServerError with ErrorType="ERR"
+//     - Spec: RFC gitprotocol-pack error-line format
 //
-//   2. Git Error/Fatal Messages:
-//      - Direct format: length + "error:" + message or length + "fatal:" + message
-//      - Side-band format: length + 0x02 + "error:" + message or length + 0x02 + "fatal:" + message
-//      - Examples: "0015error: bad object", "0016\x02error: bad object"
-//      - Returns: GitServerError with ErrorType="error" or "fatal"
-//      - Special case: Messages containing "unpack" return GitUnpackError
-//      - Source: Direct error messages or Git side-band channel 2 (progress/error messages)
-//      - Note: Side-band channel 2 is used for progress info and error messages that should
-//        be displayed to the user (typically on stderr). The leading 0x02 byte indicates
-//        side-band channel 2 per Git protocol v2 specification.
+//  2. Git Error/Fatal Messages:
+//     - Direct format: length + "error:" + message or length + "fatal:" + message
+//     - Side-band format: length + 0x02 + "error:" + message or length + 0x02 + "fatal:" + message
+//     - Examples: "0015error: bad object", "0016\x02error: bad object"
+//     - Returns: GitServerError with ErrorType="error" or "fatal"
+//     - Special case: Messages containing "unpack" return GitUnpackError
+//     - Source: Direct error messages or Git side-band channel 2 (progress/error messages)
+//     - Note: Side-band channel 2 is used for progress info and error messages that should
+//     be displayed to the user (typically on stderr). The leading 0x02 byte indicates
+//     side-band channel 2 per Git protocol v2 specification.
 //
-//   3. Reference Update Failures:
-//      - Format: length + "ng " + refname + " " + reason
-//      - Example: "0020ng refs/heads/main failed"
-//      - Returns: GitReferenceUpdateError with parsed refname and reason
-//      - Spec: Git report-status protocol "ng" (no good) responses
+//  3. Reference Update Failures:
+//     - Format: length + "ng " + refname + " " + reason
+//     - Example: "0020ng refs/heads/main failed"
+//     - Returns: GitReferenceUpdateError with parsed refname and reason
+//     - Spec: Git report-status protocol "ng" (no good) responses
 //
-//   4. Unpack Status Messages:
-//      - Format: length + "unpack " + status
-//      - Examples: "000bunpack ok", "0019unpack index-pack failed"
-//      - Success: Continues parsing (adds to lines)
-//      - Failure: Returns GitUnpackError
-//      - Spec: Git report-status protocol unpack status
+//  4. Unpack Status Messages:
+//     - Format: length + "unpack " + status
+//     - Examples: "000bunpack ok", "0019unpack index-pack failed"
+//     - Success: Continues parsing (adds to lines)
+//     - Failure: Returns GitUnpackError
+//     - Spec: Git report-status protocol unpack status
 //
 // Error Conditions:
 //   - Invalid hex length field: Returns PackParseError
-//   - Truncated packets: Returns PackParseError  
+//   - Truncated packets: Returns PackParseError
 //   - Malformed packet data: Returns PackParseError
 //
 // Protocol Compliance:
@@ -357,148 +358,160 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //   - Compatible with Git Smart HTTP protocol error handling
 //
 // Example Usage:
-//   data := []byte("0009hello000dERR failed0000")
-//   lines, remainder, err := ParsePack(data)
-//   // Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
+//
+//	data := []byte("0009hello000dERR failed0000")
+//	lines, remainder, err := ParsePack(data)
+//	// Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
 //
 // TODO: Accept an io.Reader to enable streaming packet parsing.
 func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
-	// There should be at least 4 bytes in the packet.
 	for len(b) >= 4 {
 		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
-
-
-		switch {
-		case err != nil:
+		if err != nil {
 			return nil, b, NewPackParseError(b, fmt.Errorf("parsing line length: %w", err))
+		}
 
+		// Handle different packet types
+		switch {
 		case length < 4:
-			// This is a special-case packet.
-			// For now, we don't really have a good solution to handle special-case packets.
-			b = b[4:]
+			lines, b = handleSpecialPacket(lines, b, length)
 			if length == 2 { // ResponseEndPacket
 				return lines, b, nil
 			}
-			continue
 
 		case length == 4:
-			// This is an empty packet; it SHOULD not be sent.
-			// https://git-scm.com/docs/gitprotocol-common#_pkt_line_format
-			b = b[4:]
-			continue
+			b = b[4:] // Skip empty packet
 
 		case uint64(len(b)) < length:
 			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(b)))
 
-		case bytes.HasPrefix(b[4:], []byte("ERR ")):
-			// This is an error packet.
-			// https://git-scm.com/docs/gitprotocol-pack#_pkt_line_format
-
-			// An error packet is a special pkt-line that contains
-			// an error string.
-			//
-			//    error-line     =  PKT-LINE("ERR" SP explanation-text)
-			//
-			// Throughout the protocol, where PKT-LINE(...) is
-			// expected, an error packet MAY be sent. Once this
-			// packet is sent by a client or a server, the data
-			// transfer process defined in this protocol is
-			// terminated.
-
-			message := string(b[8:length])
-			return lines, b[length:], NewGitServerError(b[:length], "ERR", message)
-
-
-		case bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")) ||
-			 (len(b) > 5 && b[4] == 0x02 && (bytes.HasPrefix(b[5:], []byte("error:")) || bytes.HasPrefix(b[5:], []byte("fatal:")))) ||
-			 (len(b) > 5 && b[4] == 0x03 && (bytes.HasPrefix(b[5:], []byte("error:")) || bytes.HasPrefix(b[5:], []byte("fatal:")))):
-			// Handle Git error and fatal messages.
-			// These can appear in responses when the server encounters errors during processing.
-			// 
-			// Formats supported:
-			//   1. Direct: "error: message" or "fatal: message"
-			//   2. Side-band channel 2: 0x02 + "error: message" (progress/error info)
-			//   3. Side-band channel 3: 0x03 + "fatal: message" (fatal errors)
-			//
-			// Per Git protocol v2: side-band channel 2 is for progress messages and errors
-			// displayed to the user, while channel 3 is for fatal errors that terminate
-			// the connection.
-			//
-			// Examples: "0015error: bad object"
-			//           "0016\x02error: bad object" (side-band channel 2)
-			//           "0016\x03fatal: fsck failed" (side-band channel 3)
-
-			// Determine the offset where the error/fatal message starts
-			var messageStart int
-			var fullMessage string
-			if bytes.HasPrefix(b[4:], []byte("error:")) || bytes.HasPrefix(b[4:], []byte("fatal:")) {
-				// Direct format: no side-band prefix
-				messageStart = 4
-				fullMessage = string(b[4:length])
-			} else {
-				// Side-band format: skip the side-band channel byte (0x02 or 0x03)
-				messageStart = 5
-				fullMessage = string(b[5:length])
+		default:
+			// Handle content packets
+			lines, b, err = handleContentPacket(lines, b, length)
+			if err != nil {
+				return lines, b, err
 			}
-			
-			var errorType, message string
-			if bytes.HasPrefix(b[messageStart:], []byte("error:")) {
-				errorType = "error"
-				message = fullMessage[6:] // Remove "error:" prefix
-			} else {
-				errorType = "fatal"
-				message = fullMessage[6:] // Remove "fatal:" prefix
-			}
-			
-			// Check if this is an unpack error
-			if bytes.Contains(b[4:length], []byte("unpack")) {
-				return lines, b[length:], NewGitUnpackError(b[:length], message)
-			}
-			
-			return lines, b[length:], NewGitServerError(b[:length], errorType, message)
-
-		case bytes.HasPrefix(b[4:], []byte("ng ")):
-			// Handle reference update failure packets.
-			// "ng" means "no good" - indicating a reference update failed.
-			// Format: "ng <refname> <error-msg>"
-			// This is part of the report-status protocol.
-			//
-			// Example from user: "ng refs/heads/robertoonboarding failed"
-
-			parts := bytes.SplitN(b[7:length], []byte(" "), 2)
-			var refName, reason string
-			if len(parts) >= 1 {
-				refName = string(parts[0])
-			}
-			if len(parts) >= 2 {
-				reason = string(parts[1])
-			} else {
-				reason = "update failed"
-			}
-			
-			return lines, b[length:], NewGitReferenceUpdateError(b[:length], refName, reason)
-
-		case bytes.HasPrefix(b[4:], []byte("unpack ")):
-			// Handle unpack status messages.
-			// Format: "unpack <status-msg>"
-			// This is part of the report-status protocol for push operations.
-			//
-			// Examples: "unpack ok" or "unpack [error-message]"
-
-			unpackContent := string(b[11:length]) // Skip "unpack "
-			if unpackContent != "ok" {
-				return lines, b[length:], NewGitUnpackError(b[:length], unpackContent)
-			}
-			// If unpack ok, continue processing normally
-			lines = append(lines, b[4:length])
-			b = b[length:]
-			continue
 		}
-
-		// The length includes the first 4 bytes as well, so we should be good with this.
-		lines = append(lines, b[4:length])
-		b = b[length:]
 	}
 
 	return lines, b, nil
+}
+
+// handleSpecialPacket processes special control packets (flush, delimiter, response-end)
+func handleSpecialPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte) {
+	// Special-case packets: flush (0000), delimiter (0001), response-end (0002)
+	return lines, b[4:]
+}
+
+// handleContentPacket processes regular data packets and error packets
+func handleContentPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte, error) {
+	packetData := b[4:length]
+
+	// Check for different packet content types
+	switch {
+	case bytes.HasPrefix(packetData, []byte("ERR ")):
+		return lines, b[length:], handleERRPacket(b[:length], packetData)
+
+	case isErrorOrFatalMessage(packetData):
+		return lines, b[length:], handleErrorFatalMessage(b[:length], packetData)
+
+	case bytes.HasPrefix(packetData, []byte("ng ")):
+		return lines, b[length:], handleReferenceUpdateFailure(b[:length], packetData)
+
+	case bytes.HasPrefix(packetData, []byte("unpack ")):
+		return handleUnpackStatus(lines, b, length, packetData)
+
+	default:
+		// Regular data packet
+		lines = append(lines, packetData)
+		return lines, b[length:], nil
+	}
+}
+
+// isErrorOrFatalMessage checks if packet contains error/fatal messages (direct or side-band)
+func isErrorOrFatalMessage(data []byte) bool {
+	// Direct format: "error:" or "fatal:"
+	if bytes.HasPrefix(data, []byte("error:")) || bytes.HasPrefix(data, []byte("fatal:")) {
+		return true
+	}
+
+	// Side-band format: check for channels 2 or 3 with error/fatal messages
+	if len(data) > 1 && (data[0] == 0x02 || data[0] == 0x03) {
+		return bytes.HasPrefix(data[1:], []byte("error:")) || bytes.HasPrefix(data[1:], []byte("fatal:"))
+	}
+
+	return false
+}
+
+// handleERRPacket processes ERR packets per gitprotocol-pack specification
+func handleERRPacket(fullPacket, packetData []byte) error {
+	// ERR packet format: "ERR " + message
+	message := string(packetData[4:]) // Skip "ERR "
+	return NewGitServerError(fullPacket, "ERR", message)
+}
+
+// handleErrorFatalMessage processes error/fatal messages (direct or side-band format)
+func handleErrorFatalMessage(fullPacket, packetData []byte) error {
+	var messageStart int
+	var fullMessage string
+
+	// Determine message format and extract content
+	if bytes.HasPrefix(packetData, []byte("error:")) || bytes.HasPrefix(packetData, []byte("fatal:")) {
+		// Direct format: no side-band prefix
+		messageStart = 0
+		fullMessage = string(packetData)
+	} else {
+		// Side-band format: skip the side-band channel byte (0x02 or 0x03)
+		messageStart = 1
+		fullMessage = string(packetData[1:])
+	}
+
+	// Parse error type and message
+	var errorType, message string
+	if bytes.HasPrefix(packetData[messageStart:], []byte("error:")) {
+		errorType = "error"
+		message = fullMessage[6:] // Remove "error:" prefix
+	} else {
+		errorType = "fatal"
+		message = fullMessage[6:] // Remove "fatal:" prefix
+	}
+
+	// Check if this is an unpack error
+	if bytes.Contains(packetData, []byte("unpack")) {
+		return NewGitUnpackError(fullPacket, message)
+	}
+
+	return NewGitServerError(fullPacket, errorType, message)
+}
+
+// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets
+func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
+	// Format: "ng <refname> <error-msg>"
+	parts := bytes.SplitN(packetData[3:], []byte(" "), 2) // Skip "ng "
+
+	var refName, reason string
+	if len(parts) >= 1 {
+		refName = string(parts[0])
+	}
+	if len(parts) >= 2 {
+		reason = string(parts[1])
+	} else {
+		reason = "update failed"
+	}
+
+	return NewGitReferenceUpdateError(fullPacket, refName, reason)
+}
+
+// handleUnpackStatus processes unpack status messages
+func handleUnpackStatus(lines [][]byte, b []byte, length uint64, packetData []byte) ([][]byte, []byte, error) {
+	// Format: "unpack <status-msg>"
+	unpackContent := string(packetData[7:]) // Skip "unpack "
+
+	if unpackContent != "ok" {
+		return lines, b[length:], NewGitUnpackError(b[:length], unpackContent)
+	}
+
+	// If unpack ok, add to lines and continue processing
+	lines = append(lines, packetData)
+	return lines, b[length:], nil
 }

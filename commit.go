@@ -383,6 +383,33 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		"page", options.Page,
 		"per_page", options.PerPage)
 
+	page, perPage := c.validatePagination(options)
+	skip := (page - 1) * perPage
+	collect := perPage
+
+	ctx, allObjects := storage.FromContextOrInMemory(ctx)
+	
+	commitObjs, err := c.collectCommitObjects(ctx, startCommit, options, skip+collect, perPage, allObjects)
+	if err != nil {
+		return nil, err
+	}
+
+	commits, err := c.paginateCommits(commitObjs, skip, collect)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debug("Commits listed",
+		"start_hash", startCommit.String(),
+		"total_found", len(commitObjs),
+		"returned_count", len(commits),
+		"page", page,
+		"per_page", perPage)
+	return commits, nil
+}
+
+// validatePagination validates and normalizes pagination parameters
+func (c *httpClient) validatePagination(options ListCommitsOptions) (int, int) {
 	perPage := options.PerPage
 	if perPage <= 0 {
 		perPage = 30
@@ -396,16 +423,17 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		page = 1
 	}
 
-	skip := (page - 1) * perPage
-	collect := perPage
+	return page, perPage
+}
 
+// collectCommitObjects traverses commit history and collects matching commits
+func (c *httpClient) collectCommitObjects(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions, maxCommits, perPage int, allObjects storage.PackfileStorage) ([]*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
 	var commitObjs []*protocol.PackfileObject
 	visited := make(map[string]bool)
 	queue := []hash.Hash{startCommit}
 
-	ctx, allObjects := storage.FromContextOrInMemory(ctx)
-
-	for len(queue) > 0 && len(commitObjs) < skip+collect {
+	for len(queue) > 0 && len(commitObjs) < maxCommits {
 		currentHash := queue[0]
 		queue = queue[1:]
 
@@ -414,27 +442,9 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		}
 		visited[currentHash.String()] = true
 
-		logger.Debug("Process commit",
-			"commit_hash", currentHash.String(),
-			"visited_count", len(visited))
-
-		objects, err := c.Fetch(ctx, client.FetchOptions{
-			NoProgress:   true,
-			NoBlobFilter: true,
-			Want:         []hash.Hash{currentHash},
-			Deepen:       perPage,
-			Done:         true,
-		})
+		commit, err := c.fetchCommitObject(ctx, currentHash, perPage, allObjects)
 		if err != nil {
-			return nil, fmt.Errorf("fetch commit %s: %w", currentHash.String(), err)
-		}
-
-		commit, ok := objects[currentHash.String()]
-		if !ok || commit.Type != protocol.ObjectTypeCommit {
-			commit, ok = allObjects.GetByType(currentHash, protocol.ObjectTypeCommit)
-			if !ok {
-				return nil, NewObjectNotFoundError(currentHash)
-			}
+			return nil, err
 		}
 
 		matches, err := c.commitMatchesFilters(ctx, commit, &options, allObjects)
@@ -442,23 +452,51 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 			return nil, fmt.Errorf("check filters for commit %s: %w", currentHash.String(), err)
 		}
 
-		if !matches {
-			if !commit.Commit.Parent.Is(hash.Zero) {
-				queue = append(queue, commit.Commit.Parent)
-			}
-			continue
+		if matches {
+			commitObjs = append(commitObjs, commit)
+			logger.Debug("Commit added",
+				"commit_hash", currentHash.String(),
+				"total_commits", len(commitObjs))
 		}
-
-		commitObjs = append(commitObjs, commit)
-		logger.Debug("Commit added",
-			"commit_hash", currentHash.String(),
-			"total_commits", len(commitObjs))
 
 		if !commit.Commit.Parent.Is(hash.Zero) {
 			queue = append(queue, commit.Commit.Parent)
 		}
 	}
 
+	return commitObjs, nil
+}
+
+// fetchCommitObject fetches a single commit object
+func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash, perPage int, allObjects storage.PackfileStorage) (*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Process commit",
+		"commit_hash", commitHash.String())
+
+	objects, err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{commitHash},
+		Deepen:       perPage,
+		Done:         true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
+	}
+
+	commit, ok := objects[commitHash.String()]
+	if !ok || commit.Type != protocol.ObjectTypeCommit {
+		commit, ok = allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
+		if !ok {
+			return nil, NewObjectNotFoundError(commitHash)
+		}
+	}
+
+	return commit, nil
+}
+
+// paginateCommits applies pagination to the collected commits
+func (c *httpClient) paginateCommits(commitObjs []*protocol.PackfileObject, skip, collect int) ([]Commit, error) {
 	if skip >= len(commitObjs) {
 		return []Commit{}, nil
 	}
@@ -473,12 +511,6 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 		commits = append(commits, *commit)
 	}
 
-	logger.Debug("Commits listed",
-		"start_hash", startCommit.String(),
-		"total_found", len(commitObjs),
-		"returned_count", len(commits),
-		"page", page,
-		"per_page", perPage)
 	return commits, nil
 }
 

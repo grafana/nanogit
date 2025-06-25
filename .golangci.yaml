@@ -1,4 +1,7 @@
+version: "2"
 linters:
-  presets:
-    - bugs
-    - performance
+  enable:
+    - gocyclo
+  settings:
+    gocyclo:
+      min-complexity: 15

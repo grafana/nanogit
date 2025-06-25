@@ -12,7 +12,7 @@ import (
 
 // UploadPack sends a POST request to the git-upload-pack endpoint.
 // This endpoint is used to fetch objects and refs from the remote repository.
-func (c *rawClient) UploadPack(ctx context.Context, data []byte) ([]byte, error) {
+func (c *rawClient) UploadPack(ctx context.Context, data []byte) (response []byte, err error) {
 	body := bytes.NewReader(data)
 
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
@@ -36,7 +36,11 @@ func (c *rawClient) UploadPack(ctx context.Context, data []byte) ([]byte, error)
 		return nil, err
 	}
 
-	defer res.Body.Close()
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil {
+			err = fmt.Errorf("close response body: %w", closeErr)
+		}
+	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)

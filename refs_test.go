@@ -482,97 +482,161 @@ func TestUpdateRef(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var server *httptest.Server
-			shouldCheckBody := tt.expectedError == ""
-			if tt.setupClient == nil {
-				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path == "/git-upload-pack" {
-						// Simulate refs list for GetRef in UpdateRef tests
-						var refsResp string
-						if tt.refExists {
-							// Ref exists
-							pkt, _ := protocol.FormatPacks(
-								protocol.PackLine(fmt.Sprintf("%s %s\n", tt.refToUpdate.Hash, tt.refToUpdate.Name)),
-							)
-							refsResp = string(pkt)
-						} else {
-							// Ref does not exist
-							refsResp = "0000"
-						}
-						w.WriteHeader(http.StatusOK)
-						if _, err := w.Write([]byte(refsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
-					if r.URL.Path == "/git-receive-pack" {
-						if tt.expectedError == "ref refs/heads/non-existent does not exist" {
-							w.WriteHeader(http.StatusInternalServerError)
-							if _, err := w.Write([]byte("error: ref refs/heads/non-existent does not exist")); err != nil {
-								t.Errorf("failed to write response: %v", err)
-								return
-							}
-							return
-						}
-						if shouldCheckBody {
-							body, err := io.ReadAll(r.Body)
-							if err != nil {
-								t.Errorf("failed to read request body: %v", err)
-								return
-							}
-							expectedRefLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n0000",
-								tt.refToUpdate.Hash, // old value is the current hash
-								tt.refToUpdate.Hash, // new value is the same hash
-								tt.refToUpdate.Name,
-							)
-							refLine := string(body[4 : len(body)-len(protocol.EmptyPack)-4])
-							if refLine != expectedRefLine {
-								t.Errorf("unexpected ref line:\ngot:  %q\nwant: %q", refLine, expectedRefLine)
-								return
-							}
-							if !bytes.Equal(body[len(body)-len(protocol.EmptyPack)-4:len(body)-4], protocol.EmptyPack) {
-								t.Error("empty pack file not found in request")
-								return
-							}
-							if !bytes.Equal(body[len(body)-4:], []byte(protocol.FlushPacket)) {
-								t.Error("flush packet not found in request")
-								return
-							}
-						}
-						w.WriteHeader(http.StatusOK)
-						return
-					}
-					t.Errorf("unexpected request path: %s", r.URL.Path)
-				}))
-				defer server.Close()
-			}
+			
+			server := setupUpdateRefTestServer(t, tt)
+			defer func() {
+				if server != nil {
+					server.Close()
+				}
+			}()
 
-			url := "http://127.0.0.1:0"
-			if server != nil {
-				url = server.URL
-			}
-
-			var (
-				client Client
-				err    error
-			)
-
-			if tt.setupClient != nil {
-				client, err = NewHTTPClient(url, tt.setupClient)
-			} else {
-				client, err = NewHTTPClient(url)
-			}
-			require.NoError(t, err)
-
-			err = client.UpdateRef(context.Background(), tt.refToUpdate)
-			if tt.expectedError != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
+			client := createTestClient(t, server, tt.setupClient)
+			runUpdateRefTest(t, client, tt)
 		})
+	}
+}
+
+// setupUpdateRefTestServer creates a test server for UpdateRef tests
+func setupUpdateRefTestServer(t *testing.T, tt struct {
+	name          string
+	refToUpdate   Ref
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) *httptest.Server {
+	if tt.setupClient != nil {
+		return nil
+	}
+
+	shouldCheckBody := tt.expectedError == ""
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/git-upload-pack":
+			handleUploadPackRequest(t, w, tt)
+		case "/git-receive-pack":
+			handleReceivePackRequest(t, w, r, tt, shouldCheckBody)
+		default:
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+}
+
+// handleUploadPackRequest handles git-upload-pack requests in tests
+func handleUploadPackRequest(t *testing.T, w http.ResponseWriter, tt struct {
+	name          string
+	refToUpdate   Ref
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) {
+	var refsResp string
+	if tt.refExists {
+		pkt, _ := protocol.FormatPacks(
+			protocol.PackLine(fmt.Sprintf("%s %s\n", tt.refToUpdate.Hash, tt.refToUpdate.Name)),
+		)
+		refsResp = string(pkt)
+	} else {
+		refsResp = "0000"
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(refsResp)); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
+}
+
+// handleReceivePackRequest handles git-receive-pack requests in tests
+func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Request, tt struct {
+	name          string
+	refToUpdate   Ref
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}, shouldCheckBody bool) {
+	if tt.expectedError == "ref refs/heads/non-existent does not exist" {
+		w.WriteHeader(http.StatusInternalServerError)
+		if _, err := w.Write([]byte("error: ref refs/heads/non-existent does not exist")); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+		return
+	}
+	
+	if shouldCheckBody {
+		validateReceivePackBody(t, r, tt)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// validateReceivePackBody validates the request body for receive-pack requests
+func validateReceivePackBody(t *testing.T, r *http.Request, tt struct {
+	name          string
+	refToUpdate   Ref
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("failed to read request body: %v", err)
+		return
+	}
+	
+	expectedRefLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n0000",
+		tt.refToUpdate.Hash,
+		tt.refToUpdate.Hash,
+		tt.refToUpdate.Name,
+	)
+	
+	refLine := string(body[4 : len(body)-len(protocol.EmptyPack)-4])
+	if refLine != expectedRefLine {
+		t.Errorf("unexpected ref line:\ngot:  %q\nwant: %q", refLine, expectedRefLine)
+		return
+	}
+	
+	if !bytes.Equal(body[len(body)-len(protocol.EmptyPack)-4:len(body)-4], protocol.EmptyPack) {
+		t.Error("empty pack file not found in request")
+		return
+	}
+	
+	if !bytes.Equal(body[len(body)-4:], []byte(protocol.FlushPacket)) {
+		t.Error("flush packet not found in request")
+	}
+}
+
+// createTestClient creates a test client with optional custom configuration
+func createTestClient(t *testing.T, server *httptest.Server, setupClient options.Option) Client {
+	url := "http://127.0.0.1:0"
+	if server != nil {
+		url = server.URL
+	}
+
+	var (
+		client Client
+		err    error
+	)
+
+	if setupClient != nil {
+		client, err = NewHTTPClient(url, setupClient)
+	} else {
+		client, err = NewHTTPClient(url)
+	}
+	require.NoError(t, err)
+	return client
+}
+
+// runUpdateRefTest executes the UpdateRef test and validates results
+func runUpdateRefTest(t *testing.T, client Client, tt struct {
+	name          string
+	refToUpdate   Ref
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) {
+	err := client.UpdateRef(context.Background(), tt.refToUpdate)
+	if tt.expectedError != "" {
+		require.Error(t, err)
+		require.Contains(t, err.Error(), tt.expectedError)
+	} else {
+		require.NoError(t, err)
 	}
 }
 
@@ -621,96 +685,131 @@ func TestDeleteRef(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var server *httptest.Server
-			shouldCheckBody := tt.expectedError == "" || strings.Contains(tt.expectedError, "send ref update: got status code 500")
-			if tt.setupClient == nil {
-				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path == "/git-upload-pack" {
-						// Simulate refs list for GetRef in DeleteRef tests
-						var refsResp string
-						if tt.refExists {
-							// Ref exists
-							pkt, _ := protocol.FormatPacks(
-								protocol.PackLine(fmt.Sprintf("%s %s\n", "1234567890123456789012345678901234567890", tt.refToDelete)),
-							)
-							refsResp = string(pkt)
-						} else {
-							// Ref does not exist
-							refsResp = "0000"
-						}
-						w.WriteHeader(http.StatusOK)
-						if _, err := w.Write([]byte(refsResp)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-							return
-						}
-						return
-					}
-					if r.URL.Path == "/git-receive-pack" {
-						if tt.expectedError == "ref refs/heads/non-existent does not exist" {
-							w.WriteHeader(http.StatusInternalServerError)
-							if _, err := w.Write([]byte("error: ref refs/heads/non-existent does not exist")); err != nil {
-								t.Errorf("failed to write response: %v", err)
-								return
-							}
-							return
-						}
-						if shouldCheckBody {
-							body, err := io.ReadAll(r.Body)
-							if err != nil {
-								t.Errorf("failed to read request body: %v", err)
-								return
-							}
-							expectedRefLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n0000",
-								"1234567890123456789012345678901234567890", // old value is the current hash
-								protocol.ZeroHash,                          // new value is zero hash for deletion
-								tt.refToDelete,
-							)
-							refLine := string(body[4 : len(body)-len(protocol.EmptyPack)-4])
-							if refLine != expectedRefLine {
-								t.Errorf("unexpected ref line:\ngot:  %q\nwant: %q", refLine, expectedRefLine)
-								return
-							}
-							if !bytes.Equal(body[len(body)-len(protocol.EmptyPack)-4:len(body)-4], protocol.EmptyPack) {
-								t.Error("empty pack file not found in request")
-								return
-							}
-							if !bytes.Equal(body[len(body)-4:], []byte(protocol.FlushPacket)) {
-								t.Error("flush packet not found in request")
-								return
-							}
-						}
-						w.WriteHeader(http.StatusOK)
-						return
-					}
-					t.Errorf("unexpected request path: %s", r.URL.Path)
-				}))
-				defer server.Close()
-			}
+			
+			server := setupDeleteRefTestServer(t, tt)
+			defer func() {
+				if server != nil {
+					server.Close()
+				}
+			}()
 
-			url := "http://127.0.0.1:0"
-			if server != nil {
-				url = server.URL
-			}
-
-			var (
-				client Client
-				err    error
-			)
-
-			if tt.setupClient != nil {
-				client, err = NewHTTPClient(url, tt.setupClient)
-			} else {
-				client, err = NewHTTPClient(url)
-			}
-			require.NoError(t, err)
-
-			err = client.DeleteRef(context.Background(), tt.refToDelete)
-			if tt.expectedError != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
+			client := createTestClient(t, server, tt.setupClient)
+			runDeleteRefTest(t, client, tt)
 		})
+	}
+}
+
+// setupDeleteRefTestServer creates a test server for DeleteRef tests
+func setupDeleteRefTestServer(t *testing.T, tt struct {
+	name          string
+	refToDelete   string
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) *httptest.Server {
+	if tt.setupClient != nil {
+		return nil
+	}
+
+	shouldCheckBody := tt.expectedError == "" || strings.Contains(tt.expectedError, "send ref update: got status code 500")
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/git-upload-pack":
+			handleDeleteRefUploadPack(t, w, tt)
+		case "/git-receive-pack":
+			handleDeleteRefReceivePack(t, w, r, tt, shouldCheckBody)
+		default:
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+}
+
+// handleDeleteRefUploadPack handles upload-pack requests for delete ref tests
+func handleDeleteRefUploadPack(t *testing.T, w http.ResponseWriter, tt struct {
+	name          string
+	refToDelete   string
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) {
+	var refsResp string
+	if tt.refExists {
+		pkt, _ := protocol.FormatPacks(
+			protocol.PackLine(fmt.Sprintf("%s %s\n", "1234567890123456789012345678901234567890", tt.refToDelete)),
+		)
+		refsResp = string(pkt)
+	} else {
+		refsResp = "0000"
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(refsResp)); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
+}
+
+// handleDeleteRefReceivePack handles receive-pack requests for delete ref tests  
+func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Request, tt struct {
+	name          string
+	refToDelete   string
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}, shouldCheckBody bool) {
+	if shouldCheckBody {
+		validateDeleteRefBody(t, r, tt)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// validateDeleteRefBody validates the request body for delete ref requests
+func validateDeleteRefBody(t *testing.T, r *http.Request, tt struct {
+	name          string
+	refToDelete   string
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("failed to read request body: %v", err)
+		return
+	}
+	
+	expectedRefLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n0000",
+		"1234567890123456789012345678901234567890",
+		protocol.ZeroHash,
+		tt.refToDelete,
+	)
+	
+	refLine := string(body[4 : len(body)-len(protocol.EmptyPack)-4])
+	if refLine != expectedRefLine {
+		t.Errorf("unexpected ref line:\ngot:  %q\nwant: %q", refLine, expectedRefLine)
+		return
+	}
+	
+	if !bytes.Equal(body[len(body)-len(protocol.EmptyPack)-4:len(body)-4], protocol.EmptyPack) {
+		t.Error("empty pack file not found in request")
+		return
+	}
+	
+	if !bytes.Equal(body[len(body)-4:], []byte(protocol.FlushPacket)) {
+		t.Error("flush packet not found in request")
+	}
+}
+
+// runDeleteRefTest executes the DeleteRef test and validates results
+func runDeleteRefTest(t *testing.T, client Client, tt struct {
+	name          string
+	refToDelete   string
+	refExists     bool
+	expectedError string
+	setupClient   options.Option
+}) {
+	err := client.DeleteRef(context.Background(), tt.refToDelete)
+	if tt.expectedError != "" {
+		require.Error(t, err)
+		require.Contains(t, err.Error(), tt.expectedError)
+	} else {
+		require.NoError(t, err)
 	}
 }

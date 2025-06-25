@@ -636,22 +636,24 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 
 	// Create a pipe to stream packfile data directly from WritePackfile to ReceivePack
 	pipeReader, pipeWriter := io.Pipe()
-	
+
 	// Channel to capture any error from WritePackfile goroutine
 	writeErrChan := make(chan error, 1)
-	
+
 	// Start WritePackfile in a goroutine, writing to the pipe
 	go func() {
-		defer pipeWriter.Close()
+		defer func() {
+			_ = pipeWriter.Close() // Best effort close in goroutine
+		}()
 		err := w.writer.WritePackfile(pipeWriter, w.ref.Name, w.ref.Hash)
 		writeErrChan <- err
 	}()
-	
+
 	// Call ReceivePack with the pipe reader (this will stream the data)
 	responseBody, err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
-		pipeReader.Close() // Close reader to unblock the writer goroutine
-		
+		_ = pipeReader.Close() // Best effort close since we're already handling an error
+
 		// Even if there's an error, the response body may contain useful Git protocol
 		// error details (like reference update failures, unpack errors, etc.)
 		// We should parse and return these as more specific errors when possible
@@ -661,10 +663,10 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 				return fmt.Errorf("git protocol error: %w", parseErr)
 			}
 		}
-		
+
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
-	
+
 	// Check for any error from the WritePackfile goroutine
 	if writeErr := <-writeErrChan; writeErr != nil {
 		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, writeErr)
@@ -1142,13 +1144,13 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 
 	// Clear all staged changes from memory
 	w.treeEntries = make(map[string]*FlatTreeEntry)
-	
+
 	// Reset writer state
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
-	
+
 	// Mark as cleaned up to prevent further use
 	w.isCleanedUp = true
-	
+
 	logger.Debug("Staged writer cleanup completed")
 	return nil
 }

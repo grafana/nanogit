@@ -132,7 +132,7 @@ func testBulkOperationsConsistency(t *testing.T, ctx context.Context, clients []
 	// Test each client performs bulk operations successfully
 	for i, client := range clients {
 		clientName := client.Name()
-		
+
 		// Create bulk test files specific to this client
 		files := []FileChange{
 			{Path: fmt.Sprintf("bulk_%s/file1.txt", clientName), Content: fmt.Sprintf("Bulk file 1 by %s", clientName), Action: "create"},

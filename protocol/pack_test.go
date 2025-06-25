@@ -241,8 +241,8 @@ func TestParsePacket(t *testing.T) {
 				// First packet: error message with newlines (matches user's 0083 packet)
 				message1 := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
 				pkt1, _ := protocol.PackLine(message1).Marshal()
-				
-				// Remaining packets as separate packets  
+
+				// Remaining packets as separate packets
 				message2 := "001dunpack index-pack failed\n"
 				pkt2, _ := protocol.PackLine(message2).Marshal()
 				message3 := "ng refs/heads/robertoonboarding failed\n"
@@ -271,14 +271,14 @@ func TestParsePacket(t *testing.T) {
 				// First packet: error message (0094 = 148 bytes)
 				message1 := "error: cannot lock ref 'refs/heads/main': is at d346cc9cd80dd0bbda023bb29a7ff2d887c75b19 but expected b6ce559b8c2e4834e075696cac5522b379448c13"
 				pkt1, _ := protocol.PackLine(message1).Marshal()
-				
+
 				// Subsequent packets
 				message2 := "unpack ok"
 				pkt2, _ := protocol.PackLine(message2).Marshal()
 				message3 := "ng refs/heads/main failed to update ref"
 				pkt3, _ := protocol.PackLine(message3).Marshal()
-				pkt4 := []byte("0000")  // flush packet
-				
+				pkt4 := []byte("0000") // flush packet
+
 				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
 			}(),
 			expected: expected{
@@ -289,7 +289,7 @@ func TestParsePacket(t *testing.T) {
 					pkt2, _ := protocol.PackLine(message2).Marshal()
 					message3 := "ng refs/heads/main failed to update ref"
 					pkt3, _ := protocol.PackLine(message3).Marshal()
-					pkt4 := []byte("0000")  // flush packet
+					pkt4 := []byte("0000") // flush packet
 					return append(append(pkt2, pkt3...), pkt4...)
 				}(),
 				err: new(protocol.GitServerError),
@@ -479,13 +479,13 @@ func TestGitServerError(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			err := protocol.NewGitServerError(tt.line, tt.errorType, tt.message)
 			require.Equal(t, tt.expectedErr, err.Error())
 			require.Equal(t, tt.line, err.Line)
 			require.Equal(t, tt.errorType, err.ErrorType)
 			require.Equal(t, tt.message, err.Message)
-			
+
 			// Test that it's a GitServerError
 			require.True(t, protocol.IsGitServerError(err))
 		})
@@ -542,13 +542,13 @@ func TestGitReferenceUpdateError(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			err := protocol.NewGitReferenceUpdateError(tt.line, tt.refName, tt.reason)
 			require.Equal(t, tt.expectedErr, err.Error())
 			require.Equal(t, tt.line, err.Line)
 			require.Equal(t, tt.refName, err.RefName)
 			require.Equal(t, tt.reason, err.Reason)
-			
+
 			// Test that it's a GitReferenceUpdateError
 			require.True(t, protocol.IsGitReferenceUpdateError(err))
 		})
@@ -602,12 +602,12 @@ func TestGitUnpackError(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			err := protocol.NewGitUnpackError(tt.line, tt.message)
 			require.Equal(t, tt.expectedErr, err.Error())
 			require.Equal(t, tt.line, err.Line)
 			require.Equal(t, tt.message, err.Message)
-			
+
 			// Test that it's a GitUnpackError
 			require.True(t, protocol.IsGitUnpackError(err))
 		})
@@ -643,7 +643,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			pkt, _ := protocol.PackLine(message).Marshal()
 			return pkt
 		}()
-		
+
 		lines, remainder, err := protocol.ParsePack(input)
 		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
@@ -656,13 +656,13 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			pkt, _ := protocol.PackLine(message).Marshal()
 			return pkt
 		}()
-		
+
 		lines, remainder, err := protocol.ParsePack(input)
 		require.Empty(t, lines)
 		require.Empty(t, remainder)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
-		
+
 		var unpackErr *protocol.GitUnpackError
 		require.ErrorAs(t, err, &unpackErr)
 		require.Equal(t, "index-pack failed", unpackErr.Message)
@@ -674,13 +674,13 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			pkt, _ := protocol.PackLine(message).Marshal()
 			return pkt
 		}()
-		
+
 		lines, remainder, err := protocol.ParsePack(input)
 		require.Empty(t, lines)
 		require.Empty(t, remainder)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
-		
+
 		var unpackErr *protocol.GitUnpackError
 		require.ErrorAs(t, err, &unpackErr)
 		require.Equal(t, " unpack failed", unpackErr.Message)

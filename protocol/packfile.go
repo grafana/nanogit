@@ -100,14 +100,26 @@ func (e *PackfileObject) parseTree() error {
 
 func (e *PackfileObject) parseCommit() error {
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
-
 	e.Commit = &PackfileCommit{}
+	
+	msg, err := e.parseCommitHeaders(reader)
+	if err != nil {
+		return err
+	}
+	
+	e.Commit.Message = msg.String()
+	return nil
+}
+
+// parseCommitHeaders parses commit headers and returns the message builder
+func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Builder, error) {
 	writingMsg := false
-	msg := strings.Builder{}
+	msg := &strings.Builder{}
+	
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
-			return err
+			return nil, err
 		}
 		if len(line) == 0 && errors.Is(err, io.EOF) {
 			break
@@ -124,36 +136,74 @@ func (e *PackfileObject) parseCommit() error {
 			continue
 		}
 
-		command, data, _ := bytes.Cut(line, []byte(" "))
-		switch string(command) {
-		case "committer":
-			identity, err := ParseIdentity(string(data))
-			if err != nil {
-				return fmt.Errorf("parsing committer: %w", err)
-			}
-			e.Commit.Committer = identity
-		case "tree":
-			e.Commit.Tree, err = hash.FromHex(string(data))
-		case "author":
-			identity, err := ParseIdentity(string(data))
-			if err != nil {
-				return fmt.Errorf("parsing author: %w", err)
-			}
-			e.Commit.Author = identity
-		case "parent":
-			e.Commit.Parent, err = hash.FromHex(string(data))
-		default:
-			if e.Commit.Fields == nil {
-				e.Commit.Fields = make(map[string][]byte, 8)
-			}
-			e.Commit.Fields[string(command)] = data
-		}
+		err = e.parseCommitField(line)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	e.Commit.Message = msg.String()
+	
+	return msg, nil
+}
+
+// parseCommitField parses a single commit field line
+func (e *PackfileObject) parseCommitField(line []byte) error {
+	command, data, _ := bytes.Cut(line, []byte(" "))
+	
+	switch string(command) {
+	case "committer":
+		return e.parseCommitter(string(data))
+	case "tree":
+		return e.parseCommitTree(string(data))
+	case "author":
+		return e.parseAuthor(string(data))
+	case "parent":
+		return e.parseParent(string(data))
+	default:
+		e.parseCustomField(string(command), data)
+		return nil
+	}
+}
+
+// parseCommitter parses the committer field
+func (e *PackfileObject) parseCommitter(data string) error {
+	identity, err := ParseIdentity(data)
+	if err != nil {
+		return fmt.Errorf("parsing committer: %w", err)
+	}
+	e.Commit.Committer = identity
 	return nil
+}
+
+// parseCommitTree parses the tree field
+func (e *PackfileObject) parseCommitTree(data string) error {
+	var err error
+	e.Commit.Tree, err = hash.FromHex(data)
+	return err
+}
+
+// parseAuthor parses the author field
+func (e *PackfileObject) parseAuthor(data string) error {
+	identity, err := ParseIdentity(data)
+	if err != nil {
+		return fmt.Errorf("parsing author: %w", err)
+	}
+	e.Commit.Author = identity
+	return nil
+}
+
+// parseParent parses the parent field
+func (e *PackfileObject) parseParent(data string) error {
+	var err error
+	e.Commit.Parent, err = hash.FromHex(data)
+	return err
+}
+
+// parseCustomField stores custom fields in the Fields map
+func (e *PackfileObject) parseCustomField(command string, data []byte) {
+	if e.Commit.Fields == nil {
+		e.Commit.Fields = make(map[string][]byte, 8)
+	}
+	e.Commit.Fields[command] = data
 }
 
 func (e *PackfileObject) parseDelta(parent string) error {
@@ -295,61 +345,78 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 		shift += 7
 	}
 
-	var err error
-	switch entry.Object.Type {
+	err := p.processObjectByType(entry.Object, size, buf[0])
+	if err != nil {
+		return entry, err
+	}
+
+	return entry, nil
+}
+
+// processObjectByType handles different object types during packfile reading
+func (p *PackfileReader) processObjectByType(obj *PackfileObject, size int, originalByte byte) error {
+	switch obj.Type {
 	case ObjectTypeBlob, ObjectTypeCommit, ObjectTypeTag, ObjectTypeTree:
-		entry.Object.Data, err = p.readAndInflate(size)
-		if err != nil {
-			return entry, eofIsUnexpected(err)
-		}
-
-		entry.Object.Hash, err = Object(p.algo, entry.Object.Type, entry.Object.Data)
-		if err != nil {
-			return entry, eofIsUnexpected(err)
-		}
-
-		if entry.Object.Type == ObjectTypeTree {
-			if err := entry.Object.parseTree(); err != nil {
-				return entry, err
-			}
-		}
-		if entry.Object.Type == ObjectTypeCommit {
-			if err := entry.Object.parseCommit(); err != nil {
-				return entry, err
-			}
-		}
-
+		return p.processStandardObject(obj, size)
 	case ObjectTypeRefDelta:
-		ref := make([]byte, p.algo.Size())
-		if _, err := p.reader.Read(ref); err != nil {
-			return entry, err
-		}
-		entry.Object.Data, err = p.readAndInflate(size)
-		if err != nil {
-			return entry, err
-		}
-		if err := entry.Object.parseDelta(hex.EncodeToString(ref[:])); err != nil {
-			return entry, err
-		}
-
+		return p.processRefDelta(obj, size)
 	case ObjectTypeOfsDelta:
 		// TODO(mariell): we need to handle a ref delta, at least.
 		//   Maybe OFS too? I don't think we need them as that's a
 		//   capability to negotiate.
 		fallthrough
-
 	case ObjectTypeInvalid, ObjectTypeReserved:
 		// TODO(mem): do we need to do something about these? No
 		// special handling for them yet.
 		fallthrough
-
 	default:
-		err = fmt.Errorf("%w (%s; original byte: %08b)",
-			ErrUnsupportedObjectType, entry.Object.Type, buf[0])
-		return entry, err
+		return fmt.Errorf("%w (%s; original byte: %08b)",
+			ErrUnsupportedObjectType, obj.Type, originalByte)
+	}
+}
+
+// processStandardObject handles standard Git objects (blob, commit, tag, tree)
+func (p *PackfileReader) processStandardObject(obj *PackfileObject, size int) error {
+	var err error
+	obj.Data, err = p.readAndInflate(size)
+	if err != nil {
+		return eofIsUnexpected(err)
 	}
 
-	return entry, nil
+	obj.Hash, err = Object(p.algo, obj.Type, obj.Data)
+	if err != nil {
+		return eofIsUnexpected(err)
+	}
+
+	return p.parseObjectContent(obj)
+}
+
+// parseObjectContent parses the content of tree and commit objects
+func (p *PackfileReader) parseObjectContent(obj *PackfileObject) error {
+	switch obj.Type {
+	case ObjectTypeTree:
+		return obj.parseTree()
+	case ObjectTypeCommit:
+		return obj.parseCommit()
+	default:
+		return nil
+	}
+}
+
+// processRefDelta handles reference delta objects
+func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
+	ref := make([]byte, p.algo.Size())
+	if _, err := p.reader.Read(ref); err != nil {
+		return err
+	}
+	
+	var err error
+	obj.Data, err = p.readAndInflate(size)
+	if err != nil {
+		return err
+	}
+	
+	return obj.parseDelta(hex.EncodeToString(ref[:]))
 }
 
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
@@ -357,7 +424,11 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer zr.Close()
+	defer func() {
+		if closeErr := zr.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	// TODO(mem): this should be limited to the size the packet says it
 	// carries, and we should limit that size above (i.e. if the packet
@@ -410,11 +481,11 @@ const (
 	// PackfileStorageAuto automatically chooses between memory and disk based on object count and total size.
 	// Uses memory for small operations (<=10 objects or <=5MB) and disk for larger operations.
 	PackfileStorageAuto PackfileStorageMode = iota
-	
+
 	// PackfileStorageMemory always stores objects in memory for maximum performance.
 	// Best for small operations but can use significant memory for bulk operations.
 	PackfileStorageMemory
-	
+
 	// PackfileStorageDisk always stores objects in temporary files on disk.
 	// Best for bulk operations to minimize memory usage.
 	PackfileStorageDisk
@@ -478,25 +549,29 @@ func (w *PackfileWriter) Cleanup() error {
 	}
 
 	var err error
-	
+
 	// Clean up temporary file if it exists
 	if w.tempFile != nil {
 		name := w.tempFile.Name()
-		w.tempFile.Close()
-		err = os.Remove(name)
+		if closeErr := w.tempFile.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+		if removeErr := os.Remove(name); removeErr != nil && err == nil {
+			err = removeErr
+		}
 		w.tempFile = nil
 	}
-	
+
 	// Clear all memory state
 	w.objectHashes = make(map[string]bool)
 	w.memoryObjects = nil
 	w.hasCommit = false
 	w.lastCommitHash = hash.Hash{}
 	w.totalBytes = 0
-	
+
 	// Mark as cleaned up to prevent further use
 	w.isCleanedUp = true
-	
+
 	return err
 }
 
@@ -643,7 +718,7 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 			Message:   message,
 		},
 	}
-	
+
 	// Add to appropriate storage
 	if err := w.addObject(obj); err != nil {
 		return hash.Hash{}, fmt.Errorf("adding commit object: %w", err)
@@ -666,57 +741,93 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 // - Object entries
 // - 20-byte SHA1 of the packfile
 func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRefHash hash.Hash) error {
+	if err := pw.validateWriteState(); err != nil {
+		return err
+	}
+
+	err := pw.writeRefUpdate(writer, refName, oldRefHash)
+	if err != nil {
+		return err
+	}
+
+	err = pw.writePackfileData(writer)
+	if err != nil {
+		return err
+	}
+
+	return pw.finalizeWrite()
+}
+
+// validateWriteState checks if the packfile writer is in a valid state for writing
+func (pw *PackfileWriter) validateWriteState() error {
 	if err := pw.checkCleanupState(); err != nil {
 		return err
 	}
 
-	// Block if no commit was registered
 	if !pw.hasCommit {
 		return errors.New("no commit object found in packfile")
 	}
 
-	// If no objects at all, return error
 	if len(pw.objectHashes) == 0 {
 		return errors.New("no objects to write")
 	}
 
-	// Create the complete message with reference update command
-	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n0000<packfile data>
-	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
-		oldRefHash.String(),           // old value (current ref hash)
-		pw.lastCommitHash.String(),    // new value (the last commit hash)
-		refName)                       // ref name (from parameter)
+	return nil
+}
 
-	// Calculate the length of the ref update line (including the 4 bytes of length)
+// writeRefUpdate writes the reference update command and flush packet
+func (pw *PackfileWriter) writeRefUpdate(writer io.Writer, refName string, oldRefHash hash.Hash) error {
+	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
+		oldRefHash.String(),
+		pw.lastCommitHash.String(),
+		refName)
+
 	refUpdateLen := len(refUpdate) + 4
 	refUpdateLine := fmt.Sprintf("%04x%s", refUpdateLen, refUpdate)
 
-	// First write the reference update command
 	if _, err := writer.Write([]byte(refUpdateLine)); err != nil {
 		return fmt.Errorf("writing ref update line: %w", err)
 	}
 
-	// Write flush packet
 	if _, err := writer.Write([]byte("0000")); err != nil {
 		return fmt.Errorf("writing flush packet: %w", err)
 	}
 
-	// Now stream the packfile data
-	// We need to compute the hash as we write, so use io.MultiWriter
+	return nil
+}
+
+// writePackfileData writes the packfile header and object data
+func (pw *PackfileWriter) writePackfileData(writer io.Writer) error {
 	packHash := pw.algo.New()
 	hashWriter := io.MultiWriter(writer, packHash)
-	
-	// Write packfile header
+
+	err := pw.writePackfileHeader(hashWriter)
+	if err != nil {
+		return err
+	}
+
+	err = pw.writeObjects(hashWriter)
+	if err != nil {
+		return err
+	}
+
+	if _, err := writer.Write(packHash.Sum(nil)); err != nil {
+		return fmt.Errorf("writing pack hash: %w", err)
+	}
+
+	return nil
+}
+
+// writePackfileHeader writes the packfile signature, version, and object count
+func (pw *PackfileWriter) writePackfileHeader(hashWriter io.Writer) error {
 	if _, err := hashWriter.Write([]byte("PACK")); err != nil {
 		return fmt.Errorf("writing packfile signature: %w", err)
 	}
 
-	// Write version (2)
 	if err := binary.Write(hashWriter, binary.BigEndian, uint32(2)); err != nil {
 		return fmt.Errorf("writing packfile version: %w", err)
 	}
 
-	// Write number of objects
 	numObjects := uint64(len(pw.objectHashes))
 	if numObjects > 0xFFFFFFFF {
 		return fmt.Errorf("too many objects for packfile: %d (max: %d)", numObjects, uint64(0xFFFFFFFF))
@@ -725,37 +836,45 @@ func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRef
 		return fmt.Errorf("writing object count: %w", err)
 	}
 
-	// Write object data - either from memory or temp file
+	return nil
+}
+
+// writeObjects writes all object data from either temp file or memory
+func (pw *PackfileWriter) writeObjects(hashWriter io.Writer) error {
 	if pw.tempFile != nil {
-		// Using file storage - read from temp file
-		if _, err := pw.tempFile.Seek(0, io.SeekStart); err != nil {
-			return fmt.Errorf("seeking to start of temp file: %w", err)
-		}
-		
-		if _, err := io.Copy(hashWriter, pw.tempFile); err != nil {
-			return fmt.Errorf("copying objects from temp file: %w", err)
-		}
-	} else {
-		// Using memory storage - write from memory objects
-		for _, obj := range pw.memoryObjects {
-			if err := pw.writeObjectToWriter(hashWriter, obj); err != nil {
-				return fmt.Errorf("writing memory object: %w", err)
-			}
-		}
+		return pw.writeFromTempFile(hashWriter)
+	}
+	return pw.writeFromMemory(hashWriter)
+}
+
+// writeFromTempFile writes objects from the temporary file
+func (pw *PackfileWriter) writeFromTempFile(hashWriter io.Writer) error {
+	if _, err := pw.tempFile.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seeking to start of temp file: %w", err)
 	}
 
-	// Write the packfile hash
-	if _, err := writer.Write(packHash.Sum(nil)); err != nil {
-		return fmt.Errorf("writing pack hash: %w", err)
+	if _, err := io.Copy(hashWriter, pw.tempFile); err != nil {
+		return fmt.Errorf("copying objects from temp file: %w", err)
 	}
 
-	// Clean up temp file after successful write
+	return nil
+}
+
+// writeFromMemory writes objects from memory storage
+func (pw *PackfileWriter) writeFromMemory(hashWriter io.Writer) error {
+	for _, obj := range pw.memoryObjects {
+		if err := pw.writeObjectToWriter(hashWriter, obj); err != nil {
+			return fmt.Errorf("writing memory object: %w", err)
+		}
+	}
+	return nil
+}
+
+// finalizeWrite performs cleanup after successful write
+func (pw *PackfileWriter) finalizeWrite() error {
 	if cleanupErr := pw.Cleanup(); cleanupErr != nil {
-		// Log cleanup error but don't fail the operation since write succeeded
-		// This follows the pattern of deferring cleanup errors
 		return fmt.Errorf("cleanup after successful write: %w", cleanupErr)
 	}
-
 	return nil
 }
 
@@ -801,7 +920,7 @@ func (pw *PackfileWriter) addObject(obj PackfileObject) error {
 		pw.memoryObjects = append(pw.memoryObjects, obj)
 		pw.totalBytes += len(obj.Data)
 		return nil
-		
+
 	case PackfileStorageDisk:
 		// Always use file storage
 		if pw.tempFile == nil {
@@ -812,7 +931,7 @@ func (pw *PackfileWriter) addObject(obj PackfileObject) error {
 		}
 		pw.totalBytes += len(obj.Data)
 		return pw.writeObjectToFile(obj)
-		
+
 	case PackfileStorageAuto:
 		// Auto mode: use memory for small operations, file for bulk operations
 		// Check both object count and total byte size thresholds

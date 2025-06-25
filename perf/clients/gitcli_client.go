@@ -54,15 +54,15 @@ func (c *GitCLIClient) cloneRepoOptimized(ctx context.Context, repoURL string, s
 
 	// Build git clone command with optimizations
 	args := []string{"clone"}
-	
+
 	// Add shallow clone if requested
 	if shallow {
 		args = append(args, "--depth=1")
 	}
-	
+
 	// Always use single branch for better performance
 	args = append(args, "--single-branch")
-	
+
 	// Add repository URL and local path
 	args = append(args, repoURL, localPath)
 

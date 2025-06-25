@@ -96,14 +96,14 @@ func TestPackfileWriter_StorageMode_Auto(t *testing.T) {
 			Hash: hash.Hash{}, // Hash will be computed in real usage
 		}
 		hashStr := string(rune('a' + i)) // Create unique hash strings
-		
+
 		// Add to hash map to simulate normal object addition
 		writer.objectHashes[hashStr] = true
-		
+
 		// Call addObject - at this point len(objectHashes) should be < MemoryThreshold
 		err := writer.addObject(obj)
 		require.NoError(t, err)
-		
+
 		// Should be in memory
 		assert.Len(t, writer.memoryObjects, i+1, "Object %d should be in memory", i)
 		assert.Nil(t, writer.tempFile, "No temp file should exist yet for object %d", i)
@@ -116,7 +116,7 @@ func TestPackfileWriter_StorageMode_Auto(t *testing.T) {
 		Hash: hash.Hash{}, // Hash will be computed in real usage
 	}
 	writer.objectHashes["final"] = true // Now len(objectHashes) == MemoryThreshold
-	
+
 	err := writer.addObject(obj)
 	require.NoError(t, err)
 
@@ -139,7 +139,7 @@ func TestPackfileWriter_StorageMode_UnknownMode(t *testing.T) {
 		Data: []byte("test data"),
 		Hash: hash.Hash{}, // Hash will be computed in real usage
 	}
-	
+
 	err := writer.addObject(obj)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown storage mode")
@@ -148,7 +148,7 @@ func TestPackfileWriter_StorageMode_UnknownMode(t *testing.T) {
 func TestPackfileWriter_Cleanup(t *testing.T) {
 	t.Run("cleanup with temp file", func(t *testing.T) {
 		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageDisk)
-		
+
 		// Add object to create temp file
 		obj := PackfileObject{
 			Type: ObjectTypeBlob,
@@ -158,17 +158,17 @@ func TestPackfileWriter_Cleanup(t *testing.T) {
 		err := writer.addObject(obj)
 		require.NoError(t, err)
 		require.NotNil(t, writer.tempFile)
-		
+
 		tempFileName := writer.tempFile.Name()
-		
+
 		// File should exist
 		_, err = os.Stat(tempFileName)
 		require.NoError(t, err)
-		
+
 		// Cleanup should remove file
 		err = writer.Cleanup()
 		require.NoError(t, err)
-		
+
 		// File should be gone
 		_, err = os.Stat(tempFileName)
 		assert.True(t, os.IsNotExist(err))
@@ -176,7 +176,7 @@ func TestPackfileWriter_Cleanup(t *testing.T) {
 
 	t.Run("cleanup without temp file", func(t *testing.T) {
 		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory)
-		
+
 		// Should not error when no temp file exists
 		err := writer.Cleanup()
 		assert.NoError(t, err)

@@ -316,7 +316,7 @@ func (s *GitServer) ProvisionTestRepositories(ctx context.Context) ([]*Repositor
 func (s *GitServer) ProvisionSelectedRepositories(ctx context.Context, repoSizes []string) ([]*Repository, error) {
 	specs := GetStandardSpecs()
 	repositories := make([]*Repository, 0)
-	
+
 	// Create a map of available specs for easy lookup
 	specMap := make(map[string]*RepoSpec)
 	for _, spec := range specs {
