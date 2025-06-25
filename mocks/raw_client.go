@@ -52,19 +52,17 @@ type FakeRawClient struct {
 		result1 []protocol.RefLine
 		result2 error
 	}
-	ReceivePackStub        func(context.Context, io.Reader) (io.ReadCloser, error)
+	ReceivePackStub        func(context.Context, io.Reader) error
 	receivePackMutex       sync.RWMutex
 	receivePackArgsForCall []struct {
 		arg1 context.Context
 		arg2 io.Reader
 	}
 	receivePackReturns struct {
-		result1 io.ReadCloser
-		result2 error
+		result1 error
 	}
 	receivePackReturnsOnCall map[int]struct {
-		result1 io.ReadCloser
-		result2 error
+		result1 error
 	}
 	SmartInfoStub        func(context.Context, string) (io.ReadCloser, error)
 	smartInfoMutex       sync.RWMutex
@@ -292,7 +290,7 @@ func (fake *FakeRawClient) LsRefsReturnsOnCall(i int, result1 []protocol.RefLine
 	}{result1, result2}
 }
 
-func (fake *FakeRawClient) ReceivePack(arg1 context.Context, arg2 io.Reader) (io.ReadCloser, error) {
+func (fake *FakeRawClient) ReceivePack(arg1 context.Context, arg2 io.Reader) error {
 	fake.receivePackMutex.Lock()
 	ret, specificReturn := fake.receivePackReturnsOnCall[len(fake.receivePackArgsForCall)]
 	fake.receivePackArgsForCall = append(fake.receivePackArgsForCall, struct {
@@ -307,9 +305,9 @@ func (fake *FakeRawClient) ReceivePack(arg1 context.Context, arg2 io.Reader) (io
 		return stub(arg1, arg2)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2
+		return ret.result1
 	}
-	return fakeReturns.result1, fakeReturns.result2
+	return fakeReturns.result1
 }
 
 func (fake *FakeRawClient) ReceivePackCallCount() int {
@@ -318,7 +316,7 @@ func (fake *FakeRawClient) ReceivePackCallCount() int {
 	return len(fake.receivePackArgsForCall)
 }
 
-func (fake *FakeRawClient) ReceivePackCalls(stub func(context.Context, io.Reader) (io.ReadCloser, error)) {
+func (fake *FakeRawClient) ReceivePackCalls(stub func(context.Context, io.Reader) error) {
 	fake.receivePackMutex.Lock()
 	defer fake.receivePackMutex.Unlock()
 	fake.ReceivePackStub = stub
@@ -331,30 +329,27 @@ func (fake *FakeRawClient) ReceivePackArgsForCall(i int) (context.Context, io.Re
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRawClient) ReceivePackReturns(result1 io.ReadCloser, result2 error) {
+func (fake *FakeRawClient) ReceivePackReturns(result1 error) {
 	fake.receivePackMutex.Lock()
 	defer fake.receivePackMutex.Unlock()
 	fake.ReceivePackStub = nil
 	fake.receivePackReturns = struct {
-		result1 io.ReadCloser
-		result2 error
-	}{result1, result2}
+		result1 error
+	}{result1}
 }
 
-func (fake *FakeRawClient) ReceivePackReturnsOnCall(i int, result1 io.ReadCloser, result2 error) {
+func (fake *FakeRawClient) ReceivePackReturnsOnCall(i int, result1 error) {
 	fake.receivePackMutex.Lock()
 	defer fake.receivePackMutex.Unlock()
 	fake.ReceivePackStub = nil
 	if fake.receivePackReturnsOnCall == nil {
 		fake.receivePackReturnsOnCall = make(map[int]struct {
-			result1 io.ReadCloser
-			result2 error
+			result1 error
 		})
 	}
 	fake.receivePackReturnsOnCall[i] = struct {
-		result1 io.ReadCloser
-		result2 error
-	}{result1, result2}
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeRawClient) SmartInfo(arg1 context.Context, arg2 string) (io.ReadCloser, error) {

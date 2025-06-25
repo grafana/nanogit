@@ -7,13 +7,14 @@ import (
 	"net/http"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
 )
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-// The data parameter is streamed to the server, and the response is returned as a ReadCloser.
-// The caller is responsible for closing the returned ReadCloser and handling any protocol errors.
-func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response io.ReadCloser, err error) {
+// The data parameter is streamed to the server, and the response is parsed internally.
+// Returns an error if the HTTP request fails or if Git protocol errors are detected.
+func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) error {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
@@ -22,7 +23,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response i
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), data)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.addDefaultHeaders(req)
@@ -31,19 +32,24 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response i
 
 	res, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		res.Body.Close()
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
+	defer res.Body.Close()
 
 	logger.Debug("Receive-pack response",
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	// Note: Protocol error checking will need to be done by the caller
-	// since we're now returning a stream instead of buffered data
-	return res.Body, nil
+	// Parse the response to check for Git protocol errors
+	_, err = protocol.ParsePackStream(res.Body)
+	if err != nil {
+		return fmt.Errorf("git protocol error: %w", err)
+	}
+
+	return nil
 }

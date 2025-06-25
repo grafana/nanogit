@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -80,7 +79,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "", // ReceivePack should not return error for protocol errors
+			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -92,7 +91,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "", // ReceivePack should not return error for protocol errors
+			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -104,7 +103,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "", // ReceivePack should not return error for protocol errors
+			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -116,7 +115,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "", // ReceivePack should not return error for protocol errors
+			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -128,7 +127,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "", // ReceivePack should not return error for protocol errors
+			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -140,7 +139,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "", // ReceivePack should not return error for protocol errors
+			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -198,35 +197,12 @@ func TestReceivePack(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			responseReader, err := client.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+			err = client.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				// For transport errors (non-200 status), response should be nil
-				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				defer responseReader.Close()
-				responseData, err := io.ReadAll(responseReader)
-				require.NoError(t, err)
-				
-				if tt.expectedResult != "" {
-					require.Equal(t, tt.expectedResult, string(responseData))
-				} else {
-					// For Git protocol error test cases, verify that we can detect errors by parsing the stream
-					_, parseErr := protocol.ParsePackStream(bytes.NewReader(responseData))
-					if tt.statusCode == http.StatusOK && len(responseData) > 0 {
-						// These test cases contain Git protocol errors which should be detected when parsing
-						// But ReceivePack itself should not return an error (that's the caller's responsibility)
-						if bytes.Contains(responseData, []byte("ERR ")) || 
-						   bytes.Contains(responseData, []byte("ng ")) || 
-						   bytes.Contains(responseData, []byte("error:")) || 
-						   bytes.Contains(responseData, []byte("fatal:")) || 
-						   bytes.Contains(responseData, []byte("unpack")) && !bytes.Contains(responseData, []byte("unpack ok")) {
-							require.Error(t, parseErr, "ParsePackStream should detect Git protocol errors")
-						}
-					}
-				}
 			}
 		})
 	}
