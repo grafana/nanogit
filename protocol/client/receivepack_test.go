@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,9 +26,9 @@ func TestReceivePack(t *testing.T) {
 		{
 			name:           "successful response",
 			statusCode:     http.StatusOK,
-			responseBody:   "refs data",
+			responseBody:   "000dunpack ok0000", // Valid Git packet format: unpack ok + flush
 			expectedError:  "",
-			expectedResult: "refs data",
+			expectedResult: "000dunpack ok0000",
 			setupClient:    nil,
 		},
 		{
