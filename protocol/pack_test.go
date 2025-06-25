@@ -234,11 +234,15 @@ func TestParsePacket(t *testing.T) {
 				err:       new(protocol.GitReferenceUpdateError),
 			},
 		},
-		"user example scenario": {
-			// This simulates the exact example provided by the user
+		"user example scenario - original": {
+			// This simulates the first example provided by the user
+			// Single packet 0083 contains error message with newlines, followed by other packets
 			input: func() []byte {
+				// First packet: error message with newlines (matches user's 0083 packet)
 				message1 := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
 				pkt1, _ := protocol.PackLine(message1).Marshal()
+				
+				// Remaining packets as separate packets  
 				message2 := "001dunpack index-pack failed\n"
 				pkt2, _ := protocol.PackLine(message2).Marshal()
 				message3 := "ng refs/heads/robertoonboarding failed\n"
@@ -249,11 +253,43 @@ func TestParsePacket(t *testing.T) {
 			expected: expected{
 				lines: nil,
 				remainder: func() []byte {
+					// After parsing the error packet, the remainder should contain the rest
 					message2 := "001dunpack index-pack failed\n"
 					pkt2, _ := protocol.PackLine(message2).Marshal()
 					message3 := "ng refs/heads/robertoonboarding failed\n"
 					pkt3, _ := protocol.PackLine(message3).Marshal()
 					pkt4 := []byte("0009000000000000")
+					return append(append(pkt2, pkt3...), pkt4...)
+				}(),
+				err: new(protocol.GitServerError),
+			},
+		},
+		"user example scenario - ref lock error": {
+			// This simulates the second example from user debug output
+			// Real-world scenario with ref lock error from receive-pack
+			input: func() []byte {
+				// First packet: error message (0094 = 148 bytes)
+				message1 := "error: cannot lock ref 'refs/heads/main': is at d346cc9cd80dd0bbda023bb29a7ff2d887c75b19 but expected b6ce559b8c2e4834e075696cac5522b379448c13"
+				pkt1, _ := protocol.PackLine(message1).Marshal()
+				
+				// Subsequent packets
+				message2 := "unpack ok"
+				pkt2, _ := protocol.PackLine(message2).Marshal()
+				message3 := "ng refs/heads/main failed to update ref"
+				pkt3, _ := protocol.PackLine(message3).Marshal()
+				pkt4 := []byte("0000")  // flush packet
+				
+				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
+			}(),
+			expected: expected{
+				lines: nil,
+				remainder: func() []byte {
+					// After parsing the error packet, the remainder should contain the rest
+					message2 := "unpack ok"
+					pkt2, _ := protocol.PackLine(message2).Marshal()
+					message3 := "ng refs/heads/main failed to update ref"
+					pkt3, _ := protocol.PackLine(message3).Marshal()
+					pkt4 := []byte("0000")  // flush packet
 					return append(append(pkt2, pkt3...), pkt4...)
 				}(),
 				err: new(protocol.GitServerError),
