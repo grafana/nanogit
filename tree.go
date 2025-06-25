@@ -131,9 +131,9 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	logger.Debug("Fetch tree objects", "commit_hash", commitHash.String())
 
 	ctx, allObjects := storage.FromContextOrInMemory(ctx)
-	
+
 	metrics := &fetchMetrics{totalRequests: 1}
-	
+
 	initialObjects, commitObj, err := c.fetchInitialCommitObjects(ctx, commitHash, metrics)
 	if err != nil {
 		return nil, nil, err
@@ -249,7 +249,7 @@ func (c *httpClient) initializePendingTrees(commitObj *protocol.PackfileObject, 
 // processPendingTreeBatches handles the main batch processing loop
 func (c *httpClient) processPendingTreeBatches(ctx context.Context, pending *[]hash.Hash, processedTrees, requestedHashes map[string]bool, allObjects storage.PackfileStorage, metrics *fetchMetrics) error {
 	logger := log.FromContext(ctx)
-	
+
 	const (
 		batchSize      = 10
 		retryBatchSize = 10
@@ -317,13 +317,14 @@ func (c *httpClient) prepareBatch(pending *[]hash.Hash, retries *[]hash.Hash, ba
 // processSingleBatch processes a single batch of tree objects
 func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash.Hash, retries *[]hash.Hash, retryCount map[string]int, requestedHashes, processedTrees map[string]bool, allObjects storage.PackfileStorage, pending *[]hash.Hash, metrics *fetchMetrics, maxRetries int) error {
 	logger := log.FromContext(ctx)
-	
+
 	metrics.totalRequests++
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         currentBatch,
-		Done:         true,
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           currentBatch,
+		Done:           true,
+		NoExtraObjects: false, // we want to fetch all objects in this batch
 	})
 	if err != nil {
 		return fmt.Errorf("fetch tree batch: %w", err)
@@ -369,7 +370,7 @@ func (c *httpClient) countRequestedReceived(currentBatch []hash.Hash, objects ma
 // handleMissingObjects handles objects that weren't returned in the batch
 func (c *httpClient) handleMissingObjects(currentBatch []hash.Hash, objects map[string]*protocol.PackfileObject, retries *[]hash.Hash, retryCount map[string]int, requestedHashes map[string]bool, maxRetries, totalRequests int) error {
 	logger := log.FromContext(context.Background())
-	
+
 	for _, requestedHash := range currentBatch {
 		if _, exists := objects[requestedHash.String()]; exists {
 			continue
@@ -624,10 +625,11 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	logger.Debug("Fetch tree object", "hash", want.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         []hash.Hash{want},
-		Done:         true,
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           []hash.Hash{want},
+		Done:           true,
+		NoExtraObjects: false, // GetFlatTree is called after this one. Let's read all of them
 	})
 	if err != nil {
 		// TODO: handle this at the client level

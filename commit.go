@@ -232,12 +232,13 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 		"commit_hash", commitHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         []hash.Hash{commitHash},
-		Deepen:       1,
-		Shallow:      true,
-		Done:         true,
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           []hash.Hash{commitHash},
+		Deepen:         1,
+		Shallow:        true,
+		Done:           true,
+		NoExtraObjects: false, // FIXME: we should have 2 functions for getting the commit. This public one should only read the commit object
 	})
 	if err != nil {
 		// TODO: handle this at the client level
@@ -388,7 +389,7 @@ func (c *httpClient) ListCommits(ctx context.Context, startCommit hash.Hash, opt
 	collect := perPage
 
 	ctx, allObjects := storage.FromContextOrInMemory(ctx)
-	
+
 	commitObjs, err := c.collectCommitObjects(ctx, startCommit, options, skip+collect, perPage, allObjects)
 	if err != nil {
 		return nil, err
@@ -474,11 +475,12 @@ func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash
 		"commit_hash", commitHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         []hash.Hash{commitHash},
-		Deepen:       perPage,
-		Done:         true,
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           []hash.Hash{commitHash},
+		Deepen:         perPage,
+		Done:           true,
+		NoExtraObjects: false, // we want to read other commits
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
@@ -634,13 +636,13 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	if !ok {
 		logger.Debug("Commit not in storage, fetching", "commitHash", commitHash.String())
 		objects, err := c.Fetch(ctx, client.FetchOptions{
-			NoProgress:   true,
-			NoBlobFilter: true,
-			Want:         []hash.Hash{commitHash},
-			Shallow:      true,
-			Done:         true,
+			NoProgress:     true,
+			NoBlobFilter:   true,
+			Want:           []hash.Hash{commitHash},
+			Shallow:        true,
+			Done:           true,
+			NoExtraObjects: false, // let's read of other tree objects if possible
 		})
-
 		if err != nil {
 			logger.Debug("Failed to fetch commit", "commitHash", commitHash.String(), "error", err)
 			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
