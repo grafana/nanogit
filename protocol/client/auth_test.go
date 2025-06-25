@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/grafana/nanogit/options"
@@ -64,8 +65,9 @@ func TestAuthentication(t *testing.T) {
 			c, err := NewRawClient(server.URL, tt.authOption)
 			require.NoError(t, err)
 
-			_, err = c.UploadPack(context.Background(), []byte("test"))
+			responseReader, err := c.UploadPack(context.Background(), strings.NewReader("test"))
 			require.NoError(t, err)
+			responseReader.Close()
 		})
 	}
 }

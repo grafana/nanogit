@@ -19,9 +19,9 @@ import (
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
 	IsAuthorized(ctx context.Context) (bool, error)
-	SmartInfo(ctx context.Context, service string) ([]byte, error)
-	UploadPack(ctx context.Context, data []byte) ([]byte, error)
-	ReceivePack(ctx context.Context, data io.Reader) ([]byte, error)
+	SmartInfo(ctx context.Context, service string) (io.ReadCloser, error)
+	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
+	ReceivePack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }

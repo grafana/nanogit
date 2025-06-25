@@ -32,13 +32,13 @@ import (
 //
 // Returns:
 //
-//	The raw response body from the server, or an error if the request fails.
+//	A ReadCloser for streaming the response body from the server, or an error if the request fails.
+//	The caller is responsible for closing the returned ReadCloser.
 //
 // Errors:
 //
-//	Returns an error if the HTTP request fails, the server returns a non-2xx status code,
-//	or the response body cannot be read.
-func (c *rawClient) SmartInfo(ctx context.Context, service string) (response []byte, err error) {
+//	Returns an error if the HTTP request fails or the server returns a non-2xx status code.
+func (c *rawClient) SmartInfo(ctx context.Context, service string) (response io.ReadCloser, err error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
@@ -60,25 +60,14 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) (response []b
 		return nil, err
 	}
 
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			err = fmt.Errorf("close response body: %w", closeErr)
-		}
-	}()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		res.Body.Close()
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
 	}
 
 	logger.Debug("SmartInfo response",
 		"status", res.StatusCode,
-		"statusText", res.Status,
-		"responseSize", len(body))
-	logger.Debug("SmartInfo raw response", "body", string(body))
+		"statusText", res.Status)
 
-	return body, nil
+	return res.Body, nil
 }

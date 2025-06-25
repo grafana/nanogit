@@ -16,13 +16,14 @@ import (
 //   - error if there are any other connection or protocol issues
 func (c *rawClient) IsAuthorized(ctx context.Context) (bool, error) {
 	// First get the initial capability advertisement
-	_, err := c.SmartInfo(ctx, "git-upload-pack")
+	smartInfoReader, err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		if strings.Contains(err.Error(), "401 Unauthorized") {
 			return false, nil
 		}
 		return false, fmt.Errorf("get repository info: %w", err)
 	}
+	smartInfoReader.Close() // We only need to verify authorization
 
 	return true, nil
 }

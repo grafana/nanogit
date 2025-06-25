@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 )
 
@@ -363,6 +364,82 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //	lines, remainder, err := ParsePack(data)
 //	// Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
 //
+// ParsePackStream parses Git protocol packets from an io.Reader for streaming scenarios.
+// This is the streaming equivalent of ParsePack that processes packets as they arrive
+// without buffering the entire response in memory.
+//
+// Returns:
+//   - lines: Successfully parsed packet data (without length prefixes)
+//   - err: Error encountered during parsing (if any)
+//
+// Unlike ParsePack, this function processes the stream until EOF or an error occurs.
+// It handles the same packet types but doesn't return remainder bytes since the stream
+// is consumed as it's read.
+func ParsePackStream(reader io.Reader) (lines [][]byte, err error) {
+	for {
+		// Read length header (4 hex bytes)
+		lengthBytes := make([]byte, 4)
+		_, err := io.ReadFull(reader, lengthBytes)
+		if err != nil {
+			if err == io.EOF {
+				return lines, nil // Normal end of stream
+			}
+			return lines, NewPackParseError(lengthBytes, fmt.Errorf("reading packet length: %w", err))
+		}
+
+		length, err := strconv.ParseUint(string(lengthBytes), 16, 16)
+		if err != nil {
+			return lines, NewPackParseError(lengthBytes, fmt.Errorf("parsing line length: %w", err))
+		}
+
+		// Handle different packet types
+		switch {
+		case length < 4:
+			// Special packets: flush (0000), delimiter (0001), response-end (0002)
+			if length == 2 { // ResponseEndPacket
+				return lines, nil
+			}
+			// Continue for other special packets (flush, delimiter)
+
+		case length == 4:
+			// Empty packet - nothing more to read for this packet
+			continue
+
+		default:
+			// Read packet data
+			dataLength := length - 4
+			packetData := make([]byte, dataLength)
+			if _, err := io.ReadFull(reader, packetData); err != nil {
+				return lines, NewPackParseError(lengthBytes, fmt.Errorf("reading packet data: %w", err))
+			}
+
+			// Process packet content (same logic as handleContentPacket)
+			switch {
+			case bytes.HasPrefix(packetData, []byte("ERR ")):
+				return lines, handleERRPacket(append(lengthBytes, packetData...), packetData)
+
+			case isErrorOrFatalMessage(packetData):
+				return lines, handleErrorFatalMessage(append(lengthBytes, packetData...), packetData)
+
+			case bytes.HasPrefix(packetData, []byte("ng ")):
+				return lines, handleReferenceUpdateFailure(append(lengthBytes, packetData...), packetData)
+
+			case bytes.HasPrefix(packetData, []byte("unpack ")):
+				unpackContent := string(packetData[7:]) // Skip "unpack "
+				if unpackContent != "ok" {
+					return lines, NewGitUnpackError(append(lengthBytes, packetData...), unpackContent)
+				}
+				// If unpack ok, add to lines and continue
+				lines = append(lines, packetData)
+
+			default:
+				// Regular data packet
+				lines = append(lines, packetData)
+			}
+		}
+	}
+}
+
 // TODO: Accept an io.Reader to enable streaming packet parsing.
 func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
 	for len(b) >= 4 {

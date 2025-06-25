@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -79,7 +80,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git server error:",
+			expectedError:  "", // ReceivePack should not return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -91,7 +92,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "reference update failed for refs/heads/main:",
+			expectedError:  "", // ReceivePack should not return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -103,7 +104,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "pack unpack failed:",
+			expectedError:  "", // ReceivePack should not return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -115,7 +116,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "pack unpack failed:",
+			expectedError:  "", // ReceivePack should not return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -127,7 +128,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git server ERR:",
+			expectedError:  "", // ReceivePack should not return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -139,7 +140,7 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git server error:",
+			expectedError:  "", // ReceivePack should not return error for protocol errors
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -197,23 +198,35 @@ func TestReceivePack(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			response, err := client.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+			responseReader, err := client.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-
-				// For Git protocol errors, we should still get the response body
-				// even when there's an error, since it contains the error details
-				if tt.statusCode == http.StatusOK && tt.responseBody != "" {
-					require.NotEmpty(t, response, "should have response body even with Git protocol errors")
-					require.Equal(t, tt.responseBody, string(response))
-				} else {
-					// For transport errors (non-200 status), response should be empty
-					require.Empty(t, response)
-				}
+				// For transport errors (non-200 status), response should be nil
+				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedResult, string(response))
+				defer responseReader.Close()
+				responseData, err := io.ReadAll(responseReader)
+				require.NoError(t, err)
+				
+				if tt.expectedResult != "" {
+					require.Equal(t, tt.expectedResult, string(responseData))
+				} else {
+					// For Git protocol error test cases, verify that we can detect errors by parsing the stream
+					_, parseErr := protocol.ParsePackStream(bytes.NewReader(responseData))
+					if tt.statusCode == http.StatusOK && len(responseData) > 0 {
+						// These test cases contain Git protocol errors which should be detected when parsing
+						// But ReceivePack itself should not return an error (that's the caller's responsibility)
+						if bytes.Contains(responseData, []byte("ERR ")) || 
+						   bytes.Contains(responseData, []byte("ng ")) || 
+						   bytes.Contains(responseData, []byte("error:")) || 
+						   bytes.Contains(responseData, []byte("fatal:")) || 
+						   bytes.Contains(responseData, []byte("unpack")) && !bytes.Contains(responseData, []byte("unpack ok")) {
+							require.Error(t, parseErr, "ParsePackStream should detect Git protocol errors")
+						}
+					}
+				}
 			}
 		})
 	}

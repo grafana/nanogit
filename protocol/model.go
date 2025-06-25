@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 )
@@ -112,7 +113,7 @@ outer:
 			}
 
 			var err error
-			fr.Packfile, err = ParsePackfile(joined)
+			fr.Packfile, err = ParsePackfile(bytes.NewReader(joined))
 			if err != nil {
 				return nil, err
 			}

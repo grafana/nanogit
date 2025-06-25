@@ -1,8 +1,10 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -37,9 +39,16 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 	logger.Debug("Send Ls-refs request", "requestSize", len(pkt))
 	logger.Debug("Ls-refs raw request", "request", string(pkt))
 
-	refsData, err := c.UploadPack(ctx, pkt)
+	refsReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
+	}
+	defer refsReader.Close()
+
+	// Read response for logging and parsing
+	refsData, err := io.ReadAll(refsReader)
+	if err != nil {
+		return nil, fmt.Errorf("read refs response: %w", err)
 	}
 
 	logger.Debug("Received ls-refs response", "responseSize", len(refsData))

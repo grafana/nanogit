@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -128,14 +129,17 @@ func TestSmartInfo(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			response, err := client.SmartInfo(context.Background(), "custom-service")
+			responseReader, err := client.SmartInfo(context.Background(), "custom-service")
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				require.Empty(t, response)
+				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedResult, string(response))
+				defer responseReader.Close()
+				responseData, err := io.ReadAll(responseReader)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResult, string(responseData))
 			}
 		})
 	}

@@ -447,28 +447,38 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-func ParsePackfile(payload []byte) (*PackfileReader, error) {
-	// TODO: Accept an io.Reader to the function.
-	if len(payload) < 4 || !slices.Equal(payload[:4], []byte("PACK")) {
+func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
+	// Read and verify the "PACK" signature
+	signature := make([]byte, 4)
+	if _, err := io.ReadFull(reader, signature); err != nil {
+		// Return the expected error for empty/truncated data
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return nil, ErrNoPackfileSignature
+		}
+		return nil, fmt.Errorf("reading packfile signature: %w", err)
+	}
+	if !slices.Equal(signature, []byte("PACK")) {
 		return nil, ErrNoPackfileSignature
 	}
-	payload = payload[4:] // Without "PACK"
 
-	version := binary.BigEndian.Uint32(payload[:4])
+	// Read version (4 bytes, big-endian)
+	var version uint32
+	if err := binary.Read(reader, binary.BigEndian, &version); err != nil {
+		return nil, fmt.Errorf("reading packfile version: %w", err)
+	}
 	if version != 2 && version != 3 {
 		return nil, fmt.Errorf("version %d: %w", version, ErrUnsupportedPackfileVersion)
 	}
-	payload = payload[4:] // Without version
 
-	countObjects := binary.BigEndian.Uint32(payload[:4])
-	payload = payload[4:] // Without countObjects
+	// Read object count (4 bytes, big-endian)
+	var countObjects uint32
+	if err := binary.Read(reader, binary.BigEndian, &countObjects); err != nil {
+		return nil, fmt.Errorf("reading packfile object count: %w", err)
+	}
 
-	// The payload now contains just objects. These are multiple and can be quite large.
-	// Let's pass it off to a caller to read the rest of what's in here.
-	// Eventually, we can even accept an io.Reader directly here, such that we don't need to
-	//   keep the whole original payload in memory, either.
+	// Now the reader points to the object data stream
 	return &PackfileReader{
-		reader:           bytes.NewReader(payload),
+		reader:           reader,
 		remainingObjects: countObjects,
 		algo:             crypto.SHA1, // TODO: Support SHA256
 	}, nil
