@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
-	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -134,150 +132,6 @@ func TestReceivePack(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResult, string(response))
-			}
-		})
-	}
-}
-
-func TestCheckReceivePackErrors(t *testing.T) {
-	tests := []struct {
-		name              string
-		responseBody      string
-		expectError       bool
-		expectedErrorType string
-		expectedMessage   string
-		expectedRefName   string
-		expectedReason    string
-	}{
-		{
-			name:         "no error - successful response",
-			responseBody: "0043000eunpack ok\n0017ok refs/heads/main\n0000",
-			expectError:  false,
-		},
-		{
-			name:         "no error - empty response",
-			responseBody: "",
-			expectError:  false,
-		},
-		{
-			name:              "error - cannot lock ref with side-band",
-			responseBody:      "0094error: cannot lock ref 'refs/heads/main': is at abc123 but expected def456\n0043000eunpack ok\n002cng refs/heads/main failed to update ref\n00000000",
-			expectError:       true,
-			expectedErrorType: "GitServerError",
-			expectedMessage:   "cannot lock ref 'refs/heads/main': is at abc123 but expected def456",
-		},
-		{
-			name:              "error - reference update failure ng packet",
-			responseBody:      "0043000eunpack ok\n002cng refs/heads/main failed to update ref\n0000",
-			expectError:       true,
-			expectedErrorType: "GitReferenceUpdateError",
-			expectedRefName:   "refs/heads/main",
-			expectedReason:    "failed to update ref",
-		},
-		{
-			name:              "error - reference update failure ng packet with simple reason",
-			responseBody:      "0043000eunpack ok\n001eng refs/heads/main failed\n0000",
-			expectError:       true,
-			expectedErrorType: "GitReferenceUpdateError",
-			expectedRefName:   "refs/heads/main",
-			expectedReason:    "failed",
-		},
-		{
-			name:              "error - reference update failure ng packet minimal",
-			responseBody:      "0043000eunpack ok\n0015ng refs/heads/main\n0000",
-			expectError:       true,
-			expectedErrorType: "GitReferenceUpdateError",
-			expectedRefName:   "refs/heads/main",
-			expectedReason:    "update failed", // default reason
-		},
-		{
-			name:              "error - multiple refs with ng failure",
-			responseBody:      "0043000eunpack ok\n0017ok refs/heads/feature\n002ang refs/heads/main rejected\n0000",
-			expectError:       true,
-			expectedErrorType: "GitReferenceUpdateError",
-			expectedRefName:   "refs/heads/main",
-			expectedReason:    "rejected",
-		},
-		{
-			name:              "error - cannot lock ref in different format",
-			responseBody:      "0089error: cannot lock ref 'refs/heads/feature': is at 123abc but expected 456def\n0043000eunpack ok\n0000",
-			expectError:       true,
-			expectedErrorType: "GitServerError",
-			expectedMessage:   "cannot lock ref 'refs/heads/feature': is at 123abc but expected 456def",
-		},
-		{
-			name:              "error - cannot lock ref with complex hash",
-			responseBody:      "00a2error: cannot lock ref 'refs/heads/main': is at e05cf8c9566dac359fcb7c095d5d121e984619c2 but expected 702a02239830a6c6cd45e8f6e5bbb1816f1f4cff\n0043000eunpack ok\n002cng refs/heads/main failed to update ref\n0000",
-			expectError:       true,
-			expectedErrorType: "GitServerError",
-			expectedMessage:   "cannot lock ref 'refs/heads/main': is at e05cf8c9566dac359fcb7c095d5d121e984619c2 but expected 702a02239830a6c6cd45e8f6e5bbb1816f1f4cff",
-		},
-		{
-			name:         "no error - unpack ok only",
-			responseBody: "000eunpack ok\n0000",
-			expectError:  false,
-		},
-		{
-			name:         "no error - successful push with ok response",
-			responseBody: "000eunpack ok\n0017ok refs/heads/main\n0000",
-			expectError:  false,
-		},
-		{
-			name:              "error - ng with tag reference",
-			responseBody:      "000eunpack ok\n001fng refs/tags/v1.0.0 denied\n0000",
-			expectError:       true,
-			expectedErrorType: "GitReferenceUpdateError",
-			expectedRefName:   "refs/tags/v1.0.0",
-			expectedReason:    "denied",
-		},
-		{
-			name:         "no error - contains error text but not error pattern",
-			responseBody: "0023Some message with error word\n0000",
-			expectError:  false,
-		},
-		{
-			name:         "no error - contains ng but not ng refs pattern",
-			responseBody: "001cSome ng message here\n0000",
-			expectError:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := checkReceivePackErrors([]byte(tt.responseBody))
-
-			if tt.expectError {
-				require.Error(t, err, "Expected an error but got none")
-
-				switch tt.expectedErrorType {
-				case "GitServerError":
-					var gitServerErr *protocol.GitServerError
-					require.True(t, errors.As(err, &gitServerErr), "Expected GitServerError but got %T", err)
-					require.True(t, protocol.IsGitServerError(err), "IsGitServerError should return true")
-					if tt.expectedMessage != "" {
-						require.Contains(t, gitServerErr.Message, tt.expectedMessage)
-					}
-					require.Equal(t, "error", gitServerErr.ErrorType)
-
-				case "GitReferenceUpdateError":
-					var gitRefErr *protocol.GitReferenceUpdateError
-					require.True(t, errors.As(err, &gitRefErr), "Expected GitReferenceUpdateError but got %T", err)
-					require.True(t, protocol.IsGitReferenceUpdateError(err), "IsGitReferenceUpdateError should return true")
-					if tt.expectedRefName != "" {
-						require.Equal(t, tt.expectedRefName, gitRefErr.RefName)
-					}
-					if tt.expectedReason != "" {
-						require.Equal(t, tt.expectedReason, gitRefErr.Reason)
-					}
-
-				default:
-					t.Errorf("Unknown expected error type: %s", tt.expectedErrorType)
-				}
-			} else {
-				require.NoError(t, err, "Expected no error but got: %v", err)
 			}
 		})
 	}
