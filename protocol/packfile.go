@@ -612,9 +612,23 @@ func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
 // BuildTreeObject builds a tree object from a list of entries.
 // The tree represents a directory structure with file modes and hashes.
 func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObject, error) {
-	// Sort entries by name for consistent hashing
+	// Sort entries according to Git specification: alphabetically by name,
+	// but directories are treated as if they have a trailing slash
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].FileName < entries[j].FileName
+		nameI := entries[i].FileName
+		nameJ := entries[j].FileName
+		
+		// If entry i is a directory (mode 040000), append "/" for sorting
+		if entries[i].FileMode&0o40000 != 0 {
+			nameI += "/"
+		}
+		
+		// If entry j is a directory (mode 040000), append "/" for sorting
+		if entries[j].FileMode&0o40000 != 0 {
+			nameJ += "/"
+		}
+		
+		return nameI < nameJ
 	})
 
 	// Build tree data
