@@ -3,6 +3,8 @@ package integration_test
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -241,6 +243,60 @@ var _ = Describe("Blobs", func() {
 
 			var unexpectedTypeErr *nanogit.UnexpectedObjectTypeError
 			Expect(err).To(BeAssignableToTypeOf(unexpectedTypeErr))
+		})
+	})
+
+	Context("Large blob operations", func() {
+		var (
+			client nanogit.Client
+			local  *LocalGitRepo
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+		})
+
+		It("should handle extra large dashboard file (3.7MB)", func() {
+			By("Reading the xlarge dashboard from the repository")
+			dashboardPath := filepath.Join("..", "perf", "cmd", "generate_dashboards", "generated_dashboards", "xlarge-dashboard.json")
+			dashboardContent, err := os.ReadFile(dashboardPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(dashboardContent)).To(BeNumerically(">", 3000000), "Dashboard should be larger than 3MB")
+
+			By("Creating and committing the large dashboard file")
+			local.CreateFile("xlarge-dashboard.json", string(dashboardContent))
+			local.Git("add", "xlarge-dashboard.json")
+			local.Git("commit", "-m", "Add xlarge dashboard for blob testing")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting blob hash for the large file")
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:xlarge-dashboard.json"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Testing GetBlob with large blob")
+			blob, err := client.GetBlob(ctx, blobHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blob.Content).To(Equal(dashboardContent))
+			Expect(blob.Hash).To(Equal(blobHash))
+			Expect(len(blob.Content)).To(BeNumerically(">", 3000000), "Retrieved blob should maintain size")
+
+			By("Testing GetBlobByPath with large blob")
+			rootHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			Expect(err).NotTo(HaveOccurred())
+
+			file, err := client.GetBlobByPath(ctx, rootHash, "xlarge-dashboard.json")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file.Content).To(Equal(dashboardContent))
+			Expect(file.Hash).To(Equal(blobHash))
+			Expect(len(file.Content)).To(BeNumerically(">", 3000000), "Retrieved file should maintain size")
+
+			By("Verifying the content is valid JSON dashboard")
+			contentStr := string(file.Content)
+			Expect(contentStr).To(ContainSubstring("\"title\""))
+			Expect(contentStr).To(ContainSubstring("\"panels\""))
+			Expect(contentStr).To(ContainSubstring("\"templating\""))
+			Expect(contentStr).To(Or(ContainSubstring("xlarge"), ContainSubstring("Xlarge")))
 		})
 	})
 })
