@@ -234,6 +234,12 @@ make test-perf-all
 
 For detailed documentation, usage examples, and configuration options, see [perf/README.md](perf/README.md).
 
+**Test Data Generation**:
+- `generate_repo` - Creates realistic Git repositories of various sizes for testing
+- `generate_dashboards` - Creates realistic Grafana dashboards for testing large JSON files and complex Git content
+
+For dashboard generation documentation, see [perf/cmd/generate_dashboards/README.md](perf/cmd/generate_dashboards/README.md).
+
 **Note**: Performance tests are resource-intensive and disabled by default. They require `RUN_PERFORMANCE_TESTS=true` environment variable and Docker to be running.
 
 #### Provider Tests

@@ -1,0 +1,6048 @@
+{
+  "id": 23545,
+  "title": "Large Dashboard - Development Status",
+  "tags": [
+    "monitoring",
+    "sre",
+    "performance",
+    "performance",
+    "business"
+  ],
+  "style": "dark",
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-458",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "B",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-909",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-399",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 2,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-987",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-920",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-154",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Current value indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 3,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-283",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-779",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "C",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-11",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-746",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 4,
+      "title": "System Overview",
+      "type": "text",
+      "gridPos": {
+        "h": 5,
+        "w": 15,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "rate(memory_usage[5m])",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-459",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-181",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Instructional text",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 5,
+      "title": "Queue Size",
+      "type": "gauge",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 15,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "rate(response_time[5m])",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-778",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-290",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "C",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-176",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": true,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-452",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Visual progress indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 6,
+      "title": "CPU Load",
+      "type": "gauge",
+      "gridPos": {
+        "h": 7,
+        "w": 9,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-796",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-532",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "C",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-766",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-687",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Capacity utilization display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 7,
+      "title": "Alert Instructions",
+      "type": "text",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 9,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-267",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "rate(response_time[5m])",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-885",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "rate(disk_usage[5m])",
+          "refId": "C",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-920",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-396",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Documentation panel",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 8,
+      "title": "Service Status",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-836",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Value"
+          }
+        ]
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-299",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Structured information display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for table panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-569",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-235",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-198",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Shows the trend over time",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 10,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-968",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-885",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Shows the trend over time",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 11,
+      "title": "Quality Metrics",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 15,
+        "y": 48
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-834",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-503",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Performance comparison",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 12,
+      "title": "Success Rate",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-129",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-810",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 13,
+      "title": "Service Status",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-210",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "B",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-631",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "C",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-461",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Value"
+          }
+        ]
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-69",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Structured information display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 14,
+      "title": "System Load",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 0,
+        "y": 72
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-472",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-717",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Single value metric display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 15,
+      "title": "System Load",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 9,
+        "y": 72
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-223",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "rate(disk_usage[5m])",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-470",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "rate(memory_usage[5m])",
+          "refId": "C",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-740",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-90",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 16,
+      "title": "Resource Usage",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 80
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-898",
+            "name": "elasticsearch-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "B",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-2",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Value"
+          }
+        ]
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-782",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Detailed data breakdown",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 17,
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 88
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-363",
+            "name": "tempo-datasource"
+          }
+        },
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "B",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-182",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "C",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-897",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-901",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Current value indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 18,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 88
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-496",
+            "name": "elasticsearch-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-287",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-273",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 19,
+      "title": "Response Time",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 96
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-22",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-467",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 20,
+      "title": "Active Users",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 12,
+        "y": 96
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-961",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-721",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "rate(network_io[5m])",
+          "refId": "C",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-945",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": true,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-947",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Single value metric display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 21,
+      "title": "Error Distribution",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 104
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-365",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-563",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "rate(disk_usage[5m])",
+          "refId": "C",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-576",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-779",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Proportion visualization",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for piechart panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 22,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 8,
+        "y": 104
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-577",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-89",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "C",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-925",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-890",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 23,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 112
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-283",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-503",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Shows the trend over time",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 24,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 120
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-795",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-504",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 25,
+      "title": "System Load",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 15,
+        "y": 120
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-929",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-264",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Current value indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 26,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 128
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-435",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-150",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "C",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-887",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-437",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 27,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 6,
+        "y": 128
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-236",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-584",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 28,
+      "title": "Alert Instructions",
+      "type": "text",
+      "gridPos": {
+        "h": 5,
+        "w": 15,
+        "x": 0,
+        "y": 136
+      },
+      "targets": [
+        {
+          "expr": "rate(cpu_usage[5m])",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-528",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-247",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-759",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Documentation panel",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 29,
+      "title": "Network Traffic",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 144
+      },
+      "targets": [
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-623",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-228",
+            "name": "tempo-datasource"
+          }
+        },
+        {
+          "expr": "rate(cpu_usage[5m])",
+          "refId": "C",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-523",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-721",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 30,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 152
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-873",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-939",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 31,
+      "title": "System Overview",
+      "type": "text",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 152
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-406",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-794",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Informational content",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 32,
+      "title": "Queue Size",
+      "type": "gauge",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 160
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-630",
+            "name": "tempo-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "B",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-685",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-552",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Shows current level vs threshold",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 33,
+      "title": "Network Traffic",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 160
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-215",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-8",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 34,
+      "title": "Error Distribution",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 168
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-660",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-790",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Percentage distribution",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for piechart panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 35,
+      "title": "Active Users",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 8,
+        "y": 168
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-987",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "B",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-708",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-263",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Single value metric display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for stat panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 36,
+      "title": "Network Utilization",
+      "type": "gauge",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 14,
+        "y": 168
+      },
+      "targets": [
+        {
+          "expr": "rate(cpu_usage[5m])",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-941",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-783",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Visual progress indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 37,
+      "title": "Memory Usage",
+      "type": "gauge",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 176
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-122",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-419",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Capacity utilization display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 38,
+      "title": "Queue Size",
+      "type": "gauge",
+      "gridPos": {
+        "h": 7,
+        "w": 9,
+        "x": 6,
+        "y": 176
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-590",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-769",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Capacity utilization display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 39,
+      "title": "System Load",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 15,
+        "y": 176
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-194",
+            "name": "elasticsearch-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "B",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-821",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-100",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Current value indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 40,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 184
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-112",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-554",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 41,
+      "title": "Resource Usage",
+      "type": "table",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 192
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-828",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "B",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-681",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "C",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-164",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Value"
+          }
+        ]
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-930",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Structured information display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 42,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 200
+      },
+      "targets": [
+        {
+          "expr": "rate(memory_usage[5m])",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-992",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-594",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for timeseries panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 43,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 208
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-965",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": true,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-468",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 44,
+      "title": "Total Requests",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 15,
+        "y": 208
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-71",
+            "name": "elasticsearch-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-812",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-12",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for stat panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 45,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 216
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-447",
+            "name": "tempo-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-563",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-583",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m",
+      "alert": {
+        "name": "Alert for timeseries panel",
+        "message": "Alert condition met",
+        "frequency": "10s",
+        "conditions": [],
+        "executionErrorState": "alerting",
+        "noDataState": "no_data",
+        "for": "5m"
+      }
+    },
+    {
+      "id": 46,
+      "title": "Disk Usage",
+      "type": "gauge",
+      "gridPos": {
+        "h": 7,
+        "w": 9,
+        "x": 15,
+        "y": 216
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-824",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-594",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Shows current level vs threshold",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 47,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 224
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-754",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-425",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Shows the trend over time",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 48,
+      "title": "Resource Allocation",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 12,
+        "y": 224
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-705",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "rate(network_io[5m])",
+          "refId": "B",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-768",
+            "name": "elasticsearch-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "C",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-259",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-696",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Percentage distribution",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 49,
+      "title": "Total Requests",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 0,
+        "y": 232
+      },
+      "targets": [
+        {
+          "expr": "rate(cpu_usage[5m])",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-495",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-704",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{\"query\": {\"match_all\": {}}}",
+          "refId": "C",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-644",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-uid-853",
+        "name": "loki-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 50,
+      "title": "Active Users",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 9,
+        "y": 232
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-429",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-257",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Key performance indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 51,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 240
+      },
+      "targets": [
+        {
+          "expr": "rate(cpu_usage[5m])",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-327",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-999",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Monitors real-time metrics",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 52,
+      "title": "Alert Summary",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 248
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-899",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "rate(cpu_usage[5m])",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-799",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Value"
+          }
+        ]
+      },
+      "transparent": true,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-820",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Detailed data breakdown",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 53,
+      "title": "Response Time Distribution",
+      "type": "heatmap",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 256
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-32",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-755",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Intensity mapping",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 54,
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 15,
+        "x": 0,
+        "y": 264
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-298",
+            "name": "tempo-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-316",
+            "name": "prometheus-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-756",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 55,
+      "title": "Active Users",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 15,
+        "y": 264
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-635",
+            "name": "elasticsearch-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "B",
+          "legendFormat": "{{instance}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-50",
+            "name": "loki-datasource"
+          }
+        },
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "C",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-uid-72",
+            "name": "loki-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-16",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Current value indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 56,
+      "title": "Total Requests",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 272
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-uid-747",
+            "name": "prometheus-datasource"
+          }
+        },
+        {
+          "expr": "up",
+          "refId": "B",
+          "legendFormat": "{{environment}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-509",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-135",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Single value metric display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 57,
+      "title": "Total Requests",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 272
+      },
+      "targets": [
+        {
+          "expr": "rate(response_time[5m])",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-859",
+            "name": "mysql-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch-uid-646",
+        "name": "elasticsearch-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Current value indicator",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 58,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 272
+      },
+      "targets": [
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "A",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "mysql",
+            "uid": "mysql-uid-994",
+            "name": "mysql-datasource"
+          }
+        },
+        {
+          "expr": "{job=\"app\"} |= \"error\" | json | rate[5m]",
+          "refId": "B",
+          "legendFormat": "Series {{refId}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-375",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "visible",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-uid-64",
+        "name": "prometheus-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Displays historical data patterns",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 59,
+      "title": "Top Errors",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 280
+      },
+      "targets": [
+        {
+          "expr": "rate(response_time[5m])",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch-uid-70",
+            "name": "elasticsearch-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Value"
+          }
+        ]
+      },
+      "transparent": false,
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-uid-103",
+        "name": "mysql-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Structured information display",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    },
+    {
+      "id": 60,
+      "title": "Capacity Usage",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 288
+      },
+      "targets": [
+        {
+          "expr": "{service.name=\"frontend\"}",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "format": "time_series",
+          "interval": "1m",
+          "intervalFactor": 1,
+          "step": 60,
+          "hide": false,
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo-uid-761",
+            "name": "tempo-datasource"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transparent": false,
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo-uid-214",
+        "name": "tempo-datasource"
+      },
+      "pluginVersion": "8.5.0",
+      "description": "Multi-metric comparison",
+      "links": [],
+      "maxDataPoints": 300,
+      "interval": "1m"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "type": "query",
+        "label": "Environment",
+        "description": "Select environment",
+        "query": "label_values(environment)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "description": "Select service",
+        "query": "label_values(service)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "label": "Instance",
+        "description": "Select instance",
+        "query": "label_values(instance)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "job",
+        "type": "query",
+        "label": "Job",
+        "description": "Select job",
+        "query": "label_values(job)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "region",
+        "type": "query",
+        "label": "Region",
+        "description": "Select region",
+        "query": "label_values(region)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "cluster",
+        "type": "query",
+        "label": "Cluster",
+        "description": "Select cluster",
+        "query": "label_values(cluster)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "namespace",
+        "type": "query",
+        "label": "Namespace",
+        "description": "Select namespace",
+        "query": "label_values(namespace)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "pod",
+        "type": "query",
+        "label": "Pod",
+        "description": "Select pod",
+        "query": "label_values(pod)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "container",
+        "type": "query",
+        "label": "Container",
+        "description": "Select container",
+        "query": "label_values(container)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "node",
+        "type": "query",
+        "label": "Node",
+        "description": "Select node",
+        "query": "label_values(node)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "environment_1",
+        "type": "query",
+        "label": "Environment_1",
+        "description": "Select environment_1",
+        "query": "label_values(environment_1)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "service_1",
+        "type": "query",
+        "label": "Service_1",
+        "description": "Select service_1",
+        "query": "label_values(service_1)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "instance_1",
+        "type": "query",
+        "label": "Instance_1",
+        "description": "Select instance_1",
+        "query": "label_values(instance_1)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "job_1",
+        "type": "query",
+        "label": "Job_1",
+        "description": "Select job_1",
+        "query": "label_values(job_1)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      },
+      {
+        "name": "region_1",
+        "type": "query",
+        "label": "Region_1",
+        "description": "Select region_1",
+        "query": "label_values(region_1)",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": "",
+        "hide": 0
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "refresh": "30s",
+  "schemaVersion": 30,
+  "version": 37,
+  "links": [],
+  "annotations": {
+    "list": [
+      {
+        "name": "Deployments",
+        "enable": true,
+        "hide": false,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "query": "deployment_events",
+        "showLine": true,
+        "lineColor": "rgba(0, 211, 255, 1)",
+        "textFormat": "{{title}}: {{text}}",
+        "datasource": {
+          "type": "elasticsearch",
+          "uid": "elasticsearch-uid-49",
+          "name": "elasticsearch-datasource"
+        },
+        "target": {}
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "hideControls": false,
+  "liveNow": false,
+  "weekStart": ""
+}
