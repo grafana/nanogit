@@ -80,7 +80,7 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp: `003f7fd1a60b01f91b314f59955a4e4d4e80d8edf11d
 0000`,
 			expectedRefs:  nil,
-			expectedError: "error parsing line \"003f7fd1a60b01f91b314f59955a4e4d4e80d8edf11d\\n0000\": line declared 63 bytes, but only 49 are available",
+			expectedError: "parse refs response",
 		},
 		{
 			name:          "ls-refs request fails",
@@ -510,7 +510,7 @@ func TestUpdateRef(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			server := setupUpdateRefTestServer(t, tt)
 			defer func() {
 				if server != nil {
@@ -587,7 +587,7 @@ func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
-	
+
 	if shouldCheckBody {
 		validateReceivePackBody(t, r, tt)
 	}
@@ -607,24 +607,24 @@ func validateReceivePackBody(t *testing.T, r *http.Request, tt struct {
 		t.Errorf("failed to read request body: %v", err)
 		return
 	}
-	
+
 	expectedRefLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n0000",
 		tt.refToUpdate.Hash,
 		tt.refToUpdate.Hash,
 		tt.refToUpdate.Name,
 	)
-	
+
 	refLine := string(body[4 : len(body)-len(protocol.EmptyPack)-4])
 	if refLine != expectedRefLine {
 		t.Errorf("unexpected ref line:\ngot:  %q\nwant: %q", refLine, expectedRefLine)
 		return
 	}
-	
+
 	if !bytes.Equal(body[len(body)-len(protocol.EmptyPack)-4:len(body)-4], protocol.EmptyPack) {
 		t.Error("empty pack file not found in request")
 		return
 	}
-	
+
 	if !bytes.Equal(body[len(body)-4:], []byte(protocol.FlushPacket)) {
 		t.Error("flush packet not found in request")
 	}
@@ -713,7 +713,7 @@ func TestDeleteRef(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			server := setupDeleteRefTestServer(t, tt)
 			defer func() {
 				if server != nil {
@@ -775,7 +775,7 @@ func handleDeleteRefUploadPack(t *testing.T, w http.ResponseWriter, tt struct {
 	}
 }
 
-// handleDeleteRefReceivePack handles receive-pack requests for delete ref tests  
+// handleDeleteRefReceivePack handles receive-pack requests for delete ref tests
 func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Request, tt struct {
 	name          string
 	refToDelete   string
@@ -802,24 +802,24 @@ func validateDeleteRefBody(t *testing.T, r *http.Request, tt struct {
 		t.Errorf("failed to read request body: %v", err)
 		return
 	}
-	
+
 	expectedRefLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n0000",
 		"1234567890123456789012345678901234567890",
 		protocol.ZeroHash,
 		tt.refToDelete,
 	)
-	
+
 	refLine := string(body[4 : len(body)-len(protocol.EmptyPack)-4])
 	if refLine != expectedRefLine {
 		t.Errorf("unexpected ref line:\ngot:  %q\nwant: %q", refLine, expectedRefLine)
 		return
 	}
-	
+
 	if !bytes.Equal(body[len(body)-len(protocol.EmptyPack)-4:len(body)-4], protocol.EmptyPack) {
 		t.Error("empty pack file not found in request")
 		return
 	}
-	
+
 	if !bytes.Equal(body[len(body)-4:], []byte(protocol.FlushPacket)) {
 		t.Error("flush packet not found in request")
 	}

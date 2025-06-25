@@ -126,9 +126,9 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 	// Test case based on the problematic tree structure where "robertoonboarding" directory
 	// should be sorted correctly among other entries
 	testCases := []struct {
-		name            string
-		entries         []protocol.PackfileTreeEntry
-		expectedOrder   []string
+		name          string
+		entries       []protocol.PackfileTreeEntry
+		expectedOrder []string
 	}{
 		{
 			name: "directory_and_file_with_similar_names",
@@ -140,7 +140,7 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 				},
 				{
 					FileName: "repofolder",
-					FileMode: 0o40000, // directory  
+					FileMode: 0o40000, // directory
 					Hash:     "abcdef0d22095088e7a0ecfcd02b817755f43181",
 				},
 				{
@@ -204,7 +204,7 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 			expectedOrder: []string{
 				"another-one.json",
 				"dir1",
-				"example.json", 
+				"example.json",
 				"finaltest",
 				"grafana",
 				"legacy-dashboard.json",
@@ -230,7 +230,7 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 			}
 
 			// Verify the order matches expected
-			require.Equal(t, tc.expectedOrder, actualOrder, 
+			require.Equal(t, tc.expectedOrder, actualOrder,
 				"Tree entries should be sorted according to Git specification")
 
 			// Verify the tree object was built successfully with a valid hash

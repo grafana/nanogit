@@ -3,9 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
-	"io"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -164,36 +162,19 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 
 // sendFetchRequest sends the fetch request and parses the response
 func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol.FetchResponse, error) {
-	logger := log.FromContext(ctx)
-
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
-	defer responseReader.Close()
+	// NOTE: We pass ownership of closing the responseReader to the streaming parser
+	// The streamingPackfileReader will close it when done
 
-	// Read the response into memory for logging and parsing
-	// Note: Could be optimized to stream for very large responses
-	responseData, err := io.ReadAll(responseReader)
+	// Use streaming parser instead of loading all data into memory
+	response, err := protocol.ParseFetchResponseStream(responseReader)
 	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
+		responseReader.Close() // Close on error since streaming parser didn't take ownership
+		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
-
-	logger.Debug("Received server response", "responseSize", len(responseData))
-	logger.Debug("Server response raw data", "response", hex.EncodeToString(responseData))
-
-	lines, _, err := protocol.ParsePack(responseData)
-	if err != nil {
-		logger.Debug("Failed to parse pack", "error", err)
-		return nil, fmt.Errorf("parsing packet: %w", err)
-	}
-
-	logger.Debug("Parse pack lines", "lineCount", len(lines))
-	response, err := protocol.ParseFetchResponse(lines)
-	if err != nil {
-		return nil, fmt.Errorf("parsing fetch response: %w", err)
-	}
-
 	return response, nil
 }
 

@@ -1,6 +1,7 @@
 package protocol_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"testing"
@@ -84,9 +85,8 @@ func TestParsePacket(t *testing.T) {
 	t.Parallel()
 
 	type expected struct {
-		lines     [][]byte
-		remainder []byte
-		err       error
+		lines [][]byte
+		err   error
 	}
 
 	toBytesSlice := func(lines ...string) [][]byte {
@@ -104,98 +104,86 @@ func TestParsePacket(t *testing.T) {
 		"flush packet": {
 			input: []byte("0000"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"delimiter packet": {
 			input: []byte("0001"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"response end packet": {
 			input: []byte("0002"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"empty": {
 			input: []byte("0004"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"single line": {
 			input: []byte("0009hello0000"),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte{},
-				err:       nil,
+				lines: toBytesSlice("hello"),
+				err:   nil,
 			},
 		},
 		"two lines": {
 			input: []byte("0009hello0007bye0000"),
 			expected: expected{
-				lines:     toBytesSlice("hello", "bye"),
-				remainder: []byte{},
-				err:       nil,
+				lines: toBytesSlice("hello", "bye"),
+				err:   nil,
 			},
 		},
 		"short packet": {
 			input: []byte("000"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("000"),
-				err:       nil,
+				lines: nil,
+				err:   new(protocol.PackParseError),
 			},
 		},
 		"trailing bytes": {
 			input: []byte("0009hello000"),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte("000"),
-				err:       nil,
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.PackParseError),
 			},
 		},
 		"trucated line": {
 			// This line says it has 9 bytes, but only has 8.
 			input: []byte("0009hell"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("0009hell"),
-				err:       new(protocol.PackParseError),
+				lines: nil,
+				err:   new(protocol.PackParseError),
 			},
 		},
 		"invalid length": {
 			input: []byte("000Gxxxxxxxxxxxxxxxx"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("000Gxxxxxxxxxxxxxxxx"),
-				err:       new(protocol.PackParseError),
+				lines: nil,
+				err:   new(protocol.PackParseError),
 			},
 		},
 		"error packet": {
-			input: []byte("000dERR helloF00F"),
+			input: []byte("000dERR hello0000"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("F00F"),
-				err:       new(protocol.GitServerError),
+				lines: nil,
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"lines + error packet": {
-			input: []byte("0009hello000dERR helloF00F"),
+			input: []byte("0009hello000dERR hello0000"),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte("F00F"),
-				err:       new(protocol.GitServerError),
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"git error packet": {
@@ -205,9 +193,8 @@ func TestParsePacket(t *testing.T) {
 				return pkt
 			}(),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       new(protocol.GitServerError),
+				lines: nil,
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"fatal error packet": {
@@ -217,9 +204,8 @@ func TestParsePacket(t *testing.T) {
 				return pkt
 			}(),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       new(protocol.GitServerError),
+				lines: nil,
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"reference update failure": {
@@ -229,39 +215,22 @@ func TestParsePacket(t *testing.T) {
 				return pkt
 			}(),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       new(protocol.GitReferenceUpdateError),
+				lines: nil,
+				err:   new(protocol.GitReferenceUpdateError),
 			},
 		},
 		"user example scenario - original": {
 			// This simulates the first example provided by the user
-			// Single packet 0083 contains error message with newlines, followed by other packets
+			// Single packet 0083 contains error message with newlines
 			input: func() []byte {
 				// First packet: error message with newlines (matches user's 0083 packet)
 				message1 := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
 				pkt1, _ := protocol.PackLine(message1).Marshal()
-
-				// Remaining packets as separate packets
-				message2 := "001dunpack index-pack failed\n"
-				pkt2, _ := protocol.PackLine(message2).Marshal()
-				message3 := "ng refs/heads/robertoonboarding failed\n"
-				pkt3, _ := protocol.PackLine(message3).Marshal()
-				pkt4 := []byte("0009000000000000")
-				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
+				return append(pkt1, []byte("0000")...)
 			}(),
 			expected: expected{
 				lines: nil,
-				remainder: func() []byte {
-					// After parsing the error packet, the remainder should contain the rest
-					message2 := "001dunpack index-pack failed\n"
-					pkt2, _ := protocol.PackLine(message2).Marshal()
-					message3 := "ng refs/heads/robertoonboarding failed\n"
-					pkt3, _ := protocol.PackLine(message3).Marshal()
-					pkt4 := []byte("0009000000000000")
-					return append(append(pkt2, pkt3...), pkt4...)
-				}(),
-				err: new(protocol.GitServerError),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"user example scenario - ref lock error": {
@@ -271,82 +240,238 @@ func TestParsePacket(t *testing.T) {
 				// First packet: error message (0094 = 148 bytes)
 				message1 := "error: cannot lock ref 'refs/heads/main': is at d346cc9cd80dd0bbda023bb29a7ff2d887c75b19 but expected b6ce559b8c2e4834e075696cac5522b379448c13"
 				pkt1, _ := protocol.PackLine(message1).Marshal()
-
-				// Subsequent packets
-				message2 := "unpack ok"
-				pkt2, _ := protocol.PackLine(message2).Marshal()
-				message3 := "ng refs/heads/main failed to update ref"
-				pkt3, _ := protocol.PackLine(message3).Marshal()
-				pkt4 := []byte("0000") // flush packet
-
-				return append(append(append(pkt1, pkt2...), pkt3...), pkt4...)
+				return append(pkt1, []byte("0000")...)
 			}(),
 			expected: expected{
 				lines: nil,
-				remainder: func() []byte {
-					// After parsing the error packet, the remainder should contain the rest
-					message2 := "unpack ok"
-					pkt2, _ := protocol.PackLine(message2).Marshal()
-					message3 := "ng refs/heads/main failed to update ref"
-					pkt3, _ := protocol.PackLine(message3).Marshal()
-					pkt4 := []byte("0000") // flush packet
-					return append(append(pkt2, pkt3...), pkt4...)
-				}(),
-				err: new(protocol.GitServerError),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"multiple error types in sequence": {
 			input: func() []byte {
 				pkt1, _ := protocol.PackLine("hello").Marshal()
 				pkt2, _ := protocol.PackLine("ERR hello").Marshal()
-				pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
-				return append(append(pkt1, pkt2...), pkt3...)
+				return append(append(pkt1, pkt2...), []byte("0000")...)
 			}(),
 			expected: expected{
 				lines: toBytesSlice("hello"),
-				remainder: func() []byte {
-					pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
-					return pkt3
-				}(),
-				err: new(protocol.GitServerError),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"lines + git error": {
 			input: func() []byte {
 				pkt1, _ := protocol.PackLine("hello").Marshal()
 				pkt2, _ := protocol.PackLine("error: some error").Marshal()
-				return append(pkt1, pkt2...)
+				return append(append(pkt1, pkt2...), []byte("0000")...)
 			}(),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte{},
-				err:       new(protocol.GitServerError),
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"lines + reference failure": {
 			input: func() []byte {
 				pkt1, _ := protocol.PackLine("hello").Marshal()
 				pkt2, _ := protocol.PackLine("ng refs/heads/main failed").Marshal()
-				return append(pkt1, pkt2...)
+				return append(append(pkt1, pkt2...), []byte("0000")...)
 			}(),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte{},
-				err:       new(protocol.GitReferenceUpdateError),
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.GitReferenceUpdateError),
 			},
 		},
 	}
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
-			lines, remainder, err := protocol.ParsePack(tc.input)
+			reader := bytes.NewReader(tc.input)
+			lines, err := protocol.ParsePackStream(reader)
 			require.Equal(t, tc.expected.lines, lines, "expected and actual lines should be equal")
-			require.Equal(t, tc.expected.remainder, remainder, "expected and actual remainder should be equal")
 			if tc.expected.err == nil {
-				require.NoError(t, err, "no error expected from ParsePack")
+				require.NoError(t, err, "no error expected from ParsePackStream")
 			} else {
-				require.Error(t, err, "error expected from ParsePack")
+				require.Error(t, err, "error expected from ParsePackStream")
 				require.IsType(t, tc.expected.err, err, "expected and actual error types should be equal")
+			}
+		})
+	}
+}
+
+func TestParsePackStream(t *testing.T) {
+	t.Parallel()
+
+	toBytesSlice := func(lines ...string) [][]byte {
+		out := make([][]byte, len(lines))
+		for i, line := range lines {
+			out[i] = []byte(line)
+		}
+		return out
+	}
+
+	testcases := map[string]struct {
+		input         []byte
+		expectedLines [][]byte
+		expectedErr   error
+	}{
+		"flush packet": {
+			input:         []byte("0000"),
+			expectedLines: nil,
+			expectedErr:   nil,
+		},
+		"delimiter packet": {
+			input:         []byte("0001"),
+			expectedLines: nil,
+			expectedErr:   nil,
+		},
+		"response end packet": {
+			input:         []byte("0002"),
+			expectedLines: nil,
+			expectedErr:   nil,
+		},
+		"empty": {
+			input:         []byte("0004"),
+			expectedLines: nil,
+			expectedErr:   nil,
+		},
+		"single line": {
+			input:         []byte("0009hello0000"),
+			expectedLines: toBytesSlice("hello"),
+			expectedErr:   nil,
+		},
+		"two lines": {
+			input:         []byte("0009hello0007bye0000"),
+			expectedLines: toBytesSlice("hello", "bye"),
+			expectedErr:   nil,
+		},
+		"multiple lines with flush": {
+			input:         []byte("0009hello0007bye0008test0000"),
+			expectedLines: toBytesSlice("hello", "bye", "test"),
+			expectedErr:   nil,
+		},
+		"empty packet in stream": {
+			input:         []byte("0009hello00040008test0000"),
+			expectedLines: toBytesSlice("hello", "test"),
+			expectedErr:   nil,
+		},
+		"invalid length": {
+			input:         []byte("000Gxxxxxxxxxxxxxxxx"),
+			expectedLines: nil,
+			expectedErr:   new(protocol.PackParseError),
+		},
+		"truncated packet": {
+			input:         []byte("0009hell"), // Says 9 bytes but only has 4 data bytes
+			expectedLines: nil,
+			expectedErr:   new(protocol.PackParseError),
+		},
+		"error packet": {
+			input:         []byte("000dERR hello0000"),
+			expectedLines: nil,
+			expectedErr:   new(protocol.GitServerError),
+		},
+		"lines + error packet": {
+			input:         []byte("0009hello000dERR hello0000"),
+			expectedLines: toBytesSlice("hello"),
+			expectedErr:   new(protocol.GitServerError),
+		},
+		"git error packet": {
+			input: func() []byte {
+				message := "error: object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted\nfatal: fsck error in packed object\n"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return append(pkt, []byte("0000")...)
+			}(),
+			expectedLines: nil,
+			expectedErr:   new(protocol.GitServerError),
+		},
+		"fatal error packet": {
+			input: func() []byte {
+				message := "fatal: fsck error occurred"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return append(pkt, []byte("0000")...)
+			}(),
+			expectedLines: nil,
+			expectedErr:   new(protocol.GitServerError),
+		},
+		"reference update failure": {
+			input: func() []byte {
+				message := "ng refs/heads/robertoonboarding failed"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return append(pkt, []byte("0000")...)
+			}(),
+			expectedLines: nil,
+			expectedErr:   new(protocol.GitReferenceUpdateError),
+		},
+		"lines + git error": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("error: some error").Marshal()
+				return append(append(pkt1, pkt2...), []byte("0000")...)
+			}(),
+			expectedLines: toBytesSlice("hello"),
+			expectedErr:   new(protocol.GitServerError),
+		},
+		"lines + reference failure": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("ng refs/heads/main failed").Marshal()
+				return append(append(pkt1, pkt2...), []byte("0000")...)
+			}(),
+			expectedLines: toBytesSlice("hello"),
+			expectedErr:   new(protocol.GitReferenceUpdateError),
+		},
+		"multiple error types": {
+			input: func() []byte {
+				pkt1, _ := protocol.PackLine("hello").Marshal()
+				pkt2, _ := protocol.PackLine("ERR hello").Marshal()
+				return append(pkt1, pkt2...)
+			}(),
+			expectedLines: toBytesSlice("hello"),
+			expectedErr:   new(protocol.GitServerError),
+		},
+		"unpack ok": {
+			input: func() []byte {
+				message := "unpack ok"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return append(pkt, []byte("0000")...)
+			}(),
+			expectedLines: toBytesSlice("unpack ok"),
+			expectedErr:   nil,
+		},
+		"unpack failed": {
+			input: func() []byte {
+				message := "unpack index-pack failed"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return append(pkt, []byte("0000")...)
+			}(),
+			expectedLines: nil,
+			expectedErr:   new(protocol.GitUnpackError),
+		},
+		"fatal unpack failed": {
+			input: func() []byte {
+				message := "fatal: unpack failed"
+				pkt, _ := protocol.PackLine(message).Marshal()
+				return append(pkt, []byte("0000")...)
+			}(),
+			expectedLines: nil,
+			expectedErr:   new(protocol.GitUnpackError),
+		},
+		"empty stream": {
+			input:         []byte{},
+			expectedLines: nil,
+			expectedErr:   nil,
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			reader := bytes.NewReader(tc.input)
+			lines, err := protocol.ParsePackStream(reader)
+
+			require.Equal(t, tc.expectedLines, lines, "expected and actual lines should be equal")
+			if tc.expectedErr == nil {
+				require.NoError(t, err, "no error expected from ParsePackStream")
+			} else {
+				require.Error(t, err, "error expected from ParsePackStream")
+				require.IsType(t, tc.expectedErr, err, "expected and actual error types should be equal")
 			}
 		})
 	}
@@ -644,10 +769,10 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(input)
+		reader := bytes.NewReader(input)
+		lines, err := protocol.ParsePackStream(reader)
 		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
-		require.Empty(t, remainder)
 	})
 
 	t.Run("unpack failed", func(t *testing.T) {
@@ -657,9 +782,9 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(input)
+		reader := bytes.NewReader(input)
+		lines, err := protocol.ParsePackStream(reader)
 		require.Empty(t, lines)
-		require.Empty(t, remainder)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
 
@@ -675,9 +800,9 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(input)
+		reader := bytes.NewReader(input)
+		lines, err := protocol.ParsePackStream(reader)
 		require.Empty(t, lines)
-		require.Empty(t, remainder)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
 

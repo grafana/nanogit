@@ -361,8 +361,8 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 // Example Usage:
 //
 //	data := []byte("0009hello000dERR failed0000")
-//	lines, remainder, err := ParsePack(data)
-//	// Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
+//	lines, err := ParsePackStream(bytes.NewReader(data))
+//	// Returns: lines=["hello"], err=GitServerError
 //
 // ParsePackStream parses Git protocol packets from an io.Reader for streaming scenarios.
 // This is the streaming equivalent of ParsePack that processes packets as they arrive
@@ -413,7 +413,7 @@ func ParsePackStream(reader io.Reader) (lines [][]byte, err error) {
 				return lines, NewPackParseError(lengthBytes, fmt.Errorf("reading packet data: %w", err))
 			}
 
-			// Process packet content (same logic as handleContentPacket)
+			// Process packet content using helper functions
 			switch {
 			case bytes.HasPrefix(packetData, []byte("ERR ")):
 				return lines, handleERRPacket(append(lengthBytes, packetData...), packetData)
@@ -437,71 +437,6 @@ func ParsePackStream(reader io.Reader) (lines [][]byte, err error) {
 				lines = append(lines, packetData)
 			}
 		}
-	}
-}
-
-// TODO: Accept an io.Reader to enable streaming packet parsing.
-func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
-	for len(b) >= 4 {
-		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
-		if err != nil {
-			return nil, b, NewPackParseError(b, fmt.Errorf("parsing line length: %w", err))
-		}
-
-		// Handle different packet types
-		switch {
-		case length < 4:
-			lines, b = handleSpecialPacket(lines, b, length)
-			if length == 2 { // ResponseEndPacket
-				return lines, b, nil
-			}
-
-		case length == 4:
-			b = b[4:] // Skip empty packet
-
-		case uint64(len(b)) < length:
-			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(b)))
-
-		default:
-			// Handle content packets
-			lines, b, err = handleContentPacket(lines, b, length)
-			if err != nil {
-				return lines, b, err
-			}
-		}
-	}
-
-	return lines, b, nil
-}
-
-// handleSpecialPacket processes special control packets (flush, delimiter, response-end)
-func handleSpecialPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte) {
-	// Special-case packets: flush (0000), delimiter (0001), response-end (0002)
-	return lines, b[4:]
-}
-
-// handleContentPacket processes regular data packets and error packets
-func handleContentPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte, error) {
-	packetData := b[4:length]
-
-	// Check for different packet content types
-	switch {
-	case bytes.HasPrefix(packetData, []byte("ERR ")):
-		return lines, b[length:], handleERRPacket(b[:length], packetData)
-
-	case isErrorOrFatalMessage(packetData):
-		return lines, b[length:], handleErrorFatalMessage(b[:length], packetData)
-
-	case bytes.HasPrefix(packetData, []byte("ng ")):
-		return lines, b[length:], handleReferenceUpdateFailure(b[:length], packetData)
-
-	case bytes.HasPrefix(packetData, []byte("unpack ")):
-		return handleUnpackStatus(lines, b, length, packetData)
-
-	default:
-		// Regular data packet
-		lines = append(lines, packetData)
-		return lines, b[length:], nil
 	}
 }
 
@@ -579,16 +514,10 @@ func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 	return NewGitReferenceUpdateError(fullPacket, refName, reason)
 }
 
-// handleUnpackStatus processes unpack status messages
-func handleUnpackStatus(lines [][]byte, b []byte, length uint64, packetData []byte) ([][]byte, []byte, error) {
-	// Format: "unpack <status-msg>"
-	unpackContent := string(packetData[7:]) // Skip "unpack "
 
-	if unpackContent != "ok" {
-		return lines, b[length:], NewGitUnpackError(b[:length], unpackContent)
-	}
 
-	// If unpack ok, add to lines and continue processing
-	lines = append(lines, packetData)
-	return lines, b[length:], nil
-}
+
+
+
+
+

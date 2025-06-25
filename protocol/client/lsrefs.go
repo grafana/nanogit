@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -43,35 +44,78 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
-	defer refsReader.Close()
+	// NOTE: We pass ownership of closing refsReader to the streaming parser
 
-	// Read response for logging and parsing
-	refsData, err := io.ReadAll(refsReader)
-	if err != nil {
-		return nil, fmt.Errorf("read refs response: %w", err)
-	}
-
-	logger.Debug("Received ls-refs response", "responseSize", len(refsData))
-	logger.Debug("Ls-refs raw response", "response", string(refsData))
-
+	// Parse response using streaming to avoid loading entire response into memory
+	logger.Debug("Parsing ls-refs response using streaming")
 	refs := make([]protocol.RefLine, 0)
-	lines, _, err := protocol.ParsePack(refsData)
+
+	// Stream parse packets one by one instead of reading all into memory
+	err = c.streamParseRefs(refsReader, &refs)
 	if err != nil {
+		refsReader.Close() // Close on error since streaming didn't take ownership
 		return nil, fmt.Errorf("parse refs response: %w", err)
-	}
-
-	logger.Debug("Parse ref lines", "lineCount", len(lines))
-	for _, line := range lines {
-		refLine, err := protocol.ParseRefLine(line)
-		if err != nil {
-			return nil, fmt.Errorf("parse ref line: %w", err)
-		}
-
-		if refLine.RefName != "" {
-			refs = append(refs, refLine)
-		}
 	}
 
 	logger.Debug("Ls-refs completed", "refCount", len(refs))
 	return refs, nil
+}
+
+// streamParseRefs parses the ls-refs response one packet at a time instead of
+// loading the entire response into memory first. This is more memory efficient
+// for repositories with many refs.
+func (c *rawClient) streamParseRefs(reader io.ReadCloser, refs *[]protocol.RefLine) error {
+	defer reader.Close()
+
+	for {
+		// Read packet length (4 hex bytes)
+		lengthBytes := make([]byte, 4)
+		_, err := io.ReadFull(reader, lengthBytes)
+		if err != nil {
+			if err == io.EOF {
+				return nil // End of stream
+			}
+			return fmt.Errorf("reading packet length: %w", err)
+		}
+
+		length, err := strconv.ParseUint(string(lengthBytes), 16, 16)
+		if err != nil {
+			return fmt.Errorf("parsing packet length: %w", err)
+		}
+
+		// Handle different packet types
+		switch {
+		case length < 4:
+			// Special packets (flush, delimiter, response-end)
+			if length == 0 {
+				// Flush packet (0000) - end of response
+				return nil
+			}
+			// Other special packets - continue reading
+			continue
+
+		case length == 4:
+			// Empty packet - continue
+			continue
+
+		default:
+			// Read packet data
+			dataLength := length - 4
+			packetData := make([]byte, dataLength)
+			if _, err := io.ReadFull(reader, packetData); err != nil {
+				return fmt.Errorf("reading packet data: %w", err)
+			}
+
+			// Parse this packet as a ref line
+			refLine, err := protocol.ParseRefLine(packetData)
+			if err != nil {
+				return fmt.Errorf("parse ref line: %w", err)
+			}
+
+			// Only add non-empty ref names
+			if refLine.RefName != "" {
+				*refs = append(*refs, refLine)
+			}
+		}
+	}
 }

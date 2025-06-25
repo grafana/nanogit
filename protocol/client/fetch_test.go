@@ -115,4 +115,3 @@ func (l *testLogger) Debug(msg string, keyvals ...interface{}) {
 func (l *testLogger) Info(msg string, keyvals ...interface{})  {}
 func (l *testLogger) Warn(msg string, keyvals ...interface{})  {}
 func (l *testLogger) Error(msg string, keyvals ...interface{}) {}
-

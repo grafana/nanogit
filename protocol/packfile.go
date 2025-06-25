@@ -101,12 +101,12 @@ func (e *PackfileObject) parseTree() error {
 func (e *PackfileObject) parseCommit() error {
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
 	e.Commit = &PackfileCommit{}
-	
+
 	msg, err := e.parseCommitHeaders(reader)
 	if err != nil {
 		return err
 	}
-	
+
 	e.Commit.Message = msg.String()
 	return nil
 }
@@ -115,7 +115,7 @@ func (e *PackfileObject) parseCommit() error {
 func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Builder, error) {
 	writingMsg := false
 	msg := &strings.Builder{}
-	
+
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -141,14 +141,14 @@ func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Buil
 			return nil, err
 		}
 	}
-	
+
 	return msg, nil
 }
 
 // parseCommitField parses a single commit field line
 func (e *PackfileObject) parseCommitField(line []byte) error {
 	command, data, _ := bytes.Cut(line, []byte(" "))
-	
+
 	switch string(command) {
 	case "committer":
 		return e.parseCommitter(string(data))
@@ -409,13 +409,13 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	if _, err := p.reader.Read(ref); err != nil {
 		return err
 	}
-	
+
 	var err error
 	obj.Data, err = p.readAndInflate(size)
 	if err != nil {
 		return err
 	}
-	
+
 	return obj.parseDelta(hex.EncodeToString(ref[:]))
 }
 
@@ -627,17 +627,17 @@ func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObj
 	sort.Slice(entries, func(i, j int) bool {
 		nameI := entries[i].FileName
 		nameJ := entries[j].FileName
-		
+
 		// If entry i is a directory (mode 040000), append "/" for sorting
 		if entries[i].FileMode&0o40000 != 0 {
 			nameI += "/"
 		}
-		
+
 		// If entry j is a directory (mode 040000), append "/" for sorting
 		if entries[j].FileMode&0o40000 != 0 {
 			nameJ += "/"
 		}
-		
+
 		return nameI < nameJ
 	})
 

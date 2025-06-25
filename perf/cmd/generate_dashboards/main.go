@@ -70,10 +70,10 @@ func GetDashboardSpecs() []DashboardGeneratorSpec {
 
 // KubernetesDashboard represents a Kubernetes Dashboard resource
 type KubernetesDashboard struct {
-	APIVersion string         `json:"apiVersion"`
-	Kind       string         `json:"kind"`
-	Metadata   Metadata       `json:"metadata"`
-	Spec       DashboardSpec  `json:"spec"`
+	APIVersion string        `json:"apiVersion"`
+	Kind       string        `json:"kind"`
+	Metadata   Metadata      `json:"metadata"`
+	Spec       DashboardSpec `json:"spec"`
 }
 
 type Metadata struct {
@@ -82,27 +82,27 @@ type Metadata struct {
 
 // DashboardSpec represents the spec section of a Kubernetes Dashboard
 type DashboardSpec struct {
-	ID              int                    `json:"id,omitempty"`
-	Title           string                 `json:"title"`
-	Tags            []string               `json:"tags"`
-	Style           string                 `json:"style"`
-	Timezone        string                 `json:"timezone"`
-	Panels          []Panel                `json:"panels"`
-	Templating      Templating             `json:"templating"`
-	Time            TimeRange              `json:"time"`
-	Timepicker      interface{}            `json:"timepicker"`
-	Refresh         string                 `json:"refresh"`
-	SchemaVersion   int                    `json:"schemaVersion"`
-	Version         int                    `json:"version,omitempty"`
-	Links           []interface{}          `json:"links"`
-	Annotations     Annotations            `json:"annotations"`
-	Editable        bool                   `json:"editable"`
-	FiscalYearStartMonth int               `json:"fiscalYearStartMonth"`
-	GraphTooltip    int                    `json:"graphTooltip"`
-	HideControls    bool                   `json:"hideControls,omitempty"`
-	LiveNow         bool                   `json:"liveNow,omitempty"`
-	WeekStart       string                 `json:"weekStart,omitempty"`
-	Preload         bool                   `json:"preload"`
+	ID                   int           `json:"id,omitempty"`
+	Title                string        `json:"title"`
+	Tags                 []string      `json:"tags"`
+	Style                string        `json:"style"`
+	Timezone             string        `json:"timezone"`
+	Panels               []Panel       `json:"panels"`
+	Templating           Templating    `json:"templating"`
+	Time                 TimeRange     `json:"time"`
+	Timepicker           interface{}   `json:"timepicker"`
+	Refresh              string        `json:"refresh"`
+	SchemaVersion        int           `json:"schemaVersion"`
+	Version              int           `json:"version,omitempty"`
+	Links                []interface{} `json:"links"`
+	Annotations          Annotations   `json:"annotations"`
+	Editable             bool          `json:"editable"`
+	FiscalYearStartMonth int           `json:"fiscalYearStartMonth"`
+	GraphTooltip         int           `json:"graphTooltip"`
+	HideControls         bool          `json:"hideControls,omitempty"`
+	LiveNow              bool          `json:"liveNow,omitempty"`
+	WeekStart            string        `json:"weekStart,omitempty"`
+	Preload              bool          `json:"preload"`
 }
 
 type Panel struct {
@@ -153,22 +153,22 @@ type Datasource struct {
 }
 
 type FieldConfig struct {
-	Defaults  FieldDefaults           `json:"defaults"`
+	Defaults  FieldDefaults            `json:"defaults"`
 	Overrides []map[string]interface{} `json:"overrides"`
 }
 
 type FieldDefaults struct {
-	Color         map[string]interface{} `json:"color"`
-	Custom        map[string]interface{} `json:"custom"`
-	Mappings      []interface{}          `json:"mappings"`
-	Thresholds    Thresholds             `json:"thresholds"`
-	Unit          string                 `json:"unit"`
-	Min           *float64               `json:"min,omitempty"`
-	Max           *float64               `json:"max,omitempty"`
-	Decimals      *int                   `json:"decimals,omitempty"`
-	DisplayName   string                 `json:"displayName,omitempty"`
-	NoValue       string                 `json:"noValue,omitempty"`
-	Description   string                 `json:"description,omitempty"`
+	Color       map[string]interface{} `json:"color"`
+	Custom      map[string]interface{} `json:"custom"`
+	Mappings    []interface{}          `json:"mappings"`
+	Thresholds  Thresholds             `json:"thresholds"`
+	Unit        string                 `json:"unit"`
+	Min         *float64               `json:"min,omitempty"`
+	Max         *float64               `json:"max,omitempty"`
+	Decimals    *int                   `json:"decimals,omitempty"`
+	DisplayName string                 `json:"displayName,omitempty"`
+	NoValue     string                 `json:"noValue,omitempty"`
+	Description string                 `json:"description,omitempty"`
 }
 
 type Thresholds struct {
@@ -226,13 +226,13 @@ type Annotation struct {
 }
 
 type Alert struct {
-	Name            string                   `json:"name"`
-	Message         string                   `json:"message"`
-	Frequency       string                   `json:"frequency"`
-	Conditions      []map[string]interface{} `json:"conditions"`
-	ExecutionErrorState string               `json:"executionErrorState"`
-	NoDataState     string                   `json:"noDataState"`
-	For             string                   `json:"for"`
+	Name                string                   `json:"name"`
+	Message             string                   `json:"message"`
+	Frequency           string                   `json:"frequency"`
+	Conditions          []map[string]interface{} `json:"conditions"`
+	ExecutionErrorState string                   `json:"executionErrorState"`
+	NoDataState         string                   `json:"noDataState"`
+	For                 string                   `json:"for"`
 }
 
 func main() {
@@ -247,15 +247,15 @@ func main() {
 	specs := GetDashboardSpecs()
 
 	for _, spec := range specs {
-		fmt.Printf("Generating %s dashboard (%d panels, target: %dKB)...\n", 
+		fmt.Printf("Generating %s dashboard (%d panels, target: %dKB)...\n",
 			spec.Name, spec.PanelCount, spec.TargetSizeKB)
 
 		dashboard := generateDashboard(spec)
-		
+
 		// Save dashboard
 		filename := fmt.Sprintf("%s-dashboard.json", spec.Name)
 		filepath := filepath.Join(outputDir, filename)
-		
+
 		if err := saveDashboard(dashboard, filepath); err != nil {
 			log.Fatalf("Failed to save %s dashboard: %v", spec.Name, err)
 		}
@@ -272,7 +272,7 @@ func main() {
 
 func generateDashboard(spec DashboardGeneratorSpec) KubernetesDashboard {
 	dashboardName := fmt.Sprintf("%s-dashboard-%d", spec.Name, rand.Intn(10000))
-	
+
 	dashboard := KubernetesDashboard{
 		APIVersion: "dashboard.grafana.app/v1beta1",
 		Kind:       "Dashboard",
@@ -280,22 +280,22 @@ func generateDashboard(spec DashboardGeneratorSpec) KubernetesDashboard {
 			Name: dashboardName,
 		},
 		Spec: DashboardSpec{
-			Title:           fmt.Sprintf("%s Dashboard - %s", capitalizeFirst(spec.Name), generateTitle()),
-			Tags:            generateTags(spec),
-			Style:           "dark",
-			Timezone:        "browser",
-			Panels:          generatePanels(spec),
-			Templating:      generateTemplating(spec),
-			Time:            TimeRange{From: "now-1h", To: "now"},
-			Timepicker:      map[string]interface{}{},
-			Refresh:         "30s",
-			SchemaVersion:   41,
-			Links:           []interface{}{},
-			Annotations:     generateAnnotations(spec),
-			Editable:        true,
+			Title:                fmt.Sprintf("%s Dashboard - %s", capitalizeFirst(spec.Name), generateTitle()),
+			Tags:                 generateTags(spec),
+			Style:                "dark",
+			Timezone:             "browser",
+			Panels:               generatePanels(spec),
+			Templating:           generateTemplating(spec),
+			Time:                 TimeRange{From: "now-1h", To: "now"},
+			Timepicker:           map[string]interface{}{},
+			Refresh:              "30s",
+			SchemaVersion:        41,
+			Links:                []interface{}{},
+			Annotations:          generateAnnotations(spec),
+			Editable:             true,
 			FiscalYearStartMonth: 0,
-			GraphTooltip:    0,
-			Preload:         false,
+			GraphTooltip:         0,
+			Preload:              false,
 		},
 	}
 
@@ -304,22 +304,22 @@ func generateDashboard(spec DashboardGeneratorSpec) KubernetesDashboard {
 
 func generatePanels(spec DashboardGeneratorSpec) []Panel {
 	panels := make([]Panel, spec.PanelCount)
-	
+
 	x, y := 0, 0
 	panelHeight := 8
-	
+
 	for i := 0; i < spec.PanelCount; i++ {
 		panelType := choosePanelType(spec)
-		
+
 		// Adjust panel size based on type
 		w, h := getPanelSize(panelType, spec.SizeCategory)
-		
+
 		// Wrap to next row if needed
 		if x+w > 24 {
 			x = 0
 			y += panelHeight
 		}
-		
+
 		panels[i] = Panel{
 			ID:    i + 1,
 			Title: generatePanelTitle(panelType, i),
@@ -341,21 +341,21 @@ func generatePanels(spec DashboardGeneratorSpec) []Panel {
 			MaxDataPoints: 300,
 			Interval:      "1m",
 		}
-		
+
 		// Add alert if specified
 		if spec.HasAlerts && rand.Float32() < 0.15 {
 			panels[i].Alert = generateAlert(panelType)
 		}
-		
+
 		x += w
 	}
-	
+
 	return panels
 }
 
 func choosePanelType(spec DashboardGeneratorSpec) string {
 	types := []string{"timeseries", "stat", "gauge", "table", "heatmap", "piechart", "bargauge", "text"}
-	
+
 	// Weight towards common types
 	weights := map[string]float32{
 		"timeseries": 0.4,
@@ -367,17 +367,17 @@ func choosePanelType(spec DashboardGeneratorSpec) string {
 		"bargauge":   0.05,
 		"text":       0.05,
 	}
-	
+
 	r := rand.Float32()
 	cumulative := float32(0)
-	
+
 	for _, panelType := range types {
 		cumulative += weights[panelType]
 		if r <= cumulative {
 			return panelType
 		}
 	}
-	
+
 	return "timeseries"
 }
 
@@ -392,10 +392,10 @@ func getPanelSize(panelType, sizeCategory string) (int, int) {
 		"bargauge":   {6, 6},
 		"text":       {12, 4},
 	}
-	
+
 	size := baseSizes[panelType]
 	w, h := size[0], size[1]
-	
+
 	// Adjust for dashboard size category
 	switch sizeCategory {
 	case "xlarge":
@@ -409,7 +409,7 @@ func getPanelSize(panelType, sizeCategory string) (int, int) {
 			h = min(h+1, 10)
 		}
 	}
-	
+
 	return w, h
 }
 
@@ -418,9 +418,9 @@ func generateTargets(spec DashboardGeneratorSpec, panelType string) []Target {
 	if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
 		targetCount = rand.Intn(3) + 1
 	}
-	
+
 	targets := make([]Target, targetCount)
-	
+
 	for i := 0; i < targetCount; i++ {
 		targets[i] = Target{
 			Expr:           generateQuery(spec.DataSources[rand.Intn(len(spec.DataSources))], panelType),
@@ -433,19 +433,19 @@ func generateTargets(spec DashboardGeneratorSpec, panelType string) []Target {
 			Hide:           false,
 			Datasource:     chooseDatasource(spec.DataSources),
 		}
-		
+
 		// Add extra complexity for larger dashboards
 		if spec.SizeCategory == "xlarge" {
 			targets[i].ExtraData = map[string]interface{}{
-				"exemplar":     true,
-				"instant":      false,
-				"range":        true,
-				"resolution":   1,
+				"exemplar":      true,
+				"instant":       false,
+				"range":         true,
+				"resolution":    1,
 				"maxDataPoints": 43200,
 			}
 		}
 	}
-	
+
 	return targets
 }
 
@@ -516,14 +516,14 @@ func generateFieldConfig(panelType string, sizeCategory string) FieldConfig {
 		{Color: "yellow", Value: float64Ptr(60)},
 		{Color: "red", Value: float64Ptr(80)},
 	}
-	
+
 	if sizeCategory == "large" || sizeCategory == "xlarge" {
-		thresholds = append(thresholds, 
+		thresholds = append(thresholds,
 			Threshold{Color: "dark-red", Value: float64Ptr(95)},
 			Threshold{Color: "purple", Value: float64Ptr(100)},
 		)
 	}
-	
+
 	// Generate field mappings for larger dashboards
 	mappings := []interface{}{}
 	if sizeCategory == "large" || sizeCategory == "xlarge" {
@@ -539,31 +539,31 @@ func generateFieldConfig(panelType string, sizeCategory string) FieldConfig {
 			},
 			map[string]interface{}{
 				"options": map[string]interface{}{
-					"from": 100,
-					"to":   200,
+					"from":   100,
+					"to":     200,
 					"result": map[string]interface{}{"text": "High Load", "color": "orange"},
 				},
 				"type": "range",
 			},
 		}
 	}
-	
+
 	return FieldConfig{
 		Defaults: FieldDefaults{
 			Color: map[string]interface{}{
-				"mode": "palette-classic",
+				"mode":     "palette-classic",
 				"seriesBy": "last",
 			},
-			Custom: generateCustomConfig(panelType),
+			Custom:   generateCustomConfig(panelType),
 			Mappings: mappings,
 			Thresholds: Thresholds{
-				Mode: "absolute",
+				Mode:  "absolute",
 				Steps: thresholds,
 			},
-			Unit: chooseUnit(panelType),
-			Min: float64Ptr(0),
-			Max: float64Ptr(100),
-			Decimals: intPtr(2),
+			Unit:        chooseUnit(panelType),
+			Min:         float64Ptr(0),
+			Max:         float64Ptr(100),
+			Decimals:    intPtr(2),
 			DisplayName: "${__field.displayName} - Custom Label",
 			Description: "Detailed field description with comprehensive information about the metric, its calculation method, and business context.",
 		},
@@ -575,14 +575,14 @@ func generateLargeFieldOverrides(sizeCategory string) []map[string]interface{} {
 	if sizeCategory == "small" {
 		return []map[string]interface{}{}
 	}
-	
+
 	overrideCount := 2
 	if sizeCategory == "large" {
 		overrideCount = 5
 	} else if sizeCategory == "xlarge" {
 		overrideCount = 12
 	}
-	
+
 	overrides := make([]map[string]interface{}, overrideCount)
 	for i := 0; i < overrideCount; i++ {
 		overrides[i] = map[string]interface{}{
@@ -594,30 +594,30 @@ func generateLargeFieldOverrides(sizeCategory string) []map[string]interface{} {
 				{
 					"id": "color",
 					"value": map[string]interface{}{
-						"mode":  "fixed",
+						"mode":       "fixed",
 						"fixedColor": fmt.Sprintf("rgb(%d, %d, %d)", rand.Intn(255), rand.Intn(255), rand.Intn(255)),
 					},
 				},
 				{
-					"id": "custom.lineWidth",
+					"id":    "custom.lineWidth",
 					"value": rand.Intn(5) + 1,
 				},
 				{
-					"id": "custom.fillOpacity",
+					"id":    "custom.fillOpacity",
 					"value": rand.Intn(50) + 10,
 				},
 				{
-					"id": "displayName",
+					"id":    "displayName",
 					"value": fmt.Sprintf("Custom Display Name for Series %d with Extended Description", i+1),
 				},
 				{
-					"id": "custom.axisLabel",
+					"id":    "custom.axisLabel",
 					"value": fmt.Sprintf("Custom Axis Label %d (Units: requests/sec)", i+1),
 				},
 			},
 		}
 	}
-	
+
 	return overrides
 }
 
@@ -654,7 +654,7 @@ func generateCustomConfig(panelType string) map[string]interface{} {
 		}
 	case "stat":
 		return map[string]interface{}{
-			"orientation":    "auto",
+			"orientation": "auto",
 			"reduceOptions": map[string]interface{}{
 				"values": false,
 				"calcs":  []string{"lastNotNull"},
@@ -677,7 +677,7 @@ func chooseUnit(panelType string) string {
 
 func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[string]interface{} {
 	options := map[string]interface{}{}
-	
+
 	switch panelType {
 	case "timeseries":
 		options["tooltip"] = map[string]interface{}{
@@ -689,7 +689,7 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 			"placement":   "bottom",
 			"calcs":       []string{},
 		}
-		
+
 		// Add complexity for larger dashboards
 		if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
 			options["tooltip"] = map[string]interface{}{
@@ -703,13 +703,13 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 				"values":      []string{"value", "percent"},
 			}
 		}
-		
+
 	case "table":
 		options["showHeader"] = true
 		options["sortBy"] = []map[string]interface{}{
 			{"desc": true, "displayName": "Value"},
 		}
-		
+
 		if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
 			options["sortBy"] = []map[string]interface{}{
 				{"desc": true, "displayName": "Value"},
@@ -717,11 +717,11 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 				{"desc": true, "displayName": "Instance"},
 			}
 			options["footer"] = map[string]interface{}{
-				"show": true,
+				"show":    true,
 				"reducer": []string{"sum", "count", "mean"},
 			}
 		}
-		
+
 	case "gauge":
 		options["reduceOptions"] = map[string]interface{}{
 			"values": false,
@@ -731,7 +731,7 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 		options["orientation"] = "auto"
 		options["showThresholdLabels"] = false
 		options["showThresholdMarkers"] = true
-		
+
 		if spec.SizeCategory == "large" || spec.SizeCategory == "xlarge" {
 			options["reduceOptions"] = map[string]interface{}{
 				"values": true,
@@ -740,7 +740,7 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 			}
 		}
 	}
-	
+
 	// Add extensive complexity for XLarge dashboards
 	if spec.SizeCategory == "xlarge" {
 		options["displayMode"] = "table"
@@ -754,22 +754,22 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 		options["overrides"] = []map[string]interface{}{
 			{
 				"matcher": map[string]interface{}{
-					"id": "byName",
+					"id":      "byName",
 					"options": "Series A",
 				},
 				"properties": []map[string]interface{}{
 					{
-						"id": "custom.displayMode",
+						"id":    "custom.displayMode",
 						"value": "gradient-gauge",
 					},
 					{
-						"id": "custom.fillOpacity",
+						"id":    "custom.fillOpacity",
 						"value": 80,
 					},
 				},
 			},
 		}
-		
+
 		// Add transformations for XLarge dashboards
 		options["transformations"] = []map[string]interface{}{
 			{
@@ -791,7 +791,7 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 						"Instance": 2,
 					},
 					"renameByName": map[string]interface{}{
-						"Value": "Current Value",
+						"Value":    "Current Value",
 						"Instance": "Server Instance",
 					},
 				},
@@ -808,7 +808,7 @@ func generatePanelOptions(panelType string, spec DashboardGeneratorSpec) map[str
 			},
 		}
 	}
-	
+
 	return options
 }
 
@@ -823,12 +823,12 @@ func generatePanelTitle(panelType string, index int) string {
 		"bargauge":   {"Service Performance", "Resource Utilization", "Team Metrics", "SLA Compliance", "Quality Metrics", "Capacity Usage"},
 		"text":       {"System Overview", "Important Notes", "Troubleshooting Guide", "Service Information", "Alert Instructions", "Contact Information"},
 	}
-	
+
 	titles := titlePrefixes[panelType]
 	if titles == nil {
 		return fmt.Sprintf("Panel %d", index+1)
 	}
-	
+
 	return titles[rand.Intn(len(titles))]
 }
 
@@ -841,33 +841,33 @@ func generatePanelDescription(panelType string) string {
 		"High-performance visualization component optimized for large-scale data processing and real-time monitoring scenarios. Incorporates machine learning algorithms for pattern recognition, automated threshold adjustment, and intelligent data sampling. Features advanced caching mechanisms, lazy loading for improved performance, and comprehensive audit logging for compliance requirements.",
 		"Comprehensive business intelligence panel designed for executive reporting and strategic decision making. Includes advanced analytics capabilities, trend forecasting, comparative analysis across multiple time periods, and automated report generation. Supports custom KPI definitions, goal tracking, and performance benchmarking against industry standards and internal targets.",
 	}
-	
+
 	return longDescriptions[rand.Intn(len(longDescriptions))]
 }
 
 func generateAlert(panelType string) *Alert {
 	return &Alert{
-		Name:            fmt.Sprintf("Alert for %s panel", panelType),
-		Message:         "Alert condition met",
-		Frequency:       "10s",
-		Conditions:      []map[string]interface{}{},
+		Name:                fmt.Sprintf("Alert for %s panel", panelType),
+		Message:             "Alert condition met",
+		Frequency:           "10s",
+		Conditions:          []map[string]interface{}{},
 		ExecutionErrorState: "alerting",
-		NoDataState:     "no_data",
-		For:             "5m",
+		NoDataState:         "no_data",
+		For:                 "5m",
 	}
 }
 
 func generateTemplating(spec DashboardGeneratorSpec) Templating {
 	vars := make([]TemplateVar, spec.TemplateVars)
-	
+
 	varNames := []string{"environment", "service", "instance", "job", "region", "cluster", "namespace", "pod", "container", "node"}
-	
+
 	for i := 0; i < spec.TemplateVars; i++ {
 		name := varNames[i%len(varNames)]
 		if i >= len(varNames) {
 			name = fmt.Sprintf("%s_%d", name, i/len(varNames))
 		}
-		
+
 		vars[i] = TemplateVar{
 			Name:        name,
 			Type:        "query",
@@ -879,17 +879,17 @@ func generateTemplating(spec DashboardGeneratorSpec) Templating {
 				"text":     "All",
 				"value":    "$__all",
 			},
-			Options:     []interface{}{},
-			Refresh:     1,
-			Regex:       "",
-			Sort:        1,
-			Multi:       true,
-			IncludeAll:  true,
-			AllValue:    "",
-			Hide:        0,
+			Options:    []interface{}{},
+			Refresh:    1,
+			Regex:      "",
+			Sort:       1,
+			Multi:      true,
+			IncludeAll: true,
+			AllValue:   "",
+			Hide:       0,
 		}
 	}
-	
+
 	return Templating{List: vars}
 }
 
@@ -897,7 +897,7 @@ func generateAnnotations(spec DashboardGeneratorSpec) Annotations {
 	if !spec.HasAnnotations {
 		return Annotations{List: []Annotation{}}
 	}
-	
+
 	annotations := []Annotation{
 		{
 			Name:       "Deployments",
@@ -912,30 +912,30 @@ func generateAnnotations(spec DashboardGeneratorSpec) Annotations {
 			Target:     map[string]interface{}{},
 		},
 	}
-	
+
 	return Annotations{List: annotations}
 }
 
 func generateTags(spec DashboardGeneratorSpec) []string {
 	allTags := []string{"monitoring", "infrastructure", "application", "performance", "alerts", "business", "devops", "sre", "kubernetes", "docker"}
-	
+
 	tagCount := min(5, len(allTags))
 	if spec.SizeCategory == "xlarge" {
 		tagCount = min(8, len(allTags))
 	}
-	
+
 	selectedTags := make([]string, tagCount)
 	for i := 0; i < tagCount; i++ {
 		selectedTags[i] = allTags[rand.Intn(len(allTags))]
 	}
-	
+
 	return selectedTags
 }
 
 func generateTitle() string {
 	adjectives := []string{"Production", "Staging", "Development", "Critical", "Essential", "Primary", "Secondary", "Advanced", "Basic", "Comprehensive"}
 	nouns := []string{"Monitoring", "Metrics", "Performance", "Overview", "Analytics", "Insights", "Operations", "Health", "Status", "Report"}
-	
+
 	return fmt.Sprintf("%s %s", adjectives[rand.Intn(len(adjectives))], nouns[rand.Intn(len(nouns))])
 }
 
@@ -944,10 +944,9 @@ func saveDashboard(dashboard KubernetesDashboard, filepath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal dashboard: %w", err)
 	}
-	
+
 	return os.WriteFile(filepath, data, 0644)
 }
-
 
 func capitalizeFirst(s string) string {
 	if len(s) == 0 {
