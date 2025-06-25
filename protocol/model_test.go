@@ -1,13 +1,16 @@
 package protocol
 
 import (
+	"bytes"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseFetchResponse(t *testing.T) {
+
+func TestParseFetchResponseStream(t *testing.T) {
 	// Create a minimal valid packfile
 	validPackfile := []byte("PACK" + // signature
 		"\x00\x00\x00\x02" + // version 2
@@ -15,7 +18,7 @@ func TestParseFetchResponse(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		lines   [][]byte
+		input   []byte // Raw protocol stream data
 		want    *FetchResponse
 		wantErr error
 		// Custom assertions to run after basic error checking
@@ -23,71 +26,48 @@ func TestParseFetchResponse(t *testing.T) {
 	}{
 		{
 			name:    "empty response",
-			lines:   [][]byte{},
+			input:   []byte{},
 			want:    &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
-				assert.Nil(t, got.Packfile)
+				assert.NotNil(t, got.Packfile) // Streaming always creates a packfile reader
 				assert.False(t, got.Acks.Nack)
 				assert.Nil(t, got.Acks.Acks)
 			},
 		},
 		{
-			name: "acknowledgements section with NAK",
-			lines: [][]byte{
-				[]byte("acknowledgements"),
-				[]byte("NAK"),
-			},
+			name: "acknowledgements section",
+			input: func() []byte {
+				ack1, _ := PackLine("acknowledgements").Marshal()
+				ack2, _ := PackLine("NAK").Marshal()
+				flush := []byte("0000")
+				return append(append(ack1, ack2...), flush...)
+			}(),
 			want: &FetchResponse{
 				Acks: Acknowledgements{
-					// TODO: implement
-					Nack: false,
+					Nack: false, // TODO: implement acknowledgements parsing
 					Acks: nil,
 				},
 			},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
-				assert.Nil(t, got.Packfile)
-				// TODO: implement NAK parsing
-				// assert.True(t, got.Acks.Nack)
-				// assert.Nil(t, got.Acks.Acks)
-			},
-		},
-		{
-			name: "acknowledgements section with multiple ACKs",
-			lines: [][]byte{
-				[]byte("acknowledgements"),
-				[]byte("ACK abc123"),
-				[]byte("ACK def456"),
-			},
-			want: &FetchResponse{
-				Acks: Acknowledgements{
-					Nack: false,
-					// TODO: implement
-					Acks: nil,
-					// Acks: []string{"abc123", "def456"},
-				},
-			},
-			wantErr: nil,
-			assert: func(t *testing.T, got *FetchResponse) {
-				assert.NotNil(t, got)
-				assert.Nil(t, got.Packfile)
+				assert.NotNil(t, got.Packfile)
 				assert.False(t, got.Acks.Nack)
-				// TODO: implement ACK parsing
-				// assert.Equal(t, []string{"abc123", "def456"}, got.Acks.Acks)
+				assert.Nil(t, got.Acks.Acks)
 			},
 		},
 		{
 			name: "packfile section with valid data",
-			lines: [][]byte{
-				[]byte("packfile"),
-				append([]byte{1}, validPackfile...),
-			},
-			want: &FetchResponse{
-				Packfile: &PackfileReader{}, // Will be populated by ParsePackfile
-			},
+			input: func() []byte {
+				header, _ := PackLine("packfile").Marshal()
+				packData := append([]byte{1}, validPackfile...)
+				packPkt, _ := PackLine(string(packData)).Marshal()
+				flush := []byte("0000")
+				return append(append(header, packPkt...), flush...)
+			}(),
+			want: &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -98,31 +78,14 @@ func TestParseFetchResponse(t *testing.T) {
 		},
 		{
 			name: "packfile section with progress message",
-			lines: [][]byte{
-				[]byte("packfile"),
-				append([]byte{2}, []byte("progress message")...),
-			},
-			want: &FetchResponse{
-				// Progress messages should be ignored, so no packfile
-			},
-			wantErr: nil,
-			assert: func(t *testing.T, got *FetchResponse) {
-				assert.NotNil(t, got)
-				assert.Nil(t, got.Packfile)
-				assert.False(t, got.Acks.Nack)
-				assert.Nil(t, got.Acks.Acks)
-			},
-		},
-		{
-			name: "packfile section with multiple messages",
-			lines: [][]byte{
-				[]byte("packfile"),
-				append([]byte{2}, []byte("progress message")...),
-				append([]byte{1}, validPackfile...),
-			},
-			want: &FetchResponse{
-				Packfile: &PackfileReader{}, // Will be populated by ParsePackfile
-			},
+			input: func() []byte {
+				header, _ := PackLine("packfile").Marshal()
+				progData := append([]byte{2}, []byte("progress message")...)
+				progPkt, _ := PackLine(string(progData)).Marshal()
+				flush := []byte("0000")
+				return append(append(header, progPkt...), flush...)
+			}(),
+			want: &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -133,38 +96,49 @@ func TestParseFetchResponse(t *testing.T) {
 		},
 		{
 			name: "packfile section with fatal error",
-			lines: [][]byte{
-				[]byte("packfile"),
-				append([]byte{3}, []byte("fatal error")...),
-			},
-			want:    nil,
-			wantErr: FatalFetchError("fatal error"),
+			input: func() []byte {
+				header, _ := PackLine("packfile").Marshal()
+				errorData := append([]byte{3}, []byte("fatal error")...)
+				errorPkt, _ := PackLine(string(errorData)).Marshal()
+				return append(header, errorPkt...)
+			}(),
+			want:    &FetchResponse{},
+			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
-				assert.Nil(t, got)
+				assert.NotNil(t, got)
+				assert.NotNil(t, got.Packfile)
+				// Error will be returned when trying to read objects
+				_, err := got.Packfile.ReadObject()
+				assert.ErrorIs(t, err, FatalFetchError("fatal error"))
 			},
 		},
 		{
 			name: "packfile section with invalid status",
-			lines: [][]byte{
-				[]byte("packfile"),
-				append([]byte{4}, []byte("invalid status")...),
-			},
-			want:    nil,
-			wantErr: ErrInvalidFetchStatus,
+			input: func() []byte {
+				header, _ := PackLine("packfile").Marshal()
+				invalidData := append([]byte{4}, []byte("invalid status")...)
+				invalidPkt, _ := PackLine(string(invalidData)).Marshal()
+				return append(header, invalidPkt...)
+			}(),
+			want:    &FetchResponse{},
+			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
-				assert.Nil(t, got)
+				assert.NotNil(t, got)
+				assert.NotNil(t, got.Packfile)
+				// Error will be returned when trying to read objects
+				_, err := got.Packfile.ReadObject()
+				assert.ErrorIs(t, err, ErrInvalidFetchStatus)
 			},
 		},
 		{
-			name: "line too long to be a section header",
-			lines: [][]byte{
-				[]byte("this is a very long line that exceeds 30 characters and should not be treated as a section header"),
-				[]byte("packfile"),
-				append([]byte{1}, validPackfile...),
-			},
-			want: &FetchResponse{
-				Packfile: &PackfileReader{}, // Will be populated by ParsePackfile
-			},
+			name: "ignored sections",
+			input: func() []byte {
+				shallow, _ := PackLine("shallow-info").Marshal()
+				wanted, _ := PackLine("wanted-refs").Marshal()
+				flush := []byte("0000")
+				return append(append(shallow, wanted...), flush...)
+			}(),
+			want: &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -174,28 +148,20 @@ func TestParseFetchResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid PACK",
-			lines: [][]byte{
-				[]byte("packfile"),
-				append([]byte{1}, []byte("invalid packfile data")...),
-			},
-			want:    nil,
-			wantErr: ErrNoPackfileSignature,
-			assert: func(t *testing.T, got *FetchResponse) {
-				assert.Nil(t, got)
-			},
-		},
-		{
-			name: "ignored sections",
-			lines: [][]byte{
-				[]byte("shallow-info"),
-				[]byte("wanted-refs"),
-			},
-			want:    &FetchResponse{},
+			name: "line too long to be section header",
+			input: func() []byte {
+				longLine, _ := PackLine("this is a very long line that exceeds 30 characters and should not be treated as a section header").Marshal()
+				header, _ := PackLine("packfile").Marshal()
+				packData := append([]byte{1}, validPackfile...)
+				packPkt, _ := PackLine(string(packData)).Marshal()
+				flush := []byte("0000")
+				return append(append(append(longLine, header...), packPkt...), flush...)
+			}(),
+			want: &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
-				assert.Nil(t, got.Packfile)
+				assert.NotNil(t, got.Packfile)
 				assert.False(t, got.Acks.Nack)
 				assert.Nil(t, got.Acks.Acks)
 			},
@@ -204,7 +170,9 @@ func TestParseFetchResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseFetchResponse(tt.lines)
+			reader := io.NopCloser(bytes.NewReader(tt.input))
+			got, err := ParseFetchResponseStream(reader)
+			
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return

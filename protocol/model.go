@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -88,8 +87,8 @@ type PackfileObjectReader interface {
 
 // ParseFetchResponseStream parses a fetch response from a streaming reader.
 // This avoids loading the entire response into memory, which is especially
-// important for large packfiles. Unlike ParseFetchResponse, this function
-// creates a PackfileReader directly from the stream without buffering all data.
+// important for large packfiles. This function creates a PackfileReader 
+// directly from the stream without buffering all data.
 func ParseFetchResponseStream(reader io.ReadCloser) (*FetchResponse, error) {
 	fr := &FetchResponse{}
 
@@ -286,54 +285,3 @@ func (s *sideBandReader) Read(p []byte) (n int, err error) {
 	}
 }
 
-func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
-	fr := &FetchResponse{}
-outer:
-	for i, line := range lines {
-		if len(line) > 30 {
-			// Too long to be a section header
-			continue
-		}
-
-		// We SHOULD NOT require a \n.
-		switch strings.TrimSpace(string(line)) {
-		case "acknowledgements":
-			// TODO: Parse!
-		case "packfile":
-			// These are the final pktlines. That means they're all parts of the packfile.
-			// Because of this, we can just join them! We already know we don't multiplex, so they're all just streamed in multiple lines (due to the pktline size limit).
-			var joined []byte
-			for _, next := range lines[i+1:] {
-				status := next[0]
-				switch status {
-				case 1: // This is the pack data.
-					joined = append(joined, next[1:]...)
-				case 2: // This is progress status. We don't want it.
-					continue
-				case 3: // This is a fatal error message.
-					return nil, FatalFetchError(string(next[1:]))
-				default:
-					return nil, ErrInvalidFetchStatus
-				}
-			}
-
-			if len(joined) == 0 {
-				return fr, nil
-			}
-
-			var err error
-			fr.Packfile, err = ParsePackfile(bytes.NewReader(joined))
-			if err != nil {
-				return nil, err
-			}
-
-			break outer // break out of the outer loop since we've processed the packfile
-
-		case "shallow-info", "wanted-refs":
-			// Ignore.
-		default:
-			// TODO: what do we do here? log?
-		}
-	}
-	return fr, nil
-}
