@@ -194,6 +194,35 @@ func TestGetRef(t *testing.T) {
 			expectedError: ErrEmptyRefName, // We'll check for error or empty result
 		},
 		{
+			name: "multiple refs found - exact match",
+			lsRefsResp: func() string {
+				pkt, _ := protocol.FormatPacks(
+					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/test\n"),
+					protocol.PackLine("8fd1a60b01f91b314f59955a4e4d4e80d8edf11e refs/heads/test-longer\n"),
+				)
+				return string(pkt)
+			}(),
+			refToGet: "refs/heads/test",
+			expectedRef: Ref{
+				Name: "refs/heads/test",
+				Hash: hashify("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"),
+			},
+			expectedError: nil,
+		},
+		{
+			name: "multiple refs found - no exact match",
+			lsRefsResp: func() string {
+				pkt, _ := protocol.FormatPacks(
+					protocol.PackLine("7fd1a60b01f91b314f59955a4e4d4e80d8edf11d refs/heads/test-branch\n"),
+					protocol.PackLine("8fd1a60b01f91b314f59955a4e4d4e80d8edf11e refs/heads/test-longer\n"),
+				)
+				return string(pkt)
+			}(),
+			refToGet:      "refs/heads/test",
+			expectedRef:   Ref{},
+			expectedError: nil, // We'll check for RefNotFoundError
+		},
+		{
 			name:          "ls-refs request fails",
 			lsRefsResp:    "",
 			refToGet:      "refs/heads/master",
@@ -255,12 +284,12 @@ func TestGetRef(t *testing.T) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "send ls-refs command")
 				require.Equal(t, Ref{}, ref)
-			} else if tt.refToGet == "refs/heads/non-existent" {
+			} else if tt.refToGet == "refs/heads/non-existent" || strings.Contains(tt.name, "no exact match") {
 				// Check for structured RefNotFoundError
 				require.Error(t, err)
 				var notFoundErr *RefNotFoundError
 				require.ErrorAs(t, err, &notFoundErr)
-				require.Equal(t, "refs/heads/non-existent", notFoundErr.RefName)
+				require.Equal(t, tt.refToGet, notFoundErr.RefName)
 				require.Equal(t, Ref{}, ref)
 			} else {
 				require.NoError(t, err)
