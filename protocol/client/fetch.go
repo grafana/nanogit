@@ -166,8 +166,8 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol
 	}
 	defer responseReader.Close()
 
-	// Read the response into memory for logging and parsing
-	// TODO: This could be optimized to stream directly without buffering
+	// Read the response into memory for logging and parsing  
+	// Note: Could be optimized to stream for very large responses
 	responseData, err := io.ReadAll(responseReader)
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
