@@ -87,7 +87,7 @@ type PackfileObjectReader interface {
 
 // ParseFetchResponseStream parses a fetch response from a streaming reader.
 // This avoids loading the entire response into memory, which is especially
-// important for large packfiles. This function creates a PackfileReader 
+// important for large packfiles. This function creates a PackfileReader
 // directly from the stream without buffering all data.
 func ParseFetchResponseStream(reader io.ReadCloser) (*FetchResponse, error) {
 	fr := &FetchResponse{}

@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/protocol/hash"
+
+	"github.com/grafana/nanogit/log/mocks"
 )
 
 func TestFetchStopWhenFound(t *testing.T) {
@@ -24,29 +26,32 @@ func TestFetchStopWhenFound(t *testing.T) {
 
 		// Test logging includes the new option
 		client := &rawClient{}
-		logger := &testLogger{}
+		logger := new(mocks.FakeLogger)
 		client.logFetchRequest(logger, []byte("test"), opts)
 
 		// Verify that the fetch request was logged and includes our option in the keyvals
-		require.Len(t, logger.debugMessages, 2) // Should have "Send fetch request" and "Fetch request raw data"
-		require.Equal(t, "Send fetch request", logger.debugMessages[0])
+		require.Equal(t, 2, logger.DebugCallCount()) // Should have "Send fetch request" and "Fetch request raw data"
+		msg, _ := logger.DebugArgsForCall(0)
+		require.Equal(t, "Send fetch request", msg)
 
-		// Check that StopWhenFound option is properly logged in keyvals
-		found := false
-		for i := 0; i < len(logger.keyvals); i += 2 {
-			if i+1 < len(logger.keyvals) {
-				if key, ok := logger.keyvals[i].(string); ok && key == "options" {
-					if options, ok := logger.keyvals[i+1].(map[string]interface{}); ok {
-						if noExtraObjects, exists := options["noExtraObjects"]; exists {
-							require.Equal(t, true, noExtraObjects)
-							found = true
-							break
-						}
-					}
+		// Check that NoExtraObjects option is properly logged in keyvals
+		// The first debug call should be "Send fetch request" with options in keyvals
+		_, args := logger.DebugArgsForCall(0)
+		require.Len(t, args, 4) // Should be: requestSize, <size>, options, <map>
+
+		// Find the options map in the keyvals
+		var optionsMap map[string]interface{}
+		for i := 0; i < len(args); i += 2 {
+			if key, ok := args[i].(string); ok && key == "options" {
+				if options, ok := args[i+1].(map[string]interface{}); ok {
+					optionsMap = options
+					break
 				}
 			}
 		}
-		require.True(t, found, "noExtraObjects option should be logged")
+
+		require.NotNil(t, optionsMap, "options should be logged")
+		require.Equal(t, true, optionsMap["noExtraObjects"])
 	})
 
 	t.Run("builds wanted hashes map correctly", func(t *testing.T) {
@@ -100,18 +105,3 @@ func TestFetchStopWhenFound(t *testing.T) {
 		require.Nil(t, wantedHashes)
 	})
 }
-
-// testLogger is a simple test implementation of log.Logger
-type testLogger struct {
-	debugMessages []string
-	keyvals       []interface{}
-}
-
-func (l *testLogger) Debug(msg string, keyvals ...interface{}) {
-	l.debugMessages = append(l.debugMessages, msg)
-	l.keyvals = append(l.keyvals, keyvals...)
-}
-
-func (l *testLogger) Info(msg string, keyvals ...interface{})  {}
-func (l *testLogger) Warn(msg string, keyvals ...interface{})  {}
-func (l *testLogger) Error(msg string, keyvals ...interface{}) {}
