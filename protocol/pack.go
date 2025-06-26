@@ -360,76 +360,117 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //
 // Example Usage:
 //
-//	data := []byte("0009hello000dERR failed0000")
-//	lines, remainder, err := ParsePack(data)
-//	// Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
-func ParsePack(reader io.ReadCloser) (lines [][]byte, remainder []byte, err error) {
-	// Read all data from reader into a buffer
-	b, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, nil, fmt.Errorf("reading from reader: %w", err)
-	}
+//	reader := io.NopCloser(bytes.NewReader([]byte("0009hello000dERR failed0000")))
+//	lines, err := ParsePack(reader)
+//	// Returns: lines=["hello"], err=GitServerError
+func ParsePack(reader io.ReadCloser) (lines [][]byte, err error) {
+	defer func() {
+		if closeErr := reader.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("closing reader: %w", closeErr)
+		}
+	}()
 
-	for len(b) >= 4 {
-		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
+	for {
+		lengthBytes, length, err := readPacketLength(reader)
 		if err != nil {
-			return nil, b, NewPackParseError(b, fmt.Errorf("parsing line length: %w", err))
+			return lines, err
+		}
+		if length == 0 {
+			return lines, nil // EOF
 		}
 
 		// Handle different packet types
 		switch {
 		case length < 4:
-			lines, b = handleSpecialPacket(lines, b)
 			if length == 2 { // ResponseEndPacket
-				return lines, b, nil
+				return lines, nil
 			}
+			// Continue for other special packets (flush, delimiter)
 
 		case length == 4:
-			b = b[4:] // Skip empty packet
-
-		case uint64(len(b)) < length:
-			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(b)))
+			// Empty packet - nothing more to read for this packet
+			continue
 
 		default:
-			// Handle content packets
-			lines, b, err = handleContentPacket(lines, b, length)
+			packetData, err := readPacketData(reader, lengthBytes, length)
 			if err != nil {
-				return lines, b, err
+				return lines, err
 			}
+
+			// Process packet content
+			processedLines, shouldReturn, err := processPacketContent(lines, lengthBytes, packetData)
+			if shouldReturn {
+				return processedLines, err
+			}
+			lines = processedLines
 		}
 	}
-
-	return lines, b, nil
 }
 
-// handleSpecialPacket processes special control packets (flush, delimiter, response-end)
-func handleSpecialPacket(lines [][]byte, b []byte) ([][]byte, []byte) {
-	// Special-case packets: flush (0000), delimiter (0001), response-end (0002)
-	return lines, b[4:]
+// readPacketLength reads and parses the 4-byte packet length header
+func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err error) {
+	lengthBytes = make([]byte, 4)
+	n, err := io.ReadFull(reader, lengthBytes)
+	if err != nil {
+		if err == io.EOF && n == 0 {
+			return nil, 0, nil // Normal end of stream
+		}
+		if err == io.ErrUnexpectedEOF || err == io.EOF {
+			// Partial read - incomplete packet, treat as end of stream
+			return nil, 0, nil
+		}
+		return lengthBytes[:n], 0, NewPackParseError(lengthBytes[:n], fmt.Errorf("reading packet length: %w", err))
+	}
+
+	length, err = strconv.ParseUint(string(lengthBytes), 16, 16)
+	if err != nil {
+		return lengthBytes, 0, NewPackParseError(lengthBytes, fmt.Errorf("parsing line length: %w", err))
+	}
+
+	return lengthBytes, length, nil
 }
 
-// handleContentPacket processes regular data packets and error packets
-func handleContentPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte, error) {
-	packetData := b[4:length]
+// readPacketData reads the packet data portion
+func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte, error) {
+	dataLength := length - 4
+	packetData := make([]byte, dataLength)
+	n, err := io.ReadFull(reader, packetData)
+	if err != nil {
+		fullPacket := append(lengthBytes, packetData[:n]...)
+		if err == io.ErrUnexpectedEOF || err == io.EOF {
+			// Partial read - this is a malformed packet
+			return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
+		}
+		return nil, NewPackParseError(fullPacket, fmt.Errorf("reading packet data: %w", err))
+	}
+	return packetData, nil
+}
 
-	// Check for different packet content types
+// processPacketContent processes the packet content and returns updated lines, whether to return, and any error
+func processPacketContent(lines [][]byte, lengthBytes, packetData []byte) ([][]byte, bool, error) {
+	fullPacket := append(lengthBytes, packetData...)
+
 	switch {
 	case bytes.HasPrefix(packetData, []byte("ERR ")):
-		return lines, b[length:], handleERRPacket(b[:length], packetData)
+		return lines, true, handleERRPacket(fullPacket, packetData)
 
 	case isErrorOrFatalMessage(packetData):
-		return lines, b[length:], handleErrorFatalMessage(b[:length], packetData)
+		return lines, true, handleErrorFatalMessage(fullPacket, packetData)
 
 	case bytes.HasPrefix(packetData, []byte("ng ")):
-		return lines, b[length:], handleReferenceUpdateFailure(b[:length], packetData)
+		return lines, true, handleReferenceUpdateFailure(fullPacket, packetData)
 
 	case bytes.HasPrefix(packetData, []byte("unpack ")):
-		return handleUnpackStatus(lines, b, length, packetData)
+		unpackContent := string(packetData[7:]) // Skip "unpack "
+		if unpackContent != "ok" {
+			return lines, true, NewGitUnpackError(fullPacket, unpackContent)
+		}
+		// If unpack ok, add to lines and continue
+		return append(lines, packetData), false, nil
 
 	default:
 		// Regular data packet
-		lines = append(lines, packetData)
-		return lines, b[length:], nil
+		return append(lines, packetData), false, nil
 	}
 }
 
@@ -505,18 +546,4 @@ func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 	}
 
 	return NewGitReferenceUpdateError(fullPacket, refName, reason)
-}
-
-// handleUnpackStatus processes unpack status messages
-func handleUnpackStatus(lines [][]byte, b []byte, length uint64, packetData []byte) ([][]byte, []byte, error) {
-	// Format: "unpack <status-msg>"
-	unpackContent := string(packetData[7:]) // Skip "unpack "
-
-	if unpackContent != "ok" {
-		return lines, b[length:], NewGitUnpackError(b[:length], unpackContent)
-	}
-
-	// If unpack ok, add to lines and continue processing
-	lines = append(lines, packetData)
-	return lines, b[length:], nil
 }

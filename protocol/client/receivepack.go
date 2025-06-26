@@ -45,7 +45,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) error {
 		"statusText", res.Status)
 
 	// Parse the response to check for Git protocol errors
-	_, _, err = protocol.ParsePack(res.Body)
+	_, err = protocol.ParsePack(res.Body)
 	if err != nil {
 		return fmt.Errorf("git protocol error: %w", err)
 	}
