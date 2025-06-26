@@ -166,16 +166,8 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol
 	if err != nil {
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
-	// NOTE: We pass ownership of closing the responseReader to the streaming parser
-	// The streamingPackfileReader will close it when done
 
-	// Use streaming parser instead of loading all data into memory
-	lines, err := protocol.ParsePack(responseReader)
-	if err != nil {
-		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
-	}
-
-	response, err := protocol.ParseFetchResponse(lines)
+	response, err := protocol.ParseFetchResponse(responseReader)
 	if err != nil {
 		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}

@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"errors"
+	"io"
 	"strings"
 )
 
@@ -77,7 +78,13 @@ var (
 	_                     error = FatalFetchError("")
 )
 
-func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
+func ParseFetchResponse(reader io.ReadCloser) (*FetchResponse, error) {
+	// TODO: use streaming
+	lines, err := ParsePack(reader)
+	if err != nil {
+		return nil, err
+	}
+
 	fr := &FetchResponse{}
 outer:
 	for i, line := range lines {

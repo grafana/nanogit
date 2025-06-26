@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"bytes"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -204,7 +206,15 @@ func TestParseFetchResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseFetchResponse(tt.lines)
+			// Convert lines to proper Git packet format
+			var packetData []byte
+			for _, line := range tt.lines {
+				pkt, err := PackLine(line).Marshal()
+				require.NoError(t, err)
+				packetData = append(packetData, pkt...)
+			}
+
+			got, err := ParseFetchResponse(io.NopCloser(bytes.NewReader(packetData)))
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
