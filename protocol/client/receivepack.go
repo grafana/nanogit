@@ -36,7 +36,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) error {
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		res.Body.Close()
+		_ = res.Body.Close()
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 

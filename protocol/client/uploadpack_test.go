@@ -132,7 +132,7 @@ func TestUploadPack(t *testing.T) {
 				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				defer responseReader.Close()
+				defer func() { _ = responseReader.Close() }()
 				responseData, err := io.ReadAll(responseReader)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResult, string(responseData))

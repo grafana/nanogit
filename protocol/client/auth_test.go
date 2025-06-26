@@ -67,7 +67,7 @@ func TestAuthentication(t *testing.T) {
 
 			responseReader, err := c.UploadPack(context.Background(), strings.NewReader("test"))
 			require.NoError(t, err)
-			responseReader.Close()
+			_ = responseReader.Close()
 		})
 	}
 }

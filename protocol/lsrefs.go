@@ -13,7 +13,7 @@ import (
 func ParseLsRefsResponse(ctx context.Context, reader io.ReadCloser) ([]RefLine, error) {
 	logger := log.FromContext(ctx)
 
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	logger.Debug("Starting ls-refs response parsing")
 	refs := make([]RefLine, 0)

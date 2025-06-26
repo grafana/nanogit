@@ -54,10 +54,10 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		res.Body.Close()
+		_ = res.Body.Close()
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	logger.Debug("SmartInfo response",
 		"status", res.StatusCode,
