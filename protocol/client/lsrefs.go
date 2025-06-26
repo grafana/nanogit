@@ -44,7 +44,7 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 	}
 
 	logger.Debug("Parsing ls-refs response")
-	refs, err := protocol.ParseLsRefsResponse(refsReader)
+	refs, err := protocol.ParseLsRefsResponse(ctx, refsReader)
 	if err != nil {
 		return nil, fmt.Errorf("parse refs response: %w", err)
 	}

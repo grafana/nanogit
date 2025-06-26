@@ -1,13 +1,18 @@
 package protocol
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // ParseLsRefsResponse parses the ls-refs response one packet at a time.
-func ParseLsRefsResponse(reader io.ReadCloser) ([]RefLine, error) {
+func ParseLsRefsResponse(ctx context.Context, reader io.ReadCloser) ([]RefLine, error) {
+	logger := log.FromContext(ctx)
+
 	defer reader.Close()
 
 	refs := make([]RefLine, 0)
@@ -48,8 +53,16 @@ func ParseLsRefsResponse(reader io.ReadCloser) ([]RefLine, error) {
 			dataLength := length - 4
 			packetData := make([]byte, dataLength)
 			if _, err := io.ReadFull(reader, packetData); err != nil {
+				if err == io.ErrUnexpectedEOF {
+					return nil, fmt.Errorf("line declared %d bytes but unexpected EOF occurred", dataLength)
+				}
+
 				return nil, fmt.Errorf("reading packet data: %w", err)
 			}
+
+			logger.Debug("Parsing ls-refs packet",
+				"packet_data", string(packetData),
+				"data_length", dataLength)
 
 			// Parse this packet as a ref line
 			refLine, err := ParseRefLine(packetData)

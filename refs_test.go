@@ -80,7 +80,7 @@ func TestListRefs(t *testing.T) {
 			lsRefsResp: `003f7fd1a60b01f91b314f59955a4e4d4e80d8edf11d
 0000`,
 			expectedRefs:  nil,
-			expectedError: "parse refs response",
+			expectedError: "line declared 59 bytes but unexpected EOF occurred",
 		},
 		{
 			name:          "ls-refs request fails",
