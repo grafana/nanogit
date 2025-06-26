@@ -227,6 +227,10 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
+	return c.getCommit(ctx, commitHash, false)
+}
+
+func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtraObjects bool) (*Commit, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Get commit",
 		"commit_hash", commitHash.String())
@@ -238,7 +242,7 @@ func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Comm
 		Deepen:         1,
 		Shallow:        true,
 		Done:           true,
-		NoExtraObjects: false, // FIXME: we should have 2 functions for getting the commit. This public one should only read the commit object
+		NoExtraObjects: noExtraObjects,
 	})
 	if err != nil {
 		// TODO: handle this at the client level

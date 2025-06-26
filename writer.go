@@ -60,7 +60,8 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 
 	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
-	commit, err := c.GetCommit(ctx, ref.Hash)
+	// Get extra objects to avoid fetching them later in the next calls
+	commit, err := c.getCommit(ctx, ref.Hash, true)
 	if err != nil {
 		return nil, fmt.Errorf("get commit %s: %w", ref.Hash.String(), err)
 	}
