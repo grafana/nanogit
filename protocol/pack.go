@@ -363,7 +363,7 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //	data := []byte("0009hello000dERR failed0000")
 //	lines, remainder, err := ParsePack(data)
 //	// Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
-func ParsePack(reader io.Reader) (lines [][]byte, remainder []byte, err error) {
+func ParsePack(reader io.ReadCloser) (lines [][]byte, remainder []byte, err error) {
 	// Read all data from reader into a buffer
 	b, err := io.ReadAll(reader)
 	if err != nil {
@@ -379,7 +379,7 @@ func ParsePack(reader io.Reader) (lines [][]byte, remainder []byte, err error) {
 		// Handle different packet types
 		switch {
 		case length < 4:
-			lines, b = handleSpecialPacket(lines, b, length)
+			lines, b = handleSpecialPacket(lines, b)
 			if length == 2 { // ResponseEndPacket
 				return lines, b, nil
 			}
@@ -403,7 +403,7 @@ func ParsePack(reader io.Reader) (lines [][]byte, remainder []byte, err error) {
 }
 
 // handleSpecialPacket processes special control packets (flush, delimiter, response-end)
-func handleSpecialPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte) {
+func handleSpecialPacket(lines [][]byte, b []byte) ([][]byte, []byte) {
 	// Special-case packets: flush (0000), delimiter (0001), response-end (0002)
 	return lines, b[4:]
 }

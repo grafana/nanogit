@@ -39,7 +39,6 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) error {
 		res.Body.Close()
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
-	defer res.Body.Close()
 
 	logger.Debug("Receive-pack response",
 		"status", res.StatusCode,

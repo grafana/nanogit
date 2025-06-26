@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -340,7 +341,7 @@ func TestParsePacket(t *testing.T) {
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
-			lines, remainder, err := protocol.ParsePack(bytes.NewReader(tc.input))
+			lines, remainder, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(tc.input)))
 			require.Equal(t, tc.expected.lines, lines, "expected and actual lines should be equal")
 			require.Equal(t, tc.expected.remainder, remainder, "expected and actual remainder should be equal")
 			if tc.expected.err == nil {
@@ -645,7 +646,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(bytes.NewReader(input))
+		lines, remainder, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(input)))
 		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
 		require.Empty(t, remainder)
@@ -658,7 +659,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(bytes.NewReader(input))
+		lines, remainder, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(input)))
 		require.Empty(t, lines)
 		require.Empty(t, remainder)
 		require.Error(t, err)
@@ -676,7 +677,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(bytes.NewReader(input))
+		lines, remainder, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(input)))
 		require.Empty(t, lines)
 		require.Empty(t, remainder)
 		require.Error(t, err)
