@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -176,8 +177,13 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol
 }
 
 // processPackfileResponse processes the packfile response and extracts objects
-func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
+func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) (err error) {
 	logger := log.FromContext(ctx)
+	defer func() {
+		if err := response.Packfile.Close(); err != nil && err != io.EOF {
+			logger.Error("Error closing packfile reader", "error", err)
+		}
+	}()
 
 	// Build a set of pending wanted object hashes for quick lookup if early termination is enabled
 	// Only build this if we have specific objects we want AND NoExtraObjects is enabled

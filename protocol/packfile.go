@@ -273,13 +273,17 @@ type PackfileTrailer struct {
 //     Then, we have an object name if OBJ_REF_DELTA or a negative relative offset from the delta object's position in the pack if this is an OBJ_OFS_DELTA object.
 //     Finally, the compressed delta data.
 type PackfileReader struct {
-	reader           io.Reader
+	reader           io.ReadCloser
 	remainingObjects uint32
 	algo             crypto.Hash
 
 	// State that shouldn't be set when constructed.
 	trailerRead bool
 	err         error
+}
+
+func (p *PackfileReader) Close() error {
+	return p.reader.Close()
 }
 
 // ReadObject reads an object from the packfile.
@@ -447,7 +451,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
+func ParsePackfile(reader io.ReadCloser) (*PackfileReader, error) {
 	// Read and verify the "PACK" signature
 	signature := make([]byte, 4)
 	if _, err := io.ReadFull(reader, signature); err != nil {

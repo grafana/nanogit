@@ -59,7 +59,7 @@ func TestParsePackfile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := protocol.ParsePackfile(bytes.NewReader(tc.input))
+			_, err := protocol.ParsePackfile(io.NopCloser(bytes.NewReader(tc.input)))
 			require.ErrorIs(t, err, tc.expectedError)
 
 			// We don't really have a way to validate that the
@@ -85,7 +85,7 @@ func TestGolden(t *testing.T) {
 			t.Parallel()
 
 			data := loadGolden(t, name)
-			pr, err := protocol.ParsePackfile(bytes.NewReader(data))
+			pr, err := protocol.ParsePackfile(io.NopCloser(bytes.NewReader(data)))
 			require.NoError(t, err)
 
 			for _, obj := range tc.expectedObjects {
