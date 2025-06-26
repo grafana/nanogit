@@ -285,7 +285,7 @@ func TestParsePacket(t *testing.T) {
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
 			reader := bytes.NewReader(tc.input)
-			lines, err := protocol.ParsePackStream(reader)
+			lines, err := protocol.ParsePack(reader)
 			require.Equal(t, tc.expected.lines, lines, "expected and actual lines should be equal")
 			if tc.expected.err == nil {
 				require.NoError(t, err, "no error expected from ParsePackStream")
@@ -464,7 +464,7 @@ func TestParsePackStream(t *testing.T) {
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
 			reader := bytes.NewReader(tc.input)
-			lines, err := protocol.ParsePackStream(reader)
+			lines, err := protocol.ParsePack(reader)
 
 			require.Equal(t, tc.expectedLines, lines, "expected and actual lines should be equal")
 			if tc.expectedErr == nil {
@@ -770,7 +770,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 		}()
 
 		reader := bytes.NewReader(input)
-		lines, err := protocol.ParsePackStream(reader)
+		lines, err := protocol.ParsePack(reader)
 		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
 	})
@@ -783,7 +783,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 		}()
 
 		reader := bytes.NewReader(input)
-		lines, err := protocol.ParsePackStream(reader)
+		lines, err := protocol.ParsePack(reader)
 		require.Empty(t, lines)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
@@ -801,7 +801,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 		}()
 
 		reader := bytes.NewReader(input)
-		lines, err := protocol.ParsePackStream(reader)
+		lines, err := protocol.ParsePack(reader)
 		require.Empty(t, lines)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))

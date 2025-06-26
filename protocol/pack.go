@@ -361,10 +361,10 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 // Example Usage:
 //
 //	data := []byte("0009hello000dERR failed0000")
-//	lines, err := ParsePackStream(bytes.NewReader(data))
+//	lines, err := ParsePack(bytes.NewReader(data))
 //	// Returns: lines=["hello"], err=GitServerError
 //
-// ParsePackStream parses Git protocol packets from an io.Reader for streaming scenarios.
+// ParsePack parses Git protocol packets from an io.Reader for streaming scenarios.
 // This is the streaming equivalent of ParsePack that processes packets as they arrive
 // without buffering the entire response in memory.
 //
@@ -375,7 +375,7 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 // Unlike ParsePack, this function processes the stream until EOF or an error occurs.
 // It handles the same packet types but doesn't return remainder bytes since the stream
 // is consumed as it's read.
-func ParsePackStream(reader io.Reader) (lines [][]byte, err error) {
+func ParsePack(reader io.Reader) (lines [][]byte, err error) {
 	for {
 		// Read length header (4 hex bytes)
 		lengthBytes := make([]byte, 4)
@@ -513,11 +513,3 @@ func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 
 	return NewGitReferenceUpdateError(fullPacket, refName, reason)
 }
-
-
-
-
-
-
-
-
