@@ -85,15 +85,15 @@ type PackfileObjectReader interface {
 	ReadObject() (PackfileEntry, error)
 }
 
-// ParseFetchResponseStream parses a fetch response from a streaming reader.
+// ParseFetchResponse parses a fetch response from a streaming reader.
 // This avoids loading the entire response into memory, which is especially
 // important for large packfiles. This function creates a PackfileReader
 // directly from the stream without buffering all data.
-func ParseFetchResponseStream(reader io.ReadCloser) (*FetchResponse, error) {
+func ParseFetchResponse(reader io.ReadCloser) (*FetchResponse, error) {
 	fr := &FetchResponse{}
 
 	// Create a streaming packfile reader that will handle side-band demultiplexing
-	packfileReader := &streamingPackfileReader{
+	packfileReader := &packfileReader{
 		reader:        reader,
 		closer:        reader,
 		foundPackfile: false,
@@ -105,9 +105,9 @@ func ParseFetchResponseStream(reader io.ReadCloser) (*FetchResponse, error) {
 	return fr, nil
 }
 
-// streamingPackfileReader implements the PackfileReader interface but works
+// packfileReader implements the PackfileReader interface but works
 // with a streaming reader that includes Git protocol packets and side-band data.
-type streamingPackfileReader struct {
+type packfileReader struct {
 	reader        io.Reader
 	closer        io.Closer
 	foundPackfile bool
@@ -117,7 +117,7 @@ type streamingPackfileReader struct {
 }
 
 // ReadObject implements the PackfileReader interface for streaming.
-func (s *streamingPackfileReader) ReadObject() (PackfileEntry, error) {
+func (s *packfileReader) ReadObject() (PackfileEntry, error) {
 	if s.err != nil {
 		return PackfileEntry{}, s.err
 	}
@@ -145,7 +145,7 @@ func (s *streamingPackfileReader) ReadObject() (PackfileEntry, error) {
 }
 
 // closeOnce ensures the response body is closed only once
-func (s *streamingPackfileReader) closeOnce() {
+func (s *packfileReader) closeOnce() {
 	if !s.closed && s.closer != nil {
 		s.closer.Close()
 		s.closed = true
@@ -154,7 +154,7 @@ func (s *streamingPackfileReader) closeOnce() {
 
 // findAndInitializePackfile parses the protocol stream to find the packfile section
 // and initializes the PackfileReader with the packfile data stream.
-func (s *streamingPackfileReader) findAndInitializePackfile() error {
+func (s *packfileReader) findAndInitializePackfile() error {
 	for {
 		// Read length header (4 hex bytes)
 		lengthBytes := make([]byte, 4)
@@ -284,4 +284,3 @@ func (s *sideBandReader) Read(p []byte) (n int, err error) {
 		}
 	}
 }
-

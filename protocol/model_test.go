@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func TestParseFetchResponseStream(t *testing.T) {
 	// Create a minimal valid packfile
 	validPackfile := []byte("PACK" + // signature
@@ -67,7 +66,7 @@ func TestParseFetchResponseStream(t *testing.T) {
 				flush := []byte("0000")
 				return append(append(header, packPkt...), flush...)
 			}(),
-			want: &FetchResponse{},
+			want:    &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -85,7 +84,7 @@ func TestParseFetchResponseStream(t *testing.T) {
 				flush := []byte("0000")
 				return append(append(header, progPkt...), flush...)
 			}(),
-			want: &FetchResponse{},
+			want:    &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -138,7 +137,7 @@ func TestParseFetchResponseStream(t *testing.T) {
 				flush := []byte("0000")
 				return append(append(shallow, wanted...), flush...)
 			}(),
-			want: &FetchResponse{},
+			want:    &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -157,7 +156,7 @@ func TestParseFetchResponseStream(t *testing.T) {
 				flush := []byte("0000")
 				return append(append(append(longLine, header...), packPkt...), flush...)
 			}(),
-			want: &FetchResponse{},
+			want:    &FetchResponse{},
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
@@ -171,8 +170,8 @@ func TestParseFetchResponseStream(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := io.NopCloser(bytes.NewReader(tt.input))
-			got, err := ParseFetchResponseStream(reader)
-			
+			got, err := ParseFetchResponse(reader)
+
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return

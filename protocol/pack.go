@@ -375,6 +375,8 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 // Unlike ParsePack, this function processes the stream until EOF or an error occurs.
 // It handles the same packet types but doesn't return remainder bytes since the stream
 // is consumed as it's read.
+// TODO: this should not return lines but a reader.
+// TODO: this logic is duplicated
 func ParsePack(reader io.Reader) (lines [][]byte, err error) {
 	for {
 		// Read length header (4 hex bytes)
@@ -431,7 +433,6 @@ func ParsePack(reader io.Reader) (lines [][]byte, err error) {
 				}
 				// If unpack ok, add to lines and continue
 				lines = append(lines, packetData)
-
 			default:
 				// Regular data packet
 				lines = append(lines, packetData)
