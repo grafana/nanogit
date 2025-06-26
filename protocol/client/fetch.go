@@ -170,11 +170,17 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol
 	// The streamingPackfileReader will close it when done
 
 	// Use streaming parser instead of loading all data into memory
-	response, err := protocol.ParseFetchResponse(responseReader)
+	lines, _, err := protocol.ParsePack(responseReader)
 	if err != nil {
 		responseReader.Close() // Close on error since streaming parser didn't take ownership
 		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
+
+	response, err := protocol.ParseFetchResponse(lines)
+	if err != nil {
+		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
+	}
+
 	return response, nil
 }
 

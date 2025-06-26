@@ -1,10 +1,8 @@
 package protocol
 
 import (
+	"bytes"
 	"errors"
-	"fmt"
-	"io"
-	"strconv"
 	"strings"
 )
 
@@ -64,7 +62,7 @@ type FetchResponse struct {
 	//	1 - pack data
 	//	2 - progress messages
 	//	3 - fatal error message just before stream aborts
-	Packfile PackfileObjectReader
+	Packfile *PackfileReader
 	// When encoded, a flush-pkt is presented here.
 }
 
@@ -79,208 +77,54 @@ var (
 	_                     error = FatalFetchError("")
 )
 
-// PackfileObjectReader defines the interface for reading objects from a packfile.
-// This interface is implemented by both PackfileReader and streamingPackfileReader.
-type PackfileObjectReader interface {
-	ReadObject() (PackfileEntry, error)
-}
-
-// ParseFetchResponse parses a fetch response from a streaming reader.
-// This avoids loading the entire response into memory, which is especially
-// important for large packfiles. This function creates a PackfileReader
-// directly from the stream without buffering all data.
-func ParseFetchResponse(reader io.ReadCloser) (*FetchResponse, error) {
+func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
 	fr := &FetchResponse{}
+outer:
+	for i, line := range lines {
+		if len(line) > 30 {
+			// Too long to be a section header
+			continue
+		}
 
-	// Create a streaming packfile reader that will handle side-band demultiplexing
-	packfileReader := &packfileReader{
-		reader:        reader,
-		closer:        reader,
-		foundPackfile: false,
+		// We SHOULD NOT require a \n.
+		switch strings.TrimSpace(string(line)) {
+		case "acknowledgements":
+			// TODO: Parse!
+		case "packfile":
+			// These are the final pktlines. That means they're all parts of the packfile.
+			// Because of this, we can just join them! We already know we don't multiplex, so they're all just streamed in multiple lines (due to the pktline size limit).
+			var joined []byte
+			for _, next := range lines[i+1:] {
+				status := next[0]
+				switch status {
+				case 1: // This is the pack data.
+					joined = append(joined, next[1:]...)
+				case 2: // This is progress status. We don't want it.
+					continue
+				case 3: // This is a fatal error message.
+					return nil, FatalFetchError(string(next[1:]))
+				default:
+					return nil, ErrInvalidFetchStatus
+				}
+			}
+
+			if len(joined) == 0 {
+				return fr, nil
+			}
+
+			var err error
+			fr.Packfile, err = ParsePackfile(bytes.NewReader(joined))
+			if err != nil {
+				return nil, err
+			}
+
+			break outer // break out of the outer loop since we've processed the packfile
+
+		case "shallow-info", "wanted-refs":
+			// Ignore.
+		default:
+			// TODO: what do we do here? log?
+		}
 	}
-
-	// The PackfileReader will be created lazily when we encounter the packfile section
-	fr.Packfile = packfileReader
-
 	return fr, nil
-}
-
-// packfileReader implements the PackfileReader interface but works
-// with a streaming reader that includes Git protocol packets and side-band data.
-type packfileReader struct {
-	reader        io.Reader
-	closer        io.Closer
-	foundPackfile bool
-	packReader    *PackfileReader
-	err           error
-	closed        bool
-}
-
-// ReadObject implements the PackfileReader interface for streaming.
-func (s *packfileReader) ReadObject() (PackfileEntry, error) {
-	if s.err != nil {
-		return PackfileEntry{}, s.err
-	}
-
-	// Lazily initialize the packfile reader when first called
-	if !s.foundPackfile {
-		s.err = s.findAndInitializePackfile()
-		if s.err != nil {
-			return PackfileEntry{}, s.err
-		}
-	}
-
-	if s.packReader == nil {
-		return PackfileEntry{}, ErrInvalidFetchStatus
-	}
-
-	entry, err := s.packReader.ReadObject()
-
-	// Close the response body when we're done reading (on EOF or error)
-	if err == io.EOF || err != nil {
-		s.closeOnce()
-	}
-
-	return entry, err
-}
-
-// closeOnce ensures the response body is closed only once
-func (s *packfileReader) closeOnce() {
-	if !s.closed && s.closer != nil {
-		s.closer.Close()
-		s.closed = true
-	}
-}
-
-// findAndInitializePackfile parses the protocol stream to find the packfile section
-// and initializes the PackfileReader with the packfile data stream.
-func (s *packfileReader) findAndInitializePackfile() error {
-	for {
-		// Read length header (4 hex bytes)
-		lengthBytes := make([]byte, 4)
-		_, err := io.ReadFull(s.reader, lengthBytes)
-		if err != nil {
-			if err == io.EOF {
-				return err // End of stream without finding packfile
-			}
-			return fmt.Errorf("reading packet length: %w", err)
-		}
-
-		length, err := strconv.ParseUint(string(lengthBytes), 16, 16)
-		if err != nil {
-			return fmt.Errorf("parsing packet length: %w", err)
-		}
-
-		// Handle different packet types
-		switch {
-		case length < 4:
-			// Special packets: flush (0000), delimiter (0001), response-end (0002)
-			if length == 2 { // ResponseEndPacket
-				return ErrInvalidFetchStatus
-			}
-			// Continue for other special packets
-
-		case length == 4:
-			// Empty packet - continue
-			continue
-
-		default:
-			// Read packet data
-			dataLength := length - 4
-			packetData := make([]byte, dataLength)
-			if _, err := io.ReadFull(s.reader, packetData); err != nil {
-				return fmt.Errorf("reading packet data: %w", err)
-			}
-
-			// Check if this is a section header
-			if len(packetData) <= 30 { // Section headers are short
-				sectionName := strings.TrimSpace(string(packetData))
-				if sectionName == "packfile" {
-					// Found packfile section - create a side-band demultiplexing reader
-					demuxReader := &sideBandReader{reader: s.reader}
-					s.packReader, err = ParsePackfile(demuxReader)
-					if err != nil {
-						return fmt.Errorf("creating packfile reader: %w", err)
-					}
-					s.foundPackfile = true
-					return nil
-				}
-				// Skip other sections (acknowledgements, shallow-info, etc.)
-			}
-		}
-	}
-}
-
-// sideBandReader implements io.Reader and handles Git side-band demultiplexing.
-// It filters out progress messages and extracts pack data from the stream.
-type sideBandReader struct {
-	reader io.Reader
-	buffer []byte // Buffer for partial packet data
-}
-
-func (s *sideBandReader) Read(p []byte) (n int, err error) {
-	// If we have buffered data from a previous call, return it first
-	if len(s.buffer) > 0 {
-		n = copy(p, s.buffer)
-		s.buffer = s.buffer[n:]
-		return n, nil
-	}
-
-	for {
-		// Read packet length
-		lengthBytes := make([]byte, 4)
-		_, err := io.ReadFull(s.reader, lengthBytes)
-		if err != nil {
-			return 0, err
-		}
-
-		length, err := strconv.ParseUint(string(lengthBytes), 16, 16)
-		if err != nil {
-			return 0, fmt.Errorf("parsing packet length: %w", err)
-		}
-
-		// Handle packet types
-		switch {
-		case length < 4:
-			// Special packets: continue reading
-			continue
-		case length == 4:
-			// Empty packet: continue
-			continue
-		default:
-			// Read packet data
-			dataLength := length - 4
-			packetData := make([]byte, dataLength)
-			if _, err := io.ReadFull(s.reader, packetData); err != nil {
-				return 0, fmt.Errorf("reading packet data: %w", err)
-			}
-
-			if len(packetData) == 0 {
-				continue
-			}
-
-			// Handle side-band multiplexing
-			status := packetData[0]
-			switch status {
-			case 1: // Pack data
-				data := packetData[1:]
-				if len(data) <= len(p) {
-					// Data fits in the provided buffer
-					copy(p, data)
-					return len(data), nil
-				} else {
-					// Data is larger than buffer - copy what fits and save the rest
-					copy(p, data[:len(p)])
-					s.buffer = append(s.buffer, data[len(p):]...)
-					return len(p), nil
-				}
-			case 2: // Progress messages - skip
-				continue
-			case 3: // Fatal error
-				return 0, FatalFetchError(string(packetData[1:]))
-			default:
-				return 0, ErrInvalidFetchStatus
-			}
-		}
-	}
 }
