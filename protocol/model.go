@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 
@@ -89,6 +88,7 @@ func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchRes
 	fr := &FetchResponse{}
 	sectionCount := 0
 
+outer:
 	for {
 		sectionCount++
 		logger.Debug("Reading next section", "section_number", sectionCount)
@@ -181,8 +181,8 @@ func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchRes
 			}
 
 			logger.Debug("Successfully parsed packfile", "data_size", len(joined))
-			return fr, nil
 
+			break outer // break out of the outer loop since we've processed the packfile
 		case "shallow-info", "wanted-refs":
 			logger.Debug("Ignoring section", "section_type", sectionType)
 			// Ignore.
@@ -190,7 +190,13 @@ func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchRes
 			logger.Debug("Unknown section type encountered", "section_type", sectionType, "section_number", sectionCount)
 			// TODO: what do we do here? log?
 		}
+
+		if sectionType == "packfile" {
+			break outer
+		}
 	}
 
-	return nil, fmt.Errorf("no packfile section found")
+	logger.Debug("Completed fetch response parsing", "total_sections_processed", sectionCount-1)
+
+	return fr, nil
 }

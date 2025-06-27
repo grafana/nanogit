@@ -183,18 +183,8 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (response 
 }
 
 // processPackfileResponse processes the packfile response and extracts objects
-func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) (err error) {
+func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
 	logger := log.FromContext(ctx)
-	defer func() {
-		if response.Packfile == nil {
-			return
-		}
-
-		if closeErr := response.Packfile.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("error closing packfile reader: %w", closeErr)
-		}
-	}()
-
 	// Build a set of pending wanted object hashes for quick lookup if early termination is enabled
 	// Only build this if we have specific objects we want AND NoExtraObjects is enabled
 	var pendingWantedHashes map[string]bool
