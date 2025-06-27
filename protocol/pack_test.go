@@ -301,7 +301,26 @@ func TestParsePacket(t *testing.T) {
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
-			lines, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(tc.input)))
+			parser := protocol.NewParser(io.NopCloser(bytes.NewReader(tc.input)))
+			t.Cleanup(func() {
+				require.NoError(t, parser.Close())
+			})
+
+			var lines [][]byte
+			var err error
+			for {
+				var line []byte
+				line, err = parser.Next()
+				if err != nil {
+					if err == io.EOF {
+						err = nil
+						break
+					}
+					break
+				}
+				lines = append(lines, line)
+			}
+
 			require.Equal(t, tc.expected.lines, lines, "expected and actual lines should be equal")
 			if tc.expected.err == nil {
 				require.NoError(t, err, "no error expected from ParsePack")
@@ -604,9 +623,23 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			pkt, _ := protocol.PackLine(message).Marshal()
 			return pkt
 		}()
+		parser := protocol.NewParser(io.NopCloser(bytes.NewReader(input)))
+		t.Cleanup(func() {
+			require.NoError(t, parser.Close())
+		})
 
-		lines, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(input)))
-		require.NoError(t, err)
+		lines := [][]byte{}
+		var err error
+		for {
+			var line []byte
+			line, err = parser.Next()
+			if err != nil {
+				break
+			}
+			lines = append(lines, line)
+		}
+
+		require.Equal(t, io.EOF, err)
 		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
 	})
 
@@ -617,7 +650,21 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(input)))
+		parser := protocol.NewParser(io.NopCloser(bytes.NewReader(input)))
+		t.Cleanup(func() {
+			require.NoError(t, parser.Close())
+		})
+
+		lines := [][]byte{}
+		var err error
+		for {
+			var line []byte
+			line, err = parser.Next()
+			if err != nil {
+				break
+			}
+			lines = append(lines, line)
+		}
 		require.Empty(t, lines)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
@@ -634,7 +681,21 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, err := protocol.ParsePack(io.NopCloser(bytes.NewReader(input)))
+		parser := protocol.NewParser(io.NopCloser(bytes.NewReader(input)))
+		t.Cleanup(func() {
+			require.NoError(t, parser.Close())
+		})
+
+		lines := [][]byte{}
+		var err error
+		for {
+			var line []byte
+			line, err = parser.Next()
+			if err != nil {
+				break
+			}
+			lines = append(lines, line)
+		}
 		require.Empty(t, lines)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))

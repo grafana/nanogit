@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -162,13 +161,20 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 }
 
 // sendFetchRequest sends the fetch request and parses the response
-func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol.FetchResponse, error) {
+func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (response *protocol.FetchResponse, err error) {
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	response, err := protocol.ParseFetchResponse(responseReader)
+	parser := protocol.NewParser(responseReader)
+	defer func() {
+		if closeErr := parser.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing parser: %w", closeErr)
+		}
+	}()
+
+	response, err = protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
 		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
@@ -180,8 +186,12 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (*protocol
 func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) (err error) {
 	logger := log.FromContext(ctx)
 	defer func() {
-		if err := response.Packfile.Close(); err != nil && err != io.EOF {
-			logger.Error("Error closing packfile reader", "error", err)
+		if response.Packfile == nil {
+			return
+		}
+
+		if closeErr := response.Packfile.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing packfile reader: %w", closeErr)
 		}
 	}()
 

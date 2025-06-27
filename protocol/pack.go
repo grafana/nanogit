@@ -276,6 +276,24 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// Parser is a parser for Git protocol packets.
+// It reads packets from a reader and returns them as a slice of bytes.
+// It fails if it detects an error in the packet stream.
+// The stream will be consider closed when reading the next returns io.EOF.
+type Parser struct {
+	reader io.ReadCloser
+}
+
+// NewParser creates a new Parser from a reader.
+func NewParser(reader io.ReadCloser) *Parser {
+	return &Parser{reader: reader}
+}
+
+// Close implements the io.Closer interface.
+func (p *Parser) Close() error {
+	return p.reader.Close()
+}
+
 // ParsePack parses a sequence of Git protocol packets from a byte slice according to the
 // Git Smart HTTP protocol specification (https://git-scm.com/docs/gitprotocol-pack).
 //
@@ -363,46 +381,39 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //	reader := io.NopCloser(bytes.NewReader([]byte("0009hello000dERR failed0000")))
 //	lines, err := ParsePack(reader)
 //	// Returns: lines=["hello"], err=GitServerError
-func ParsePack(reader io.ReadCloser) (lines [][]byte, err error) {
-	defer func() {
-		if closeErr := reader.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("closing reader: %w", closeErr)
-		}
-	}()
-
+func (p *Parser) Next() (line []byte, err error) {
 	for {
-		lengthBytes, length, err := readPacketLength(reader)
+		lengthBytes, length, err := readPacketLength(p.reader)
 		if err != nil {
-			return lines, err
+			return nil, err
 		}
+
 		if length == 0 {
-			return lines, nil // EOF
+			return nil, io.EOF
 		}
 
 		// Handle different packet types
 		switch {
 		case length < 4:
 			if length == 2 { // ResponseEndPacket
-				return lines, nil
+				return nil, io.EOF
 			}
 			// Continue for other special packets (flush, delimiter)
-
 		case length == 4:
 			// Empty packet - nothing more to read for this packet
 			continue
-
 		default:
-			packetData, err := readPacketData(reader, lengthBytes, length)
+			packetData, err := readPacketData(p.reader, lengthBytes, length)
 			if err != nil {
-				return lines, err
+				return nil, err
 			}
 
-			// Process packet content
-			processedLines, shouldReturn, err := processPacketContent(lines, lengthBytes, packetData)
-			if shouldReturn {
-				return processedLines, err
+			// Detect errors in packet content
+			if err := detectError(lengthBytes, packetData); err != nil {
+				return nil, err
 			}
-			lines = processedLines
+
+			return packetData, nil
 		}
 	}
 }
@@ -446,31 +457,32 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	return packetData, nil
 }
 
-// processPacketContent processes the packet content and returns updated lines, whether to return, and any error
-func processPacketContent(lines [][]byte, lengthBytes, packetData []byte) ([][]byte, bool, error) {
+// detectError processes packet content to detect and handle various Git protocol error conditions.
+// It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
+// Returns an error if any error condition is detected, otherwise returns nil to continue processing.
+func detectError(lengthBytes, packetData []byte) error {
 	fullPacket := append(lengthBytes, packetData...)
 
 	switch {
 	case bytes.HasPrefix(packetData, []byte("ERR ")):
-		return lines, true, handleERRPacket(fullPacket, packetData)
+		return handleERRPacket(fullPacket, packetData)
 
 	case isErrorOrFatalMessage(packetData):
-		return lines, true, handleErrorFatalMessage(fullPacket, packetData)
+		return handleErrorFatalMessage(fullPacket, packetData)
 
 	case bytes.HasPrefix(packetData, []byte("ng ")):
-		return lines, true, handleReferenceUpdateFailure(fullPacket, packetData)
+		return handleReferenceUpdateFailure(fullPacket, packetData)
 
 	case bytes.HasPrefix(packetData, []byte("unpack ")):
 		unpackContent := string(packetData[7:]) // Skip "unpack "
 		if unpackContent != "ok" {
-			return lines, true, NewGitUnpackError(fullPacket, unpackContent)
+			return NewGitUnpackError(fullPacket, unpackContent)
 		}
 		// If unpack ok, add to lines and continue
-		return append(lines, packetData), false, nil
-
+		return nil
 	default:
 		// Regular data packet
-		return append(lines, packetData), false, nil
+		return nil
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 // This endpoint is used to send objects to the remote repository.
 // The data parameter is streamed to the server, and the response is parsed internally.
 // Returns an error if the HTTP request fails or if Git protocol errors are detected.
-func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) error {
+func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
@@ -44,11 +44,20 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) error {
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	// Parse the response to check for Git protocol errors
-	_, err = protocol.ParsePack(res.Body)
-	if err != nil {
-		return fmt.Errorf("git protocol error: %w", err)
-	}
+	parser := protocol.NewParser(res.Body)
+	defer func() {
+		if closeErr := parser.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing parser: %w", closeErr)
+		}
+	}()
 
-	return nil
+	for {
+		if _, err := parser.Next(); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+
+			return fmt.Errorf("git protocol error: %w", err)
+		}
+	}
 }

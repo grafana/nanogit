@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"testing"
 
@@ -214,7 +215,12 @@ func TestParseFetchResponse(t *testing.T) {
 				packetData = append(packetData, pkt...)
 			}
 
-			got, err := ParseFetchResponse(io.NopCloser(bytes.NewReader(packetData)))
+			parser := NewParser(io.NopCloser(bytes.NewReader(packetData)))
+			t.Cleanup(func() {
+				require.NoError(t, parser.Close())
+			})
+
+			got, err := ParseFetchResponse(context.Background(), parser)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
