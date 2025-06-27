@@ -93,7 +93,7 @@ func ParseRefName(in string) (RefName, error) {
 	}
 
 	rn := RefName{FullName: in}
-	
+
 	refPath, err := validateRefPrefix(in)
 	if err != nil {
 		return rn, err

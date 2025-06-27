@@ -1,8 +1,12 @@
 package protocol
 
 import (
+	"context"
 	"errors"
+	"io"
 	"strings"
+
+	"github.com/grafana/nanogit/log"
 )
 
 // Acknowledgements contains whether a nack ("NAK") was received, or a list of ACKs, and for which objects those apply.
@@ -76,54 +80,71 @@ var (
 	_                     error = FatalFetchError("")
 )
 
-func ParseFetchResponse(lines [][]byte) (*FetchResponse, error) {
+func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchResponse, err error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting fetch response parsing")
+
 	fr := &FetchResponse{}
+	sectionCount := 0
+
 outer:
-	for i, line := range lines {
+	for {
+		sectionCount++
+		logger.Debug("Reading next section", "section_number", sectionCount)
+
+		line, err := parser.Next()
+		if err != nil {
+			if err == io.EOF {
+				logger.Debug("Reached end of response", "total_sections", sectionCount-1)
+				break
+			}
+
+			logger.Debug("Error reading next line", "error", err, "section_number", sectionCount)
+			return nil, err
+		}
+
+		logger.Debug("Received line", "line_content", strings.TrimSpace(string(line)), "line_length", len(line), "section_number", sectionCount)
+
 		if len(line) > 30 {
 			// Too long to be a section header
+			logger.Debug("Line too long to be section header, skipping", "line_length", len(line))
 			continue
 		}
 
 		// We SHOULD NOT require a \n.
-		switch strings.TrimSpace(string(line)) {
+		sectionType := strings.TrimSpace(string(line))
+		logger.Debug("Processing section", "section_type", sectionType, "section_number", sectionCount)
+
+		switch sectionType {
 		case "acknowledgements":
+			logger.Debug("Processing acknowledgements section")
 			// TODO: Parse!
 		case "packfile":
-			// These are the final pktlines. That means they're all parts of the packfile.
-			// Because of this, we can just join them! We already know we don't multiplex, so they're all just streamed in multiple lines (due to the pktline size limit).
-			var joined []byte
-			for _, next := range lines[i+1:] {
-				status := next[0]
-				switch status {
-				case 1: // This is the pack data.
-					joined = append(joined, next[1:]...)
-				case 2: // This is progress status. We don't want it.
-					continue
-				case 3: // This is a fatal error message.
-					return nil, FatalFetchError(string(next[1:]))
-				default:
-					return nil, ErrInvalidFetchStatus
-				}
-			}
-
-			if len(joined) == 0 {
-				return fr, nil
-			}
-
+			logger.Debug("Processing packfile section")
 			var err error
-			fr.Packfile, err = ParsePackfile(joined)
+			fr.Packfile, err = ParsePackfileFromParser(parser)
 			if err != nil {
+				logger.Debug("Error parsing packfile", "error", err)
 				return nil, err
 			}
 
-			break outer // break out of the outer loop since we've processed the packfile
+			if fr.Packfile == nil {
+				logger.Debug("No packfile data collected, returning empty response")
+				return fr, nil
+			}
 
+			logger.Debug("Successfully parsed packfile")
+			break outer // break out of the outer loop since we've processed the packfile
 		case "shallow-info", "wanted-refs":
+			logger.Debug("Ignoring section", "section_type", sectionType)
 			// Ignore.
 		default:
+			logger.Debug("Unknown section type encountered", "section_type", sectionType, "section_number", sectionCount)
 			// TODO: what do we do here? log?
 		}
 	}
+
+	logger.Debug("Completed fetch response parsing", "total_sections_processed", sectionCount-1)
+
 	return fr, nil
 }

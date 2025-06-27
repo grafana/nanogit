@@ -95,19 +95,19 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 		if len(payload) == 0 {
 			return nil, strError("missing cmd byte")
 		}
-		
+
 		cmd := payload[0]
 		payload = payload[1:]
-		
+
 		change, newPayload, consumedSize, err := parseDeltaCommand(cmd, payload, delta.ExpectedSourceLength, originalDeltaSize)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if consumedSize == 0 {
 			break
 		}
-		
+
 		delta.Changes = append(delta.Changes, change)
 		deltaSize -= consumedSize
 		payload = newPayload
@@ -134,25 +134,25 @@ func parseCopyCommand(cmd byte, payload []byte, expectedSourceLength, originalDe
 	if err != nil {
 		return DeltaChange{}, payload, 0, err
 	}
-	
+
 	size, finalPayload, err := parseSize(cmd, newPayload)
 	if err != nil {
 		return DeltaChange{}, payload, 0, err
 	}
-	
+
 	if size == 0 {
 		size = 0x10000
 	}
-	
+
 	if size > originalDeltaSize || offset+size > expectedSourceLength || offset+size < offset {
 		return DeltaChange{}, payload, 0, nil
 	}
-	
+
 	change := DeltaChange{
 		SourceOffset: offset,
 		Length:       size,
 	}
-	
+
 	return change, finalPayload, size, nil
 }
 
@@ -164,18 +164,18 @@ func parseAddCommand(cmd byte, payload []byte, originalDeltaSize uint64) (DeltaC
 	if len(payload) < int(cmd) {
 		return DeltaChange{}, payload, 0, strError("missing data bytes")
 	}
-	
+
 	change := DeltaChange{
 		DeltaData: payload[:cmd],
 	}
-	
+
 	return change, payload[cmd:], uint64(cmd), nil
 }
 
 // parseOffset extracts offset value from copy command
 func parseOffset(cmd byte, payload []byte) (uint64, []byte, error) {
 	var offset uint64
-	
+
 	if (cmd & 0b1) != 0 {
 		if len(payload) == 0 {
 			return 0, payload, errMissingOffsetByte
@@ -204,14 +204,14 @@ func parseOffset(cmd byte, payload []byte) (uint64, []byte, error) {
 		offset |= uint64(payload[0]) << 24
 		payload = payload[1:]
 	}
-	
+
 	return offset, payload, nil
 }
 
 // parseSize extracts size value from copy command
 func parseSize(cmd byte, payload []byte) (uint64, []byte, error) {
 	var size uint64
-	
+
 	if (cmd & 0b10000) != 0 {
 		if len(payload) == 0 {
 			return 0, payload, errMissingSizeByte
@@ -233,7 +233,7 @@ func parseSize(cmd byte, payload []byte) (uint64, []byte, error) {
 		size |= uint64(payload[0]) << 16
 		payload = payload[1:]
 	}
-	
+
 	return size, payload, nil
 }
 

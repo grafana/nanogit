@@ -32,6 +32,13 @@ Always prioritize security, scalability, and maintainability in your designs and
 - Keep functions focused and small
 - Document public APIs with godoc comments
 
+## Naming Conventions
+
+- Use camelCase for Go variables and functions following Go conventions
+- Use descriptive names that convey purpose over brevity
+- Prefix boolean variables with verbs like `is`, `has`, `can`, `should`
+- Use singular names for types, plural for slices/collections
+
 # Testing
 
 - Write tests for all public APIs
@@ -78,6 +85,21 @@ Always prioritize security, scalability, and maintainability in your designs and
 - Add logging statements at key points in the code flow
 - Log entry and exit of important operations at debug level
 - Include timing information for performance-sensitive operations
+
+## Logging Key Naming Conventions
+
+- Use snake_case for log keys to maintain consistency with existing codebase patterns
+- Use descriptive key names that clearly indicate the data being logged
+- Establish standard key names for common concepts:
+  - `packet_number`, `packet_count` for packet indexing
+  - `total_packets`, `total_refs` for counts and totals
+  - `data_length`, `packet_data` for data and sizes
+  - `error` for error values
+  - `operation` for operation names
+  - Use consistent prefixes for related data (e.g., `request_*`, `response_*`)
+- Keep key names concise but unambiguous
+- Use plural forms for collections (`refs`, `objects`, `packets`)
+- Use past tense for completed actions (`objects_read`, `packets_processed`)
 
 # Documentation
 
@@ -126,6 +148,15 @@ Always prioritize security, scalability, and maintainability in your designs and
 - Use clear package boundaries
 - Follow standard Go project layout
 - Maintain clean interfaces
+
+## Consistency Patterns
+
+- When adding functionality to existing code, match the established patterns in that file/package
+- Look at similar functions in the same package for naming, error handling, and logging patterns
+- Maintain consistency in variable naming within a function scope
+- Use the same level of detail for similar operations (e.g., if one packet parsing step is logged, log all steps)
+- Follow existing indentation and code organization patterns
+- When in doubt, prioritize consistency with the immediate context over global conventions
 
 # Versioning
 - Follow semantic versioning

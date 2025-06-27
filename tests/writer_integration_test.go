@@ -1804,31 +1804,31 @@ var _ = Describe("Writer Operations", func() {
 			// Recreate the exact tree structure from the bug report
 			// Based on the repository structure that caused the "treeNotSorted" error
 			treeStructure := map[string]string{
-				"another-one.json":                          `{"type": "dashboard", "title": "Another One"}`,
-				"dir1/dir2/dir3/deepinside.json":            `{"deep": "content"}`,
-				"example.json":                              `{"example": "data"}`,
-				"finaltest/folder/bounds.json":              `{"bounds": true}`,
-				"finaltest/folder/nested/timeline.json":     `{"timeline": "data"}`,
-				"finaltest/heatmap.json":                    `{"heatmap": "visualization"}`,
-				"grafana/fix-migration-test.json":           `{"migration": "test"}`,
-				"grafana/new-dashboard-2025-06-16-YCsUH.json": `{"dashboard": "2025-06-16"}`,
-				"grafana/new-dashboard.json":                `{"dashboard": "new"}`,
-				"legacy/legacy-dashboard-inside.json":       `{"legacy": "inside"}`,
-				"legacy-dashboard.json":                     `{"legacy": "root"}`,
-				"one/two/three/inside.json":                 `{"nested": "deep"}`,
-				"README.md":                                 `# Test Repository`,
-				"repofolder/in-repo-folder.json":            `{"repo": "folder"}`,
-				"test2/heatmap.json":                        `{"test2": "heatmap"}`,
-				"testagain/heatmap.json":                    `{"testagain": "heatmap"}`,
-				"testloop/__folder_not_found/aei9icv4lhywwa/bounds.json": `{"testloop": "bounds"}`,
-				"testloop/__folder_not_found/bei9j85bufu2oa/timeline.json": `{"testloop": "timeline"}`,
-				"testloop/heatmap.json":                     `{"testloop": "heatmap"}`,
-				"testo2/folder/bounds.json":                 `{"testo2": "bounds"}`,
-				"testo2/folder/nested/timeline.json":        `{"testo2": "timeline"}`,
-				"testo2/heatmap.json":                       `{"testo2": "heatmap"}`,
+				"another-one.json":                                             `{"type": "dashboard", "title": "Another One"}`,
+				"dir1/dir2/dir3/deepinside.json":                               `{"deep": "content"}`,
+				"example.json":                                                 `{"example": "data"}`,
+				"finaltest/folder/bounds.json":                                 `{"bounds": true}`,
+				"finaltest/folder/nested/timeline.json":                        `{"timeline": "data"}`,
+				"finaltest/heatmap.json":                                       `{"heatmap": "visualization"}`,
+				"grafana/fix-migration-test.json":                              `{"migration": "test"}`,
+				"grafana/new-dashboard-2025-06-16-YCsUH.json":                  `{"dashboard": "2025-06-16"}`,
+				"grafana/new-dashboard.json":                                   `{"dashboard": "new"}`,
+				"legacy/legacy-dashboard-inside.json":                          `{"legacy": "inside"}`,
+				"legacy-dashboard.json":                                        `{"legacy": "root"}`,
+				"one/two/three/inside.json":                                    `{"nested": "deep"}`,
+				"README.md":                                                    `# Test Repository`,
+				"repofolder/in-repo-folder.json":                               `{"repo": "folder"}`,
+				"test2/heatmap.json":                                           `{"test2": "heatmap"}`,
+				"testagain/heatmap.json":                                       `{"testagain": "heatmap"}`,
+				"testloop/__folder_not_found/aei9icv4lhywwa/bounds.json":       `{"testloop": "bounds"}`,
+				"testloop/__folder_not_found/bei9j85bufu2oa/timeline.json":     `{"testloop": "timeline"}`,
+				"testloop/heatmap.json":                                        `{"testloop": "heatmap"}`,
+				"testo2/folder/bounds.json":                                    `{"testo2": "bounds"}`,
+				"testo2/folder/nested/timeline.json":                           `{"testo2": "timeline"}`,
+				"testo2/heatmap.json":                                          `{"testo2": "heatmap"}`,
 				"whatever/DemoFolder/DemoDeeperFolder/inside-deep-folder.json": `{"demo": "deep"}`,
-				"whatever/DemoFolder/inside-demo-folder.json": `{"demo": "folder"}`,
-				"whatever/git-sync-demo-dashboard.json":     `{"git": "sync"}`,
+				"whatever/DemoFolder/inside-demo-folder.json":                  `{"demo": "folder"}`,
+				"whatever/git-sync-demo-dashboard.json":                        `{"git": "sync"}`,
 			}
 
 			// Create all files in the structure first
@@ -1894,7 +1894,7 @@ var _ = Describe("Writer Operations", func() {
 
 			// Verify the file was created successfully
 			local.Git("pull", "origin", "robertoonboarding")
-			
+
 			// Check that the new file exists
 			filePath := filepath.Join(local.Path, newFileName)
 			content, err := os.ReadFile(filePath)
