@@ -484,6 +484,42 @@ func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
 	}, nil
 }
 
+// ParsePackfileFromParser creates a PackfileReader by reading from a Parser,
+// handling the multiplexed packfile data with status codes.
+func ParsePackfileFromParser(parser *Parser) (*PackfileReader, error) {
+	// Collect all packfile data by reading lines from the parser
+	var joined []byte
+	for {
+		next, err := parser.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		status := next[0]
+		switch status {
+		case 1: // This is the pack data.
+			joined = append(joined, next[1:]...)
+		case 2: // This is progress status. We don't want it.
+			continue
+		case 3: // This is a fatal error message.
+			errorMsg := string(next[1:])
+			return nil, FatalFetchError(errorMsg)
+		default:
+			return nil, ErrInvalidFetchStatus
+		}
+	}
+
+	if len(joined) == 0 {
+		return nil, nil
+	}
+
+	// Parse the collected packfile data
+	return ParsePackfile(bytes.NewReader(joined))
+}
+
 // PackfileStorageMode defines how packfile objects are stored during staging.
 type PackfileStorageMode int
 

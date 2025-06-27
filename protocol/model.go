@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -121,67 +120,20 @@ outer:
 			logger.Debug("Processing acknowledgements section")
 			// TODO: Parse!
 		case "packfile":
-			logger.Debug("Processing packfile section, starting data collection")
-			// These are the final pktlines. That means they're all parts of the packfile.
-			// Because of this, we can just join them! We already know we don't multiplex, so they're all just streamed in multiple lines (due to the pktline size limit).
-			var joined []byte
-			packetCount := 0
-			var totalDataSize int
-
-			for {
-				packetCount++
-				logger.Debug("Reading packfile packet", "packet_number", packetCount)
-
-				next, err := parser.Next()
-				if err != nil {
-					if err == io.EOF {
-						logger.Debug("Reached end of packfile data", "total_packets", packetCount-1, "total_data_size", totalDataSize)
-						break
-					}
-
-					logger.Debug("Error reading packfile packet", "error", err, "packet_number", packetCount)
-					return nil, err
-				}
-
-				status := next[0]
-				logger.Debug("Processing packfile packet", "status", status, "packet_size", len(next), "packet_number", packetCount)
-
-				switch status {
-				case 1: // This is the pack data.
-					dataSize := len(next) - 1
-					joined = append(joined, next[1:]...)
-					totalDataSize += dataSize
-					logger.Debug("Added pack data", "data_size", dataSize, "total_data_size", totalDataSize, "packet_number", packetCount)
-				case 2: // This is progress status. We don't want it.
-					logger.Debug("Skipping progress message", "message", string(next[1:]), "packet_number", packetCount)
-					continue
-				case 3: // This is a fatal error message.
-					errorMsg := string(next[1:])
-					logger.Debug("Received fatal error message", "error_message", errorMsg, "packet_number", packetCount)
-					return nil, FatalFetchError(errorMsg)
-				default:
-					logger.Debug("Invalid status in packfile", "status", status, "packet_number", packetCount)
-					return nil, ErrInvalidFetchStatus
-				}
+			logger.Debug("Processing packfile section")
+			var err error
+			fr.Packfile, err = ParsePackfileFromParser(parser)
+			if err != nil {
+				logger.Debug("Error parsing packfile", "error", err)
+				return nil, err
 			}
 
-			if len(joined) == 0 {
+			if fr.Packfile == nil {
 				logger.Debug("No packfile data collected, returning empty response")
 				return fr, nil
 			}
 
-			logger.Debug("Parsing collected packfile data", "total_data_size", len(joined), "total_packets_processed", packetCount-1)
-			logger.Debug("Packfile data", "data", string(joined))
-
-			var err error
-			fr.Packfile, err = ParsePackfile(bytes.NewReader(joined))
-			if err != nil {
-				logger.Debug("Error parsing packfile", "error", err, "data_size", len(joined))
-				return nil, err
-			}
-
-			logger.Debug("Successfully parsed packfile", "data_size", len(joined))
-
+			logger.Debug("Successfully parsed packfile")
 			break outer // break out of the outer loop since we've processed the packfile
 		case "shallow-info", "wanted-refs":
 			logger.Debug("Ignoring section", "section_type", sectionType)
@@ -189,10 +141,6 @@ outer:
 		default:
 			logger.Debug("Unknown section type encountered", "section_type", sectionType, "section_number", sectionCount)
 			// TODO: what do we do here? log?
-		}
-
-		if sectionType == "packfile" {
-			break outer
 		}
 	}
 
