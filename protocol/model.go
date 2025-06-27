@@ -174,7 +174,7 @@ outer:
 			logger.Debug("Packfile data", "data", string(joined))
 
 			var err error
-			fr.Packfile, err = ParsePackfile(io.NopCloser(bytes.NewReader(joined)))
+			fr.Packfile, err = ParsePackfile(bytes.NewReader(joined))
 			if err != nil {
 				logger.Debug("Error parsing packfile", "error", err, "data_size", len(joined))
 				return nil, err
