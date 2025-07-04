@@ -294,6 +294,10 @@ func (p *Parser) Close() error {
 	return p.reader.Close()
 }
 
+func (p *Parser) Read(b []byte) (n int, err error) {
+	return p.reader.Read(b)
+}
+
 // ParsePack parses a sequence of Git protocol packets from a byte slice according to the
 // Git Smart HTTP protocol specification (https://git-scm.com/docs/gitprotocol-pack).
 //
