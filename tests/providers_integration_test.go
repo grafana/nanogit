@@ -271,7 +271,7 @@ func TestProvidersLargeBlob(t *testing.T) {
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
 	)
 	require.NoError(t, err)
-	
+
 	auth, err := client.IsAuthorized(ctx)
 	require.NoError(t, err)
 	require.True(t, auth)
@@ -289,13 +289,13 @@ func TestProvidersLargeBlob(t *testing.T) {
 	branchName := fmt.Sprintf("test-large-blob-%d", time.Now().Unix())
 	mainRef, err := client.GetRef(ctx, "refs/heads/main")
 	require.NoError(t, err)
-	
+
 	err = client.CreateRef(ctx, nanogit.Ref{
 		Name: "refs/heads/" + branchName,
 		Hash: mainRef.Hash,
 	})
 	require.NoError(t, err)
-	
+
 	t.Cleanup(func() {
 		err = client.DeleteRef(ctx, "refs/heads/"+branchName)
 		require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestProvidersLargeBlob(t *testing.T) {
 	}
 	committer := nanogit.Committer{
 		Name:  "Test User",
-		Email: "test@example.com", 
+		Email: "test@example.com",
 		Time:  time.Now(),
 	}
 
@@ -354,9 +354,9 @@ func TestProvidersLargeBlob(t *testing.T) {
 	require.Contains(t, contentStr, "\"title\"")
 	require.Contains(t, contentStr, "\"panels\"")
 	require.Contains(t, contentStr, "\"templating\"")
-	require.True(t, 
-		contentStr == string(dashboardContent) && 
-		(len(contentStr) > 3000000),
+	require.True(t,
+		contentStr == string(dashboardContent) &&
+			(len(contentStr) > 3000000),
 		"Content should match original and be large")
 
 	t.Logf("Successfully tested large blob operations with %d bytes", len(retrievedFile.Content))

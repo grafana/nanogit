@@ -1,6 +1,7 @@
 package protocol_test
 
 import (
+	"bytes"
 	"crypto"
 	"io"
 	"os"
@@ -58,7 +59,7 @@ func TestParsePackfile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := protocol.ParsePackfile(tc.input)
+			_, err := protocol.ParsePackfile(bytes.NewReader(tc.input))
 			require.ErrorIs(t, err, tc.expectedError)
 
 			// We don't really have a way to validate that the
@@ -84,7 +85,7 @@ func TestGolden(t *testing.T) {
 			t.Parallel()
 
 			data := loadGolden(t, name)
-			pr, err := protocol.ParsePackfile(data)
+			pr, err := protocol.ParsePackfile(bytes.NewReader(data))
 			require.NoError(t, err)
 
 			for _, obj := range tc.expectedObjects {
@@ -125,9 +126,9 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 	// Test case based on the problematic tree structure where "robertoonboarding" directory
 	// should be sorted correctly among other entries
 	testCases := []struct {
-		name            string
-		entries         []protocol.PackfileTreeEntry
-		expectedOrder   []string
+		name          string
+		entries       []protocol.PackfileTreeEntry
+		expectedOrder []string
 	}{
 		{
 			name: "directory_and_file_with_similar_names",
@@ -139,7 +140,7 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 				},
 				{
 					FileName: "repofolder",
-					FileMode: 0o40000, // directory  
+					FileMode: 0o40000, // directory
 					Hash:     "abcdef0d22095088e7a0ecfcd02b817755f43181",
 				},
 				{
@@ -203,7 +204,7 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 			expectedOrder: []string{
 				"another-one.json",
 				"dir1",
-				"example.json", 
+				"example.json",
 				"finaltest",
 				"grafana",
 				"legacy-dashboard.json",
@@ -229,7 +230,7 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 			}
 
 			// Verify the order matches expected
-			require.Equal(t, tc.expectedOrder, actualOrder, 
+			require.Equal(t, tc.expectedOrder, actualOrder,
 				"Tree entries should be sorted according to Git specification")
 
 			// Verify the tree object was built successfully with a valid hash
