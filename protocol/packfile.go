@@ -446,9 +446,8 @@ func (lr *limitedReader) Read(p []byte) (int, error) {
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	const MaxCompressedSize = 10 << 20 // 10 MB compressed max — adjust as needed
 	// Wrap p.reader to prevent zlib from reading into the next object
-	limited := &io.LimitedReader{
-		R: p.reader,
-		N: MaxCompressedSize,
+	limited := &limitedReader{
+		reader: p.reader,
 	}
 
 	zr, err := zlib.NewReader(limited)
@@ -476,8 +475,8 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	}
 
 	// Optional: check if zlib reader consumed too much compressed input
-	// If limited.N == 0, zlib read MaxCompressedSize — suspicious
-	if limited.N == 0 {
+	// If limited.bytesRead >= MaxCompressedSize, zlib read too much — suspicious
+	if limited.bytesRead >= MaxCompressedSize {
 		return nil, fmt.Errorf("zlib stream too large (exceeded %d bytes compressed)", MaxCompressedSize)
 	}
 
