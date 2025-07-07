@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"context"
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -289,7 +291,7 @@ type PackfileReader struct {
 //
 // This function is not concurrency-safe. Use a mutex or a single goroutine+channel when dealing with this.
 // Objects returned are no longer owned by this function once returned; you can pass them around goroutines freely.
-func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
+func (p *PackfileReader) ReadObject(ctx context.Context) (PackfileEntry, error) {
 	// TODO: probably smart to use a mutex here.
 	if p == nil {
 		return PackfileEntry{}, io.EOF
@@ -300,14 +302,15 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	}
 
 	var entry PackfileEntry
-	entry, p.err = p.readObject()
+	entry, p.err = p.readObject(ctx)
 	if !p.trailerRead {
 		p.err = eofIsUnexpected(p.err)
 	}
 	return entry, p.err
 }
 
-func (p *PackfileReader) readObject() (PackfileEntry, error) {
+func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) {
+	logger := log.FromContext(ctx)
 	entry := PackfileEntry{}
 	if p.remainingObjects == 0 {
 		// It's time for the trailer.
@@ -334,6 +337,8 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
 	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
+	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type)
+
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
@@ -442,7 +447,8 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
+func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
+	logger := log.FromContext(ctx)
 	// Read and verify the "PACK" signature
 	signature := make([]byte, 4)
 	if _, err := io.ReadFull(reader, signature); err != nil {
@@ -461,6 +467,7 @@ func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
 	if err := binary.Read(reader, binary.BigEndian, &version); err != nil {
 		return nil, fmt.Errorf("reading packfile version: %w", err)
 	}
+	logger.Debug("Packfile version", "version", version)
 	if version != 2 && version != 3 {
 		return nil, fmt.Errorf("version %d: %w", version, ErrUnsupportedPackfileVersion)
 	}
@@ -470,6 +477,7 @@ func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
 	if err := binary.Read(reader, binary.BigEndian, &countObjects); err != nil {
 		return nil, fmt.Errorf("reading packfile object count: %w", err)
 	}
+	logger.Debug("Packfile object count", "count", countObjects)
 
 	// Now the reader points to the object data stream
 	return &PackfileReader{

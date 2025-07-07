@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
@@ -206,11 +205,6 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
-			if errors.Is(err, protocol.ErrUnsupportedObjectType) {
-				logger.Warn("unsupported object type", "type", obj.Object.Type, "originalByte", obj.Object.Data[0])
-				continue
-			}
-
 			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount)
 			break
 		}

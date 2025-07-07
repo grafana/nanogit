@@ -117,7 +117,7 @@ func (mr *MultiplexedReader) Read(p []byte) (n int, err error) {
 	if len(mr.buffer) > 0 {
 		n = copy(p, mr.buffer)
 		mr.buffer = mr.buffer[n:]
-		mr.logger.Debug("Served buffered data", "bytes_served", n, "remaining_buffer", len(mr.buffer))
+		mr.logger.Debug("Served buffered data", "bytes_served", n, "remaining_buffer", len(mr.buffer), "served_data", string(p[:n]))
 		return n, nil
 	}
 
@@ -161,9 +161,9 @@ func (mr *MultiplexedReader) Read(p []byte) (n int, err error) {
 			// If there's remaining data, buffer it
 			if n < len(data) {
 				mr.buffer = append(mr.buffer, data[n:]...)
-				mr.logger.Debug("Added pack data", "bytes_returned", n, "bytes_buffered", len(data)-n)
+				mr.logger.Debug("Added pack data", "bytes_returned", n, "bytes_buffered", len(data)-n, "served_data", string(p), "received_data", string(data))
 			} else {
-				mr.logger.Debug("Added pack data", "bytes_returned", n)
+				mr.logger.Debug("Added pack data", "bytes_returned", n, "served_data", string(p), "received_data", string(data))
 			}
 
 			return n, nil
@@ -232,7 +232,7 @@ outer:
 			// Create a multiplexed reader to handle the Git protocol multiplexing
 			multiplexedReader := NewMultiplexedReader(ctx, parser)
 			var err error
-			fr.Packfile, err = ParsePackfile(multiplexedReader)
+			fr.Packfile, err = ParsePackfile(ctx, multiplexedReader)
 			if err != nil {
 				logger.Debug("Error parsing packfile", "error", err)
 				return nil, err
@@ -254,7 +254,7 @@ outer:
 		}
 	}
 
-	logger.Debug("Completed fetch response parsing", "total_sections_processed", sectionCount-1)
+	logger.Debug("Completed fetch response parsing", "total_sections_processed", sectionCount)
 
 	return fr, nil
 }
