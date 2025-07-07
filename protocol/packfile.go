@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -23,6 +24,53 @@ import (
 
 // ErrPackfileWriterCleanedUp is returned when trying to use a PackfileWriter after cleanup has been called.
 var ErrPackfileWriterCleanedUp = errors.New("packfile writer has been cleaned up and can no longer be used")
+
+// Buffer pools for parseTree optimization
+var (
+	// Pool for bufio.Reader instances to avoid allocating new readers for each tree
+	treeReaderPool = sync.Pool{
+		New: func() interface{} {
+			return bufio.NewReader(nil)
+		},
+	}
+	
+	// Pool for hex encoding buffers to reduce allocations
+	hexBufferPool = sync.Pool{
+		New: func() interface{} {
+			// Pre-allocate buffer for SHA-1 hash (40 hex chars)
+			return make([]byte, 40)
+		},
+	}
+)
+
+// getHexBuffer gets a hex buffer from the pool and returns it with the encoded hash
+func getHexBuffer(hash [20]byte) ([]byte, string) {
+	buf := hexBufferPool.Get().([]byte)
+	hex.Encode(buf, hash[:])
+	return buf, string(buf)
+}
+
+// putHexBuffer returns a hex buffer to the pool
+func putHexBuffer(buf []byte) {
+	hexBufferPool.Put(buf)
+}
+
+// estimateTreeSize estimates the number of entries in tree data
+func estimateTreeSize(data []byte) int {
+	// Rough estimate: each entry is at least 25 bytes (mode + space + name + null + 20-byte hash)
+	// Add some buffer for longer filenames and modes
+	if len(data) < 25 {
+		return 4 // minimum reasonable capacity
+	}
+	estimate := len(data) / 35 // conservative estimate
+	if estimate < 4 {
+		return 4
+	}
+	if estimate > 1000 {
+		return 1000 // cap at reasonable size
+	}
+	return estimate
+}
 
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
 // Review it once we have some more integration testing so that we don't break things unintentionally.
@@ -62,7 +110,14 @@ type PackfileObject struct {
 }
 
 func (e *PackfileObject) parseTree() error {
-	reader := bufio.NewReader(bytes.NewReader(e.Data))
+	// Get reader from pool to avoid allocation
+	reader := treeReaderPool.Get().(*bufio.Reader)
+	defer treeReaderPool.Put(reader)
+	reader.Reset(bytes.NewReader(e.Data))
+
+	// Pre-allocate Tree slice with estimated capacity based on data size
+	capacity := estimateTreeSize(e.Data)
+	e.Tree = make([]PackfileTreeEntry, 0, capacity)
 
 	for {
 		fileModeStr, err := reader.ReadString(' ')
@@ -90,11 +145,14 @@ func (e *PackfileObject) parseTree() error {
 			return eofIsUnexpected(err)
 		}
 
+		// Use pooled hex buffer to avoid allocation
+		hexBuf, hashStr := getHexBuffer(hash)
 		e.Tree = append(e.Tree, PackfileTreeEntry{
 			FileName: name,
 			FileMode: uint32(fileMode),
-			Hash:     hex.EncodeToString(hash[:]),
+			Hash:     hashStr,
 		})
+		putHexBuffer(hexBuf)
 	}
 
 	return nil
