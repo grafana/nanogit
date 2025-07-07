@@ -10,11 +10,8 @@ import (
 )
 
 // ParseLsRefsResponse parses the ls-refs response one packet at a time.
-func ParseLsRefsResponse(ctx context.Context, reader io.ReadCloser) ([]RefLine, error) {
+func ParseLsRefsResponse(ctx context.Context, reader io.Reader) ([]RefLine, error) {
 	logger := log.FromContext(ctx)
-
-	defer func() { _ = reader.Close() }()
-
 	logger.Debug("Starting ls-refs response parsing")
 	refs := make([]RefLine, 0)
 	count := 0

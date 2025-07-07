@@ -281,17 +281,16 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 // It fails if it detects an error in the packet stream.
 // The stream will be consider closed when reading the next returns io.EOF.
 type Parser struct {
-	reader io.ReadCloser
+	reader io.Reader
 }
 
 // NewParser creates a new Parser from a reader.
-func NewParser(reader io.ReadCloser) *Parser {
+func NewParser(reader io.Reader) *Parser {
 	return &Parser{reader: reader}
 }
 
-// Close implements the io.Closer interface.
-func (p *Parser) Close() error {
-	return p.reader.Close()
+func (p *Parser) Read(b []byte) (n int, err error) {
+	return p.reader.Read(b)
 }
 
 // ParsePack parses a sequence of Git protocol packets from a byte slice according to the

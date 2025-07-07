@@ -43,6 +43,12 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
 
+	defer func() {
+		if closeErr := refsReader.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing refs reader: %w", closeErr)
+		}
+	}()
+
 	logger.Debug("Parsing ls-refs response")
 	refs, err := protocol.ParseLsRefsResponse(ctx, refsReader)
 	if err != nil {

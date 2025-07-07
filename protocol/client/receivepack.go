@@ -34,6 +34,11 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %w", closeErr)
+		}
+	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		_ = res.Body.Close()
@@ -45,12 +50,6 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 		"statusText", res.Status)
 
 	parser := protocol.NewParser(res.Body)
-	defer func() {
-		if closeErr := parser.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("error closing parser: %w", closeErr)
-		}
-	}()
-
 	for {
 		if _, err := parser.Next(); err != nil {
 			if err == io.EOF {

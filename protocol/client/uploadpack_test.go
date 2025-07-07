@@ -132,7 +132,11 @@ func TestUploadPack(t *testing.T) {
 				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				defer func() { _ = responseReader.Close() }()
+				defer func() {
+					if closeErr := responseReader.Close(); closeErr != nil {
+						t.Errorf("error closing response body: %v", closeErr)
+					}
+				}()
 				responseData, err := io.ReadAll(responseReader)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResult, string(responseData))

@@ -302,9 +302,6 @@ func TestParsePacket(t *testing.T) {
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
 			parser := protocol.NewParser(io.NopCloser(bytes.NewReader(tc.input)))
-			t.Cleanup(func() {
-				require.NoError(t, parser.Close())
-			})
 
 			var lines [][]byte
 			var err error
@@ -623,11 +620,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			pkt, _ := protocol.PackLine(message).Marshal()
 			return pkt
 		}()
-		parser := protocol.NewParser(io.NopCloser(bytes.NewReader(input)))
-		t.Cleanup(func() {
-			require.NoError(t, parser.Close())
-		})
-
+		parser := protocol.NewParser(bytes.NewReader(input))
 		lines := [][]byte{}
 		var err error
 		for {
@@ -650,10 +643,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		parser := protocol.NewParser(io.NopCloser(bytes.NewReader(input)))
-		t.Cleanup(func() {
-			require.NoError(t, parser.Close())
-		})
+		parser := protocol.NewParser(bytes.NewReader(input))
 
 		lines := [][]byte{}
 		var err error
@@ -681,10 +671,7 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		parser := protocol.NewParser(io.NopCloser(bytes.NewReader(input)))
-		t.Cleanup(func() {
-			require.NoError(t, parser.Close())
-		})
+		parser := protocol.NewParser(bytes.NewReader(input))
 
 		lines := [][]byte{}
 		var err error

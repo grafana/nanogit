@@ -34,9 +34,11 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	if err != nil {
 		return nil, err
 	}
-
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		_ = res.Body.Close()
+		if closeErr := res.Body.Close(); closeErr != nil {
+			logger.Error("error closing response body", "error", closeErr)
+		}
+
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 

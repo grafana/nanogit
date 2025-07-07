@@ -80,6 +80,113 @@ var (
 	_                     error = FatalFetchError("")
 )
 
+// MultiplexedReader wraps a Parser to handle Git protocol multiplexing.
+// It processes status bytes in the multiplexed stream:
+// - Status 1: Pack data (returned via Read)
+// - Status 2: Progress messages (logged and skipped)
+// - Status 3: Fatal error messages (returned as error)
+type MultiplexedReader struct {
+	parser *Parser
+	logger log.Logger
+	buffer []byte // Buffer for incomplete data
+	eof    bool
+	err    error
+}
+
+// NewMultiplexedReader creates a new MultiplexedReader that handles Git protocol multiplexing.
+func NewMultiplexedReader(ctx context.Context, parser *Parser) *MultiplexedReader {
+	return &MultiplexedReader{
+		parser: parser,
+		logger: log.FromContext(ctx),
+		buffer: make([]byte, 0),
+	}
+}
+
+// Read implements io.Reader interface.
+// It reads from the multiplexed stream, handling status bytes and returning only pack data.
+func (mr *MultiplexedReader) Read(p []byte) (n int, err error) {
+	if mr.err != nil {
+		return 0, mr.err
+	}
+
+	if mr.eof && len(mr.buffer) == 0 {
+		return 0, io.EOF
+	}
+
+	// If we have buffered data, serve it first
+	if len(mr.buffer) > 0 {
+		n = copy(p, mr.buffer)
+		mr.buffer = mr.buffer[n:]
+		mr.logger.Debug("Served buffered data", "bytes_served", n, "remaining_buffer", len(mr.buffer))
+		return n, nil
+	}
+
+	// Read more data from the parser
+	for {
+		if mr.eof {
+			return 0, io.EOF
+		}
+
+		packet, err := mr.parser.Next()
+		if err != nil {
+			if err == io.EOF {
+				mr.logger.Debug("Reached end of multiplexed stream")
+				mr.eof = true
+				return 0, io.EOF
+			}
+			mr.logger.Debug("Error reading packet from parser", "error", err)
+			mr.err = err
+			return 0, err
+		}
+
+		if len(packet) == 0 {
+			mr.logger.Debug("Received empty packet, continuing")
+			continue
+		}
+
+		status := packet[0]
+		mr.logger.Debug("Processing multiplexed packet", "status", status, "packet_size", len(packet))
+
+		switch status {
+		case 1: // Pack data
+			data := packet[1:]
+			if len(data) == 0 {
+				mr.logger.Debug("Received empty pack data packet, continuing")
+				continue
+			}
+
+			// Copy what fits into the provided buffer
+			n = copy(p, data)
+
+			// If there's remaining data, buffer it
+			if n < len(data) {
+				mr.buffer = append(mr.buffer, data[n:]...)
+				mr.logger.Debug("Added pack data", "bytes_returned", n, "bytes_buffered", len(data)-n)
+			} else {
+				mr.logger.Debug("Added pack data", "bytes_returned", n)
+			}
+
+			return n, nil
+
+		case 2: // Progress message
+			message := string(packet[1:])
+			mr.logger.Debug("Received progress message", "message", message)
+			// Continue to next packet
+
+		case 3: // Fatal error
+			errorMsg := string(packet[1:])
+			mr.logger.Debug("Received fatal error message", "error_message", errorMsg)
+			mr.err = FatalFetchError(errorMsg)
+			return 0, mr.err
+
+		default:
+			mr.logger.Debug("Invalid status in multiplexed stream", "status", status)
+			mr.err = ErrInvalidFetchStatus
+			return 0, mr.err
+		}
+	}
+}
+
 func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchResponse, err error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Starting fetch response parsing")
@@ -121,8 +228,11 @@ outer:
 			// TODO: Parse!
 		case "packfile":
 			logger.Debug("Processing packfile section")
+
+			// Create a multiplexed reader to handle the Git protocol multiplexing
+			multiplexedReader := NewMultiplexedReader(ctx, parser)
 			var err error
-			fr.Packfile, err = ParsePackfileFromParser(parser)
+			fr.Packfile, err = ParsePackfile(multiplexedReader)
 			if err != nil {
 				logger.Debug("Error parsing packfile", "error", err)
 				return nil, err

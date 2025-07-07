@@ -424,11 +424,6 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if closeErr := zr.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
 
 	// TODO(mem): this should be limited to the size the packet says it
 	// carries, and we should limit that size above (i.e. if the packet
@@ -482,42 +477,6 @@ func ParsePackfile(reader io.Reader) (*PackfileReader, error) {
 		remainingObjects: countObjects,
 		algo:             crypto.SHA1, // TODO: Support SHA256
 	}, nil
-}
-
-// ParsePackfileFromParser creates a PackfileReader by reading from a Parser,
-// handling the multiplexed packfile data with status codes.
-func ParsePackfileFromParser(parser *Parser) (*PackfileReader, error) {
-	// Collect all packfile data by reading lines from the parser
-	var joined []byte
-	for {
-		next, err := parser.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-
-		status := next[0]
-		switch status {
-		case 1: // This is the pack data.
-			joined = append(joined, next[1:]...)
-		case 2: // This is progress status. We don't want it.
-			continue
-		case 3: // This is a fatal error message.
-			errorMsg := string(next[1:])
-			return nil, FatalFetchError(errorMsg)
-		default:
-			return nil, ErrInvalidFetchStatus
-		}
-	}
-
-	if len(joined) == 0 {
-		return nil, nil
-	}
-
-	// Parse the collected packfile data
-	return ParsePackfile(bytes.NewReader(joined))
 }
 
 // PackfileStorageMode defines how packfile objects are stored during staging.

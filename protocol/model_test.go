@@ -104,6 +104,7 @@ func TestParseFetchResponse(t *testing.T) {
 			lines: [][]byte{
 				[]byte("packfile"),
 				append([]byte{2}, []byte("progress message")...),
+				append([]byte{1}, validPackfile...),
 			},
 			want: &FetchResponse{
 				// Progress messages should be ignored, so no packfile
@@ -111,7 +112,7 @@ func TestParseFetchResponse(t *testing.T) {
 			wantErr: nil,
 			assert: func(t *testing.T, got *FetchResponse) {
 				assert.NotNil(t, got)
-				assert.Nil(t, got.Packfile)
+				assert.NotNil(t, got.Packfile)
 				assert.False(t, got.Acks.Nack)
 				assert.Nil(t, got.Acks.Acks)
 			},
@@ -216,10 +217,6 @@ func TestParseFetchResponse(t *testing.T) {
 			}
 
 			parser := NewParser(io.NopCloser(bytes.NewReader(packetData)))
-			t.Cleanup(func() {
-				require.NoError(t, parser.Close())
-			})
-
 			got, err := ParseFetchResponse(context.Background(), parser)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)

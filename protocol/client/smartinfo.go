@@ -52,12 +52,15 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %w", closeErr)
+		}
+	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		_ = res.Body.Close()
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
-	defer func() { _ = res.Body.Close() }()
 
 	logger.Debug("SmartInfo response",
 		"status", res.StatusCode,

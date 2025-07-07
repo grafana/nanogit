@@ -3,7 +3,9 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -45,9 +47,17 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
-	response, err := c.sendFetchRequest(ctx, pkt)
+	responseReader, response, err := c.sendFetchRequest(ctx, pkt)
 	if err != nil {
 		return nil, err
+	}
+
+	if responseReader != nil {
+		defer func() {
+			if closeErr := responseReader.Close(); closeErr != nil {
+				logger.Error("error closing response reader", "error", closeErr)
+			}
+		}()
 	}
 
 	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
@@ -161,25 +171,19 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 }
 
 // sendFetchRequest sends the fetch request and parses the response
-func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (response *protocol.FetchResponse, err error) {
+func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (io.ReadCloser, *protocol.FetchResponse, error) {
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
-		return nil, fmt.Errorf("sending commands: %w", err)
+		return nil, nil, fmt.Errorf("sending commands: %w", err)
 	}
 
 	parser := protocol.NewParser(responseReader)
-	defer func() {
-		if closeErr := parser.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("error closing parser: %w", closeErr)
-		}
-	}()
-
-	response, err = protocol.ParseFetchResponse(ctx, parser)
+	response, err := protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
-		return nil, fmt.Errorf("parsing fetch response stream: %w", err)
+		return nil, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
 
-	return response, nil
+	return responseReader, response, nil
 }
 
 // processPackfileResponse processes the packfile response and extracts objects
@@ -202,6 +206,11 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	for {
 		obj, err := response.Packfile.ReadObject()
 		if err != nil {
+			if errors.Is(err, protocol.ErrUnsupportedObjectType) {
+				logger.Warn("unsupported object type", "type", obj.Object.Type, "originalByte", obj.Object.Data[0])
+				continue
+			}
+
 			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount)
 			break
 		}
