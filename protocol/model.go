@@ -117,7 +117,7 @@ func (mr *MultiplexedReader) Read(p []byte) (n int, err error) {
 	if len(mr.buffer) > 0 {
 		n = copy(p, mr.buffer)
 		mr.buffer = mr.buffer[n:]
-		mr.logger.Debug("Served buffered data", "bytes_served", n, "remaining_buffer", len(mr.buffer), "served_data", string(p[:n]))
+		mr.logger.Debug("Served buffered data", "bytes_served", n, "remaining_buffer", len(mr.buffer))
 		return n, nil
 	}
 
@@ -161,9 +161,9 @@ func (mr *MultiplexedReader) Read(p []byte) (n int, err error) {
 			// If there's remaining data, buffer it
 			if n < len(data) {
 				mr.buffer = append(mr.buffer, data[n:]...)
-				mr.logger.Debug("Added pack data", "bytes_returned", n, "bytes_buffered", len(data)-n, "served_data", string(p), "received_data", string(data))
+				mr.logger.Debug("Added pack data", "bytes_returned", n, "bytes_buffered", len(data)-n)
 			} else {
-				mr.logger.Debug("Added pack data", "bytes_returned", n, "served_data", string(p), "received_data", string(data))
+				mr.logger.Debug("Added pack data", "bytes_returned", n)
 			}
 
 			return n, nil

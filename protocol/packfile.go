@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -310,7 +309,6 @@ func (p *PackfileReader) ReadObject(ctx context.Context) (PackfileEntry, error) 
 }
 
 func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) {
-	logger := log.FromContext(ctx)
 	entry := PackfileEntry{}
 	if p.remainingObjects == 0 {
 		// It's time for the trailer.
@@ -337,7 +335,6 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
 	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
-	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type)
 
 	size := int(buf[0] & 0b1111)
 	shift := 4
@@ -424,31 +421,44 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	return obj.parseDelta(hex.EncodeToString(ref[:]))
 }
 
+// limitedReader wraps a reader and only allows reading one byte at a time
+// This prevents the zlib reader from consuming too much data from the underlying stream
+type limitedReader struct {
+	reader    io.Reader
+	bytesRead int
+}
+
+func (lr *limitedReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// Only read one byte at a time to prevent zlib from consuming too much
+	n, err := lr.reader.Read(p[:1])
+	lr.bytesRead += n
+	return n, err
+}
+
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
-	zr, err := zlib.NewReader(p.reader)
+	// Create a limited reader that only allows one byte at a time
+	limitedReader := &limitedReader{reader: p.reader}
+
+	zr, err := zlib.NewReader(limitedReader)
 	if err != nil {
 		return nil, err
 	}
+	defer zr.Close()
 
-	// TODO(mem): this should be limited to the size the packet says it
-	// carries, and we should limit that size above (i.e. if the packet
-	// says it's carrying a huge amount of data we should bail out).
-	lr := io.LimitReader(zr, MaxUnpackedObjectSize)
-
-	var data bytes.Buffer
-	if _, err := io.Copy(&data, lr); err != nil {
-		return nil, eofIsUnexpected(err)
+	// Read exactly the uncompressed size we expect
+	data := make([]byte, sz)
+	_, err = io.ReadFull(zr, data)
+	if err != nil {
+		return nil, err
 	}
-
-	if data.Len() != sz {
-		return nil, ErrInflatedDataIncorrectSize
-	}
-
-	return data.Bytes(), nil
+	return data, nil
 }
 
 func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
-	logger := log.FromContext(ctx)
 	// Read and verify the "PACK" signature
 	signature := make([]byte, 4)
 	if _, err := io.ReadFull(reader, signature); err != nil {
@@ -467,7 +477,6 @@ func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, erro
 	if err := binary.Read(reader, binary.BigEndian, &version); err != nil {
 		return nil, fmt.Errorf("reading packfile version: %w", err)
 	}
-	logger.Debug("Packfile version", "version", version)
 	if version != 2 && version != 3 {
 		return nil, fmt.Errorf("version %d: %w", version, ErrUnsupportedPackfileVersion)
 	}
@@ -477,7 +486,6 @@ func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, erro
 	if err := binary.Read(reader, binary.BigEndian, &countObjects); err != nil {
 		return nil, fmt.Errorf("reading packfile object count: %w", err)
 	}
-	logger.Debug("Packfile object count", "count", countObjects)
 
 	// Now the reader points to the object data stream
 	return &PackfileReader{

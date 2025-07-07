@@ -203,7 +203,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	foundWantedCount := 0
 
 	for {
-		obj, err := response.Packfile.ReadObject()
+		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
 			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount)
 			break
