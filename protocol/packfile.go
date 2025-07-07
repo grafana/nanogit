@@ -285,6 +285,16 @@ type PackfileReader struct {
 	err         error
 }
 
+// Close cleans up the PackfileReader's resources, including the zlib reader
+func (p *PackfileReader) Close() error {
+	if p.zlibReader != nil {
+		err := p.zlibReader.Close()
+		p.zlibReader = nil
+		return err
+	}
+	return nil
+}
+
 // ReadObject reads an object from the packfile.
 // The final object is always a PackfileTrailer. It comes with a nil error, not an io.EOF.
 // When the final object is read, a nil and io.EOF is returned.
@@ -546,6 +556,8 @@ type PackfileWriter struct {
 	totalBytes int
 	// Track if cleanup has been called
 	isCleanedUp bool
+	// Reusable zlib writer for performance
+	zlibWriter *zlib.Writer
 
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
@@ -584,6 +596,14 @@ func (w *PackfileWriter) Cleanup() error {
 	}
 
 	var err error
+
+	// Clean up zlib writer first (before closing temp file)
+	if w.zlibWriter != nil {
+		if closeErr := w.zlibWriter.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+		w.zlibWriter = nil
+	}
 
 	// Clean up temporary file if it exists
 	if w.tempFile != nil {
@@ -949,8 +969,11 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data
-	zw := zlib.NewWriter(writer)
+	// Compress and write data using reusable zlib writer
+	zw, err := pw.getOrResetZlibWriter(writer)
+	if err != nil {
+		return fmt.Errorf("getting zlib writer: %w", err)
+	}
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
@@ -959,6 +982,18 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 	}
 
 	return nil
+}
+
+// getOrResetZlibWriter returns the reusable zlib writer, creating or resetting as needed
+func (pw *PackfileWriter) getOrResetZlibWriter(writer io.Writer) (*zlib.Writer, error) {
+	if pw.zlibWriter == nil {
+		pw.zlibWriter = zlib.NewWriter(writer)
+		return pw.zlibWriter, nil
+	}
+	
+	// Reset the writer for a new stream
+	pw.zlibWriter.Reset(writer)
+	return pw.zlibWriter, nil
 }
 
 // addObject adds an object using the appropriate storage method based on the storage mode.
@@ -1060,8 +1095,11 @@ func (w *PackfileWriter) writeObjectToFile(obj PackfileObject) error {
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data
-	zw := zlib.NewWriter(w.tempFile)
+	// Compress and write data using reusable zlib writer
+	zw, err := w.getOrResetZlibWriter(w.tempFile)
+	if err != nil {
+		return fmt.Errorf("getting zlib writer: %w", err)
+	}
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
