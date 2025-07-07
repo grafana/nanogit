@@ -447,7 +447,10 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer zr.Close()
+
+	defer func() {
+		_ = zr.Close()
+	}()
 
 	// Read exactly the uncompressed size we expect
 	data := make([]byte, sz)
