@@ -278,6 +278,7 @@ type PackfileReader struct {
 	reader           io.Reader
 	remainingObjects uint32
 	algo             crypto.Hash
+	zlibReader       io.ReadCloser // Reusable zlib reader for performance
 
 	// State that shouldn't be set when constructed.
 	trailerRead bool
@@ -426,21 +427,34 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 }
 
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
-	zr, err := zlib.NewReader(p.reader)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if closeErr := zr.Close(); closeErr != nil && err == nil {
-			err = closeErr
+	// Reuse zlib reader for performance - avoid creating new reader for each object
+	if p.zlibReader == nil {
+		var err error
+		p.zlibReader, err = zlib.NewReader(p.reader)
+		if err != nil {
+			return nil, err
 		}
-	}()
+	} else {
+		// Reset the reader for the next zlib stream
+		if resetter, ok := p.zlibReader.(zlib.Resetter); ok {
+			if err := resetter.Reset(p.reader, nil); err != nil {
+				return nil, err
+			}
+		} else {
+			// Fallback: close and recreate if Reset is not available
+			p.zlibReader.Close()
+			var err error
+			p.zlibReader, err = zlib.NewReader(p.reader)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	// TODO(mem): this should be limited to the size the packet says it
 	// carries, and we should limit that size above (i.e. if the packet
 	// says it's carrying a huge amount of data we should bail out).
-	lr := io.LimitReader(zr, MaxUnpackedObjectSize)
+	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
 	var data bytes.Buffer
 	if _, err := io.Copy(&data, lr); err != nil {
 		return nil, eofIsUnexpected(err)
