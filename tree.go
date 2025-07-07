@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -13,6 +14,76 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
 )
+
+// Pools for flatten optimization
+var (
+	// Pool for strings.Builder to avoid allocations during path construction
+	pathBuilderPool = sync.Pool{
+		New: func() interface{} {
+			b := &strings.Builder{}
+			b.Grow(256) // Pre-allocate reasonable capacity for typical paths
+			return b
+		},
+	}
+	
+	// Cache for hash.FromHex conversions to avoid repeated parsing
+	hashCache = sync.Map{} // map[string]hash.Hash
+)
+
+// getPathBuilder gets a strings.Builder from the pool
+func getPathBuilder() *strings.Builder {
+	return pathBuilderPool.Get().(*strings.Builder)
+}
+
+// putPathBuilder returns a strings.Builder to the pool after resetting it
+func putPathBuilder(b *strings.Builder) {
+	b.Reset()
+	pathBuilderPool.Put(b)
+}
+
+// getCachedHash gets a hash from cache or parses it and caches the result
+func getCachedHash(hexStr string) (hash.Hash, error) {
+	if cached, ok := hashCache.Load(hexStr); ok {
+		return cached.(hash.Hash), nil
+	}
+	
+	h, err := hash.FromHex(hexStr)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	
+	// Cache the result for future use
+	hashCache.Store(hexStr, h)
+	return h, nil
+}
+
+// estimateFlatTreeSize estimates the total number of entries in a tree structure
+func estimateFlatTreeSize(rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) int {
+	// Start with root tree entries
+	estimate := len(rootTree.Tree)
+	
+	// Rough estimate: assume each directory has an average of 5-10 entries
+	// and count directories to get a ballpark
+	treeCount := 0
+	for _, entry := range rootTree.Tree {
+		if entry.FileMode&0o40000 != 0 { // Is directory
+			treeCount++
+		}
+	}
+	
+	// Conservative estimate: each tree directory contains ~8 entries on average
+	estimate += treeCount * 8
+	
+	// Cap at reasonable bounds
+	if estimate < 10 {
+		return 10
+	}
+	if estimate > 10000 {
+		return 10000
+	}
+	
+	return estimate
+}
 
 // FlatTreeEntry represents a single entry in a flattened Git tree structure.
 // Unlike TreeEntry, this includes the full path from the repository root,
@@ -492,8 +563,9 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 	logger := log.FromContext(ctx)
 	logger.Debug("Flatten tree", "treeHash", rootTree.Hash.String())
 
-	// Build flat entries iteratively using breadth-first traversal
-	var entries []FlatTreeEntry
+	// Pre-allocate entries slice with estimated capacity to reduce reallocations
+	estimatedSize := estimateFlatTreeSize(rootTree, allTreeObjects)
+	entries := make([]FlatTreeEntry, 0, estimatedSize)
 
 	// Queue for processing: each item contains the tree object and its base path
 	type queueItem struct {
@@ -501,8 +573,10 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 		basePath string
 	}
 
-	queue := []queueItem{{tree: rootTree, basePath: ""}}
-	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue))
+	// Pre-allocate queue with reasonable capacity
+	queue := make([]queueItem, 0, 32)
+	queue = append(queue, queueItem{tree: rootTree, basePath: ""})
+	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue), "estimatedEntries", estimatedSize)
 
 	// Process the queue iteratively
 	for len(queue) > 0 {
@@ -511,7 +585,8 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 
 		// Process all entries in this tree
 		for _, entry := range current.tree.Tree {
-			entryHash, err := hash.FromHex(entry.Hash)
+			// Use cached hash parsing to avoid repeated allocations
+			entryHash, err := getCachedHash(entry.Hash)
 			if err != nil {
 				logger.Debug("Failed to parse entry hash",
 					"hash", entry.Hash,
@@ -519,10 +594,17 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 				return nil, fmt.Errorf("parsing entry hash %s: %w", entry.Hash, err)
 			}
 
-			// Build the full path for this entry
-			entryPath := entry.FileName
+			// Build the full path for this entry using pooled string builder
+			var entryPath string
 			if current.basePath != "" {
-				entryPath = current.basePath + "/" + entry.FileName
+				pathBuilder := getPathBuilder()
+				pathBuilder.WriteString(current.basePath)
+				pathBuilder.WriteString("/")
+				pathBuilder.WriteString(entry.FileName)
+				entryPath = pathBuilder.String()
+				putPathBuilder(pathBuilder)
+			} else {
+				entryPath = entry.FileName
 			}
 
 			// Determine the type based on the mode
