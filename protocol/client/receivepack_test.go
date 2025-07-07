@@ -16,53 +16,47 @@ import (
 
 func TestReceivePack(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   string
-		expectedError  string
-		expectedResult string
-		setupClient    options.Option
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError string
+		setupClient   options.Option
 	}{
 		{
-			name:           "successful response",
-			statusCode:     http.StatusOK,
-			responseBody:   "000dunpack ok0000", // Valid Git packet format: unpack ok + flush
-			expectedError:  "",
-			expectedResult: "000dunpack ok0000",
-			setupClient:    nil,
+			name:          "successful response",
+			statusCode:    http.StatusOK,
+			responseBody:  "000dunpack ok0000", // Valid Git packet format: unpack ok + flush
+			expectedError: "",
+			setupClient:   nil,
 		},
 		{
-			name:           "not found",
-			statusCode:     http.StatusNotFound,
-			responseBody:   "not found",
-			expectedError:  "got status code 404: 404 Not Found",
-			expectedResult: "",
-			setupClient:    nil,
+			name:          "not found",
+			statusCode:    http.StatusNotFound,
+			responseBody:  "not found",
+			expectedError: "got status code 404: 404 Not Found",
+			setupClient:   nil,
 		},
 		{
-			name:           "server error",
-			statusCode:     http.StatusInternalServerError,
-			responseBody:   "server error",
-			expectedError:  "got status code 500: 500 Internal Server Error",
-			expectedResult: "",
-			setupClient:    nil,
+			name:          "server error",
+			statusCode:    http.StatusInternalServerError,
+			responseBody:  "server error",
+			expectedError: "got status code 500: 500 Internal Server Error",
+			setupClient:   nil,
 		},
 		{
-			name:           "timeout error",
-			statusCode:     0,
-			responseBody:   "",
-			expectedError:  "context deadline exceeded",
-			expectedResult: "",
+			name:          "timeout error",
+			statusCode:    0,
+			responseBody:  "",
+			expectedError: "context deadline exceeded",
 			setupClient: options.WithHTTPClient(&http.Client{
 				Timeout: 1 * time.Nanosecond,
 			}),
 		},
 		{
-			name:           "connection refused",
-			statusCode:     0,
-			responseBody:   "",
-			expectedError:  "i/o timeout",
-			expectedResult: "",
+			name:          "connection refused",
+			statusCode:    0,
+			responseBody:  "",
+			expectedError: "i/o timeout",
 			setupClient: options.WithHTTPClient(&http.Client{
 				Transport: &http.Transport{
 					DialContext: (&net.Dialer{
@@ -79,9 +73,8 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
-			expectedResult: "",
-			setupClient:    nil,
+			expectedError: "git server error:",
+			setupClient:   nil,
 		},
 		{
 			name:       "git reference update error",
@@ -91,9 +84,8 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
-			expectedResult: "",
-			setupClient:    nil,
+			expectedError: "reference update failed for refs/heads/main:",
+			setupClient:   nil,
 		},
 		{
 			name:       "git unpack error",
@@ -103,9 +95,8 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
-			expectedResult: "",
-			setupClient:    nil,
+			expectedError: "index-pack failed",
+			setupClient:   nil,
 		},
 		{
 			name:       "git fatal error with unpack keyword",
@@ -115,9 +106,8 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
-			expectedResult: "",
-			setupClient:    nil,
+			expectedError: "unpack failed due to corrupt data",
+			setupClient:   nil,
 		},
 		{
 			name:       "git ERR packet",
@@ -127,9 +117,8 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
-			expectedResult: "",
-			setupClient:    nil,
+			expectedError: "push declined due to email policy",
+			setupClient:   nil,
 		},
 		{
 			name:       "multi-line error like user's first example",
@@ -139,9 +128,8 @@ func TestReceivePack(t *testing.T) {
 				pkt, _ := protocol.PackLine(message).Marshal()
 				return string(pkt)
 			}(),
-			expectedError:  "git protocol error:", // ReceivePack should return error for protocol errors
-			expectedResult: "",
-			setupClient:    nil,
+			expectedError: "object 457e2462aee3d41d1a2832f10419213e10091bdc: treeNotSorted: not properly sorted",
+			setupClient:   nil,
 		},
 	}
 

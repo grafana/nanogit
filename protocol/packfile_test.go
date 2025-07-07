@@ -90,7 +90,7 @@ func TestGolden(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, obj := range tc.expectedObjects {
-				entry, err := pr.ReadObject()
+				entry, err := pr.ReadObject(context.Background())
 				require.NoError(t, err)
 
 				require.NotNil(t, entry.Object)
@@ -101,12 +101,12 @@ func TestGolden(t *testing.T) {
 			}
 
 			// There should be a trailer here.
-			entry, err := pr.ReadObject()
+			entry, err := pr.ReadObject(context.Background())
 			require.NoError(t, err)
 			require.Nil(t, entry.Object)
 			require.NotNil(t, entry.Trailer)
 
-			_, err = pr.ReadObject()
+			_, err = pr.ReadObject(context.Background())
 			require.ErrorIs(t, err, io.EOF)
 		})
 	}
