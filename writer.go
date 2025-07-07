@@ -60,8 +60,8 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 
 	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
-	// Get extra objects to avoid fetching them later in the next calls
-	commit, err := c.getCommit(ctx, ref.Hash, true)
+	// Get essential objects - fetch only commit and root tree, defer flat tree loading
+	commit, err := c.getCommit(ctx, ref.Hash, false)
 	if err != nil {
 		return nil, fmt.Errorf("get commit %s: %w", ref.Hash.String(), err)
 	}
@@ -71,21 +71,14 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		return nil, fmt.Errorf("get tree %s: %w", commit.Tree.String(), err)
 	}
 
-	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
-	if err != nil {
-		return nil, fmt.Errorf("get flat tree for commit %s: %w", commit.Hash.String(), err)
-	}
-
-	entries := make(map[string]*FlatTreeEntry, len(currentTree.Entries))
-	for _, entry := range currentTree.Entries {
-		entries[entry.Path] = &entry
-	}
+	// Initialize empty tree entries map - will be populated lazily as needed
+	entries := make(map[string]*FlatTreeEntry, 64) // Start with reasonable capacity
 
 	logger.Debug("Staged writer ready",
 		"ref_name", ref.Name,
 		"commit_hash", commit.Hash.String(),
 		"tree_hash", treeObj.Hash.String(),
-		"entry_count", len(entries))
+		"lazy_loading", true)
 
 	// Convert writer storage mode to protocol storage mode
 	var protocolStorageMode protocol.PackfileStorageMode
@@ -136,12 +129,15 @@ type stagedWriter struct {
 	lastTree *protocol.PackfileObject
 	// Cache of fetched tree objects
 	objStorage storage.PackfileStorage
-	// Flat mapping of paths to tree entries
+	// Lazy-loaded flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
 	// Storage mode for packfile writer
 	storageMode protocol.PackfileStorageMode
 	// Track if cleanup has been called
 	isCleanedUp bool
+	// Lazy loading state
+	flatTreeLoaded bool
+	flatTreeCache  *FlatTree
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.
@@ -149,6 +145,42 @@ func (w *stagedWriter) checkCleanupState() error {
 	if w.isCleanedUp {
 		return ErrWriterCleanedUp
 	}
+	return nil
+}
+
+// ensureFlatTreeLoaded loads the flat tree if it hasn't been loaded yet.
+// This implements lazy loading to avoid the expensive GetFlatTree call during initialization.
+func (w *stagedWriter) ensureFlatTreeLoaded(ctx context.Context) error {
+	if w.flatTreeLoaded {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Lazy loading flat tree", "commit_hash", w.lastCommit.Hash.String())
+
+	currentTree, err := w.client.GetFlatTree(ctx, w.lastCommit.Hash)
+	if err != nil {
+		return fmt.Errorf("lazy load flat tree for commit %s: %w", w.lastCommit.Hash.String(), err)
+	}
+
+	// Populate the tree entries map efficiently
+	if len(currentTree.Entries) > len(w.treeEntries) {
+		// Resize map if we need more capacity
+		w.treeEntries = make(map[string]*FlatTreeEntry, len(currentTree.Entries))
+	}
+
+	for i := range currentTree.Entries {
+		entry := &currentTree.Entries[i] // Avoid copying
+		w.treeEntries[entry.Path] = entry
+	}
+
+	w.flatTreeCache = currentTree
+	w.flatTreeLoaded = true
+
+	logger.Debug("Flat tree loaded lazily",
+		"entry_count", len(w.treeEntries),
+		"memory_saved_during_init", true)
+
 	return nil
 }
 
@@ -174,6 +206,11 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 
 	if path == "" {
 		return false, ErrEmptyPath
+	}
+
+	// Lazy load flat tree only when needed
+	if err := w.ensureFlatTreeLoaded(ctx); err != nil {
+		return false, fmt.Errorf("ensure flat tree loaded: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
@@ -213,6 +250,11 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
+	}
+
+	// Lazy load flat tree only when needed
+	if err := w.ensureFlatTreeLoaded(ctx); err != nil {
+		return hash.Zero, fmt.Errorf("ensure flat tree loaded: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
@@ -274,6 +316,11 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 		return hash.Zero, ErrEmptyPath
 	}
 
+	// Lazy load flat tree only when needed
+	if err := w.ensureFlatTreeLoaded(ctx); err != nil {
+		return hash.Zero, fmt.Errorf("ensure flat tree loaded: %w", err)
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Update blob",
 		"path", path,
@@ -332,6 +379,11 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 		return hash.Zero, ErrEmptyPath
 	}
 
+	// Lazy load flat tree only when needed
+	if err := w.ensureFlatTreeLoaded(ctx); err != nil {
+		return hash.Zero, fmt.Errorf("ensure flat tree loaded: %w", err)
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Delete blob",
 		"path", path)
@@ -386,6 +438,11 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return nil, err
+	}
+
+	// Lazy load flat tree only when needed
+	if err := w.ensureFlatTreeLoaded(ctx); err != nil {
+		return nil, fmt.Errorf("ensure flat tree loaded: %w", err)
 	}
 
 	existing, ok := w.treeEntries[path]
@@ -475,6 +532,11 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 		w.lastTree = &emptyTree
 
 		return emptyHash, nil
+	}
+
+	// Lazy load flat tree only when needed
+	if err := w.ensureFlatTreeLoaded(ctx); err != nil {
+		return hash.Zero, fmt.Errorf("ensure flat tree loaded: %w", err)
 	}
 
 	existing, ok := w.treeEntries[path]
