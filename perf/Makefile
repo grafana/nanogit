@@ -7,6 +7,7 @@
 .PHONY: test-perf-tree-small test-perf-tree-medium test-perf-tree-large test-perf-tree-xlarge
 .PHONY: test-perf-bulk-small test-perf-bulk-medium test-perf-bulk-large test-perf-bulk-xlarge
 .PHONY: test-perf-compare-small test-perf-compare-medium test-perf-compare-large test-perf-compare-xlarge
+.PHONY: profile-cpu profile-mem profile-all profile-compare profile-clean profile-baseline
 
 # Default target
 help:
@@ -42,6 +43,14 @@ help:
 	@echo "  test-perf-tree-{small,medium,large,xlarge}     - FlatTree by size"
 	@echo "  test-perf-bulk-{small,medium}                  - Bulk ops (small/medium only)"
 	@echo "  test-perf-compare-{small,medium}               - Compare commits (small/medium only)"
+	@echo ""
+	@echo "Profiling Targets:"
+	@echo "  profile-baseline    - Create baseline profiles (run before optimizations)"
+	@echo "  profile-cpu         - Generate CPU profile for file operations"
+	@echo "  profile-mem         - Generate memory profile for file operations"
+	@echo "  profile-all         - Generate both CPU and memory profiles"
+	@echo "  profile-compare     - Compare profiles with baseline"
+	@echo "  profile-clean       - Clean up profile files"
 
 # Setup performance test data (one-time setup)
 test-perf-setup:
@@ -169,3 +178,57 @@ test-perf-compare-xlarge:
 # Full performance benchmark suite (combines all test types)
 test-perf: test-perf-consistency test-perf-file-ops
 	@echo "Core performance testing completed"
+
+# Profiling targets
+profile-cpu:
+	@echo "Generating CPU profile for file operations..."
+	@mkdir -p profiles
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestFileOperationsPerformance" -cpuprofile=profiles/cpu.prof .
+	@echo "CPU profile saved to profiles/cpu.prof"
+	@echo "Analyze with: go tool pprof profiles/cpu.prof"
+
+profile-mem:
+	@echo "Generating memory profile for file operations..."
+	@mkdir -p profiles
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestFileOperationsPerformance" -memprofile=profiles/mem.prof .
+	@echo "Memory profile saved to profiles/mem.prof"
+	@echo "Analyze with: go tool pprof profiles/mem.prof"
+
+profile-all:
+	@echo "Generating both CPU and memory profiles..."
+	@mkdir -p profiles
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestFileOperationsPerformance" -cpuprofile=profiles/cpu.prof -memprofile=profiles/mem.prof .
+	@echo "Profiles saved to profiles/"
+	@echo "Analyze CPU: go tool pprof profiles/cpu.prof"
+	@echo "Analyze Memory: go tool pprof profiles/mem.prof"
+
+profile-compare:
+	@echo "Comparing profiles with baseline..."
+	@if [ ! -f profiles/baseline_cpu.prof ]; then \
+		echo "No baseline found. Run 'make profile-baseline' first."; \
+		exit 1; \
+	fi
+	@if [ ! -f profiles/cpu.prof ]; then \
+		echo "No current profile found. Run 'make profile-cpu' first."; \
+		exit 1; \
+	fi
+	@echo "CPU comparison (baseline vs current):"
+	go tool pprof -base=profiles/baseline_cpu.prof profiles/cpu.prof -top
+	@echo ""
+	@echo "Memory comparison (baseline vs current):"
+	@if [ -f profiles/baseline_mem.prof ] && [ -f profiles/mem.prof ]; then \
+		go tool pprof -base=profiles/baseline_mem.prof profiles/mem.prof -top; \
+	else \
+		echo "Memory profiles not available for comparison"; \
+	fi
+
+profile-baseline:
+	@echo "Creating baseline profiles..."
+	@mkdir -p profiles
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestFileOperationsPerformance" -cpuprofile=profiles/baseline_cpu.prof -memprofile=profiles/baseline_mem.prof .
+	@echo "Baseline profiles saved to profiles/baseline_*.prof"
+
+profile-clean:
+	@echo "Cleaning up profile files..."
+	@rm -rf profiles/
+	@echo "Profile files cleaned"
