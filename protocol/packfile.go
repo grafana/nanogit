@@ -425,32 +425,8 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	return obj.parseDelta(hex.EncodeToString(ref[:]))
 }
 
-// limitedReader wraps a reader and only allows reading one byte at a time
-// This prevents the zlib reader from consuming too much data from the underlying stream
-type limitedReader struct {
-	reader    io.Reader
-	bytesRead int
-}
-
-func (lr *limitedReader) Read(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-
-	// Only read one byte at a time to prevent zlib from consuming too much
-	n, err := lr.reader.Read(p[:1])
-	lr.bytesRead += n
-	return n, err
-}
-
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
-	const MaxCompressedSize = 10 << 20 // 10 MB compressed max — adjust as needed
-	// Wrap p.reader to prevent zlib from reading into the next object
-	limited := &limitedReader{
-		reader: p.reader,
-	}
-
-	zr, err := zlib.NewReader(limited)
+	zr, err := zlib.NewReader(p.reader)
 	if err != nil {
 		return nil, err
 	}
@@ -472,12 +448,6 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 
 	if data.Len() != sz {
 		return nil, ErrInflatedDataIncorrectSize
-	}
-
-	// Optional: check if zlib reader consumed too much compressed input
-	// If limited.bytesRead >= MaxCompressedSize, zlib read too much — suspicious
-	if limited.bytesRead >= MaxCompressedSize {
-		return nil, fmt.Errorf("zlib stream too large (exceeded %d bytes compressed)", MaxCompressedSize)
 	}
 
 	return data.Bytes(), nil
@@ -516,8 +486,10 @@ func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, erro
 	logger.Debug("Read packfile header", "version", version, "object_count", countObjects)
 
 	// Now the reader points to the object data stream
+	// For fast I/O
+	bufferedReader := bufio.NewReader(reader)
 	return &PackfileReader{
-		reader:           reader,
+		reader:           bufferedReader,
 		remainingObjects: countObjects,
 		algo:             crypto.SHA1, // TODO: Support SHA256
 	}, nil
