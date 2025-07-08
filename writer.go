@@ -18,42 +18,6 @@ import (
 // ErrWriterCleanedUp is returned when trying to use a writer after cleanup has been called.
 var ErrWriterCleanedUp = errors.New("writer has been cleaned up and can no longer be used")
 
-// entryPool manages reusable slices for PackfileTreeEntry to reduce allocations.
-// This addresses the frequent slice allocations in updateTreeEntry.
-type entryPool struct {
-	pool [][]protocol.PackfileTreeEntry
-}
-
-// newEntryPool creates a new entry pool.
-func newEntryPool() *entryPool {
-	return &entryPool{
-		pool: make([][]protocol.PackfileTreeEntry, 0, 16), // Start with some capacity
-	}
-}
-
-// get retrieves a slice with at least the specified capacity.
-// If a suitable slice exists in the pool, it's reused; otherwise a new one is allocated.
-func (p *entryPool) get(capacity int) []protocol.PackfileTreeEntry {
-	// Look for a suitable slice in the pool
-	for i, slice := range p.pool {
-		if cap(slice) >= capacity {
-			// Remove from pool and return
-			p.pool[i] = p.pool[len(p.pool)-1]
-			p.pool = p.pool[:len(p.pool)-1]
-			// Reset length but keep capacity
-			return slice[:0]
-		}
-	}
-	// No suitable slice found, allocate new one
-	return make([]protocol.PackfileTreeEntry, 0, capacity)
-}
-
-// put returns a slice to the pool for reuse.
-func (p *entryPool) put(slice []protocol.PackfileTreeEntry) {
-	if cap(slice) > 0 && len(p.pool) < 32 { // Limit pool size to avoid memory leaks
-		p.pool = append(p.pool, slice[:0]) // Reset length but keep capacity
-	}
-}
 
 // NewStagedWriter creates a new StagedWriter for staging changes to a Git reference.
 // It initializes the writer with the current state of the specified reference,
@@ -150,7 +114,6 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		objStorage:  objStorage,
 		treeEntries: entries,
 		storageMode: protocolStorageMode,
-		entryPool:   newEntryPool(), // Initialize the entry pool for memory optimization
 		dirtyPaths:  make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
 	}, nil
 }
@@ -182,8 +145,6 @@ type stagedWriter struct {
 	treeEntries map[string]*FlatTreeEntry
 	// Storage mode for packfile writer
 	storageMode protocol.PackfileStorageMode
-	// Memory optimization: pool for reusing tree entry slices
-	entryPool *entryPool
 	// Track if cleanup has been called
 	isCleanedUp bool
 	// Deferred tree building optimization: track which directory paths need tree rebuilding
@@ -788,79 +749,6 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	return nil
 }
 
-// updateTreeEntry creates a new tree object by adding or updating an entry in an existing tree.
-// This method takes an existing tree object and either adds a new entry or updates an existing
-// entry with the same filename. It maintains proper Git tree object sorting and formatting.
-//
-// Parameters:
-//   - ctx: Context for the operation
-//   - obj: The existing tree object to modify
-//   - current: The tree entry to add or update
-//
-// Returns:
-//   - *protocol.PackfileObject: New tree object with the updated entry
-//   - error: Error if tree creation fails
-func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.PackfileObject, current protocol.PackfileTreeEntry) (*protocol.PackfileObject, error) {
-	logger := log.FromContext(ctx)
-	logger.Debug("Update tree entry",
-		"fileName", current.FileName,
-		"fileMode", fmt.Sprintf("%o", current.FileMode),
-	)
-
-	// Use pooled slice to reduce allocations - get appropriate capacity
-	var capacity int
-	found := false
-	for _, entry := range treeObj.Tree {
-		if entry.FileName == current.FileName {
-			found = true
-			break
-		}
-	}
-	if found {
-		// Replacing existing entry - same capacity
-		capacity = len(treeObj.Tree)
-	} else {
-		// Adding new entry - need +1 capacity
-		capacity = len(treeObj.Tree) + 1
-	}
-	
-	combinedEntries := w.entryPool.get(capacity)
-
-	// Add all entries except the one we're updating
-	for _, entry := range treeObj.Tree {
-		if entry.FileName != current.FileName {
-			combinedEntries = append(combinedEntries, entry)
-		}
-	}
-
-	// Add the new/updated entry
-	combinedEntries = append(combinedEntries, current)
-	
-	// CRITICAL: Make a copy of the slice for BuildTreeObject since it sorts in-place
-	// and we don't want to corrupt the pooled slice
-	entriesCopy := make([]protocol.PackfileTreeEntry, len(combinedEntries))
-	copy(entriesCopy, combinedEntries)
-	
-	// Return slice to pool immediately after copying, before BuildTreeObject
-	w.entryPool.put(combinedEntries)
-	
-	newObj, err := protocol.BuildTreeObject(crypto.SHA1, entriesCopy)
-	if err != nil {
-		return nil, fmt.Errorf("build tree object: %w", err)
-	}
-
-	w.writer.AddObject(newObj)
-	w.objStorage.Add(&newObj)
-	w.objStorage.Delete(treeObj.Hash)
-
-	logger.Debug("Tree entry updated",
-		"fileName", current.FileName,
-		"oldEntryCount", len(treeObj.Tree),
-		"newEntryCount", len(combinedEntries),
-		"newHash", newObj.Hash.String())
-
-	return &newObj, nil
-}
 
 // removeBlobFromTree marks directory paths as dirty for deferred tree building after blob removal.
 // This method handles marking the tree structure for updates when deleting files from Git:
@@ -945,66 +833,6 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 	return nil
 }
 
-// removeTreeEntry creates a new tree object by removing a specific entry from an existing tree.
-// This is a lower-level helper method that handles the actual removal of an entry from a
-// Git tree object, creating a new tree object with the filtered entries.
-//
-// Parameters:
-//   - ctx: Context for the operation
-//   - obj: The tree object to modify
-//   - targetFileName: The filename of the entry to remove
-//
-// Returns:
-//   - *protocol.PackfileObject: New tree object without the specified entry
-//   - error: Error if tree creation fails
-//
-// Note: If the target entry is not found, the original object is returned unchanged.
-func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.PackfileObject, targetFileName string) (*protocol.PackfileObject, error) {
-	logger := log.FromContext(ctx)
-
-	logger.Debug("Remove tree entry",
-		"targetFileName", targetFileName,
-		"treeHash", treeObj.Hash.String())
-
-	// Create a new slice excluding the target entry
-	filteredEntries := make([]protocol.PackfileTreeEntry, 0, len(treeObj.Tree))
-	found := false
-
-	for _, entry := range treeObj.Tree {
-		if entry.FileName != targetFileName {
-			filteredEntries = append(filteredEntries, entry)
-		} else {
-			found = true
-		}
-	}
-
-	if !found {
-		logger.Debug("Entry not found in tree",
-			"targetFileName", targetFileName,
-			"treeHash", treeObj.Hash.String())
-		// Entry not found in tree, but this might be okay for intermediate trees
-		// Return the original object unchanged
-		return treeObj, nil
-	}
-
-	// Build new tree object with the filtered entries
-	newObj, err := protocol.BuildTreeObject(crypto.SHA1, filteredEntries)
-	if err != nil {
-		return nil, fmt.Errorf("build tree object: %w", err)
-	}
-
-	w.writer.AddObject(newObj)
-	w.objStorage.Add(&newObj)
-	w.objStorage.Delete(treeObj.Hash)
-
-	logger.Debug("Tree entry removed",
-		"targetFileName", targetFileName,
-		"oldEntryCount", len(treeObj.Tree),
-		"newEntryCount", len(filteredEntries),
-		"newHash", newObj.Hash.String())
-
-	return &newObj, nil
-}
 
 // buildPendingTrees builds all dirty tree objects in topological order (deepest first).
 // This method is called at commit time to efficiently build all trees that need updating.
@@ -1062,12 +890,8 @@ func (w *stagedWriter) buildPendingTrees(ctx context.Context) error {
 	return nil
 }
 
-// buildSingleTree builds a single tree object for the given directory path.
-// It collects all direct children (files and subdirectories) and creates a tree object.
-func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) error {
-	logger := log.FromContext(ctx)
-	
-	// Collect all direct children of this directory
+// collectDirectChildren collects all direct children entries for a directory path.
+func (w *stagedWriter) collectDirectChildren(dirPath string) []protocol.PackfileTreeEntry {
 	var entries []protocol.PackfileTreeEntry
 	pathPrefix := dirPath
 	if pathPrefix != "" {
@@ -1080,26 +904,7 @@ func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) erro
 			continue // Skip the directory itself
 		}
 		
-		var isDirectChild bool
-		var childName string
-		
-		if dirPath == "" {
-			// Root directory: direct children have no "/" in their path
-			if !strings.Contains(entryPath, "/") {
-				isDirectChild = true
-				childName = entryPath
-			}
-		} else {
-			// Non-root directory: direct children start with dirPath + "/"
-			if strings.HasPrefix(entryPath, pathPrefix) {
-				remainingPath := entryPath[len(pathPrefix):]
-				if !strings.Contains(remainingPath, "/") {
-					isDirectChild = true
-					childName = remainingPath
-				}
-			}
-		}
-		
+		isDirectChild, childName := w.isDirectChild(entryPath, dirPath, pathPrefix)
 		if isDirectChild {
 			entries = append(entries, protocol.PackfileTreeEntry{
 				FileMode: entry.Mode,
@@ -1109,36 +914,32 @@ func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) erro
 		}
 	}
 	
-	// Handle empty directories by creating empty tree objects
-	if len(entries) == 0 {
-		logger.Debug("Creating empty tree object", "path", dirPath)
-		// Create an empty tree object for empty directories
-		emptyTreeObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{})
-		if err != nil {
-			return fmt.Errorf("build empty tree object for %q: %w", dirPath, err)
+	return entries
+}
+
+// isDirectChild determines if an entry path is a direct child of a directory.
+func (w *stagedWriter) isDirectChild(entryPath, dirPath, pathPrefix string) (bool, string) {
+	if dirPath == "" {
+		// Root directory: direct children have no "/" in their path
+		if !strings.Contains(entryPath, "/") {
+			return true, entryPath
 		}
-		
-		// Add to writer and storage
-		w.writer.AddObject(emptyTreeObj)
-		w.objStorage.Add(&emptyTreeObj)
-		
-		// Update the tree entry with the calculated hash
-		if dirPath == "" {
-			// This is the root tree
-			w.lastTree = &emptyTreeObj
-			logger.Debug("Built empty root tree", "hash", emptyTreeObj.Hash.String())
-		} else {
-			// Update the directory entry
-			if dirEntry, exists := w.treeEntries[dirPath]; exists {
-				dirEntry.Hash = emptyTreeObj.Hash
+	} else {
+		// Non-root directory: direct children start with dirPath + "/"
+		if strings.HasPrefix(entryPath, pathPrefix) {
+			remainingPath := entryPath[len(pathPrefix):]
+			if !strings.Contains(remainingPath, "/") {
+				return true, remainingPath
 			}
-			logger.Debug("Built empty directory tree", "path", dirPath, "hash", emptyTreeObj.Hash.String())
 		}
-		
-		return nil
 	}
+	return false, ""
+}
+
+// buildTreeObject creates a tree object and updates storage.
+func (w *stagedWriter) buildTreeObject(ctx context.Context, dirPath string, entries []protocol.PackfileTreeEntry) error {
+	logger := log.FromContext(ctx)
 	
-	// Build the tree object
 	treeObj, err := protocol.BuildTreeObject(crypto.SHA1, entries)
 	if err != nil {
 		return fmt.Errorf("build tree object for %q: %w", dirPath, err)
@@ -1162,6 +963,24 @@ func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) erro
 	}
 	
 	return nil
+}
+
+// buildSingleTree builds a single tree object for the given directory path.
+// It collects all direct children (files and subdirectories) and creates a tree object.
+func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) error {
+	logger := log.FromContext(ctx)
+	
+	// Collect all direct children of this directory
+	entries := w.collectDirectChildren(dirPath)
+	
+	// Handle empty directories by creating empty tree objects
+	if len(entries) == 0 {
+		logger.Debug("Creating empty tree object", "path", dirPath)
+		return w.buildTreeObject(ctx, dirPath, []protocol.PackfileTreeEntry{})
+	}
+	
+	// Build the tree object with collected entries
+	return w.buildTreeObject(ctx, dirPath, entries)
 }
 
 // Cleanup releases all resources held by the writer and clears staged changes.
