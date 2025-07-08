@@ -245,7 +245,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 //	}
 //	fmt.Printf("Commit by %s: %s\n", commit.Author.Name, commit.Message)
 func (c *httpClient) GetCommit(ctx context.Context, commitHash hash.Hash) (*Commit, error) {
-	return c.getCommit(ctx, commitHash, false)
+	return c.getCommit(ctx, commitHash, true)
 }
 
 func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtraObjects bool) (*Commit, error) {
