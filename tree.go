@@ -25,7 +25,7 @@ var (
 			return b
 		},
 	}
-	
+
 	// Cache for hash.FromHex conversions to avoid repeated parsing
 	hashCache = sync.Map{} // map[string]hash.Hash
 )
@@ -46,12 +46,12 @@ func getCachedHash(hexStr string) (hash.Hash, error) {
 	if cached, ok := hashCache.Load(hexStr); ok {
 		return cached.(hash.Hash), nil
 	}
-	
+
 	h, err := hash.FromHex(hexStr)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	
+
 	// Cache the result for future use
 	hashCache.Store(hexStr, h)
 	return h, nil
@@ -59,29 +59,65 @@ func getCachedHash(hexStr string) (hash.Hash, error) {
 
 // estimateFlatTreeSize estimates the total number of entries in a tree structure
 func estimateFlatTreeSize(rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) int {
-	// Start with root tree entries
-	estimate := len(rootTree.Tree)
-	
-	// Rough estimate: assume each directory has an average of 5-10 entries
-	// and count directories to get a ballpark
+	// More accurate estimation by sampling actual tree sizes
+	totalEntries := 0
 	treeCount := 0
-	for _, entry := range rootTree.Tree {
-		if entry.FileMode&0o40000 != 0 { // Is directory
-			treeCount++
+	sampleSize := 0
+
+	// Process up to 10 trees to get better average
+	queue := []*protocol.PackfileObject{rootTree}
+	visited := make(map[string]bool)
+
+	for len(queue) > 0 && sampleSize < 10 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if visited[current.Hash.String()] {
+			continue
+		}
+		visited[current.Hash.String()] = true
+		sampleSize++
+
+		totalEntries += len(current.Tree)
+
+		// Add subdirectories to queue for sampling
+		for _, entry := range current.Tree {
+			if entry.FileMode&0o40000 != 0 { // Is directory
+				treeCount++
+				if sampleSize < 5 { // Only sample first few levels
+					if _, exists := allTreeObjects.GetByType(hash.Hash{}, protocol.ObjectTypeTree); exists {
+						if entryHash, err := hash.FromHex(entry.Hash); err == nil {
+							if childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
+								queue = append(queue, childTree)
+							}
+						}
+					}
+				}
+			}
 		}
 	}
-	
-	// Conservative estimate: each tree directory contains ~8 entries on average
-	estimate += treeCount * 8
-	
-	// Cap at reasonable bounds
-	if estimate < 10 {
-		return 10
+
+	if sampleSize == 0 {
+		return 100 // Safe default
 	}
-	if estimate > 10000 {
-		return 10000
+
+	// Calculate average entries per tree from sample
+	avgEntriesPerTree := float64(totalEntries) / float64(sampleSize)
+
+	// Estimate total trees (exponential growth factor)
+	estimatedTotalTrees := treeCount * 3 // More aggressive multiplier
+
+	// Calculate final estimate
+	estimate := int(avgEntriesPerTree * float64(estimatedTotalTrees))
+
+	// Apply bounds with higher ceiling
+	if estimate < 50 {
+		return 50
 	}
-	
+	if estimate > 50000 {
+		return 50000
+	}
+
 	return estimate
 }
 
@@ -573,15 +609,31 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 		basePath string
 	}
 
-	// Pre-allocate queue with reasonable capacity
-	queue := make([]queueItem, 0, 32)
+	// Pre-allocate queue with capacity based on estimated tree depth
+	// Use higher initial capacity to reduce reallocations
+	queueCap := estimatedSize / 20 // Rough estimate of directory depth
+	if queueCap < 64 {
+		queueCap = 64
+	}
+	if queueCap > 512 {
+		queueCap = 512
+	}
+	queue := make([]queueItem, 0, queueCap)
 	queue = append(queue, queueItem{tree: rootTree, basePath: ""})
 	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue), "estimatedEntries", estimatedSize)
 
-	// Process the queue iteratively
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
+	// Process the queue iteratively with efficient removal
+	queueIdx := 0
+	for queueIdx < len(queue) {
+		current := queue[queueIdx]
+		queueIdx++
+
+		// Reset queue when we've processed enough to avoid memory buildup
+		if queueIdx > 100 && queueIdx*2 > len(queue) {
+			copy(queue, queue[queueIdx:])
+			queue = queue[:len(queue)-queueIdx]
+			queueIdx = 0
+		}
 
 		// Process all entries in this tree
 		for _, entry := range current.tree.Tree {
@@ -639,7 +691,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 		}
 
 		logger.Debug("Queue progress",
-			"remaining", len(queue),
+			"remaining", len(queue)-queueIdx,
 			"processedEntries", len(entries))
 	}
 

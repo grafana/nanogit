@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 )
 
 // Package protocol implements Git's packet format used in various Git protocols.
@@ -71,6 +72,14 @@ var (
 	// ErrGitUnpackError is returned when Git pack unpacking fails.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrGitUnpackError = errors.New("git unpack error")
+
+	// packetDataPool provides buffer reuse for packet data to reduce allocations
+	packetDataPool = sync.Pool{
+		New: func() interface{} {
+			// Start with 8KB buffer, which covers most Git packets
+			return make([]byte, 0, 8192)
+		},
+	}
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -440,20 +449,48 @@ func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err 
 	return lengthBytes, length, nil
 }
 
-// readPacketData reads the packet data portion
+// readPacketData reads the packet data portion using buffer pooling to reduce allocations
 func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte, error) {
 	dataLength := length - 4
-	packetData := make([]byte, dataLength)
+	
+	// Get buffer from pool and ensure it has enough capacity
+	pooledBuf := packetDataPool.Get().([]byte)
+	
+	// Ensure buffer has sufficient capacity
+	if cap(pooledBuf) < int(dataLength) {
+		// Buffer too small, allocate new one and return old to pool
+		packetDataPool.Put(pooledBuf)
+		packetData := make([]byte, dataLength)
+		n, err := io.ReadFull(reader, packetData)
+		if err != nil {
+			fullPacket := append(lengthBytes, packetData[:n]...)
+			if err == io.ErrUnexpectedEOF || err == io.EOF {
+				return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
+			}
+			return nil, NewPackParseError(fullPacket, fmt.Errorf("reading packet data: %w", err))
+		}
+		return packetData, nil
+	}
+	
+	// Use pooled buffer
+	packetData := pooledBuf[:dataLength]
 	n, err := io.ReadFull(reader, packetData)
 	if err != nil {
+		// Return buffer to pool before error
+		packetDataPool.Put(pooledBuf[:0])
 		fullPacket := append(lengthBytes, packetData[:n]...)
 		if err == io.ErrUnexpectedEOF || err == io.EOF {
-			// Partial read - this is a malformed packet
 			return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
 		}
 		return nil, NewPackParseError(fullPacket, fmt.Errorf("reading packet data: %w", err))
 	}
-	return packetData, nil
+	
+	// Make a copy to return, then return buffer to pool
+	result := make([]byte, dataLength)
+	copy(result, packetData)
+	packetDataPool.Put(pooledBuf[:0])
+	
+	return result, nil
 }
 
 // detectError processes packet content to detect and handle various Git protocol error conditions.

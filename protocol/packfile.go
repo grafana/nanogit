@@ -33,7 +33,7 @@ var (
 			return bufio.NewReader(nil)
 		},
 	}
-	
+
 	// Pool for hex encoding buffers to reduce allocations
 	hexBufferPool = sync.Pool{
 		New: func() interface{} {
