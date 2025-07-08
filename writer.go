@@ -463,7 +463,7 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 	if path == "" || path == "." {
 		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
 		if err != nil {
-			return nil, fmt.Errorf("create empty tree: %w", err)
+			return hash.Zero, fmt.Errorf("create empty tree: %w", err)
 		}
 
 		emptyTree := protocol.PackfileObject{
@@ -488,11 +488,11 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 	existing, ok := w.treeEntries[path]
 	if !ok {
-		return nil, NewPathNotFoundError(path)
+		return hash.Zero, NewPathNotFoundError(path)
 	}
 
 	if existing.Type != protocol.ObjectTypeTree {
-		return nil, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type)
+		return hash.Zero, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type)
 	}
 	treeHash := existing.Hash
 
@@ -516,7 +516,7 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 	// Update the tree structure to remove the directory entry
 	if err := w.removeTreeFromTree(ctx, path); err != nil {
-		return nil, fmt.Errorf("remove tree from entire tree: %w", err)
+		return hash.Zero, fmt.Errorf("remove tree from entire tree: %w", err)
 	}
 
 	return treeHash, nil

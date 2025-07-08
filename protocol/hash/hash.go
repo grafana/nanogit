@@ -4,23 +4,27 @@ package hash
 import (
 	"encoding/hex"
 	"hash"
-	"slices"
 )
 
-type Hash []byte
+type Hash [20]byte
 
-var Zero Hash
+var Zero Hash // All zeros, no need to initialize
 
 func FromHex(hs string) (Hash, error) {
 	if len(hs) == 0 {
 		return Zero, nil
 	}
 
-	b, err := hex.DecodeString(hs)
+	if len(hs) != 40 {
+		return Zero, hex.InvalidByteError(len(hs))
+	}
+
+	var h Hash
+	_, err := hex.Decode(h[:], []byte(hs))
 	if err != nil {
 		return Zero, err
 	}
-	return Hash(b), err
+	return h, nil
 }
 
 // MustFromHex is like FromHex but panics if the hex string is invalid.
@@ -35,11 +39,11 @@ func MustFromHex(hs string) Hash {
 }
 
 func (h Hash) String() string {
-	return hex.EncodeToString(h)
+	return hex.EncodeToString(h[:])
 }
 
 func (h Hash) Is(other Hash) bool {
-	return slices.Equal(h, other)
+	return h == other
 }
 
 type Hasher struct {

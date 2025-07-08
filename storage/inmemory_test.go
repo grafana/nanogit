@@ -21,7 +21,7 @@ func TestInMemoryStorage(t *testing.T) {
 	t.Run("Add and Get", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
 		obj := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
+			Hash: hash.MustFromHex("0123456789abcdef0123456789abcdef01234567"),
 			Type: protocol.ObjectTypeBlob,
 		}
 
@@ -39,7 +39,7 @@ func TestInMemoryStorage(t *testing.T) {
 	t.Run("GetByType", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
 		obj := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
+			Hash: hash.MustFromHex("0123456789abcdef0123456789abcdef01234567"),
 			Type: protocol.ObjectTypeBlob,
 		}
 
@@ -56,7 +56,7 @@ func TestInMemoryStorage(t *testing.T) {
 
 	t.Run("GetByType non-existent", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
-		hash := hash.MustFromHex("0123456789abcdef")
+		hash := hash.MustFromHex("0123456789abcdef0123456789abcdef01234567")
 		got, ok := storage.GetByType(hash, protocol.ObjectTypeBlob)
 		require.False(t, ok)
 		require.Nil(t, got)
@@ -64,7 +64,7 @@ func TestInMemoryStorage(t *testing.T) {
 
 	t.Run("Get non-existent", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
-		hash := hash.MustFromHex("0123456789abcdef")
+		hash := hash.MustFromHex("0123456789abcdef0123456789abcdef01234567")
 		got, ok := storage.Get(hash)
 		require.False(t, ok)
 		require.Nil(t, got)
@@ -73,11 +73,11 @@ func TestInMemoryStorage(t *testing.T) {
 	t.Run("GetAllKeys", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
 		obj1 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
+			Hash: hash.MustFromHex("0123456789abcdef0123456789abcdef01234567"),
 			Type: protocol.ObjectTypeBlob,
 		}
 		obj2 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("fedcba9876543210"),
+			Hash: hash.MustFromHex("fedcba9876543210fedcba9876543210fedcba98"),
 			Type: protocol.ObjectTypeTree,
 		}
 
@@ -92,7 +92,7 @@ func TestInMemoryStorage(t *testing.T) {
 	t.Run("Delete", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
 		obj := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
+			Hash: hash.MustFromHex("0123456789abcdef0123456789abcdef01234567"),
 			Type: protocol.ObjectTypeBlob,
 		}
 
@@ -111,11 +111,11 @@ func TestInMemoryStorage(t *testing.T) {
 	t.Run("Add multiple objects", func(t *testing.T) {
 		storage := NewInMemoryStorage(context.Background())
 		obj1 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
+			Hash: hash.MustFromHex("0123456789abcdef0123456789abcdef01234567"),
 			Type: protocol.ObjectTypeBlob,
 		}
 		obj2 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("fedcba9876543210"),
+			Hash: hash.MustFromHex("fedcba9876543210fedcba9876543210fedcba98"),
 			Type: protocol.ObjectTypeTree,
 		}
 
@@ -139,15 +139,15 @@ func TestInMemoryStorage(t *testing.T) {
 		storage := NewInMemoryStorage(ctx, WithTTL(100*time.Millisecond))
 
 		obj1 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("0123456789abcdef"),
+			Hash: hash.MustFromHex("0123456789abcdef0123456789abcdef01234567"),
 			Type: protocol.ObjectTypeBlob,
 		}
 		obj2 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("fedcba9876543210"),
+			Hash: hash.MustFromHex("fedcba9876543210fedcba9876543210fedcba98"),
 			Type: protocol.ObjectTypeTree,
 		}
 		obj3 := &protocol.PackfileObject{
-			Hash: hash.MustFromHex("1111111111111111"),
+			Hash: hash.MustFromHex("1111111111111111111111111111111111111111"),
 			Type: protocol.ObjectTypeBlob,
 		}
 

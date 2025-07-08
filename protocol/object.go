@@ -133,14 +133,21 @@ var ErrUnlinkedAlgorithm = errors.New("the algorithm is not linked into the bina
 func Object(algo crypto.Hash, t ObjectType, data []byte) (hash.Hash, error) {
 	h, err := NewHasher(algo, t, int64(len(data)))
 	if err != nil {
-		return nil, err
+		return hash.Zero, err
 	}
 
 	if _, err = h.Write(data); err != nil {
-		return nil, err
+		return hash.Zero, err
 	}
 
-	return h.Sum(nil), nil
+	sum := h.Sum(nil)
+	if len(sum) != 20 {
+		return hash.Zero, fmt.Errorf("expected 20-byte hash, got %d bytes", len(sum))
+	}
+
+	var result hash.Hash
+	copy(result[:], sum)
+	return result, nil
 }
 
 // NewHasher creates a new hasher for a Git object. It writes the object header
