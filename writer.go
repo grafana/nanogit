@@ -1109,13 +1109,32 @@ func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) erro
 		}
 	}
 	
-	// Handle empty directories (they shouldn't exist in Git)
+	// Handle empty directories by creating empty tree objects
 	if len(entries) == 0 {
-		logger.Debug("Removing empty directory", "path", dirPath)
-		// Empty directories don't exist in Git - remove them from treeEntries
-		if dirPath != "" {
-			delete(w.treeEntries, dirPath)
+		logger.Debug("Creating empty tree object", "path", dirPath)
+		// Create an empty tree object for empty directories
+		emptyTreeObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{})
+		if err != nil {
+			return fmt.Errorf("build empty tree object for %q: %w", dirPath, err)
 		}
+		
+		// Add to writer and storage
+		w.writer.AddObject(emptyTreeObj)
+		w.objStorage.Add(&emptyTreeObj)
+		
+		// Update the tree entry with the calculated hash
+		if dirPath == "" {
+			// This is the root tree
+			w.lastTree = &emptyTreeObj
+			logger.Debug("Built empty root tree", "hash", emptyTreeObj.Hash.String())
+		} else {
+			// Update the directory entry
+			if dirEntry, exists := w.treeEntries[dirPath]; exists {
+				dirEntry.Hash = emptyTreeObj.Hash
+			}
+			logger.Debug("Built empty directory tree", "path", dirPath, "hash", emptyTreeObj.Hash.String())
+		}
+		
 		return nil
 	}
 	
