@@ -53,19 +53,25 @@ func getHexString(hash [20]byte) string {
 	return result
 }
 
-// estimateTreeSize estimates the number of entries in tree data
+// estimateTreeSize estimates the number of entries in tree data using improved heuristics
 func estimateTreeSize(data []byte) int {
-	// Rough estimate: each entry is at least 25 bytes (mode + space + name + null + 20-byte hash)
-	// Add some buffer for longer filenames and modes
 	if len(data) < 25 {
 		return 4 // minimum reasonable capacity
 	}
-	estimate := len(data) / 35 // conservative estimate
-	if estimate < 4 {
-		return 4
+	
+	// Use average entry size based on typical Git tree structure
+	// Mode (6) + space (1) + avg filename (12) + null (1) + hash (20) = 40 bytes average
+	estimate := len(data) / 40
+	
+	// Add 25% buffer for safety
+	estimate = estimate + (estimate / 4)
+	
+	// Apply reasonable bounds
+	if estimate < 8 {
+		return 8
 	}
-	if estimate > 1000 {
-		return 1000 // cap at reasonable size
+	if estimate > 2000 {
+		return 2000
 	}
 	return estimate
 }

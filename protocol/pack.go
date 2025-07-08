@@ -76,9 +76,9 @@ var (
 	// packetDataPool provides buffer reuse for packet data to reduce allocations
 	packetDataPool = sync.Pool{
 		New: func() interface{} {
-			// Start with 64KB buffer to handle larger Git packets and reduce grow operations
-			// Git's max packet size is 65516 bytes, so this covers all cases
-			return make([]byte, 0, 65536)
+			// Start with 128KB buffer to handle larger Git packets and reduce grow operations
+			// This provides more headroom for typical Git operations and reduces pool churn
+			return make([]byte, 0, 131072)
 		},
 	}
 )
