@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
@@ -34,8 +33,6 @@ type rawClient struct {
 	client *http.Client
 	// User-Agent header value for requests
 	userAgent string
-	// Ensures userAgent is set only once
-	userAgentOnce sync.Once
 	// Basic authentication credentials (username/password)
 	basicAuth *struct{ Username, Password string }
 	// Token-based authentication header
