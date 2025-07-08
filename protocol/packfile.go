@@ -552,7 +552,8 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	
 	if sz <= 65536 { // Use pooled buffer for objects <= 64KB
 		pooledBuf = dataBufferPool.Get().([]byte)
-		defer dataBufferPool.Put(pooledBuf)
+		//lint:ignore SA6002 byte slices are correct for sync.Pool
+		defer dataBufferPool.Put(pooledBuf) //nolint:staticcheck
 		data = pooledBuf[:sz] // Slice to exact size needed
 	} else {
 		data = make([]byte, sz) // Allocate directly for large objects
@@ -574,7 +575,8 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// for the next object. This is essential for sequential object reading.
 	// We need to read until EOF to complete the zlib stream.
 	discardBuf := discardBufferPool.Get().([]byte)
-	defer discardBufferPool.Put(discardBuf)
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	defer discardBufferPool.Put(discardBuf) //nolint:staticcheck
 	
 	for {
 		_, err := lr.Read(discardBuf)
