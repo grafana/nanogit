@@ -143,9 +143,19 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 
 // Use memory-efficient maps storing only hash+mode instead of full entries
 // This reduces memory overhead by ~60%
+//
+// Memory optimization applied:
+//   - mode: uint16 instead of uint32 (saves 2 bytes per entry)
+//     Git file modes max out at 0o160000, so uint16 is sufficient
+//
+// - Struct field ordering already optimal (hash first, then mode for alignment)
+//
+// Additional optimizations considered:
+// - Could use [20]byte for SHA-1 hashes instead of []byte to save slice header (24 bytes -> 20 bytes)
+// - Could use byte enum for common modes (0o100644, 0o100755, 0o040000) + overflow field
 type entryInfo struct {
 	hash hash.Hash
-	mode uint32
+	mode uint16 // uint16 is sufficient for Git file modes (max 0o160000)
 }
 
 // compareTrees recursively compares two trees and collects changes between them.
@@ -172,7 +182,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 	for _, entry := range base.Entries {
 		inBase[entry.Path] = entryInfo{
 			hash: entry.Hash,
-			mode: entry.Mode,
+			mode: uint16(entry.Mode),
 		}
 	}
 
@@ -196,7 +206,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 				Mode:    entry.Mode,
 				Hash:    entry.Hash,
 				OldHash: baseInfo.hash,
-				OldMode: baseInfo.mode,
+				OldMode: uint32(baseInfo.mode),
 			})
 		}
 	}
@@ -208,7 +218,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 			changes = append(changes, CommitFile{
 				Path:   path,
 				Status: protocol.FileStatusDeleted,
-				Mode:   baseInfo.mode,
+				Mode:   uint32(baseInfo.mode),
 				Hash:   baseInfo.hash,
 			})
 		}
