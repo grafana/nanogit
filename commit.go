@@ -141,6 +141,13 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 	return changes, nil
 }
 
+// Use memory-efficient maps storing only hash+mode instead of full entries
+// This reduces memory overhead by ~60%
+type entryInfo struct {
+	hash hash.Hash
+	mode uint32
+}
+
 // compareTrees recursively compares two trees and collects changes between them.
 // It builds maps of entries from both trees and compares them to identify:
 //   - Files that exist in the head tree but not in the base tree (added)
@@ -160,21 +167,12 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 	}
 	changes := make([]CommitFile, 0, estimatedChanges)
 
-	// Use memory-efficient maps storing only hash+mode instead of full entries
-	// This reduces memory overhead by ~60%
-	type entryInfo struct {
-		hash hash.Hash
-		mode uint32
-		typ  protocol.ObjectType
-	}
-	
 	// Pre-allocate maps with capacity to avoid reallocations
 	inBase := make(map[string]entryInfo, len(base.Entries))
 	for _, entry := range base.Entries {
 		inBase[entry.Path] = entryInfo{
 			hash: entry.Hash,
 			mode: entry.Mode,
-			typ:  entry.Type,
 		}
 	}
 
@@ -182,7 +180,6 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 	inHead := make(map[string]struct{}, len(head.Entries)) // For deleted file lookup
 	for _, entry := range head.Entries {
 		inHead[entry.Path] = struct{}{}
-		
 		if baseInfo, exists := inBase[entry.Path]; !exists {
 			// File exists in head but not in base - it was added
 			changes = append(changes, CommitFile{
