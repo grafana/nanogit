@@ -202,6 +202,21 @@ profile-all:
 	@echo "Analyze CPU: go tool pprof profiles/cpu.prof"
 	@echo "Analyze Memory: go tool pprof profiles/mem.prof"
 
+profile-all-tree:
+	@echo "Generating both CPU and memory profiles..."
+	@mkdir -p profiles
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestGetFlatTreePerformance" -cpuprofile=profiles/cpu.prof -memprofile=profiles/mem.prof .
+	@echo "Profiles saved to profiles/"
+	@echo "Analyze CPU: go tool pprof profiles/cpu.prof"
+	@echo "Analyze Memory: go tool pprof profiles/mem.prof"
+
+profile-all-commit:
+	@echo "Generating both CPU and memory profiles..."
+	@mkdir -p profiles
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 10m -run "TestCompareCommitsPerformance" -cpuprofile=profiles/cpu.prof -memprofile=profiles/mem.prof .
+	@echo "Profiles saved to profiles/"
+	@echo "Analyze CPU: go tool pprof profiles/cpu.prof"
+	@echo "Analyze Memory: go tool pprof profiles/mem.prof"
 profile-compare:
 	@echo "Comparing profiles with baseline..."
 	@if [ ! -f profiles/baseline_cpu.prof ]; then \

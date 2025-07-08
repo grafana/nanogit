@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -44,10 +45,30 @@ var (
 )
 
 // getHexBuffer gets a hex buffer from the pool and returns it with the encoded hash
+// Returns buffer and whether a string conversion is needed
 func getHexBuffer(hash [20]byte) ([]byte, string) {
 	buf := hexBufferPool.Get().([]byte)
 	hex.Encode(buf, hash[:])
-	return buf, string(buf)
+	// Use unsafe conversion to avoid allocation when string is temporary
+	// This is safe because buf content is valid for the lifetime of the call
+	return buf, unsafeString(buf)
+}
+
+// getHexString gets a hex string from a hash, allocating a new string
+func getHexString(hash [20]byte) string {
+	buf := hexBufferPool.Get().([]byte)
+	hex.Encode(buf, hash[:])
+	// Allocate string and return buffer to pool
+	result := string(buf)
+	hexBufferPool.Put(buf)
+	return result
+}
+
+// unsafeString converts byte slice to string without allocation
+// WARNING: The returned string shares memory with the byte slice.
+// The byte slice must not be modified while the string is in use.
+func unsafeString(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
 
 // putHexBuffer returns a hex buffer to the pool
@@ -145,14 +166,13 @@ func (e *PackfileObject) parseTree() error {
 			return eofIsUnexpected(err)
 		}
 
-		// Use pooled hex buffer to avoid allocation
-		hexBuf, hashStr := getHexBuffer(hash)
+		// Use pooled hex buffer and get proper string copy
+		hashStr := getHexString(hash)
 		e.Tree = append(e.Tree, PackfileTreeEntry{
 			FileName: name,
 			FileMode: uint32(fileMode),
 			Hash:     hashStr,
 		})
-		putHexBuffer(hexBuf)
 	}
 
 	return nil

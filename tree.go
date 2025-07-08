@@ -85,11 +85,9 @@ func estimateFlatTreeSize(rootTree *protocol.PackfileObject, allTreeObjects stor
 			if entry.FileMode&0o40000 != 0 { // Is directory
 				treeCount++
 				if sampleSize < 5 { // Only sample first few levels
-					if _, exists := allTreeObjects.GetByType(hash.Hash{}, protocol.ObjectTypeTree); exists {
-						if entryHash, err := hash.FromHex(entry.Hash); err == nil {
-							if childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
-								queue = append(queue, childTree)
-							}
+					if entryHash, err := hash.FromHex(entry.Hash); err == nil {
+						if childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
+							queue = append(queue, childTree)
 						}
 					}
 				}
