@@ -81,6 +81,15 @@ var (
 			return make([]byte, 0, 131072)
 		},
 	}
+
+	// Pre-compiled error detection patterns to avoid repeated allocations
+	errPattern        = []byte("ERR ")
+	errorPattern      = []byte("error:")
+	fatalPattern      = []byte("fatal:")
+	ngPattern         = []byte("ng ")
+	unpackPattern     = []byte("unpack ")
+	unpackOkPattern   = []byte("ok")
+	unpackOkFull      = []byte("unpack ok") // Most common success case
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -498,24 +507,34 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
 // Returns an error if any error condition is detected, otherwise returns nil to continue processing.
 func detectError(lengthBytes, packetData []byte) error {
-	fullPacket := append(lengthBytes, packetData...)
-
+	// Avoid allocation by building fullPacket only when needed
+	
 	switch {
-	case bytes.HasPrefix(packetData, []byte("ERR ")):
+	case bytes.HasPrefix(packetData, errPattern):
+		fullPacket := append(lengthBytes, packetData...)
 		return handleERRPacket(fullPacket, packetData)
 
-	case isErrorOrFatalMessage(packetData):
+	case isErrorOrFatalMessageOptimized(packetData):
+		fullPacket := append(lengthBytes, packetData...)
 		return handleErrorFatalMessage(fullPacket, packetData)
 
-	case bytes.HasPrefix(packetData, []byte("ng ")):
+	case bytes.HasPrefix(packetData, ngPattern):
+		fullPacket := append(lengthBytes, packetData...)
 		return handleReferenceUpdateFailure(fullPacket, packetData)
 
-	case bytes.HasPrefix(packetData, []byte("unpack ")):
-		unpackContent := string(packetData[7:]) // Skip "unpack "
-		if unpackContent != "ok" {
-			return NewGitUnpackError(fullPacket, unpackContent)
+	case bytes.HasPrefix(packetData, unpackPattern):
+		// Fast path for most common case: "unpack ok"
+		if bytes.Equal(packetData, unpackOkFull) {
+			return nil // Success case, no error
 		}
-		// If unpack ok, add to lines and continue
+		
+		// Optimize unpack handling with byte comparison instead of string conversion
+		unpackData := packetData[len(unpackPattern):]
+		if !bytes.Equal(unpackData, unpackOkPattern) {
+			fullPacket := append(lengthBytes, packetData...)
+			return NewGitUnpackError(fullPacket, string(unpackData))
+		}
+		// If unpack ok, continue processing
 		return nil
 	default:
 		// Regular data packet
@@ -523,16 +542,16 @@ func detectError(lengthBytes, packetData []byte) error {
 	}
 }
 
-// isErrorOrFatalMessage checks if packet contains error/fatal messages (direct or side-band)
-func isErrorOrFatalMessage(data []byte) bool {
+// isErrorOrFatalMessageOptimized checks if packet contains error/fatal messages using pre-compiled patterns
+func isErrorOrFatalMessageOptimized(data []byte) bool {
 	// Direct format: "error:" or "fatal:"
-	if bytes.HasPrefix(data, []byte("error:")) || bytes.HasPrefix(data, []byte("fatal:")) {
+	if bytes.HasPrefix(data, errorPattern) || bytes.HasPrefix(data, fatalPattern) {
 		return true
 	}
 
 	// Side-band format: check for channels 2 or 3 with error/fatal messages
 	if len(data) > 1 && (data[0] == 0x02 || data[0] == 0x03) {
-		return bytes.HasPrefix(data[1:], []byte("error:")) || bytes.HasPrefix(data[1:], []byte("fatal:"))
+		return bytes.HasPrefix(data[1:], errorPattern) || bytes.HasPrefix(data[1:], fatalPattern)
 	}
 
 	return false
