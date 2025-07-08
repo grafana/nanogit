@@ -183,15 +183,16 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 
 	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode)
 	return &stagedWriter{
-		client:      c,
-		ref:         ref,
-		writer:      writer,
-		lastCommit:  commit,
-		lastTree:    treeObj,
-		objStorage:  objStorage,
-		treeEntries: entries,
-		storageMode: protocolStorageMode,
-		entryPool:   newEntryPool(), // Initialize the entry pool for memory optimization
+		client:          c,
+		ref:             ref,
+		writer:          writer,
+		lastCommit:      commit,
+		lastTree:        treeObj,
+		objStorage:      objStorage,
+		treeEntries:     entries,
+		storageMode:     protocolStorageMode,
+		entryPool:       newEntryPool(), // Initialize the entry pool for memory optimization
+		deferredObjects: make([]protocol.PackfileObject, 0), // Initialize slice for lazy tree building
 	}, nil
 }
 
@@ -226,6 +227,8 @@ type stagedWriter struct {
 	entryPool *entryPool
 	// Track if cleanup has been called
 	isCleanedUp bool
+	// Lazy tree building: deferred objects to add only before commit
+	deferredObjects []protocol.PackfileObject
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.
@@ -554,7 +557,8 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 			Tree: []protocol.PackfileTreeEntry{},
 		}
 
-		w.writer.AddObject(emptyTree)
+		// Defer object addition until commit time for lazy tree building
+		w.deferredObjects = append(w.deferredObjects, emptyTree)
 		w.objStorage.Add(&emptyTree)
 		w.treeEntries[""] = &FlatTreeEntry{
 			Path: "",
@@ -651,6 +655,14 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		"message", message,
 		"author_name", author.Name,
 		"committer_name", committer.Name)
+
+	// Add all deferred objects to the packfile writer before commit
+	for _, obj := range w.deferredObjects {
+		w.writer.AddObject(obj)
+	}
+	logger.Debug("Added deferred objects to packfile", "count", len(w.deferredObjects))
+	// Clear deferred objects after adding them
+	w.deferredObjects = nil
 
 	if !w.writer.HasObjects() {
 		return nil, ErrNothingToCommit
@@ -805,7 +817,8 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 				return fmt.Errorf("create tree for %s: %w", currentPath, err)
 			}
 
-			w.writer.AddObject(treeObj)
+			// Defer object addition until commit time for lazy tree building
+			w.deferredObjects = append(w.deferredObjects, treeObj)
 			w.objStorage.Add(&treeObj)
 			logger.Debug("add new tree object", "path", currentPath, "hash", treeObj.Hash.String(), "child", current.Hash, "child_path", current.FileName)
 
@@ -854,7 +867,8 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			return fmt.Errorf("build new root tree: %w", err)
 		}
 
-		w.writer.AddObject(newRoot)
+		// Defer object addition until commit time for lazy tree building
+		w.deferredObjects = append(w.deferredObjects, newRoot)
 		w.objStorage.Add(&newRoot)
 		w.lastTree = &newRoot
 
@@ -934,7 +948,8 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.Pa
 		return nil, fmt.Errorf("build tree object: %w", err)
 	}
 
-	w.writer.AddObject(newObj)
+	// Defer object addition until commit time for lazy tree building
+	w.deferredObjects = append(w.deferredObjects, newObj)
 	w.objStorage.Add(&newObj)
 	w.objStorage.Delete(treeObj.Hash)
 
@@ -1208,7 +1223,8 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 		return nil, fmt.Errorf("build tree object: %w", err)
 	}
 
-	w.writer.AddObject(newObj)
+	// Defer object addition until commit time for lazy tree building
+	w.deferredObjects = append(w.deferredObjects, newObj)
 	w.objStorage.Add(&newObj)
 	w.objStorage.Delete(treeObj.Hash)
 
