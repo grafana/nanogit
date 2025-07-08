@@ -57,12 +57,12 @@ This are some of the performance differences between nanogit and go-git in some 
 
 | Scenario                                  | Speed       | Memory Usage |
 | ----------------------------------------- | ----------- | ------------ |
-| CreateFile (XL repo)                      | 262x faster | 195x less    |
-| UpdateFile (XL repo)                      | 275x faster | 180x less    |
-| DeleteFile (XL repo)                      | 269x faster | 212x less    |
-| BulkCreateFiles (1000 files, medium repo) | 50x faster  | 9x less      |
-| CompareCommits (XL repo)                  | 111x faster | 114x less    |
-| GetFlatTree (XL repo)                     | 303x faster | 137x less    |
+| CreateFile (XL repo)                      | 306x faster | 186x less    |
+| UpdateFile (XL repo)                      | 291x faster | 178x less    |
+| DeleteFile (XL repo)                      | 302x faster | 175x less    |
+| BulkCreateFiles (1000 files, medium repo) | 607x faster | 11x less     |
+| CompareCommits (XL repo)                  | 60x faster  | 96x less     |
+| GetFlatTree (XL repo)                     | 258x faster | 160x less    |
 
 For detailed performance metrics, see the [latest performance report](perf/LAST_REPORT.md) and [performance analysis](PERFORMANCE.md).
 

@@ -123,15 +123,37 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
-	baseTree, err := c.GetFlatTree(ctx, baseCommit)
-	if err != nil {
-		return nil, fmt.Errorf("get base tree for commit %s: %w", baseCommit.String(), err)
+	// Fetch both trees concurrently to improve performance
+	type treeResult struct {
+		tree *FlatTree
+		err  error
 	}
-
-	headTree, err := c.GetFlatTree(ctx, headCommit)
-	if err != nil {
-		return nil, fmt.Errorf("get head tree for commit %s: %w", headCommit.String(), err)
+	
+	baseResult := make(chan treeResult, 1)
+	headResult := make(chan treeResult, 1)
+	
+	go func() {
+		tree, err := c.GetFlatTree(ctx, baseCommit)
+		baseResult <- treeResult{tree, err}
+	}()
+	
+	go func() {
+		tree, err := c.GetFlatTree(ctx, headCommit)
+		headResult <- treeResult{tree, err}
+	}()
+	
+	baseRes := <-baseResult
+	if baseRes.err != nil {
+		return nil, fmt.Errorf("get base tree for commit %s: %w", baseCommit.String(), baseRes.err)
 	}
+	
+	headRes := <-headResult
+	if headRes.err != nil {
+		return nil, fmt.Errorf("get head tree for commit %s: %w", headCommit.String(), headRes.err)
+	}
+	
+	baseTree := baseRes.tree
+	headTree := headRes.tree
 
 	changes := c.compareTrees(baseTree, headTree)
 	logger.Debug("Commits compared",

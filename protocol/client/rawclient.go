@@ -118,10 +118,12 @@ func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 // addDefaultHeaders adds the default headers to the request.
 func (c *rawClient) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
-	if c.userAgent == "" {
-		c.userAgent = "nanogit/0"
+	userAgent := c.userAgent
+	if userAgent == "" {
+		userAgent = "nanogit/0"
 	}
-	req.Header.Add("User-Agent", c.userAgent)
+
+	req.Header.Add("User-Agent", userAgent)
 
 	if c.basicAuth != nil {
 		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
