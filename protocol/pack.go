@@ -82,6 +82,13 @@ var (
 		},
 	}
 
+	// packetLengthPool provides buffer reuse for 4-byte packet length headers
+	packetLengthPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 4)
+		},
+	}
+
 	// Pre-compiled error detection patterns to avoid repeated allocations
 	errPattern        = []byte("ERR ")
 	errorPattern      = []byte("error:")
@@ -438,8 +445,11 @@ func (p *Parser) Next() (line []byte, err error) {
 
 // readPacketLength reads and parses the 4-byte packet length header
 func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err error) {
-	lengthBytes = make([]byte, 4)
-	n, err := io.ReadFull(reader, lengthBytes)
+	// Use pooled buffer for length reading to reduce allocations
+	pooledBuf := packetLengthPool.Get().([]byte)
+	defer packetLengthPool.Put(pooledBuf) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+	
+	n, err := io.ReadFull(reader, pooledBuf)
 	if err != nil {
 		if err == io.EOF && n == 0 {
 			return nil, 0, nil // Normal end of stream
@@ -448,14 +458,23 @@ func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err 
 			// Partial read - incomplete packet, treat as end of stream
 			return nil, 0, nil
 		}
-		return lengthBytes[:n], 0, NewPackParseError(lengthBytes[:n], fmt.Errorf("reading packet length: %w", err))
+		// Make a copy for error reporting since we're returning the pooled buffer
+		errBytes := make([]byte, n)
+		copy(errBytes, pooledBuf[:n])
+		return errBytes, 0, NewPackParseError(errBytes, fmt.Errorf("reading packet length: %w", err))
 	}
 
-	length, err = strconv.ParseUint(string(lengthBytes), 16, 16)
+	length, err = strconv.ParseUint(string(pooledBuf), 16, 16)
 	if err != nil {
-		return lengthBytes, 0, NewPackParseError(lengthBytes, fmt.Errorf("parsing line length: %w", err))
+		// Make a copy for error reporting since we're returning the pooled buffer
+		errBytes := make([]byte, 4)
+		copy(errBytes, pooledBuf)
+		return errBytes, 0, NewPackParseError(errBytes, fmt.Errorf("parsing line length: %w", err))
 	}
 
+	// Make a copy to return since we're reusing the pooled buffer
+	lengthBytes = make([]byte, 4)
+	copy(lengthBytes, pooledBuf)
 	return lengthBytes, length, nil
 }
 

@@ -41,6 +41,14 @@ var (
 			return make([]byte, 40)
 		},
 	}
+
+	// Pool for zlib decompression buffers to reduce allocations
+	zlibBufferPool = sync.Pool{
+		New: func() interface{} {
+			// Start with 64KB buffer for typical Git object sizes
+			return make([]byte, 0, 65536)
+		},
+	}
 )
 
 // getHexString gets a hex string from a hash, allocating a new string
@@ -526,16 +534,40 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// carries, and we should limit that size above (i.e. if the packet
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
-	var data bytes.Buffer
-	if _, err := io.Copy(&data, lr); err != nil {
+	
+	// Use pooled buffer instead of bytes.Buffer to reduce allocations
+	pooledBuf := zlibBufferPool.Get().([]byte)
+	defer zlibBufferPool.Put(pooledBuf[:0]) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+	
+	// Ensure buffer has sufficient capacity
+	if cap(pooledBuf) < sz {
+		// Buffer too small, allocate exact size needed
+		data := make([]byte, sz)
+		n, err := io.ReadFull(lr, data)
+		if err != nil {
+			return nil, eofIsUnexpected(err)
+		}
+		if n != sz {
+			return nil, ErrInflatedDataIncorrectSize
+		}
+		return data, nil
+	}
+	
+	// Use pooled buffer with sufficient capacity
+	data := pooledBuf[:sz]
+	n, err := io.ReadFull(lr, data)
+	if err != nil {
 		return nil, eofIsUnexpected(err)
 	}
-
-	if data.Len() != sz {
+	
+	if n != sz {
 		return nil, ErrInflatedDataIncorrectSize
 	}
-
-	return data.Bytes(), nil
+	
+	// Make a copy to return since we're reusing the pooled buffer
+	result := make([]byte, sz)
+	copy(result, data)
+	return result, nil
 }
 
 func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
