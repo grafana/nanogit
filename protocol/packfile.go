@@ -568,8 +568,8 @@ func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, erro
 	logger.Debug("Read packfile header", "version", version, "object_count", countObjects)
 
 	// Now the reader points to the object data stream
-	// For fast I/O
-	bufferedReader := bufio.NewReader(reader)
+	// For fast I/O with 64KB buffer
+	bufferedReader := bufio.NewReaderSize(reader, 64*1024)
 	return &PackfileReader{
 		reader:           bufferedReader,
 		remainingObjects: countObjects,
@@ -1048,7 +1048,7 @@ func (pw *PackfileWriter) getOrResetZlibWriter(writer io.Writer) (*zlib.Writer, 
 		pw.zlibWriter = zlib.NewWriter(writer)
 		return pw.zlibWriter, nil
 	}
-	
+
 	// Reset the writer for a new stream
 	pw.zlibWriter.Reset(writer)
 	return pw.zlibWriter, nil
