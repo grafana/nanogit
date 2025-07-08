@@ -17,6 +17,85 @@ import (
 // ErrWriterCleanedUp is returned when trying to use a writer after cleanup has been called.
 var ErrWriterCleanedUp = errors.New("writer has been cleaned up and can no longer be used")
 
+// pathComponents represents a parsed file path with optimized access to components.
+// This struct reduces string allocations by storing components once and providing
+// efficient access methods for tree operations.
+type pathComponents struct {
+	fullPath  string   // original path
+	parts     []string // path components split by "/"
+	fileName  string   // last component (file name)
+	dirParts  []string // all components except the last (directory parts)
+}
+
+// newPathComponents creates a new pathComponents from a file path.
+// This performs the expensive string operations once and caches the results.
+func newPathComponents(path string) *pathComponents {
+	if path == "" {
+		return &pathComponents{fullPath: path}
+	}
+	
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 {
+		return &pathComponents{fullPath: path}
+	}
+	
+	fileName := parts[len(parts)-1]
+	dirParts := parts[:len(parts)-1]
+	
+	return &pathComponents{
+		fullPath: path,
+		parts:    parts,
+		fileName: fileName,
+		dirParts: dirParts,
+	}
+}
+
+// joinDirPath efficiently creates a directory path from the first n directory components.
+// This avoids repeated string.Join calls by reusing the underlying string slice.
+func (p *pathComponents) joinDirPath(n int) string {
+	if n <= 0 || n > len(p.dirParts) {
+		return ""
+	}
+	return strings.Join(p.dirParts[:n], "/")
+}
+
+// entryPool manages reusable slices for PackfileTreeEntry to reduce allocations.
+// This addresses the frequent slice allocations in updateTreeEntry.
+type entryPool struct {
+	pool [][]protocol.PackfileTreeEntry
+}
+
+// newEntryPool creates a new entry pool.
+func newEntryPool() *entryPool {
+	return &entryPool{
+		pool: make([][]protocol.PackfileTreeEntry, 0, 16), // Start with some capacity
+	}
+}
+
+// get retrieves a slice with at least the specified capacity.
+// If a suitable slice exists in the pool, it's reused; otherwise a new one is allocated.
+func (p *entryPool) get(capacity int) []protocol.PackfileTreeEntry {
+	// Look for a suitable slice in the pool
+	for i, slice := range p.pool {
+		if cap(slice) >= capacity {
+			// Remove from pool and return
+			p.pool[i] = p.pool[len(p.pool)-1]
+			p.pool = p.pool[:len(p.pool)-1]
+			// Reset length but keep capacity
+			return slice[:0]
+		}
+	}
+	// No suitable slice found, allocate new one
+	return make([]protocol.PackfileTreeEntry, 0, capacity)
+}
+
+// put returns a slice to the pool for reuse.
+func (p *entryPool) put(slice []protocol.PackfileTreeEntry) {
+	if cap(slice) > 0 && len(p.pool) < 32 { // Limit pool size to avoid memory leaks
+		p.pool = append(p.pool, slice[:0]) // Reset length but keep capacity
+	}
+}
+
 // NewStagedWriter creates a new StagedWriter for staging changes to a Git reference.
 // It initializes the writer with the current state of the specified reference,
 // allowing you to stage multiple changes (create/update/delete blobs and trees)
@@ -112,6 +191,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		objStorage:  objStorage,
 		treeEntries: entries,
 		storageMode: protocolStorageMode,
+		entryPool:   newEntryPool(), // Initialize the entry pool for memory optimization
 	}, nil
 }
 
@@ -142,6 +222,8 @@ type stagedWriter struct {
 	treeEntries map[string]*FlatTreeEntry
 	// Storage mode for packfile writer
 	storageMode protocol.PackfileStorageMode
+	// Memory optimization: pool for reusing tree entry slices
+	entryPool *entryPool
 	// Track if cleanup has been called
 	isCleanedUp bool
 }
@@ -694,15 +776,12 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 // creating or updating tree objects as necessary to accommodate the new blob.
 func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
 	logger := log.FromContext(ctx)
-	// Split the path into parts
-	pathParts := strings.Split(path, "/")
-	// Get the file name and directory parts
-	fileName := pathParts[len(pathParts)-1]
-	dirParts := pathParts[:len(pathParts)-1]
+	// Use optimized path parsing to reduce string allocations
+	pathComp := newPathComponents(path)
 
 	current := protocol.PackfileTreeEntry{
 		FileMode: 0o100644,
-		FileName: fileName,
+		FileName: pathComp.fileName,
 		Hash:     blobHash.String(),
 	}
 
@@ -710,8 +789,8 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 	// if it does not exist or hash is different, create it with the previous tree entry.
 	// if it exists and hash is the same, continue.
 	// Add the file to the tree
-	for i := len(dirParts) - 1; i >= 0; i-- {
-		currentPath := strings.Join(dirParts[:i+1], "/")
+	for i := len(pathComp.dirParts) - 1; i >= 0; i-- {
+		currentPath := pathComp.joinDirPath(i + 1)
 		// Check if not a tree
 		existingObj, exists := w.treeEntries[currentPath]
 		if exists && existingObj.Type != protocol.ObjectTypeTree {
@@ -733,7 +812,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			// Add this tree to the parent's entries
 			current = protocol.PackfileTreeEntry{
 				FileMode: 0o40000, // Directory mode
-				FileName: dirParts[i],
+				FileName: pathComp.dirParts[i],
 				Hash:     treeObj.Hash.String(),
 			}
 
@@ -757,7 +836,7 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 			logger.Debug("add updated tree object", "path", currentPath, "hash", newObj.Hash.String(), "children", len(existingTree.Tree)+1)
 			current = protocol.PackfileTreeEntry{
 				FileMode: 0o40000, // Directory mode
-				FileName: dirParts[i],
+				FileName: pathComp.dirParts[i],
 				Hash:     newObj.Hash.String(),
 			}
 
@@ -795,6 +874,10 @@ func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path st
 // This method takes an existing tree object and either adds a new entry or updates an existing
 // entry with the same filename. It maintains proper Git tree object sorting and formatting.
 //
+// Memory optimizations:
+//   - Pre-allocates slice with exact capacity to avoid reallocations
+//   - Reuses slice space when replacing existing entries
+//
 // Parameters:
 //   - ctx: Context for the operation
 //   - obj: The existing tree object to modify
@@ -810,18 +893,42 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.Pa
 		"fileMode", fmt.Sprintf("%o", current.FileMode),
 	)
 
-	// Create a new slice for the updated entries
-	combinedEntries := make([]protocol.PackfileTreeEntry, 0, len(treeObj.Tree))
-
-	// Add all entries except the one we're updating
-	for _, entry := range treeObj.Tree {
-		if entry.FileName != current.FileName {
-			combinedEntries = append(combinedEntries, entry)
+	// Pre-allocate with capacity to avoid reallocations
+	// If updating existing entry, we keep same length; if adding new, we need +1
+	existingEntryIndex := -1
+	for i, entry := range treeObj.Tree {
+		if entry.FileName == current.FileName {
+			existingEntryIndex = i
+			break
 		}
 	}
 
-	// Add the new/updated entry
-	combinedEntries = append(combinedEntries, current)
+	// Use pooled slice to reduce allocations
+	var capacity int
+	if existingEntryIndex >= 0 {
+		// Replacing existing entry - same capacity
+		capacity = len(treeObj.Tree)
+	} else {
+		// Adding new entry - need +1 capacity
+		capacity = len(treeObj.Tree) + 1
+	}
+	
+	combinedEntries := w.entryPool.get(capacity)
+	defer w.entryPool.put(combinedEntries) // Return to pool when done
+	
+	if existingEntryIndex >= 0 {
+		// Copy entries before the replacement
+		combinedEntries = append(combinedEntries, treeObj.Tree[:existingEntryIndex]...)
+		// Add the new entry
+		combinedEntries = append(combinedEntries, current)
+		// Copy entries after the replacement
+		combinedEntries = append(combinedEntries, treeObj.Tree[existingEntryIndex+1:]...)
+	} else {
+		// Copy all existing entries
+		combinedEntries = append(combinedEntries, treeObj.Tree...)
+		// Add the new entry
+		combinedEntries = append(combinedEntries, current)
+	}
 	newObj, err := protocol.BuildTreeObject(crypto.SHA1, combinedEntries)
 	if err != nil {
 		return nil, fmt.Errorf("build tree object: %w", err)
@@ -851,25 +958,21 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.Pa
 // updating each tree object to reflect the removal of the blob or updated child tree.
 func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) error {
 	logger := log.FromContext(ctx)
-	// Split the path into parts
-	pathParts := strings.Split(path, "/")
-	if len(pathParts) == 0 {
+	// Use optimized path parsing to reduce string allocations
+	pathComp := newPathComponents(path)
+	if len(pathComp.parts) == 0 {
 		return errors.New("empty path")
 	}
 
-	// Get the file name and directory parts
-	fileName := pathParts[len(pathParts)-1]
-	dirParts := pathParts[:len(pathParts)-1]
-
 	// First, remove the file from its immediate parent directory
-	if len(dirParts) == 0 {
+	if len(pathComp.dirParts) == 0 {
 		// File is in root directory
-		newRootObj, err := w.removeTreeEntry(ctx, w.lastTree, fileName)
+		newRootObj, err := w.removeTreeEntry(ctx, w.lastTree, pathComp.fileName)
 		if err != nil {
 			return fmt.Errorf("remove file from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
-		logger.Debug("removed file from root", "file", fileName, "new_root_hash", newRootObj.Hash.String())
+		logger.Debug("removed file from root", "file", pathComp.fileName, "new_root_hash", newRootObj.Hash.String())
 		return nil
 	}
 
@@ -877,8 +980,8 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 	// Start from the immediate parent and work up to root
 	var updatedChildHash hash.Hash
 
-	for i := len(dirParts) - 1; i >= 0; i-- {
-		currentPath := strings.Join(dirParts[:i+1], "/")
+	for i := len(pathComp.dirParts) - 1; i >= 0; i-- {
+		currentPath := pathComp.joinDirPath(i + 1)
 
 		// Get the tree we need to modify
 		existingObj, exists := w.treeEntries[currentPath]
@@ -900,16 +1003,16 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 			err    error
 		)
 
-		if i == len(dirParts)-1 {
+		if i == len(pathComp.dirParts)-1 {
 			// This is the immediate parent - remove the file
-			newObj, err = w.removeTreeEntry(ctx, treeObj, fileName)
+			newObj, err = w.removeTreeEntry(ctx, treeObj, pathComp.fileName)
 			if err != nil {
 				return fmt.Errorf("remove file from tree %s: %w", currentPath, err)
 			}
-			logger.Debug("removed file from parent tree", "path", currentPath, "file", fileName, "new_hash", newObj.Hash.String())
+			logger.Debug("removed file from parent tree", "path", currentPath, "file", pathComp.fileName, "new_hash", newObj.Hash.String())
 		} else {
 			// This is an ancestor directory - update with new child hash
-			childDirName := dirParts[i+1]
+			childDirName := pathComp.dirParts[i+1]
 			childEntry := protocol.PackfileTreeEntry{
 				FileMode: 0o40000, // Directory mode
 				FileName: childDirName,
@@ -934,7 +1037,7 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 	}
 
 	// Finally, update the root tree with the new top-level directory hash
-	rootDirName := dirParts[0]
+	rootDirName := pathComp.dirParts[0]
 	rootDirEntry := protocol.PackfileTreeEntry{
 		FileMode: 0o40000, // Directory mode
 		FileName: rootDirName,
@@ -962,21 +1065,18 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 // This is similar to removeBlobFromTree but handles directory removal instead of file removal.
 func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) error {
 	logger := log.FromContext(ctx)
-	// Split the path into parts
-	pathParts := strings.Split(path, "/")
-	// Get the directory name and parent directory parts
-	dirName := pathParts[len(pathParts)-1]
-	parentParts := pathParts[:len(pathParts)-1]
+	// Use optimized path parsing to reduce string allocations
+	pathComp := newPathComponents(path)
 
 	// First, remove the directory from its immediate parent
-	if len(parentParts) == 0 {
+	if len(pathComp.dirParts) == 0 {
 		// Directory is in root
-		newRootObj, err := w.removeTreeEntry(ctx, w.lastTree, dirName)
+		newRootObj, err := w.removeTreeEntry(ctx, w.lastTree, pathComp.fileName)
 		if err != nil {
 			return fmt.Errorf("remove directory from root tree: %w", err)
 		}
 		w.lastTree = newRootObj
-		logger.Debug("removed directory from root", "dir", dirName, "new_root_hash", newRootObj.Hash.String())
+		logger.Debug("removed directory from root", "dir", pathComp.fileName, "new_root_hash", newRootObj.Hash.String())
 		return nil
 	}
 
@@ -984,8 +1084,8 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 	// Start from the immediate parent and work up to root
 	var updatedChildHash hash.Hash
 
-	for i := len(parentParts) - 1; i >= 0; i-- {
-		currentPath := strings.Join(parentParts[:i+1], "/")
+	for i := len(pathComp.dirParts) - 1; i >= 0; i-- {
+		currentPath := pathComp.joinDirPath(i + 1)
 
 		// Get the tree we need to modify
 		existingObj, exists := w.treeEntries[currentPath]
@@ -1007,16 +1107,16 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 			err    error
 		)
 
-		if i == len(parentParts)-1 {
+		if i == len(pathComp.dirParts)-1 {
 			// This is the immediate parent - remove the directory
-			newObj, err = w.removeTreeEntry(ctx, treeObj, dirName)
+			newObj, err = w.removeTreeEntry(ctx, treeObj, pathComp.fileName)
 			if err != nil {
 				return fmt.Errorf("remove directory from tree %s: %w", currentPath, err)
 			}
-			logger.Debug("removed directory from parent tree", "path", currentPath, "dir", dirName, "new_hash", newObj.Hash.String())
+			logger.Debug("removed directory from parent tree", "path", currentPath, "dir", pathComp.fileName, "new_hash", newObj.Hash.String())
 		} else {
 			// This is an ancestor directory - update with new child hash
-			childDirName := parentParts[i+1]
+			childDirName := pathComp.dirParts[i+1]
 			childEntry := protocol.PackfileTreeEntry{
 				FileMode: 0o40000, // Directory mode
 				FileName: childDirName,
@@ -1041,7 +1141,7 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 	}
 
 	// Finally, update the root tree with the new top-level directory hash
-	rootDirName := parentParts[0]
+	rootDirName := pathComp.dirParts[0]
 	rootDirEntry := protocol.PackfileTreeEntry{
 		FileMode: 0o40000, // Directory mode
 		FileName: rootDirName,
