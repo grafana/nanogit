@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -44,36 +43,14 @@ var (
 	}
 )
 
-// getHexBuffer gets a hex buffer from the pool and returns it with the encoded hash
-// Returns buffer and whether a string conversion is needed
-func getHexBuffer(hash [20]byte) ([]byte, string) {
-	buf := hexBufferPool.Get().([]byte)
-	hex.Encode(buf, hash[:])
-	// Use unsafe conversion to avoid allocation when string is temporary
-	// This is safe because buf content is valid for the lifetime of the call
-	return buf, unsafeString(buf)
-}
-
 // getHexString gets a hex string from a hash, allocating a new string
 func getHexString(hash [20]byte) string {
 	buf := hexBufferPool.Get().([]byte)
 	hex.Encode(buf, hash[:])
 	// Allocate string and return buffer to pool
 	result := string(buf)
-	hexBufferPool.Put(buf)
+	hexBufferPool.Put(buf) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
 	return result
-}
-
-// unsafeString converts byte slice to string without allocation
-// WARNING: The returned string shares memory with the byte slice.
-// The byte slice must not be modified while the string is in use.
-func unsafeString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-// putHexBuffer returns a hex buffer to the pool
-func putHexBuffer(buf []byte) {
-	hexBufferPool.Put(buf)
 }
 
 // estimateTreeSize estimates the number of entries in tree data
@@ -530,7 +507,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 			}
 		} else {
 			// Fallback: close and recreate if Reset is not available
-			p.zlibReader.Close()
+			_ = p.zlibReader.Close()
 			var err error
 			p.zlibReader, err = zlib.NewReader(p.reader)
 			if err != nil {
