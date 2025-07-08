@@ -592,7 +592,7 @@ func (c *httpClient) findRootTree(ctx context.Context, commitHash hash.Hash, all
 	return treeObj, nil
 }
 
-// flatten converts collected tree objects into a flat tree structure using breadth-first traversal.
+// flatten converts collected tree objects into a flat tree structure using depth-first traversal.
 func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Flatten tree", "treeHash", rootTree.Hash.String())
@@ -601,54 +601,36 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 	estimatedSize := estimateFlatTreeSize(rootTree, allTreeObjects)
 	entries := make([]FlatTreeEntry, 0, estimatedSize)
 
-	// Queue for processing: each item contains the tree object and its base path
-	type queueItem struct {
-		tree     *protocol.PackfileObject
-		basePath string
-	}
-
-	// Pre-allocate queue with capacity based on estimated tree depth
-	// Use higher initial capacity to reduce reallocations
-	queueCap := estimatedSize / 20 // Rough estimate of directory depth
-	if queueCap < 64 {
-		queueCap = 64
-	}
-	if queueCap > 512 {
-		queueCap = 512
-	}
-	queue := make([]queueItem, 0, queueCap)
-	queue = append(queue, queueItem{tree: rootTree, basePath: ""})
-	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue), "estimatedEntries", estimatedSize)
-
-	// Process the queue iteratively with efficient removal
-	queueIdx := 0
-	for queueIdx < len(queue) {
-		current := queue[queueIdx]
-		queueIdx++
-
-		// Reset queue when we've processed enough to avoid memory buildup
-		if queueIdx > 100 && queueIdx*2 > len(queue) {
-			copy(queue, queue[queueIdx:])
-			queue = queue[:len(queue)-queueIdx]
-			queueIdx = 0
+	// Use depth-first traversal with sorted processing to naturally produce sorted entries
+	var traverseTree func(tree *protocol.PackfileObject, basePath string) error
+	traverseTree = func(tree *protocol.PackfileObject, basePath string) error {
+		// Create a sorted slice of entries to ensure consistent ordering
+		treeEntries := make([]*protocol.PackfileTreeEntry, len(tree.Tree))
+		for i := range tree.Tree {
+			treeEntries[i] = &tree.Tree[i]
 		}
 
-		// Process all entries in this tree
-		for _, entry := range current.tree.Tree {
+		// Sort entries by filename to ensure deterministic order
+		sort.Slice(treeEntries, func(i, j int) bool {
+			return treeEntries[i].FileName < treeEntries[j].FileName
+		})
+
+		// Process sorted entries in depth-first order
+		for _, entry := range treeEntries {
 			// Use cached hash parsing to avoid repeated allocations
 			entryHash, err := getCachedHash(entry.Hash)
 			if err != nil {
 				logger.Debug("Failed to parse entry hash",
 					"hash", entry.Hash,
 					"error", err)
-				return nil, fmt.Errorf("parsing entry hash %s: %w", entry.Hash, err)
+				return fmt.Errorf("parsing entry hash %s: %w", entry.Hash, err)
 			}
 
 			// Build the full path for this entry using pooled string builder
 			var entryPath string
-			if current.basePath != "" {
+			if basePath != "" {
 				pathBuilder := getPathBuilder()
-				pathBuilder.WriteString(current.basePath)
+				pathBuilder.WriteString(basePath)
 				pathBuilder.WriteString("/")
 				pathBuilder.WriteString(entry.FileName)
 				entryPath = pathBuilder.String()
@@ -663,7 +645,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 				entryType = protocol.ObjectTypeTree
 			}
 
-			// Add this entry to results
+			// Add this entry to results (directories first, then files within)
 			entries = append(entries, FlatTreeEntry{
 				Name: entry.FileName,
 				Path: entryPath,
@@ -672,30 +654,30 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 				Type: entryType,
 			})
 
-			// If this is a tree, add it to the queue for processing
+			// If this is a tree, recursively process it
 			if entryType == protocol.ObjectTypeTree {
 				childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree)
 				if !exists {
 					logger.Debug("Child tree not found",
 						"hash", entry.Hash,
 						"path", entryPath)
-					return nil, fmt.Errorf("tree object %s not found in collection", entry.Hash)
+					return fmt.Errorf("tree object %s not found in collection", entry.Hash)
 				}
-				queue = append(queue, queueItem{
-					tree:     childTree,
-					basePath: entryPath,
-				})
+				// Recursively traverse the child tree
+				if err := traverseTree(childTree, entryPath); err != nil {
+					return err
+				}
 			}
 		}
-
-		logger.Debug("Queue progress",
-			"remaining", len(queue)-queueIdx,
-			"processedEntries", len(entries))
+		return nil
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Path < entries[j].Path
-	})
+	logger.Debug("Traverse tree depth-first for sorted processing", "estimatedEntries", estimatedSize)
+
+	// Start depth-first traversal from root
+	if err := traverseTree(rootTree, ""); err != nil {
+		return nil, err
+	}
 
 	logger.Debug("Tree flattening completed",
 		"treeHash", rootTree.Hash.String(),
