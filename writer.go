@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/grafana/nanogit/log"
@@ -150,6 +151,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		treeEntries: entries,
 		storageMode: protocolStorageMode,
 		entryPool:   newEntryPool(), // Initialize the entry pool for memory optimization
+		dirtyPaths:  make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
 	}, nil
 }
 
@@ -184,8 +186,8 @@ type stagedWriter struct {
 	entryPool *entryPool
 	// Track if cleanup has been called
 	isCleanedUp bool
-	// Lazy tree building: track if root tree needs rebuilding
-	needsRootRebuild bool
+	// Deferred tree building optimization: track which directory paths need tree rebuilding
+	dirtyPaths map[string]bool
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.
@@ -340,6 +342,7 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 		Path: path,
 		Hash: blobHash,
 		Type: protocol.ObjectTypeBlob,
+		Mode: 0o100644,
 	}
 
 	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
@@ -612,6 +615,12 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		"author_name", author.Name,
 		"committer_name", committer.Name)
 
+	// Build all pending trees before creating the commit
+	// This optimizes performance by deferring tree building until commit time
+	if err := w.buildPendingTrees(ctx); err != nil {
+		return nil, fmt.Errorf("build pending trees: %w", err)
+	}
+
 	if !w.writer.HasObjects() {
 		return nil, ErrNothingToCommit
 	}
@@ -725,110 +734,56 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	return nil
 }
 
-// addMissingOrStaleTreeEntries updates the tree structure to include a new or updated blob.
-// This method handles the complex tree manipulation required when adding files to Git:
-//   - Creates missing intermediate directories as needed
-//   - Updates existing tree objects to include the new blob
-//   - Properly handles nested directory structures
-//   - Maintains proper Git tree object format and hashing
+// addMissingOrStaleTreeEntries marks directory paths as dirty for deferred tree building.
+// This method handles the tree structure updates required when adding files to Git:
+//   - Marks all parent directories as dirty for later tree rebuilding
+//   - Creates missing intermediate directory entries in treeEntries map
+//   - Defers actual tree object creation until commit time for better performance
 //
-// The method works by traversing the path from the deepest directory up to the root,
-// creating or updating tree objects as necessary to accommodate the new blob.
+// The method works by traversing the path from the file up to the root,
+// marking each directory path as dirty so trees can be built efficiently at commit time.
 func (w *stagedWriter) addMissingOrStaleTreeEntries(ctx context.Context, path string, blobHash hash.Hash) error {
 	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
-	// Get the file name and directory parts
-	fileName := pathParts[len(pathParts)-1]
+	// Get the file name and directory parts  
 	dirParts := pathParts[:len(pathParts)-1]
 
-	current := protocol.PackfileTreeEntry{
-		FileMode: 0o100644,
-		FileName: fileName,
-		Hash:     blobHash.String(),
-	}
-
-	// Iterate bottom up checking if the existing tree.
-	// if it does not exist or hash is different, create it with the previous tree entry.
-	// if it exists and hash is the same, continue.
-	// Add the file to the tree
-	for i := len(dirParts) - 1; i >= 0; i-- {
+	// Mark all parent directories as dirty for deferred tree building
+	for i := 0; i < len(dirParts); i++ {
 		currentPath := strings.Join(dirParts[:i+1], "/")
+		
 		// Check if not a tree
 		existingObj, exists := w.treeEntries[currentPath]
 		if exists && existingObj.Type != protocol.ObjectTypeTree {
 			return NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type)
 		}
 
-		// Create new tree
+		// Create directory entry if it doesn't exist
 		if !exists {
-			// Create new tree
-			treeObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
-			if err != nil {
-				return fmt.Errorf("create tree for %s: %w", currentPath, err)
-			}
-
-			w.writer.AddObject(treeObj)
-			w.objStorage.Add(&treeObj)
-			logger.Debug("add new tree object", "path", currentPath, "hash", treeObj.Hash.String(), "child", current.Hash, "child_path", current.FileName)
-
-			// Add this tree to the parent's entries
-			current = protocol.PackfileTreeEntry{
-				FileMode: 0o40000, // Directory mode
-				FileName: dirParts[i],
-				Hash:     treeObj.Hash.String(),
-			}
-
 			w.treeEntries[currentPath] = &FlatTreeEntry{
 				Path: currentPath,
-				Hash: treeObj.Hash,
+				Hash: hash.Zero, // Will be calculated during tree building
 				Type: protocol.ObjectTypeTree,
 				Mode: 0o40000,
 			}
-		} else {
-			existingTree, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
-			if !ok {
-				return fmt.Errorf("get existing tree %s: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
-			}
-
-			newObj, err := w.updateTreeEntry(ctx, existingTree, current)
-			if err != nil {
-				return fmt.Errorf("update tree for %s: %w", currentPath, err)
-			}
-
-			logger.Debug("add updated tree object", "path", currentPath, "hash", newObj.Hash.String(), "children", len(existingTree.Tree)+1)
-			current = protocol.PackfileTreeEntry{
-				FileMode: 0o40000, // Directory mode
-				FileName: dirParts[i],
-				Hash:     newObj.Hash.String(),
-			}
-
-			w.treeEntries[currentPath] = &FlatTreeEntry{
-				Path: currentPath,
-				Hash: newObj.Hash,
-				Type: protocol.ObjectTypeTree,
-			}
+			logger.Debug("created directory entry", "path", currentPath)
 		}
+		
+		// Mark this directory path as dirty
+		w.dirtyPaths[currentPath] = true
+		logger.Debug("marked path as dirty", "path", currentPath)
 	}
-
-	if len(w.lastTree.Tree) == 0 {
-		newRoot, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{current})
-		if err != nil {
-			return fmt.Errorf("build new root tree: %w", err)
-		}
-
-		w.writer.AddObject(newRoot)
-		w.objStorage.Add(&newRoot)
-		w.lastTree = &newRoot
-
-		return nil
+	
+	// Mark root as dirty if file is in root directory
+	if len(dirParts) == 0 {
+		w.dirtyPaths[""] = true
+		logger.Debug("marked root as dirty for root-level file")
+	} else {
+		// Always mark root as dirty when any nested directory changes
+		w.dirtyPaths[""] = true
+		logger.Debug("marked root as dirty for nested file")
 	}
-
-	newRootObj, err := w.updateTreeEntry(ctx, w.lastTree, current)
-	if err != nil {
-		return fmt.Errorf("update root tree: %w", err)
-	}
-	w.lastTree = newRootObj
 
 	return nil
 }
@@ -907,15 +862,13 @@ func (w *stagedWriter) updateTreeEntry(ctx context.Context, treeObj *protocol.Pa
 	return &newObj, nil
 }
 
-// removeBlobFromTree removes a blob entry from the tree structure and updates all parent trees.
-// This method handles the complex tree manipulation required when deleting files from Git:
-//   - Removes the blob from its immediate parent directory
-//   - Updates all ancestor directories with new tree hashes
-//   - Properly handles nested directory structures
-//   - Maintains Git tree object integrity throughout the hierarchy
+// removeBlobFromTree marks directory paths as dirty for deferred tree building after blob removal.
+// This method handles marking the tree structure for updates when deleting files from Git:
+//   - Marks all parent directories as dirty for later tree rebuilding
+//   - Defers actual tree object rebuilding until commit time for better performance
 //
-// The method works by traversing from the immediate parent directory up to the root,
-// updating each tree object to reflect the removal of the blob or updated child tree.
+// The method works by traversing the path from the file up to the root,
+// marking each directory path as dirty so trees can be rebuilt efficiently at commit time.
 func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) error {
 	logger := log.FromContext(ctx)
 	// Split the path into parts
@@ -924,30 +877,14 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		return errors.New("empty path")
 	}
 
-	// Get the file name and directory parts
-	fileName := pathParts[len(pathParts)-1]
+	// Get the directory parts
 	dirParts := pathParts[:len(pathParts)-1]
 
-	// First, remove the file from its immediate parent directory
-	if len(dirParts) == 0 {
-		// File is in root directory
-		newRootObj, err := w.removeTreeEntry(ctx, w.lastTree, fileName)
-		if err != nil {
-			return fmt.Errorf("remove file from root tree: %w", err)
-		}
-		w.lastTree = newRootObj
-		logger.Debug("removed file from root", "file", fileName, "new_root_hash", newRootObj.Hash.String())
-		return nil
-	}
-
-	// File is in a subdirectory - we need to update the tree hierarchy
-	// Start from the immediate parent and work up to root
-	var updatedChildHash hash.Hash
-
-	for i := len(dirParts) - 1; i >= 0; i-- {
+	// Mark all parent directories as dirty for deferred tree building
+	for i := 0; i < len(dirParts); i++ {
 		currentPath := strings.Join(dirParts[:i+1], "/")
-
-		// Get the tree we need to modify
+		
+		// Verify the directory exists
 		existingObj, exists := w.treeEntries[currentPath]
 		if !exists {
 			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, NewPathNotFoundError(currentPath))
@@ -956,105 +893,37 @@ func (w *stagedWriter) removeBlobFromTree(ctx context.Context, path string) erro
 		if existingObj.Type != protocol.ObjectTypeTree {
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
-
-		treeObj, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
-		if !ok {
-			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
-		}
-
-		var (
-			newObj *protocol.PackfileObject
-			err    error
-		)
-
-		if i == len(dirParts)-1 {
-			// This is the immediate parent - remove the file
-			newObj, err = w.removeTreeEntry(ctx, treeObj, fileName)
-			if err != nil {
-				return fmt.Errorf("remove file from tree %s: %w", currentPath, err)
-			}
-			logger.Debug("removed file from parent tree", "path", currentPath, "file", fileName, "new_hash", newObj.Hash.String())
-		} else {
-			// This is an ancestor directory - update with new child hash
-			childDirName := dirParts[i+1]
-			childEntry := protocol.PackfileTreeEntry{
-				FileMode: 0o40000, // Directory mode
-				FileName: childDirName,
-				Hash:     updatedChildHash.String(),
-			}
-			newObj, err = w.updateTreeEntry(ctx, treeObj, childEntry)
-			if err != nil {
-				return fmt.Errorf("update tree %s with new child: %w", currentPath, err)
-			}
-			logger.Debug("updated parent tree with new child", "path", currentPath, "child", childDirName, "child_hash", updatedChildHash.String(), "new_hash", newObj.Hash.String())
-		}
-
-		// Store the new tree hash for the next iteration
-		updatedChildHash = newObj.Hash
-
-		// Update our references
-		w.treeEntries[currentPath] = &FlatTreeEntry{
-			Path: currentPath,
-			Hash: newObj.Hash,
-			Type: protocol.ObjectTypeTree,
-		}
+		
+		// Mark this directory path as dirty
+		w.dirtyPaths[currentPath] = true
+		logger.Debug("marked path as dirty for blob removal", "path", currentPath)
 	}
-
-	// Finally, update the root tree with the new top-level directory hash
-	rootDirName := dirParts[0]
-	rootDirEntry := protocol.PackfileTreeEntry{
-		FileMode: 0o40000, // Directory mode
-		FileName: rootDirName,
-		Hash:     updatedChildHash.String(),
-	}
-
-	newRootObj, err := w.updateTreeEntry(ctx, w.lastTree, rootDirEntry)
-	if err != nil {
-		return fmt.Errorf("update root tree: %w", err)
-	}
-
-	w.lastTree = newRootObj
-	logger.Debug("updated root tree", "dir", rootDirName, "dir_hash", updatedChildHash.String(), "new_root_hash", newRootObj.Hash.String())
+	
+	// Always mark root as dirty when any file is removed
+	w.dirtyPaths[""] = true
+	logger.Debug("marked root as dirty for blob removal")
 
 	return nil
 }
 
-// removeTreeFromTree removes a directory tree from the tree structure and updates all parent trees.
-// This method handles the complex tree manipulation required when deleting directories from Git:
-//   - Removes the directory from its immediate parent
-//   - Updates all ancestor directories with new tree hashes
-//   - Properly handles nested directory structures
-//   - Maintains Git tree object integrity throughout the hierarchy
+// removeTreeFromTree marks directory paths as dirty for deferred tree building after tree removal.
+// This method handles marking the tree structure for updates when deleting directories from Git:
+//   - Marks all parent directories as dirty for later tree rebuilding
+//   - Defers actual tree object rebuilding until commit time for better performance
 //
 // This is similar to removeBlobFromTree but handles directory removal instead of file removal.
 func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) error {
 	logger := log.FromContext(ctx)
 	// Split the path into parts
 	pathParts := strings.Split(path, "/")
-	// Get the directory name and parent directory parts
-	dirName := pathParts[len(pathParts)-1]
+	// Get the parent directory parts
 	parentParts := pathParts[:len(pathParts)-1]
 
-	// First, remove the directory from its immediate parent
-	if len(parentParts) == 0 {
-		// Directory is in root
-		newRootObj, err := w.removeTreeEntry(ctx, w.lastTree, dirName)
-		if err != nil {
-			return fmt.Errorf("remove directory from root tree: %w", err)
-		}
-		w.lastTree = newRootObj
-		logger.Debug("removed directory from root", "dir", dirName, "new_root_hash", newRootObj.Hash.String())
-		return nil
-	}
-
-	// Directory is in a subdirectory - we need to update the tree hierarchy
-	// Start from the immediate parent and work up to root
-	var updatedChildHash hash.Hash
-
-	for i := len(parentParts) - 1; i >= 0; i-- {
+	// Mark all parent directories as dirty for deferred tree building
+	for i := 0; i < len(parentParts); i++ {
 		currentPath := strings.Join(parentParts[:i+1], "/")
-
-		// Get the tree we need to modify
+		
+		// Verify the directory exists
 		existingObj, exists := w.treeEntries[currentPath]
 		if !exists {
 			return fmt.Errorf("parent directory %s does not exist: %w", currentPath, NewPathNotFoundError(currentPath))
@@ -1063,66 +932,15 @@ func (w *stagedWriter) removeTreeFromTree(ctx context.Context, path string) erro
 		if existingObj.Type != protocol.ObjectTypeTree {
 			return fmt.Errorf("parent path is not a tree: %w", NewUnexpectedObjectTypeError(existingObj.Hash, protocol.ObjectTypeTree, existingObj.Type))
 		}
-
-		treeObj, ok := w.objStorage.GetByType(existingObj.Hash, protocol.ObjectTypeTree)
-		if !ok {
-			return fmt.Errorf("get tree %s in cache: %w", currentPath, NewObjectNotFoundError(existingObj.Hash))
-		}
-
-		var (
-			newObj *protocol.PackfileObject
-			err    error
-		)
-
-		if i == len(parentParts)-1 {
-			// This is the immediate parent - remove the directory
-			newObj, err = w.removeTreeEntry(ctx, treeObj, dirName)
-			if err != nil {
-				return fmt.Errorf("remove directory from tree %s: %w", currentPath, err)
-			}
-			logger.Debug("removed directory from parent tree", "path", currentPath, "dir", dirName, "new_hash", newObj.Hash.String())
-		} else {
-			// This is an ancestor directory - update with new child hash
-			childDirName := parentParts[i+1]
-			childEntry := protocol.PackfileTreeEntry{
-				FileMode: 0o40000, // Directory mode
-				FileName: childDirName,
-				Hash:     updatedChildHash.String(),
-			}
-			newObj, err = w.updateTreeEntry(ctx, treeObj, childEntry)
-			if err != nil {
-				return fmt.Errorf("update tree %s with new child: %w", currentPath, err)
-			}
-			logger.Debug("updated parent tree with new child", "path", currentPath, "child", childDirName, "child_hash", updatedChildHash.String(), "new_hash", newObj.Hash.String())
-		}
-
-		// Store the new tree hash for the next iteration
-		updatedChildHash = newObj.Hash
-
-		// Update our references
-		w.treeEntries[currentPath] = &FlatTreeEntry{
-			Path: currentPath,
-			Hash: newObj.Hash,
-			Type: protocol.ObjectTypeTree,
-		}
+		
+		// Mark this directory path as dirty
+		w.dirtyPaths[currentPath] = true
+		logger.Debug("marked path as dirty for tree removal", "path", currentPath)
 	}
-
-	// Finally, update the root tree with the new top-level directory hash
-	rootDirName := parentParts[0]
-	rootDirEntry := protocol.PackfileTreeEntry{
-		FileMode: 0o40000, // Directory mode
-		FileName: rootDirName,
-		Hash:     updatedChildHash.String(),
-	}
-
-	newRootObj, err := w.updateTreeEntry(ctx, w.lastTree, rootDirEntry)
-	if err != nil {
-		return fmt.Errorf("update root tree: %w", err)
-	}
-
-	w.lastTree = newRootObj
-	w.objStorage.Add(newRootObj)
-	logger.Debug("updated root tree", "dir", rootDirName, "dir_hash", updatedChildHash.String(), "new_root_hash", newRootObj.Hash.String())
+	
+	// Always mark root as dirty when any directory is removed
+	w.dirtyPaths[""] = true
+	logger.Debug("marked root as dirty for tree removal")
 
 	return nil
 }
@@ -1188,6 +1006,141 @@ func (w *stagedWriter) removeTreeEntry(ctx context.Context, treeObj *protocol.Pa
 	return &newObj, nil
 }
 
+// buildPendingTrees builds all dirty tree objects in topological order (deepest first).
+// This method is called at commit time to efficiently build all trees that need updating.
+// It builds trees bottom-up to ensure parent trees can reference their children's hashes.
+func (w *stagedWriter) buildPendingTrees(ctx context.Context) error {
+	if len(w.dirtyPaths) == 0 {
+		return nil // No dirty paths, nothing to build
+	}
+	
+	logger := log.FromContext(ctx)
+	logger.Debug("Building pending trees", "dirty_path_count", len(w.dirtyPaths))
+
+	// Step 1: Collect all dirty paths and sort them by depth (deepest first)
+	var dirtyPathList []string
+	for path := range w.dirtyPaths {
+		dirtyPathList = append(dirtyPathList, path)
+	}
+	
+	// Sort by depth (deepest first) - deeper paths have more "/" separators
+	sort.Slice(dirtyPathList, func(i, j int) bool {
+		depthI := strings.Count(dirtyPathList[i], "/")
+		depthJ := strings.Count(dirtyPathList[j], "/")
+		if depthI != depthJ {
+			return depthI > depthJ // Deeper paths first
+		}
+		// Same depth, sort alphabetically for consistency
+		// Root directory ("") should always be last
+		if dirtyPathList[i] == "" {
+			return false
+		}
+		if dirtyPathList[j] == "" {
+			return true
+		}
+		return dirtyPathList[i] < dirtyPathList[j]
+	})
+	
+	logger.Debug("Sorted dirty paths", "paths", dirtyPathList)
+
+	// Step 2: Build trees from deepest to shallowest
+	for _, path := range dirtyPathList {
+		// Skip if this path was already processed (can happen with complex operations)
+		if _, exists := w.treeEntries[path]; !exists && path != "" {
+			continue // Directory was deleted
+		}
+		
+		if err := w.buildSingleTree(ctx, path); err != nil {
+			return fmt.Errorf("build tree for path %q: %w", path, err)
+		}
+	}
+	
+	// Step 3: Clear dirty paths since all trees have been built
+	w.dirtyPaths = make(map[string]bool)
+	logger.Debug("Finished building pending trees")
+	
+	return nil
+}
+
+// buildSingleTree builds a single tree object for the given directory path.
+// It collects all direct children (files and subdirectories) and creates a tree object.
+func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) error {
+	logger := log.FromContext(ctx)
+	
+	// Collect all direct children of this directory
+	var entries []protocol.PackfileTreeEntry
+	pathPrefix := dirPath
+	if pathPrefix != "" {
+		pathPrefix += "/"
+	}
+	
+	// Find all direct children (files and subdirectories)
+	for entryPath, entry := range w.treeEntries {
+		if entryPath == dirPath {
+			continue // Skip the directory itself
+		}
+		
+		var isDirectChild bool
+		var childName string
+		
+		if dirPath == "" {
+			// Root directory: direct children have no "/" in their path
+			if !strings.Contains(entryPath, "/") {
+				isDirectChild = true
+				childName = entryPath
+			}
+		} else {
+			// Non-root directory: direct children start with dirPath + "/"
+			if strings.HasPrefix(entryPath, pathPrefix) {
+				remainingPath := entryPath[len(pathPrefix):]
+				if !strings.Contains(remainingPath, "/") {
+					isDirectChild = true
+					childName = remainingPath
+				}
+			}
+		}
+		
+		if isDirectChild {
+			entries = append(entries, protocol.PackfileTreeEntry{
+				FileMode: entry.Mode,
+				FileName: childName,
+				Hash:     entry.Hash.String(),
+			})
+		}
+	}
+	
+	// Skip empty directories (they shouldn't exist in Git)
+	if len(entries) == 0 {
+		logger.Debug("Skipping empty directory", "path", dirPath)
+		return nil
+	}
+	
+	// Build the tree object
+	treeObj, err := protocol.BuildTreeObject(crypto.SHA1, entries)
+	if err != nil {
+		return fmt.Errorf("build tree object for %q: %w", dirPath, err)
+	}
+	
+	// Add to writer and storage
+	w.writer.AddObject(treeObj)
+	w.objStorage.Add(&treeObj)
+	
+	// Update the tree entry with the calculated hash
+	if dirPath == "" {
+		// This is the root tree
+		w.lastTree = &treeObj
+		logger.Debug("Built root tree", "hash", treeObj.Hash.String(), "entry_count", len(entries))
+	} else {
+		// Update the directory entry
+		if dirEntry, exists := w.treeEntries[dirPath]; exists {
+			dirEntry.Hash = treeObj.Hash
+		}
+		logger.Debug("Built directory tree", "path", dirPath, "hash", treeObj.Hash.String(), "entry_count", len(entries))
+	}
+	
+	return nil
+}
+
 // Cleanup releases all resources held by the writer and clears staged changes.
 // This method:
 //   - Cleans up the underlying PackfileWriter (removes temp files)
@@ -1210,6 +1163,7 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 
 	// Clear all staged changes from memory
 	w.treeEntries = make(map[string]*FlatTreeEntry)
+	w.dirtyPaths = make(map[string]bool)
 
 	// Reset writer state
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
