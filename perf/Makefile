@@ -203,7 +203,7 @@ profile-mem:
 profile-all:
 	@echo "Generating both CPU and memory profiles (nanogit only)..."
 	@mkdir -p profiles
-	RUN_PERFORMANCE_TESTS=true NANOGIT_PROFILE_MODE=true go test -v -timeout 10m -run "TestFileOperationsPerformance" -cpuprofile=profiles/cpu.prof -memprofile=profiles/mem.prof .
+	RUN_PERFORMANCE_TESTS=true NANOGIT_PROFILE_MODE=true go test -v -timeout 10m -run "TestFileOperationsPerformance|TestGetFlatTreePerformance|TestCompareCommitsPerformance|TestBulkOperationsPerformance" -cpuprofile=profiles/cpu.prof -memprofile=profiles/mem.prof .
 	@echo "Profiles saved to profiles/"
 	@echo "Analyze CPU: go tool pprof profiles/cpu.prof"
 	@echo "Analyze Memory: go tool pprof profiles/mem.prof"

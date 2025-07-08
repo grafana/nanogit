@@ -400,7 +400,7 @@ func TestSpecialCases(t *testing.T) {
 	t.Run("nil hash handling", func(t *testing.T) {
 		t.Parallel()
 		err := NewObjectNotFoundError(hash.Zero)
-		expected := "object  not found"
+		expected := "object 0000000000000000000000000000000000000000 not found"
 		require.Equal(t, expected, err.Error())
 	})
 

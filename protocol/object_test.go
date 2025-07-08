@@ -190,22 +190,20 @@ func TestObject(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "valid sha256 blob",
+			name:    "sha256 blob returns error for wrong size",
 			algo:    crypto.SHA256,
 			objType: ObjectTypeBlob,
 			data:    []byte("test content"),
-			// Header: "blob 12\0"
-			// Content: "test content"
-			// Full object: "blob 12\0test content"
-			want:    hash.Hash{0x18, 0xf2, 0x76, 0x9e, 0xc7, 0x4f, 0xa8, 0x25, 0x6f, 0x4b, 0x1f, 0x8b, 0x9f, 0xa4, 0x6a, 0xe0, 0xb9, 0x8a, 0xf0, 0xef, 0xcb, 0x65, 0x8e, 0x7e, 0x95, 0xe8, 0x00, 0x90, 0xf6, 0x6c, 0x33, 0x8a},
-			wantErr: false,
+			// SHA-256 produces 32-byte hash, but we only support 20-byte hashes
+			want:    hash.Zero,
+			wantErr: true,
 		},
 		{
 			name:    "unavailable algorithm",
 			algo:    99999,
 			objType: ObjectTypeBlob,
 			data:    []byte("test content"),
-			want:    nil,
+			want:    hash.Zero,
 			wantErr: true,
 		},
 		{
@@ -228,8 +226,10 @@ func TestObject(t *testing.T) {
 			got, err := Object(tt.algo, tt.objType, tt.data)
 			if tt.wantErr {
 				require.Error(t, err)
-				require.ErrorIs(t, err, ErrUnlinkedAlgorithm)
-				require.Nil(t, got)
+				if tt.name == "unavailable algorithm" {
+					require.ErrorIs(t, err, ErrUnlinkedAlgorithm)
+				}
+				require.Equal(t, hash.Zero, got)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
@@ -324,17 +324,6 @@ func TestHasher_Write(t *testing.T) {
 			// Content: "test content"
 			// Full object: "blob 12\0test content"
 			want: hash.Hash{0x08, 0xcf, 0x61, 0x01, 0x41, 0x6f, 0x0c, 0xe0, 0xdd, 0xa3, 0xc8, 0x0e, 0x62, 0x7f, 0x33, 0x38, 0x54, 0xc4, 0x08, 0x5c},
-		},
-		{
-			name:    "write to sha256 hasher",
-			algo:    crypto.SHA256,
-			objType: ObjectTypeBlob,
-			size:    12,
-			data:    []byte("test content"),
-			// Header: "blob 12\0"
-			// Content: "test content"
-			// Full object: "blob 12\0test content"
-			want: hash.Hash{0x18, 0xf2, 0x76, 0x9e, 0xc7, 0x4f, 0xa8, 0x25, 0x6f, 0x4b, 0x1f, 0x8b, 0x9f, 0xa4, 0x6a, 0xe0, 0xb9, 0x8a, 0xf0, 0xef, 0xcb, 0x65, 0x8e, 0x7e, 0x95, 0xe8, 0x00, 0x90, 0xf6, 0x6c, 0x33, 0x8a},
 		},
 		{
 			name:    "write empty data",
