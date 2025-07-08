@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	stdhash "hash"
 	"io"
 	"os"
 	"slices"
@@ -39,6 +40,21 @@ var (
 		New: func() interface{} {
 			// Pre-allocate buffer for SHA-1 hash (40 hex chars)
 			return make([]byte, 40)
+		},
+	}
+
+	// Pool for readAndInflate data buffers to reduce allocations
+	dataBufferPool = sync.Pool{
+		New: func() interface{} {
+			// Pre-allocate buffer for common object sizes (64KB)
+			return make([]byte, 65536)
+		},
+	}
+
+	// Pool for discard buffers used in zlib stream consumption
+	discardBufferPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 4096)
 		},
 	}
 
@@ -342,6 +358,7 @@ type PackfileReader struct {
 	remainingObjects uint32
 	algo             crypto.Hash
 	zlibReader       io.ReadCloser // Reusable zlib reader for performance
+	hasher           stdhash.Hash  // Reusable hasher for performance
 
 	// State that shouldn't be set when constructed.
 	trailerRead bool
@@ -463,7 +480,7 @@ func (p *PackfileReader) processStandardObject(obj *PackfileObject, size int) er
 		return eofIsUnexpected(err)
 	}
 
-	obj.Hash, err = Object(p.algo, obj.Type, obj.Data)
+	obj.Hash, err = p.calculateObjectHash(obj.Type, obj.Data)
 	if err != nil {
 		return eofIsUnexpected(err)
 	}
@@ -529,34 +546,38 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
 	
-	// Pre-allocate the data slice with the expected size to avoid reallocations
-	// This is much more efficient than using bytes.Buffer with io.Copy
-	data := make([]byte, sz)
-	totalRead := 0
+	// Use pooled buffer if size is reasonable, otherwise allocate directly
+	var data []byte
+	var pooledBuf []byte
 	
-	for totalRead < sz {
-		n, err := lr.Read(data[totalRead:])
-		totalRead += n
-		
-		if err != nil {
-			if err == io.EOF {
-				// We've reached the end of the zlib stream
-				break
+	if sz <= 65536 { // Use pooled buffer for objects <= 64KB
+		pooledBuf = dataBufferPool.Get().([]byte)
+		defer dataBufferPool.Put(pooledBuf)
+		data = pooledBuf[:sz] // Slice to exact size needed
+	} else {
+		data = make([]byte, sz) // Allocate directly for large objects
+	}
+	
+	n, err := io.ReadFull(lr, data)
+	if err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			// Handle partial read correctly
+			if n != sz {
+				return nil, ErrInflatedDataIncorrectSize
 			}
+		} else {
 			return nil, eofIsUnexpected(err)
 		}
-	}
-
-	if totalRead != sz {
-		return nil, ErrInflatedDataIncorrectSize
 	}
 
 	// CRITICAL: Consume any remaining bytes in the zlib stream to ensure proper positioning
 	// for the next object. This is essential for sequential object reading.
 	// We need to read until EOF to complete the zlib stream.
-	var discardBuf [512]byte
+	discardBuf := discardBufferPool.Get().([]byte)
+	defer discardBufferPool.Put(discardBuf)
+	
 	for {
-		_, err := lr.Read(discardBuf[:])
+		_, err := lr.Read(discardBuf)
 		if err != nil {
 			if err == io.EOF {
 				break // This is expected - we've consumed the entire zlib stream
@@ -565,7 +586,60 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 		}
 	}
 
+	// If we used a pooled buffer, we need to copy the data to return it
+	// since the pooled buffer will be reused
+	if pooledBuf != nil {
+		result := make([]byte, sz)
+		copy(result, data)
+		return result, nil
+	}
+
 	return data, nil
+}
+
+// calculateObjectHash computes the hash of an object using a reusable hasher for performance
+func (p *PackfileReader) calculateObjectHash(objType ObjectType, data []byte) (hash.Hash, error) {
+	// Initialize hasher on first use
+	if p.hasher == nil {
+		p.hasher = p.algo.New()
+	} else {
+		p.hasher.Reset()
+	}
+	
+	// Write Git object header exactly as NewHasher does for compatibility
+	// This ensures we get the same hash as the Object function
+	typeBytes := objType.Bytes()
+	if _, err := p.hasher.Write(typeBytes); err != nil {
+		return hash.Zero, err
+	}
+	
+	if _, err := p.hasher.Write([]byte(" ")); err != nil {
+		return hash.Zero, err
+	}
+	
+	sizeBytes := []byte(strconv.FormatInt(int64(len(data)), 10))
+	if _, err := p.hasher.Write(sizeBytes); err != nil {
+		return hash.Zero, err
+	}
+	
+	if _, err := p.hasher.Write([]byte{0}); err != nil {
+		return hash.Zero, err
+	}
+	
+	// Write object data
+	if _, err := p.hasher.Write(data); err != nil {
+		return hash.Zero, err
+	}
+	
+	// Get hash sum
+	sum := p.hasher.Sum(nil)
+	if len(sum) != 20 {
+		return hash.Zero, fmt.Errorf("expected 20-byte hash, got %d bytes", len(sum))
+	}
+	
+	var result hash.Hash
+	copy(result[:], sum)
+	return result, nil
 }
 
 func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
