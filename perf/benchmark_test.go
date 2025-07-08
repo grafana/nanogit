@@ -177,17 +177,25 @@ func NewBenchmarkSuiteWithSelectedRepos(ctx context.Context, networkLatency time
 		return nil, fmt.Errorf("failed to provision selected repositories: %w", err)
 	}
 
-	// Initialize clients
+	// Initialize clients based on environment variables
 	var allClients []GitClient
+	
+	// Always include nanogit
 	allClients = append(allClients, NewNanogitClientWrapper())
-	allClients = append(allClients, NewGoGitClientWrapper())
+	
+	// Only include other clients if profiling mode is not enabled
+	if os.Getenv("NANOGIT_PROFILE_MODE") != "true" {
+		allClients = append(allClients, NewGoGitClientWrapper())
 
-	gitCLIWrapper, err := NewGitCLIClientWrapper()
-	if err != nil {
-		gitServer.Cleanup(ctx)
-		return nil, fmt.Errorf("failed to create git CLI client: %w", err)
+		gitCLIWrapper, err := NewGitCLIClientWrapper()
+		if err != nil {
+			gitServer.Cleanup(ctx)
+			return nil, fmt.Errorf("failed to create git CLI client: %w", err)
+		}
+		allClients = append(allClients, gitCLIWrapper)
+	} else {
+		fmt.Printf("NANOGIT_PROFILE_MODE enabled: running with nanogit client only (%d clients total)\n", len(allClients))
 	}
-	allClients = append(allClients, gitCLIWrapper)
 
 	return &BenchmarkSuite{
 		clients:      allClients,
