@@ -12,7 +12,9 @@ import (
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
-func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response []byte, err error) {
+// The data parameter is streamed to the server, and the response is parsed internally.
+// Returns an error if the HTTP request fails or if Git protocol errors are detected.
+func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-receive-pack")
@@ -21,7 +23,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response [
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), data)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.addDefaultHeaders(req)
@@ -30,35 +32,31 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (response [
 
 	res, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
 	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			err = fmt.Errorf("close response body: %w", closeErr)
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %w", closeErr)
 		}
 	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
-
-	responseBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+		_ = res.Body.Close()
+		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
 	logger.Debug("Receive-pack response",
 		"status", res.StatusCode,
-		"statusText", res.Status,
-		"responseSize", len(responseBody))
-	logger.Debug("Receive-pack raw response", "responseBody", string(responseBody))
+		"statusText", res.Status)
 
-	// Check for Git protocol errors in receive-pack response
-	if _, _, err := protocol.ParsePack(responseBody); err != nil {
-		logger.Debug("Protocol error detected in receive-pack response", "error", err.Error())
-		return responseBody, err
+	parser := protocol.NewParser(res.Body)
+	for {
+		if _, err := parser.Next(); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+
+			return fmt.Errorf("git protocol error: %w", err)
+		}
 	}
-
-	return responseBody, nil
 }

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -37,30 +38,21 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 	logger.Debug("Send Ls-refs request", "requestSize", len(pkt))
 	logger.Debug("Ls-refs raw request", "request", string(pkt))
 
-	refsData, err := c.UploadPack(ctx, pkt)
+	refsReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
 
-	logger.Debug("Received ls-refs response", "responseSize", len(refsData))
-	logger.Debug("Ls-refs raw response", "response", string(refsData))
+	defer func() {
+		if closeErr := refsReader.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing refs reader: %w", closeErr)
+		}
+	}()
 
-	refs := make([]protocol.RefLine, 0)
-	lines, _, err := protocol.ParsePack(refsData)
+	logger.Debug("Parsing ls-refs response")
+	refs, err := protocol.ParseLsRefsResponse(ctx, refsReader)
 	if err != nil {
 		return nil, fmt.Errorf("parse refs response: %w", err)
-	}
-
-	logger.Debug("Parse ref lines", "lineCount", len(lines))
-	for _, line := range lines {
-		refLine, err := protocol.ParseRefLine(line)
-		if err != nil {
-			return nil, fmt.Errorf("parse ref line: %w", err)
-		}
-
-		if refLine.RefName != "" {
-			refs = append(refs, refLine)
-		}
 	}
 
 	logger.Debug("Ls-refs completed", "refCount", len(refs))

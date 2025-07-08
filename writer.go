@@ -60,7 +60,8 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 
 	ctx, objStorage := storage.FromContextOrInMemory(ctx)
 
-	commit, err := c.GetCommit(ctx, ref.Hash)
+	// Get essential objects - fetch commit, root tree, and flat tree
+	commit, err := c.getCommit(ctx, ref.Hash, false)
 	if err != nil {
 		return nil, fmt.Errorf("get commit %s: %w", ref.Hash.String(), err)
 	}
@@ -70,11 +71,13 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		return nil, fmt.Errorf("get tree %s: %w", commit.Tree.String(), err)
 	}
 
+	// Get the flat tree representation for efficient path-based operations
 	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("get flat tree for commit %s: %w", commit.Hash.String(), err)
 	}
 
+	// Build tree entries map from flat tree
 	entries := make(map[string]*FlatTreeEntry, len(currentTree.Entries))
 	for _, entry := range currentTree.Entries {
 		entries[entry.Path] = &entry
@@ -84,7 +87,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		"ref_name", ref.Name,
 		"commit_hash", commit.Hash.String(),
 		"tree_hash", treeObj.Hash.String(),
-		"entry_count", len(entries))
+		"tree_entries", len(entries))
 
 	// Convert writer storage mode to protocol storage mode
 	var protocolStorageMode protocol.PackfileStorageMode
@@ -151,6 +154,7 @@ func (w *stagedWriter) checkCleanupState() error {
 	return nil
 }
 
+
 // BlobExists checks if a blob exists at the given path in the repository.
 // This method verifies the existence of a file by checking the tree entries
 // that have been loaded into memory.
@@ -174,6 +178,7 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 	if path == "" {
 		return false, ErrEmptyPath
 	}
+
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Check blob existence", "path", path)
@@ -213,6 +218,7 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 	if path == "" {
 		return hash.Zero, ErrEmptyPath
 	}
+
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Create blob",
@@ -273,6 +279,7 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 		return hash.Zero, ErrEmptyPath
 	}
 
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Update blob",
 		"path", path,
@@ -331,6 +338,7 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 		return hash.Zero, ErrEmptyPath
 	}
 
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Delete blob",
 		"path", path)
@@ -386,6 +394,7 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 	if err := w.checkCleanupState(); err != nil {
 		return nil, err
 	}
+
 
 	existing, ok := w.treeEntries[path]
 	if !ok {
@@ -475,6 +484,7 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 		return emptyHash, nil
 	}
+
 
 	existing, ok := w.treeEntries[path]
 	if !ok {
@@ -649,21 +659,10 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 		writeErrChan <- err
 	}()
 
-	// Call ReceivePack with the pipe reader (this will stream the data)
-	responseBody, err := w.client.ReceivePack(ctx, pipeReader)
+	// Call ReceivePack with the pipe reader (this will stream the data and parse the response)
+	err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
 		_ = pipeReader.Close() // Best effort close since we're already handling an error
-
-		// Even if there's an error, the response body may contain useful Git protocol
-		// error details (like reference update failures, unpack errors, etc.)
-		// We should parse and return these as more specific errors when possible
-		if len(responseBody) > 0 {
-			if _, _, parseErr := protocol.ParsePack(responseBody); parseErr != nil {
-				// Return the more specific Git protocol error instead of generic transport error
-				return fmt.Errorf("git protocol error: %w", parseErr)
-			}
-		}
-
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 

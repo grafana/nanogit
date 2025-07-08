@@ -19,7 +19,7 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Check repository existence")
 
-	_, err := c.SmartInfo(ctx, "git-upload-pack")
+	err := c.SmartInfo(ctx, "git-upload-pack")
 	if err != nil {
 		if strings.Contains(err.Error(), "404 Not Found") {
 			logger.Debug("Repository not found")

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
+	"sync"
 )
 
 // Package protocol implements Git's packet format used in various Git protocols.
@@ -70,6 +72,31 @@ var (
 	// ErrGitUnpackError is returned when Git pack unpacking fails.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrGitUnpackError = errors.New("git unpack error")
+
+	// packetDataPool provides buffer reuse for packet data to reduce allocations
+	packetDataPool = sync.Pool{
+		New: func() interface{} {
+			// Start with 128KB buffer to handle larger Git packets and reduce grow operations
+			// This provides more headroom for typical Git operations and reduces pool churn
+			return make([]byte, 0, 131072)
+		},
+	}
+
+	// packetLengthPool provides buffer reuse for 4-byte packet length headers
+	packetLengthPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 4)
+		},
+	}
+
+	// Pre-compiled error detection patterns to avoid repeated allocations
+	errPattern        = []byte("ERR ")
+	errorPattern      = []byte("error:")
+	fatalPattern      = []byte("fatal:")
+	ngPattern         = []byte("ng ")
+	unpackPattern     = []byte("unpack ")
+	unpackOkPattern   = []byte("ok")
+	unpackOkFull      = []byte("unpack ok") // Most common success case
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -275,6 +302,23 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// Parser is a parser for Git protocol packets.
+// It reads packets from a reader and returns them as a slice of bytes.
+// It fails if it detects an error in the packet stream.
+// The stream will be consider closed when reading the next returns io.EOF.
+type Parser struct {
+	reader io.Reader
+}
+
+// NewParser creates a new Parser from a reader.
+func NewParser(reader io.Reader) *Parser {
+	return &Parser{reader: reader}
+}
+
+func (p *Parser) Read(b []byte) (n int, err error) {
+	return p.reader.Read(b)
+}
+
 // ParsePack parses a sequence of Git protocol packets from a byte slice according to the
 // Git Smart HTTP protocol specification (https://git-scm.com/docs/gitprotocol-pack).
 //
@@ -359,85 +403,178 @@ func FormatPacks(packs ...Pack) ([]byte, error) {
 //
 // Example Usage:
 //
-//	data := []byte("0009hello000dERR failed0000")
-//	lines, remainder, err := ParsePack(data)
-//	// Returns: lines=["hello"], remainder=[]byte("0000"), err=GitServerError
-//
-// TODO: Accept an io.Reader to enable streaming packet parsing.
-func ParsePack(b []byte) (lines [][]byte, remainder []byte, err error) {
-	for len(b) >= 4 {
-		length, err := strconv.ParseUint(string(b[:4]), 16, 16)
+//	reader := io.NopCloser(bytes.NewReader([]byte("0009hello000dERR failed0000")))
+//	lines, err := ParsePack(reader)
+//	// Returns: lines=["hello"], err=GitServerError
+func (p *Parser) Next() (line []byte, err error) {
+	for {
+		lengthBytes, length, err := readPacketLength(p.reader)
 		if err != nil {
-			return nil, b, NewPackParseError(b, fmt.Errorf("parsing line length: %w", err))
+			return nil, err
+		}
+
+		if length == 0 {
+			return nil, io.EOF
 		}
 
 		// Handle different packet types
 		switch {
 		case length < 4:
-			lines, b = handleSpecialPacket(lines, b, length)
 			if length == 2 { // ResponseEndPacket
-				return lines, b, nil
+				return nil, io.EOF
 			}
-
+			// Continue for other special packets (flush, delimiter)
 		case length == 4:
-			b = b[4:] // Skip empty packet
-
-		case uint64(len(b)) < length:
-			return lines, b, NewPackParseError(b, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(b)))
-
+			// Empty packet - nothing more to read for this packet
+			continue
 		default:
-			// Handle content packets
-			lines, b, err = handleContentPacket(lines, b, length)
+			packetData, err := readPacketData(p.reader, lengthBytes, length)
 			if err != nil {
-				return lines, b, err
+				return nil, err
 			}
+
+			// Detect errors in packet content
+			if err := detectError(lengthBytes, packetData); err != nil {
+				return nil, err
+			}
+
+			return packetData, nil
 		}
 	}
-
-	return lines, b, nil
 }
 
-// handleSpecialPacket processes special control packets (flush, delimiter, response-end)
-func handleSpecialPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte) {
-	// Special-case packets: flush (0000), delimiter (0001), response-end (0002)
-	return lines, b[4:]
+// readPacketLength reads and parses the 4-byte packet length header
+func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err error) {
+	// Use pooled buffer for length reading to reduce allocations
+	pooledBuf := packetLengthPool.Get().([]byte)
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	defer packetLengthPool.Put(pooledBuf) //nolint:staticcheck
+	
+	n, err := io.ReadFull(reader, pooledBuf)
+	if err != nil {
+		if err == io.EOF && n == 0 {
+			return nil, 0, nil // Normal end of stream
+		}
+		if err == io.ErrUnexpectedEOF || err == io.EOF {
+			// Partial read - incomplete packet, treat as end of stream
+			return nil, 0, nil
+		}
+		// Make a copy for error reporting since we're returning the pooled buffer
+		errBytes := make([]byte, n)
+		copy(errBytes, pooledBuf[:n])
+		return errBytes, 0, NewPackParseError(errBytes, fmt.Errorf("reading packet length: %w", err))
+	}
+
+	length, err = strconv.ParseUint(string(pooledBuf), 16, 16)
+	if err != nil {
+		// Make a copy for error reporting since we're returning the pooled buffer
+		errBytes := make([]byte, 4)
+		copy(errBytes, pooledBuf)
+		return errBytes, 0, NewPackParseError(errBytes, fmt.Errorf("parsing line length: %w", err))
+	}
+
+	// Make a copy to return since we're reusing the pooled buffer
+	lengthBytes = make([]byte, 4)
+	copy(lengthBytes, pooledBuf)
+	return lengthBytes, length, nil
 }
 
-// handleContentPacket processes regular data packets and error packets
-func handleContentPacket(lines [][]byte, b []byte, length uint64) ([][]byte, []byte, error) {
-	packetData := b[4:length]
+// readPacketData reads the packet data portion using buffer pooling to reduce allocations
+func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte, error) {
+	dataLength := length - 4
+	
+	// Get buffer from pool and ensure it has enough capacity
+	pooledBuf := packetDataPool.Get().([]byte)
+	
+	// Ensure buffer has sufficient capacity
+	if cap(pooledBuf) < int(dataLength) {
+		// Buffer too small, allocate new one and return old to pool
+		//lint:ignore SA6002 byte slices are correct for sync.Pool
+		packetDataPool.Put(pooledBuf) //nolint:staticcheck
+		packetData := make([]byte, dataLength)
+		n, err := io.ReadFull(reader, packetData)
+		if err != nil {
+			fullPacket := append(lengthBytes, packetData[:n]...)
+			if err == io.ErrUnexpectedEOF || err == io.EOF {
+				return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
+			}
+			return nil, NewPackParseError(fullPacket, fmt.Errorf("reading packet data: %w", err))
+		}
+		return packetData, nil
+	}
+	
+	// Use pooled buffer
+	packetData := pooledBuf[:dataLength]
+	n, err := io.ReadFull(reader, packetData)
+	if err != nil {
+		// Return buffer to pool before error
+		//lint:ignore SA6002 byte slices are correct for sync.Pool
+		packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck
+		fullPacket := append(lengthBytes, packetData[:n]...)
+		if err == io.ErrUnexpectedEOF || err == io.EOF {
+			return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
+		}
+		return nil, NewPackParseError(fullPacket, fmt.Errorf("reading packet data: %w", err))
+	}
+	
+	// Make a copy to return, then return buffer to pool
+	result := make([]byte, dataLength)
+	copy(result, packetData)
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck
+	
+	return result, nil
+}
 
-	// Check for different packet content types
+// detectError processes packet content to detect and handle various Git protocol error conditions.
+// It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
+// Returns an error if any error condition is detected, otherwise returns nil to continue processing.
+func detectError(lengthBytes, packetData []byte) error {
+	// Avoid allocation by building fullPacket only when needed
+	
 	switch {
-	case bytes.HasPrefix(packetData, []byte("ERR ")):
-		return lines, b[length:], handleERRPacket(b[:length], packetData)
+	case bytes.HasPrefix(packetData, errPattern):
+		fullPacket := append(lengthBytes, packetData...)
+		return handleERRPacket(fullPacket, packetData)
 
-	case isErrorOrFatalMessage(packetData):
-		return lines, b[length:], handleErrorFatalMessage(b[:length], packetData)
+	case isErrorOrFatalMessageOptimized(packetData):
+		fullPacket := append(lengthBytes, packetData...)
+		return handleErrorFatalMessage(fullPacket, packetData)
 
-	case bytes.HasPrefix(packetData, []byte("ng ")):
-		return lines, b[length:], handleReferenceUpdateFailure(b[:length], packetData)
+	case bytes.HasPrefix(packetData, ngPattern):
+		fullPacket := append(lengthBytes, packetData...)
+		return handleReferenceUpdateFailure(fullPacket, packetData)
 
-	case bytes.HasPrefix(packetData, []byte("unpack ")):
-		return handleUnpackStatus(lines, b, length, packetData)
-
+	case bytes.HasPrefix(packetData, unpackPattern):
+		// Fast path for most common case: "unpack ok"
+		if bytes.Equal(packetData, unpackOkFull) {
+			return nil // Success case, no error
+		}
+		
+		// Optimize unpack handling with byte comparison instead of string conversion
+		unpackData := packetData[len(unpackPattern):]
+		if !bytes.Equal(unpackData, unpackOkPattern) {
+			fullPacket := append(lengthBytes, packetData...)
+			return NewGitUnpackError(fullPacket, string(unpackData))
+		}
+		// If unpack ok, continue processing
+		return nil
 	default:
 		// Regular data packet
-		lines = append(lines, packetData)
-		return lines, b[length:], nil
+		return nil
 	}
 }
 
-// isErrorOrFatalMessage checks if packet contains error/fatal messages (direct or side-band)
-func isErrorOrFatalMessage(data []byte) bool {
+// isErrorOrFatalMessageOptimized checks if packet contains error/fatal messages using pre-compiled patterns
+func isErrorOrFatalMessageOptimized(data []byte) bool {
 	// Direct format: "error:" or "fatal:"
-	if bytes.HasPrefix(data, []byte("error:")) || bytes.HasPrefix(data, []byte("fatal:")) {
+	if bytes.HasPrefix(data, errorPattern) || bytes.HasPrefix(data, fatalPattern) {
 		return true
 	}
 
 	// Side-band format: check for channels 2 or 3 with error/fatal messages
 	if len(data) > 1 && (data[0] == 0x02 || data[0] == 0x03) {
-		return bytes.HasPrefix(data[1:], []byte("error:")) || bytes.HasPrefix(data[1:], []byte("fatal:"))
+		return bytes.HasPrefix(data[1:], errorPattern) || bytes.HasPrefix(data[1:], fatalPattern)
 	}
 
 	return false
@@ -456,7 +593,7 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 	var fullMessage string
 
 	// Determine message format and extract content
-	if bytes.HasPrefix(packetData, []byte("error:")) || bytes.HasPrefix(packetData, []byte("fatal:")) {
+	if bytes.HasPrefix(packetData, errorPattern) || bytes.HasPrefix(packetData, fatalPattern) {
 		// Direct format: no side-band prefix
 		messageStart = 0
 		fullMessage = string(packetData)
@@ -468,7 +605,7 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 
 	// Parse error type and message
 	var errorType, message string
-	if bytes.HasPrefix(packetData[messageStart:], []byte("error:")) {
+	if bytes.HasPrefix(packetData[messageStart:], errorPattern) {
 		errorType = "error"
 		message = fullMessage[6:] // Remove "error:" prefix
 	} else {
@@ -476,8 +613,9 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 		message = fullMessage[6:] // Remove "fatal:" prefix
 	}
 
-	// Check if this is an unpack error
-	if bytes.Contains(packetData, []byte("unpack")) {
+	// Check if this is an unpack error (message should contain "unpack" keyword)
+	// Use Contains since this is checking within error/fatal messages that mention unpack
+	if bytes.Contains([]byte(message), []byte("unpack")) {
 		return NewGitUnpackError(fullPacket, message)
 	}
 
@@ -500,18 +638,4 @@ func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 	}
 
 	return NewGitReferenceUpdateError(fullPacket, refName, reason)
-}
-
-// handleUnpackStatus processes unpack status messages
-func handleUnpackStatus(lines [][]byte, b []byte, length uint64, packetData []byte) ([][]byte, []byte, error) {
-	// Format: "unpack <status-msg>"
-	unpackContent := string(packetData[7:]) // Skip "unpack "
-
-	if unpackContent != "ok" {
-		return lines, b[length:], NewGitUnpackError(b[:length], unpackContent)
-	}
-
-	// If unpack ok, add to lines and continue processing
-	lines = append(lines, packetData)
-	return lines, b[length:], nil
 }

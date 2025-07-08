@@ -1,8 +1,10 @@
 package protocol_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -84,9 +86,8 @@ func TestParsePacket(t *testing.T) {
 	t.Parallel()
 
 	type expected struct {
-		lines     [][]byte
-		remainder []byte
-		err       error
+		lines [][]byte
+		err   error
 	}
 
 	toBytesSlice := func(lines ...string) [][]byte {
@@ -104,98 +105,86 @@ func TestParsePacket(t *testing.T) {
 		"flush packet": {
 			input: []byte("0000"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"delimiter packet": {
 			input: []byte("0001"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"response end packet": {
 			input: []byte("0002"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"empty": {
 			input: []byte("0004"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"single line": {
 			input: []byte("0009hello0000"),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte{},
-				err:       nil,
+				lines: toBytesSlice("hello"),
+				err:   nil,
 			},
 		},
 		"two lines": {
 			input: []byte("0009hello0007bye0000"),
 			expected: expected{
-				lines:     toBytesSlice("hello", "bye"),
-				remainder: []byte{},
-				err:       nil,
+				lines: toBytesSlice("hello", "bye"),
+				err:   nil,
 			},
 		},
 		"short packet": {
 			input: []byte("000"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("000"),
-				err:       nil,
+				lines: nil,
+				err:   nil,
 			},
 		},
 		"trailing bytes": {
 			input: []byte("0009hello000"),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte("000"),
-				err:       nil,
+				lines: toBytesSlice("hello"),
+				err:   nil,
 			},
 		},
 		"trucated line": {
 			// This line says it has 9 bytes, but only has 8.
 			input: []byte("0009hell"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("0009hell"),
-				err:       new(protocol.PackParseError),
+				lines: nil,
+				err:   new(protocol.PackParseError),
 			},
 		},
 		"invalid length": {
 			input: []byte("000Gxxxxxxxxxxxxxxxx"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("000Gxxxxxxxxxxxxxxxx"),
-				err:       new(protocol.PackParseError),
+				lines: nil,
+				err:   new(protocol.PackParseError),
 			},
 		},
 		"error packet": {
 			input: []byte("000dERR helloF00F"),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte("F00F"),
-				err:       new(protocol.GitServerError),
+				lines: nil,
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"lines + error packet": {
 			input: []byte("0009hello000dERR helloF00F"),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte("F00F"),
-				err:       new(protocol.GitServerError),
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"git error packet": {
@@ -205,9 +194,8 @@ func TestParsePacket(t *testing.T) {
 				return pkt
 			}(),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       new(protocol.GitServerError),
+				lines: nil,
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"fatal error packet": {
@@ -217,9 +205,8 @@ func TestParsePacket(t *testing.T) {
 				return pkt
 			}(),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       new(protocol.GitServerError),
+				lines: nil,
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"reference update failure": {
@@ -229,9 +216,8 @@ func TestParsePacket(t *testing.T) {
 				return pkt
 			}(),
 			expected: expected{
-				lines:     nil,
-				remainder: []byte{},
-				err:       new(protocol.GitReferenceUpdateError),
+				lines: nil,
+				err:   new(protocol.GitReferenceUpdateError),
 			},
 		},
 		"user example scenario - original": {
@@ -252,16 +238,7 @@ func TestParsePacket(t *testing.T) {
 			}(),
 			expected: expected{
 				lines: nil,
-				remainder: func() []byte {
-					// After parsing the error packet, the remainder should contain the rest
-					message2 := "001dunpack index-pack failed\n"
-					pkt2, _ := protocol.PackLine(message2).Marshal()
-					message3 := "ng refs/heads/robertoonboarding failed\n"
-					pkt3, _ := protocol.PackLine(message3).Marshal()
-					pkt4 := []byte("0009000000000000")
-					return append(append(pkt2, pkt3...), pkt4...)
-				}(),
-				err: new(protocol.GitServerError),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"user example scenario - ref lock error": {
@@ -283,16 +260,7 @@ func TestParsePacket(t *testing.T) {
 			}(),
 			expected: expected{
 				lines: nil,
-				remainder: func() []byte {
-					// After parsing the error packet, the remainder should contain the rest
-					message2 := "unpack ok"
-					pkt2, _ := protocol.PackLine(message2).Marshal()
-					message3 := "ng refs/heads/main failed to update ref"
-					pkt3, _ := protocol.PackLine(message3).Marshal()
-					pkt4 := []byte("0000") // flush packet
-					return append(append(pkt2, pkt3...), pkt4...)
-				}(),
-				err: new(protocol.GitServerError),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"multiple error types in sequence": {
@@ -304,11 +272,7 @@ func TestParsePacket(t *testing.T) {
 			}(),
 			expected: expected{
 				lines: toBytesSlice("hello"),
-				remainder: func() []byte {
-					pkt3, _ := protocol.PackLine("fatal: fsck error occurred").Marshal()
-					return pkt3
-				}(),
-				err: new(protocol.GitServerError),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"lines + git error": {
@@ -318,9 +282,8 @@ func TestParsePacket(t *testing.T) {
 				return append(pkt1, pkt2...)
 			}(),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte{},
-				err:       new(protocol.GitServerError),
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.GitServerError),
 			},
 		},
 		"lines + reference failure": {
@@ -330,18 +293,32 @@ func TestParsePacket(t *testing.T) {
 				return append(pkt1, pkt2...)
 			}(),
 			expected: expected{
-				lines:     toBytesSlice("hello"),
-				remainder: []byte{},
-				err:       new(protocol.GitReferenceUpdateError),
+				lines: toBytesSlice("hello"),
+				err:   new(protocol.GitReferenceUpdateError),
 			},
 		},
 	}
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
-			lines, remainder, err := protocol.ParsePack(tc.input)
+			parser := protocol.NewParser(io.NopCloser(bytes.NewReader(tc.input)))
+
+			var lines [][]byte
+			var err error
+			for {
+				var line []byte
+				line, err = parser.Next()
+				if err != nil {
+					if err == io.EOF {
+						err = nil
+						break
+					}
+					break
+				}
+				lines = append(lines, line)
+			}
+
 			require.Equal(t, tc.expected.lines, lines, "expected and actual lines should be equal")
-			require.Equal(t, tc.expected.remainder, remainder, "expected and actual remainder should be equal")
 			if tc.expected.err == nil {
 				require.NoError(t, err, "no error expected from ParsePack")
 			} else {
@@ -643,11 +620,20 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			pkt, _ := protocol.PackLine(message).Marshal()
 			return pkt
 		}()
+		parser := protocol.NewParser(bytes.NewReader(input))
+		lines := [][]byte{}
+		var err error
+		for {
+			var line []byte
+			line, err = parser.Next()
+			if err != nil {
+				break
+			}
+			lines = append(lines, line)
+		}
 
-		lines, remainder, err := protocol.ParsePack(input)
-		require.NoError(t, err)
+		require.Equal(t, io.EOF, err)
 		require.Equal(t, [][]byte{[]byte("unpack ok")}, lines)
-		require.Empty(t, remainder)
 	})
 
 	t.Run("unpack failed", func(t *testing.T) {
@@ -657,9 +643,19 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(input)
+		parser := protocol.NewParser(bytes.NewReader(input))
+
+		lines := [][]byte{}
+		var err error
+		for {
+			var line []byte
+			line, err = parser.Next()
+			if err != nil {
+				break
+			}
+			lines = append(lines, line)
+		}
 		require.Empty(t, lines)
-		require.Empty(t, remainder)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
 
@@ -675,9 +671,19 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 			return pkt
 		}()
 
-		lines, remainder, err := protocol.ParsePack(input)
+		parser := protocol.NewParser(bytes.NewReader(input))
+
+		lines := [][]byte{}
+		var err error
+		for {
+			var line []byte
+			line, err = parser.Next()
+			if err != nil {
+				break
+			}
+			lines = append(lines, line)
+		}
 		require.Empty(t, lines)
-		require.Empty(t, remainder)
 		require.Error(t, err)
 		require.True(t, protocol.IsGitUnpackError(err))
 

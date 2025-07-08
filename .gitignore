@@ -7,3 +7,4 @@ integration.cov
 node_modules
 yarn.lock
 reports
+perf.test

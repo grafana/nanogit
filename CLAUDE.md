@@ -34,6 +34,12 @@ cd perf && make test-perf-setup    # One-time setup for performance tests
 cd perf && make test-perf-simple   # Quick consistency tests
 cd perf && make test-perf-all      # Full performance benchmark suite
 cd perf && make help               # See all performance testing targets
+
+# Performance profiling (in perf/ directory)
+cd perf && make profile-baseline   # Create baseline profiles before optimization
+cd perf && make profile-cpu        # Generate CPU profile for analysis
+cd perf && make profile-mem        # Generate memory profile for analysis
+cd perf && make profile-compare    # Compare current vs baseline performance
 ```
 
 ## Architecture Overview

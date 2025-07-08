@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"context"
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
@@ -15,12 +16,67 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
 // ErrPackfileWriterCleanedUp is returned when trying to use a PackfileWriter after cleanup has been called.
 var ErrPackfileWriterCleanedUp = errors.New("packfile writer has been cleaned up and can no longer be used")
+
+// Buffer pools for parseTree optimization
+var (
+	// Pool for bufio.Reader instances to avoid allocating new readers for each tree
+	treeReaderPool = sync.Pool{
+		New: func() interface{} {
+			return bufio.NewReader(nil)
+		},
+	}
+
+	// Pool for hex encoding buffers to reduce allocations
+	hexBufferPool = sync.Pool{
+		New: func() interface{} {
+			// Pre-allocate buffer for SHA-1 hash (40 hex chars)
+			return make([]byte, 40)
+		},
+	}
+
+)
+
+// getHexString gets a hex string from a hash, allocating a new string
+func getHexString(hash [20]byte) string {
+	buf := hexBufferPool.Get().([]byte)
+	hex.Encode(buf, hash[:])
+	// Allocate string and return buffer to pool
+	result := string(buf)
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	hexBufferPool.Put(buf) //nolint:staticcheck
+	return result
+}
+
+// estimateTreeSize estimates the number of entries in tree data using improved heuristics
+func estimateTreeSize(data []byte) int {
+	if len(data) < 25 {
+		return 4 // minimum reasonable capacity
+	}
+	
+	// Use average entry size based on typical Git tree structure
+	// Mode (6) + space (1) + avg filename (12) + null (1) + hash (20) = 40 bytes average
+	estimate := len(data) / 40
+	
+	// Add 25% buffer for safety
+	estimate = estimate + (estimate / 4)
+	
+	// Apply reasonable bounds
+	if estimate < 8 {
+		return 8
+	}
+	if estimate > 2000 {
+		return 2000
+	}
+	return estimate
+}
 
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
 // Review it once we have some more integration testing so that we don't break things unintentionally.
@@ -60,7 +116,14 @@ type PackfileObject struct {
 }
 
 func (e *PackfileObject) parseTree() error {
-	reader := bufio.NewReader(bytes.NewReader(e.Data))
+	// Get reader from pool to avoid allocation
+	reader := treeReaderPool.Get().(*bufio.Reader)
+	defer treeReaderPool.Put(reader)
+	reader.Reset(bytes.NewReader(e.Data))
+
+	// Pre-allocate Tree slice with estimated capacity based on data size
+	capacity := estimateTreeSize(e.Data)
+	e.Tree = make([]PackfileTreeEntry, 0, capacity)
 
 	for {
 		fileModeStr, err := reader.ReadString(' ')
@@ -88,10 +151,12 @@ func (e *PackfileObject) parseTree() error {
 			return eofIsUnexpected(err)
 		}
 
+		// Use pooled hex buffer and get proper string copy
+		hashStr := getHexString(hash)
 		e.Tree = append(e.Tree, PackfileTreeEntry{
 			FileName: name,
 			FileMode: uint32(fileMode),
-			Hash:     hex.EncodeToString(hash[:]),
+			Hash:     hashStr,
 		})
 	}
 
@@ -101,12 +166,12 @@ func (e *PackfileObject) parseTree() error {
 func (e *PackfileObject) parseCommit() error {
 	reader := bufio.NewReader(bytes.NewReader(e.Data))
 	e.Commit = &PackfileCommit{}
-	
+
 	msg, err := e.parseCommitHeaders(reader)
 	if err != nil {
 		return err
 	}
-	
+
 	e.Commit.Message = msg.String()
 	return nil
 }
@@ -115,7 +180,7 @@ func (e *PackfileObject) parseCommit() error {
 func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Builder, error) {
 	writingMsg := false
 	msg := &strings.Builder{}
-	
+
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -141,14 +206,14 @@ func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Buil
 			return nil, err
 		}
 	}
-	
+
 	return msg, nil
 }
 
 // parseCommitField parses a single commit field line
 func (e *PackfileObject) parseCommitField(line []byte) error {
 	command, data, _ := bytes.Cut(line, []byte(" "))
-	
+
 	switch string(command) {
 	case "committer":
 		return e.parseCommitter(string(data))
@@ -276,10 +341,21 @@ type PackfileReader struct {
 	reader           io.Reader
 	remainingObjects uint32
 	algo             crypto.Hash
+	zlibReader       io.ReadCloser // Reusable zlib reader for performance
 
 	// State that shouldn't be set when constructed.
 	trailerRead bool
 	err         error
+}
+
+// Close cleans up the PackfileReader's resources, including the zlib reader
+func (p *PackfileReader) Close() error {
+	if p.zlibReader != nil {
+		err := p.zlibReader.Close()
+		p.zlibReader = nil
+		return err
+	}
+	return nil
 }
 
 // ReadObject reads an object from the packfile.
@@ -289,7 +365,7 @@ type PackfileReader struct {
 //
 // This function is not concurrency-safe. Use a mutex or a single goroutine+channel when dealing with this.
 // Objects returned are no longer owned by this function once returned; you can pass them around goroutines freely.
-func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
+func (p *PackfileReader) ReadObject(ctx context.Context) (PackfileEntry, error) {
 	// TODO: probably smart to use a mutex here.
 	if p == nil {
 		return PackfileEntry{}, io.EOF
@@ -300,14 +376,15 @@ func (p *PackfileReader) ReadObject() (PackfileEntry, error) {
 	}
 
 	var entry PackfileEntry
-	entry, p.err = p.readObject()
+	entry, p.err = p.readObject(ctx)
 	if !p.trailerRead {
 		p.err = eofIsUnexpected(p.err)
 	}
 	return entry, p.err
 }
 
-func (p *PackfileReader) readObject() (PackfileEntry, error) {
+func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) {
+	logger := log.FromContext(ctx)
 	entry := PackfileEntry{}
 	if p.remainingObjects == 0 {
 		// It's time for the trailer.
@@ -334,6 +411,7 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 	// The first byte is a 3-bit type (stored in 4 bits).
 	// The remaining 4 bits are the start of a varint containing the size.
 	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
+
 	size := int(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
@@ -344,6 +422,8 @@ func (p *PackfileReader) readObject() (PackfileEntry, error) {
 		size += int(buf[0]&0x7f) << shift
 		shift += 7
 	}
+
+	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
 	err := p.processObjectByType(entry.Object, size, buf[0])
 	if err != nil {
@@ -409,32 +489,48 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	if _, err := p.reader.Read(ref); err != nil {
 		return err
 	}
-	
+
 	var err error
 	obj.Data, err = p.readAndInflate(size)
 	if err != nil {
 		return err
 	}
-	
+
 	return obj.parseDelta(hex.EncodeToString(ref[:]))
 }
 
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
-	zr, err := zlib.NewReader(p.reader)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := zr.Close(); closeErr != nil && err == nil {
-			err = closeErr
+	// Reuse zlib reader for performance - avoid creating new reader for each object
+	if p.zlibReader == nil {
+		var err error
+		p.zlibReader, err = zlib.NewReader(p.reader)
+		if err != nil {
+			return nil, err
 		}
-	}()
+	} else {
+		// Reset the reader for the next zlib stream
+		if resetter, ok := p.zlibReader.(zlib.Resetter); ok {
+			if err := resetter.Reset(p.reader, nil); err != nil {
+				return nil, err
+			}
+		} else {
+			// Fallback: close and recreate if Reset is not available
+			_ = p.zlibReader.Close()
+			var err error
+			p.zlibReader, err = zlib.NewReader(p.reader)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	// TODO(mem): this should be limited to the size the packet says it
 	// carries, and we should limit that size above (i.e. if the packet
 	// says it's carrying a huge amount of data we should bail out).
-	lr := io.LimitReader(zr, MaxUnpackedObjectSize)
-
+	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
+	
+	// Read all available data from the zlib stream to ensure proper positioning
+	// for the next object. We must consume the entire zlib stream.
 	var data bytes.Buffer
 	if _, err := io.Copy(&data, lr); err != nil {
 		return nil, eofIsUnexpected(err)
@@ -447,28 +543,43 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	return data.Bytes(), nil
 }
 
-func ParsePackfile(payload []byte) (*PackfileReader, error) {
-	// TODO: Accept an io.Reader to the function.
-	if len(payload) < 4 || !slices.Equal(payload[:4], []byte("PACK")) {
+func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
+	logger := log.FromContext(ctx)
+	// Read and verify the "PACK" signature
+	signature := make([]byte, 4)
+	if _, err := io.ReadFull(reader, signature); err != nil {
+		// Return the expected error for empty/truncated data
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return nil, ErrNoPackfileSignature
+		}
+		return nil, fmt.Errorf("reading packfile signature: %w", err)
+	}
+	if !slices.Equal(signature, []byte("PACK")) {
 		return nil, ErrNoPackfileSignature
 	}
-	payload = payload[4:] // Without "PACK"
 
-	version := binary.BigEndian.Uint32(payload[:4])
+	// Read version (4 bytes, big-endian)
+	var version uint32
+	if err := binary.Read(reader, binary.BigEndian, &version); err != nil {
+		return nil, fmt.Errorf("reading packfile version: %w", err)
+	}
 	if version != 2 && version != 3 {
 		return nil, fmt.Errorf("version %d: %w", version, ErrUnsupportedPackfileVersion)
 	}
-	payload = payload[4:] // Without version
 
-	countObjects := binary.BigEndian.Uint32(payload[:4])
-	payload = payload[4:] // Without countObjects
+	// Read object count (4 bytes, big-endian)
+	var countObjects uint32
+	if err := binary.Read(reader, binary.BigEndian, &countObjects); err != nil {
+		return nil, fmt.Errorf("reading packfile object count: %w", err)
+	}
 
-	// The payload now contains just objects. These are multiple and can be quite large.
-	// Let's pass it off to a caller to read the rest of what's in here.
-	// Eventually, we can even accept an io.Reader directly here, such that we don't need to
-	//   keep the whole original payload in memory, either.
+	logger.Debug("Read packfile header", "version", version, "object_count", countObjects)
+
+	// Now the reader points to the object data stream
+	// For fast I/O with 64KB buffer
+	bufferedReader := bufio.NewReaderSize(reader, 64*1024)
 	return &PackfileReader{
-		reader:           bytes.NewReader(payload),
+		reader:           bufferedReader,
 		remainingObjects: countObjects,
 		algo:             crypto.SHA1, // TODO: Support SHA256
 	}, nil
@@ -511,6 +622,8 @@ type PackfileWriter struct {
 	totalBytes int
 	// Track if cleanup has been called
 	isCleanedUp bool
+	// Reusable zlib writer for performance
+	zlibWriter *zlib.Writer
 
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
@@ -549,6 +662,14 @@ func (w *PackfileWriter) Cleanup() error {
 	}
 
 	var err error
+
+	// Clean up zlib writer first (before closing temp file)
+	if w.zlibWriter != nil {
+		if closeErr := w.zlibWriter.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+		w.zlibWriter = nil
+	}
 
 	// Clean up temporary file if it exists
 	if w.tempFile != nil {
@@ -617,17 +738,17 @@ func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObj
 	sort.Slice(entries, func(i, j int) bool {
 		nameI := entries[i].FileName
 		nameJ := entries[j].FileName
-		
+
 		// If entry i is a directory (mode 040000), append "/" for sorting
 		if entries[i].FileMode&0o40000 != 0 {
 			nameI += "/"
 		}
-		
+
 		// If entry j is a directory (mode 040000), append "/" for sorting
 		if entries[j].FileMode&0o40000 != 0 {
 			nameJ += "/"
 		}
-		
+
 		return nameI < nameJ
 	})
 
@@ -914,8 +1035,11 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data
-	zw := zlib.NewWriter(writer)
+	// Compress and write data using reusable zlib writer
+	zw, err := pw.getOrResetZlibWriter(writer)
+	if err != nil {
+		return fmt.Errorf("getting zlib writer: %w", err)
+	}
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
@@ -924,6 +1048,18 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 	}
 
 	return nil
+}
+
+// getOrResetZlibWriter returns the reusable zlib writer, creating or resetting as needed
+func (pw *PackfileWriter) getOrResetZlibWriter(writer io.Writer) (*zlib.Writer, error) {
+	if pw.zlibWriter == nil {
+		pw.zlibWriter = zlib.NewWriter(writer)
+		return pw.zlibWriter, nil
+	}
+
+	// Reset the writer for a new stream
+	pw.zlibWriter.Reset(writer)
+	return pw.zlibWriter, nil
 }
 
 // addObject adds an object using the appropriate storage method based on the storage mode.
@@ -1025,8 +1161,11 @@ func (w *PackfileWriter) writeObjectToFile(obj PackfileObject) error {
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data
-	zw := zlib.NewWriter(w.tempFile)
+	// Compress and write data using reusable zlib writer
+	zw, err := w.getOrResetZlibWriter(w.tempFile)
+	if err != nil {
+		return fmt.Errorf("getting zlib writer: %w", err)
+	}
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}

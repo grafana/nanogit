@@ -240,6 +240,84 @@ For detailed documentation, usage examples, and configuration options, see [perf
 
 For dashboard generation documentation, see [perf/cmd/generate_dashboards/README.md](perf/cmd/generate_dashboards/README.md).
 
+**Performance Profiling and Analysis**:
+
+The performance test suite includes comprehensive profiling tools to analyze CPU and memory usage patterns. These tools are essential for identifying bottlenecks, measuring optimization impact, and ensuring performance regressions don't occur.
+
+**Profiling Targets** (from `perf/` directory):
+```bash
+# Generate baseline profiles (run before making optimizations)
+make profile-baseline
+
+# Generate CPU profile for file operations
+make profile-cpu
+
+# Generate memory profile for file operations  
+make profile-mem
+
+# Generate both CPU and memory profiles
+make profile-all
+
+# Profile specific operations
+make profile-all-tree    # Profile tree operations
+make profile-all-commit  # Profile commit operations
+
+# Compare current profiles with baseline
+make profile-compare
+
+# Clean up profile files
+make profile-clean
+```
+
+**Profile Analysis Workflow**:
+1. **Create baseline**: `make profile-baseline` - establishes performance baseline before optimizations
+2. **Make changes**: Implement your optimizations or changes
+3. **Generate new profiles**: `make profile-cpu` or `make profile-mem` 
+4. **Compare results**: `make profile-compare` - shows performance differences
+5. **Analyze bottlenecks**: Use `go tool pprof` for detailed analysis
+
+**Manual Profile Analysis**:
+```bash
+# Interactive CPU analysis
+go tool pprof profiles/cpu.prof
+
+# Interactive memory analysis  
+go tool pprof profiles/mem.prof
+
+# Web-based analysis (opens browser)
+go tool pprof -http=:8080 profiles/cpu.prof
+
+# Compare two profiles
+go tool pprof -diff_base=profiles/baseline_cpu.prof profiles/cpu.prof
+
+# Top functions by CPU usage
+go tool pprof -top profiles/cpu.prof
+
+# Generate flame graph
+go tool pprof -png profiles/cpu.prof > cpu_profile.png
+```
+
+**Profile Files Location**:
+- `profiles/cpu.prof` - Current CPU profile
+- `profiles/mem.prof` - Current memory profile  
+- `profiles/baseline_cpu.prof` - Baseline CPU profile
+- `profiles/baseline_mem.prof` - Baseline memory profile
+
+**Common Profiling Use Cases**:
+- **Before optimization**: Create baseline with `make profile-baseline`
+- **After optimization**: Generate new profiles and compare with `make profile-compare`
+- **Memory leak detection**: Use `make profile-mem` and analyze allocation patterns
+- **CPU hotspot identification**: Use `make profile-cpu` and examine top functions
+- **Performance regression testing**: Compare profiles between code versions
+
+**Tips for Effective Profiling**:
+- Always create a baseline before making changes
+- Profile the same operations for consistent comparisons  
+- Use realistic data sizes (medium or large repositories)
+- Run profiles multiple times to account for variance
+- Focus on the top consumers (functions using >1% of resources)
+- Look for unexpected allocations or inefficient algorithms
+
 **Note**: Performance tests are resource-intensive and disabled by default. They require `RUN_PERFORMANCE_TESTS=true` environment variable and Docker to be running.
 
 #### Provider Tests

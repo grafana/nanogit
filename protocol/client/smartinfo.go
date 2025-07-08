@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -18,8 +17,7 @@ import (
 // by the Git Smart Protocol v2 specification for repository discovery and capability
 // negotiation.
 //
-// The response contains a list of references and advertised server capabilities in the
-// format expected by Git clients.
+// The response is parsed internally to validate the Git protocol format.
 //
 // See:
 //   - https://git-scm.com/docs/http-protocol#_smart_clients
@@ -32,13 +30,8 @@ import (
 //
 // Returns:
 //
-//	The raw response body from the server, or an error if the request fails.
-//
-// Errors:
-//
-//	Returns an error if the HTTP request fails, the server returns a non-2xx status code,
-//	or the response body cannot be read.
-func (c *rawClient) SmartInfo(ctx context.Context, service string) (response []byte, err error) {
+//	An error if the HTTP request fails, the server returns a non-2xx status code, or Git protocol errors are detected.
+func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
@@ -50,35 +43,31 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) (response []b
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.addDefaultHeaders(req)
 
 	res, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
 	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			err = fmt.Errorf("close response body: %w", closeErr)
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %w", closeErr)
 		}
 	}()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-	}
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
 	logger.Debug("SmartInfo response",
 		"status", res.StatusCode,
-		"statusText", res.Status,
-		"responseSize", len(body))
-	logger.Debug("SmartInfo raw response", "body", string(body))
+		"statusText", res.Status)
 
-	return body, nil
+	// For SmartInfo, we just need to validate that we got a successful HTTP response
+	// The actual content parsing is not needed since callers only care about authorization/existence
+
+	return nil
 }

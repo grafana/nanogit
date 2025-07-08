@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
@@ -13,6 +14,110 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
 )
+
+// Pools for flatten optimization
+var (
+	// Pool for strings.Builder to avoid allocations during path construction
+	pathBuilderPool = sync.Pool{
+		New: func() interface{} {
+			b := &strings.Builder{}
+			b.Grow(256) // Pre-allocate reasonable capacity for typical paths
+			return b
+		},
+	}
+
+	// Cache for hash.FromHex conversions to avoid repeated parsing
+	hashCache = sync.Map{} // map[string]hash.Hash
+)
+
+// getPathBuilder gets a strings.Builder from the pool
+func getPathBuilder() *strings.Builder {
+	return pathBuilderPool.Get().(*strings.Builder)
+}
+
+// putPathBuilder returns a strings.Builder to the pool after resetting it
+func putPathBuilder(b *strings.Builder) {
+	b.Reset()
+	pathBuilderPool.Put(b)
+}
+
+// getCachedHash gets a hash from cache or parses it and caches the result
+func getCachedHash(hexStr string) (hash.Hash, error) {
+	if cached, ok := hashCache.Load(hexStr); ok {
+		return cached.(hash.Hash), nil
+	}
+
+	h, err := hash.FromHex(hexStr)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	// Cache the result for future use
+	hashCache.Store(hexStr, h)
+	return h, nil
+}
+
+// estimateFlatTreeSize estimates the total number of entries in a tree structure
+func estimateFlatTreeSize(rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) int {
+	// More accurate estimation by sampling actual tree sizes
+	totalEntries := 0
+	treeCount := 0
+	sampleSize := 0
+
+	// Process up to 10 trees to get better average
+	queue := []*protocol.PackfileObject{rootTree}
+	visited := make(map[string]bool)
+
+	for len(queue) > 0 && sampleSize < 10 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if visited[current.Hash.String()] {
+			continue
+		}
+		visited[current.Hash.String()] = true
+		sampleSize++
+
+		totalEntries += len(current.Tree)
+
+		// Add subdirectories to queue for sampling
+		for _, entry := range current.Tree {
+			if entry.FileMode&0o40000 != 0 { // Is directory
+				treeCount++
+				if sampleSize < 5 { // Only sample first few levels
+					if entryHash, err := hash.FromHex(entry.Hash); err == nil {
+						if childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
+							queue = append(queue, childTree)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if sampleSize == 0 {
+		return 100 // Safe default
+	}
+
+	// Calculate average entries per tree from sample
+	avgEntriesPerTree := float64(totalEntries) / float64(sampleSize)
+
+	// Estimate total trees (exponential growth factor)
+	estimatedTotalTrees := treeCount * 3 // More aggressive multiplier
+
+	// Calculate final estimate
+	estimate := int(avgEntriesPerTree * float64(estimatedTotalTrees))
+
+	// Apply bounds with higher ceiling
+	if estimate < 50 {
+		return 50
+	}
+	if estimate > 50000 {
+		return 50000
+	}
+
+	return estimate
+}
 
 // FlatTreeEntry represents a single entry in a flattened Git tree structure.
 // Unlike TreeEntry, this includes the full path from the repository root,
@@ -131,9 +236,9 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	logger.Debug("Fetch tree objects", "commit_hash", commitHash.String())
 
 	ctx, allObjects := storage.FromContextOrInMemory(ctx)
-	
+
 	metrics := &fetchMetrics{totalRequests: 1}
-	
+
 	initialObjects, commitObj, err := c.fetchInitialCommitObjects(ctx, commitHash, metrics)
 	if err != nil {
 		return nil, nil, err
@@ -249,7 +354,7 @@ func (c *httpClient) initializePendingTrees(commitObj *protocol.PackfileObject, 
 // processPendingTreeBatches handles the main batch processing loop
 func (c *httpClient) processPendingTreeBatches(ctx context.Context, pending *[]hash.Hash, processedTrees, requestedHashes map[string]bool, allObjects storage.PackfileStorage, metrics *fetchMetrics) error {
 	logger := log.FromContext(ctx)
-	
+
 	const (
 		batchSize      = 10
 		retryBatchSize = 10
@@ -317,13 +422,14 @@ func (c *httpClient) prepareBatch(pending *[]hash.Hash, retries *[]hash.Hash, ba
 // processSingleBatch processes a single batch of tree objects
 func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash.Hash, retries *[]hash.Hash, retryCount map[string]int, requestedHashes, processedTrees map[string]bool, allObjects storage.PackfileStorage, pending *[]hash.Hash, metrics *fetchMetrics, maxRetries int) error {
 	logger := log.FromContext(ctx)
-	
+
 	metrics.totalRequests++
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         currentBatch,
-		Done:         true,
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           currentBatch,
+		Done:           true,
+		NoExtraObjects: false, // we want to fetch all objects in this batch
 	})
 	if err != nil {
 		return fmt.Errorf("fetch tree batch: %w", err)
@@ -369,7 +475,7 @@ func (c *httpClient) countRequestedReceived(currentBatch []hash.Hash, objects ma
 // handleMissingObjects handles objects that weren't returned in the batch
 func (c *httpClient) handleMissingObjects(currentBatch []hash.Hash, objects map[string]*protocol.PackfileObject, retries *[]hash.Hash, retryCount map[string]int, requestedHashes map[string]bool, maxRetries, totalRequests int) error {
 	logger := log.FromContext(context.Background())
-	
+
 	for _, requestedHash := range currentBatch {
 		if _, exists := objects[requestedHash.String()]; exists {
 			continue
@@ -491,8 +597,9 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 	logger := log.FromContext(ctx)
 	logger.Debug("Flatten tree", "treeHash", rootTree.Hash.String())
 
-	// Build flat entries iteratively using breadth-first traversal
-	var entries []FlatTreeEntry
+	// Pre-allocate entries slice with estimated capacity to reduce reallocations
+	estimatedSize := estimateFlatTreeSize(rootTree, allTreeObjects)
+	entries := make([]FlatTreeEntry, 0, estimatedSize)
 
 	// Queue for processing: each item contains the tree object and its base path
 	type queueItem struct {
@@ -500,17 +607,36 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 		basePath string
 	}
 
-	queue := []queueItem{{tree: rootTree, basePath: ""}}
-	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue))
+	// Pre-allocate queue with capacity based on estimated tree depth
+	// Use higher initial capacity to reduce reallocations
+	queueCap := estimatedSize / 20 // Rough estimate of directory depth
+	if queueCap < 64 {
+		queueCap = 64
+	}
+	if queueCap > 512 {
+		queueCap = 512
+	}
+	queue := make([]queueItem, 0, queueCap)
+	queue = append(queue, queueItem{tree: rootTree, basePath: ""})
+	logger.Debug("Traverse tree breadth-first for pending objects", "queueSize", len(queue), "estimatedEntries", estimatedSize)
 
-	// Process the queue iteratively
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
+	// Process the queue iteratively with efficient removal
+	queueIdx := 0
+	for queueIdx < len(queue) {
+		current := queue[queueIdx]
+		queueIdx++
+
+		// Reset queue when we've processed enough to avoid memory buildup
+		if queueIdx > 100 && queueIdx*2 > len(queue) {
+			copy(queue, queue[queueIdx:])
+			queue = queue[:len(queue)-queueIdx]
+			queueIdx = 0
+		}
 
 		// Process all entries in this tree
 		for _, entry := range current.tree.Tree {
-			entryHash, err := hash.FromHex(entry.Hash)
+			// Use cached hash parsing to avoid repeated allocations
+			entryHash, err := getCachedHash(entry.Hash)
 			if err != nil {
 				logger.Debug("Failed to parse entry hash",
 					"hash", entry.Hash,
@@ -518,10 +644,17 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 				return nil, fmt.Errorf("parsing entry hash %s: %w", entry.Hash, err)
 			}
 
-			// Build the full path for this entry
-			entryPath := entry.FileName
+			// Build the full path for this entry using pooled string builder
+			var entryPath string
 			if current.basePath != "" {
-				entryPath = current.basePath + "/" + entry.FileName
+				pathBuilder := getPathBuilder()
+				pathBuilder.WriteString(current.basePath)
+				pathBuilder.WriteString("/")
+				pathBuilder.WriteString(entry.FileName)
+				entryPath = pathBuilder.String()
+				putPathBuilder(pathBuilder)
+			} else {
+				entryPath = entry.FileName
 			}
 
 			// Determine the type based on the mode
@@ -556,7 +689,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 		}
 
 		logger.Debug("Queue progress",
-			"remaining", len(queue),
+			"remaining", len(queue)-queueIdx,
 			"processedEntries", len(entries))
 	}
 
@@ -624,10 +757,11 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	logger.Debug("Fetch tree object", "hash", want.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         []hash.Hash{want},
-		Done:         true,
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           []hash.Hash{want},
+		Done:           true,
+		NoExtraObjects: false, // GetFlatTree is called after this one. Let's read all of them
 	})
 	if err != nil {
 		// TODO: handle this at the client level

@@ -2,9 +2,11 @@ package client
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,14 +125,21 @@ func TestUploadPack(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			response, err := client.UploadPack(context.Background(), []byte("test data"))
+			responseReader, err := client.UploadPack(context.Background(), strings.NewReader("test data"))
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
-				require.Empty(t, response)
+				require.Nil(t, responseReader)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedResult, string(response))
+				defer func() {
+					if closeErr := responseReader.Close(); closeErr != nil {
+						t.Errorf("error closing response body: %v", closeErr)
+					}
+				}()
+				responseData, err := io.ReadAll(responseReader)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResult, string(responseData))
 			}
 		})
 	}
