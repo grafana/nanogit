@@ -50,7 +50,7 @@ func getHexString(hash [20]byte) string {
 	hex.Encode(buf, hash[:])
 	// Allocate string and return buffer to pool
 	result := string(buf)
-	hexBufferPool.Put(buf) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+	hexBufferPool.Put(buf) //lint:ignore SA6002 byte slices are correct for sync.Pool
 	return result
 }
 
@@ -528,19 +528,18 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
 	
-	// Always allocate exact size needed to avoid unnecessary copy operations
-	// This matches the original bytes.Buffer behavior more closely
-	data := make([]byte, sz)
-	n, err := io.ReadFull(lr, data)
-	if err != nil {
+	// Read all available data from the zlib stream to ensure proper positioning
+	// for the next object. We must consume the entire zlib stream.
+	var data bytes.Buffer
+	if _, err := io.Copy(&data, lr); err != nil {
 		return nil, eofIsUnexpected(err)
 	}
-	
-	if n != sz {
+
+	if data.Len() != sz {
 		return nil, ErrInflatedDataIncorrectSize
 	}
-	
-	return data, nil
+
+	return data.Bytes(), nil
 }
 
 func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {

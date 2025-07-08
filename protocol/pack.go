@@ -447,7 +447,7 @@ func (p *Parser) Next() (line []byte, err error) {
 func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err error) {
 	// Use pooled buffer for length reading to reduce allocations
 	pooledBuf := packetLengthPool.Get().([]byte)
-	defer packetLengthPool.Put(pooledBuf) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+	defer packetLengthPool.Put(pooledBuf) //lint:ignore SA6002 byte slices are correct for sync.Pool
 	
 	n, err := io.ReadFull(reader, pooledBuf)
 	if err != nil {
@@ -488,7 +488,7 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	// Ensure buffer has sufficient capacity
 	if cap(pooledBuf) < int(dataLength) {
 		// Buffer too small, allocate new one and return old to pool
-		packetDataPool.Put(pooledBuf) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+		packetDataPool.Put(pooledBuf) //lint:ignore SA6002 byte slices are correct for sync.Pool
 		packetData := make([]byte, dataLength)
 		n, err := io.ReadFull(reader, packetData)
 		if err != nil {
@@ -506,7 +506,7 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	n, err := io.ReadFull(reader, packetData)
 	if err != nil {
 		// Return buffer to pool before error
-		packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+		packetDataPool.Put(pooledBuf[:0]) //lint:ignore SA6002 byte slices are correct for sync.Pool
 		fullPacket := append(lengthBytes, packetData[:n]...)
 		if err == io.ErrUnexpectedEOF || err == io.EOF {
 			return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
@@ -517,7 +517,7 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	// Make a copy to return, then return buffer to pool
 	result := make([]byte, dataLength)
 	copy(result, packetData)
-	packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck // SA6002: byte slices are correct for sync.Pool
+	packetDataPool.Put(pooledBuf[:0]) //lint:ignore SA6002 byte slices are correct for sync.Pool
 	
 	return result, nil
 }
@@ -589,7 +589,7 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 	var fullMessage string
 
 	// Determine message format and extract content
-	if bytes.HasPrefix(packetData, []byte("error:")) || bytes.HasPrefix(packetData, []byte("fatal:")) {
+	if bytes.HasPrefix(packetData, errorPattern) || bytes.HasPrefix(packetData, fatalPattern) {
 		// Direct format: no side-band prefix
 		messageStart = 0
 		fullMessage = string(packetData)
@@ -601,7 +601,7 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 
 	// Parse error type and message
 	var errorType, message string
-	if bytes.HasPrefix(packetData[messageStart:], []byte("error:")) {
+	if bytes.HasPrefix(packetData[messageStart:], errorPattern) {
 		errorType = "error"
 		message = fullMessage[6:] // Remove "error:" prefix
 	} else {
@@ -609,8 +609,9 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 		message = fullMessage[6:] // Remove "fatal:" prefix
 	}
 
-	// Check if this is an unpack error
-	if bytes.Contains(packetData, []byte("unpack")) {
+	// Check if this is an unpack error (message should contain "unpack" keyword)
+	// Use Contains since this is checking within error/fatal messages that mention unpack
+	if bytes.Contains([]byte(message), []byte("unpack")) {
 		return NewGitUnpackError(fullPacket, message)
 	}
 
