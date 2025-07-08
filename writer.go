@@ -1109,9 +1109,13 @@ func (w *stagedWriter) buildSingleTree(ctx context.Context, dirPath string) erro
 		}
 	}
 	
-	// Skip empty directories (they shouldn't exist in Git)
+	// Handle empty directories (they shouldn't exist in Git)
 	if len(entries) == 0 {
-		logger.Debug("Skipping empty directory", "path", dirPath)
+		logger.Debug("Removing empty directory", "path", dirPath)
+		// Empty directories don't exist in Git - remove them from treeEntries
+		if dirPath != "" {
+			delete(w.treeEntries, dirPath)
+		}
 		return nil
 	}
 	
