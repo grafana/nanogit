@@ -447,7 +447,8 @@ func (p *Parser) Next() (line []byte, err error) {
 func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err error) {
 	// Use pooled buffer for length reading to reduce allocations
 	pooledBuf := packetLengthPool.Get().([]byte)
-	defer packetLengthPool.Put(pooledBuf) //lint:ignore SA6002 byte slices are correct for sync.Pool
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	defer packetLengthPool.Put(pooledBuf) //nolint:staticcheck
 	
 	n, err := io.ReadFull(reader, pooledBuf)
 	if err != nil {
@@ -488,7 +489,8 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	// Ensure buffer has sufficient capacity
 	if cap(pooledBuf) < int(dataLength) {
 		// Buffer too small, allocate new one and return old to pool
-		packetDataPool.Put(pooledBuf) //lint:ignore SA6002 byte slices are correct for sync.Pool
+		//lint:ignore SA6002 byte slices are correct for sync.Pool
+		packetDataPool.Put(pooledBuf) //nolint:staticcheck
 		packetData := make([]byte, dataLength)
 		n, err := io.ReadFull(reader, packetData)
 		if err != nil {
@@ -506,7 +508,8 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	n, err := io.ReadFull(reader, packetData)
 	if err != nil {
 		// Return buffer to pool before error
-		packetDataPool.Put(pooledBuf[:0]) //lint:ignore SA6002 byte slices are correct for sync.Pool
+		//lint:ignore SA6002 byte slices are correct for sync.Pool
+		packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck
 		fullPacket := append(lengthBytes, packetData[:n]...)
 		if err == io.ErrUnexpectedEOF || err == io.EOF {
 			return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
@@ -517,7 +520,8 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	// Make a copy to return, then return buffer to pool
 	result := make([]byte, dataLength)
 	copy(result, packetData)
-	packetDataPool.Put(pooledBuf[:0]) //lint:ignore SA6002 byte slices are correct for sync.Pool
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck
 	
 	return result, nil
 }

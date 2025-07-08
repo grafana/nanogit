@@ -50,7 +50,8 @@ func getHexString(hash [20]byte) string {
 	hex.Encode(buf, hash[:])
 	// Allocate string and return buffer to pool
 	result := string(buf)
-	hexBufferPool.Put(buf) //lint:ignore SA6002 byte slices are correct for sync.Pool
+	//lint:ignore SA6002 byte slices are correct for sync.Pool
+	hexBufferPool.Put(buf) //nolint:staticcheck
 	return result
 }
 
