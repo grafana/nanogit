@@ -529,18 +529,43 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
 	
-	// Read all available data from the zlib stream to ensure proper positioning
-	// for the next object. We must consume the entire zlib stream.
-	var data bytes.Buffer
-	if _, err := io.Copy(&data, lr); err != nil {
-		return nil, eofIsUnexpected(err)
+	// Pre-allocate the data slice with the expected size to avoid reallocations
+	// This is much more efficient than using bytes.Buffer with io.Copy
+	data := make([]byte, sz)
+	totalRead := 0
+	
+	for totalRead < sz {
+		n, err := lr.Read(data[totalRead:])
+		totalRead += n
+		
+		if err != nil {
+			if err == io.EOF {
+				// We've reached the end of the zlib stream
+				break
+			}
+			return nil, eofIsUnexpected(err)
+		}
 	}
 
-	if data.Len() != sz {
+	if totalRead != sz {
 		return nil, ErrInflatedDataIncorrectSize
 	}
 
-	return data.Bytes(), nil
+	// CRITICAL: Consume any remaining bytes in the zlib stream to ensure proper positioning
+	// for the next object. This is essential for sequential object reading.
+	// We need to read until EOF to complete the zlib stream.
+	var discardBuf [512]byte
+	for {
+		_, err := lr.Read(discardBuf[:])
+		if err != nil {
+			if err == io.EOF {
+				break // This is expected - we've consumed the entire zlib stream
+			}
+			return nil, eofIsUnexpected(err)
+		}
+	}
+
+	return data, nil
 }
 
 func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
