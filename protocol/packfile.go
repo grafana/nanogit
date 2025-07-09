@@ -3,7 +3,6 @@ package protocol
 import (
 	"bufio"
 	"bytes"
-	"compress/zlib"
 	"context"
 	"crypto"
 	"encoding/binary"
@@ -18,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/klauspost/compress/zlib"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -58,6 +59,24 @@ var (
 		},
 	}
 
+	// Pool for zlib writers to reduce allocations
+	zlibWriterPool = sync.Pool{
+		New: func() interface{} {
+			// Use BestSpeed for better performance
+			zw, _ := zlib.NewWriterLevel(nil, zlib.BestSpeed)
+			return zw
+		},
+	}
+
+	// Pool for zlib readers to reduce allocations
+	zlibReaderPool = sync.Pool{
+		New: func() interface{} {
+			// Create a reader with valid empty zlib data - will be reset before use
+			emptyZlibData := []byte{0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01} // Empty zlib stream
+			zr, _ := zlib.NewReader(bytes.NewReader(emptyZlibData))
+			return zr
+		},
+	}
 )
 
 // getHexString gets a hex string from a hash, allocating a new string
@@ -71,19 +90,52 @@ func getHexString(hash [20]byte) string {
 	return result
 }
 
+// getPooledZlibWriter gets a zlib writer from the pool and resets it for the given writer
+func getPooledZlibWriter(writer io.Writer) *zlib.Writer {
+	zw := zlibWriterPool.Get().(*zlib.Writer)
+	zw.Reset(writer)
+	return zw
+}
+
+// returnPooledZlibWriter returns a zlib writer to the pool
+func returnPooledZlibWriter(zw *zlib.Writer) {
+	zlibWriterPool.Put(zw)
+}
+
+// getPooledZlibReader gets a zlib reader from the pool and resets it for the given reader
+func getPooledZlibReader(reader io.Reader) (io.ReadCloser, error) {
+	zr := zlibReaderPool.Get().(io.ReadCloser)
+	if resetter, ok := zr.(zlib.Resetter); ok {
+		if err := resetter.Reset(reader, nil); err != nil {
+			zlibReaderPool.Put(zr)
+			return nil, err
+		}
+		return zr, nil
+	}
+	// Fallback: close and get a new reader
+	_ = zr.Close()
+	zlibReaderPool.Put(zr)
+	return zlib.NewReader(reader)
+}
+
+// returnPooledZlibReader returns a zlib reader to the pool
+func returnPooledZlibReader(zr io.ReadCloser) {
+	zlibReaderPool.Put(zr)
+}
+
 // estimateTreeSize estimates the number of entries in tree data using improved heuristics
 func estimateTreeSize(data []byte) int {
 	if len(data) < 25 {
 		return 4 // minimum reasonable capacity
 	}
-	
+
 	// Use average entry size based on typical Git tree structure
 	// Mode (6) + space (1) + avg filename (12) + null (1) + hash (20) = 40 bytes average
 	estimate := len(data) / 40
-	
+
 	// Add 25% buffer for safety
 	estimate = estimate + (estimate / 4)
-	
+
 	// Apply reasonable bounds
 	if estimate < 8 {
 		return 8
@@ -369,6 +421,8 @@ type PackfileReader struct {
 func (p *PackfileReader) Close() error {
 	if p.zlibReader != nil {
 		err := p.zlibReader.Close()
+		// Return reader to pool for reuse
+		returnPooledZlibReader(p.zlibReader)
 		p.zlibReader = nil
 		return err
 	}
@@ -520,7 +574,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// Reuse zlib reader for performance - avoid creating new reader for each object
 	if p.zlibReader == nil {
 		var err error
-		p.zlibReader, err = zlib.NewReader(p.reader)
+		p.zlibReader, err = getPooledZlibReader(p.reader)
 		if err != nil {
 			return nil, err
 		}
@@ -531,10 +585,10 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 				return nil, err
 			}
 		} else {
-			// Fallback: close and recreate if Reset is not available
+			// Fallback: close and recreate using pool
 			_ = p.zlibReader.Close()
 			var err error
-			p.zlibReader, err = zlib.NewReader(p.reader)
+			p.zlibReader, err = getPooledZlibReader(p.reader)
 			if err != nil {
 				return nil, err
 			}
@@ -545,20 +599,20 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// carries, and we should limit that size above (i.e. if the packet
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
-	
+
 	// Use pooled buffer if size is reasonable, otherwise allocate directly
 	var data []byte
 	var pooledBuf []byte
-	
+
 	if sz <= 65536 { // Use pooled buffer for objects <= 64KB
 		pooledBuf = dataBufferPool.Get().([]byte)
 		//lint:ignore SA6002 byte slices are correct for sync.Pool
 		defer dataBufferPool.Put(pooledBuf) //nolint:staticcheck
-		data = pooledBuf[:sz] // Slice to exact size needed
+		data = pooledBuf[:sz]               // Slice to exact size needed
 	} else {
 		data = make([]byte, sz) // Allocate directly for large objects
 	}
-	
+
 	n, err := io.ReadFull(lr, data)
 	if err != nil {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -577,7 +631,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	discardBuf := discardBufferPool.Get().([]byte)
 	//lint:ignore SA6002 byte slices are correct for sync.Pool
 	defer discardBufferPool.Put(discardBuf) //nolint:staticcheck
-	
+
 	for {
 		_, err := lr.Read(discardBuf)
 		if err != nil {
@@ -607,38 +661,38 @@ func (p *PackfileReader) calculateObjectHash(objType ObjectType, data []byte) (h
 	} else {
 		p.hasher.Reset()
 	}
-	
+
 	// Write Git object header exactly as NewHasher does for compatibility
 	// This ensures we get the same hash as the Object function
 	typeBytes := objType.Bytes()
 	if _, err := p.hasher.Write(typeBytes); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	if _, err := p.hasher.Write([]byte(" ")); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	sizeBytes := []byte(strconv.FormatInt(int64(len(data)), 10))
 	if _, err := p.hasher.Write(sizeBytes); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	if _, err := p.hasher.Write([]byte{0}); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	// Write object data
 	if _, err := p.hasher.Write(data); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	// Get hash sum
 	sum := p.hasher.Sum(nil)
 	if len(sum) != 20 {
 		return hash.Zero, fmt.Errorf("expected 20-byte hash, got %d bytes", len(sum))
 	}
-	
+
 	var result hash.Hash
 	copy(result[:], sum)
 	return result, nil
@@ -723,9 +777,6 @@ type PackfileWriter struct {
 	totalBytes int
 	// Track if cleanup has been called
 	isCleanedUp bool
-	// Reusable zlib writer for performance
-	zlibWriter *zlib.Writer
-
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
 }
@@ -764,13 +815,7 @@ func (w *PackfileWriter) Cleanup() error {
 
 	var err error
 
-	// Clean up zlib writer first (before closing temp file)
-	if w.zlibWriter != nil {
-		if closeErr := w.zlibWriter.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-		w.zlibWriter = nil
-	}
+	// No need to clean up zlib writer since we create a new one for each object
 
 	// Clean up temporary file if it exists
 	if w.tempFile != nil {
@@ -1136,11 +1181,11 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data using reusable zlib writer
-	zw, err := pw.getOrResetZlibWriter(writer)
-	if err != nil {
-		return fmt.Errorf("getting zlib writer: %w", err)
-	}
+	// Compress and write data using pooled zlib writer
+	// This ensures proper zlib stream boundaries for each Git object
+	zw := getPooledZlibWriter(writer)
+	defer returnPooledZlibWriter(zw)
+	
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
@@ -1151,17 +1196,6 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 	return nil
 }
 
-// getOrResetZlibWriter returns the reusable zlib writer, creating or resetting as needed
-func (pw *PackfileWriter) getOrResetZlibWriter(writer io.Writer) (*zlib.Writer, error) {
-	if pw.zlibWriter == nil {
-		pw.zlibWriter = zlib.NewWriter(writer)
-		return pw.zlibWriter, nil
-	}
-
-	// Reset the writer for a new stream
-	pw.zlibWriter.Reset(writer)
-	return pw.zlibWriter, nil
-}
 
 // addObject adds an object using the appropriate storage method based on the storage mode.
 func (pw *PackfileWriter) addObject(obj PackfileObject) error {
@@ -1262,11 +1296,11 @@ func (w *PackfileWriter) writeObjectToFile(obj PackfileObject) error {
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data using reusable zlib writer
-	zw, err := w.getOrResetZlibWriter(w.tempFile)
-	if err != nil {
-		return fmt.Errorf("getting zlib writer: %w", err)
-	}
+	// Compress and write data using pooled zlib writer
+	// This ensures proper zlib stream boundaries for each Git object
+	zw := getPooledZlibWriter(w.tempFile)
+	defer returnPooledZlibWriter(zw)
+	
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
