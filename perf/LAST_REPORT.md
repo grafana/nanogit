@@ -1,81 +1,81 @@
 # 🚀 Performance Benchmark Report
 
-**Generated:** 2025-07-08T19:17:28+02:00  
+**Generated:** 2025-07-09T10:18:29+02:00  
 **Total Benchmarks:** 168
 
 ## 📊 Performance Overview
 
 | Operation                              | Speed Winner | Duration | In-Memory Winner | Memory Usage |
 | -------------------------------------- | ------------ | -------- | ---------------- | ------------ |
-| BulkCreateFiles_bulk_1000_files_medium | 🚀 nanogit    | 115.7ms  | 💚 nanogit        | 3.8 MB       |
-| BulkCreateFiles_bulk_1000_files_small  | 🚀 nanogit    | 111.1ms  | 💚 nanogit        | 3.1 MB       |
-| BulkCreateFiles_bulk_100_files_medium  | 🚀 nanogit    | 83.0ms   | 💚 nanogit        | 2.4 MB       |
-| BulkCreateFiles_bulk_100_files_small   | 🚀 nanogit    | 76.8ms   | 💚 nanogit        | 1.7 MB       |
-| CompareCommits_adjacent_commits_large  | 🚀 nanogit    | 100.1ms  | 💚 nanogit        | 6.3 MB       |
-| CompareCommits_adjacent_commits_medium | 🚀 nanogit    | 82.7ms   | 💚 nanogit        | 2.8 MB       |
-| CompareCommits_adjacent_commits_small  | 🚀 nanogit    | 67.6ms   | 💚 nanogit        | 1.6 MB       |
-| CompareCommits_adjacent_commits_xlarge | 🚀 nanogit    | 111.5ms  | 💚 nanogit        | 16.0 MB      |
-| CompareCommits_few_commits_large       | 🚀 nanogit    | 154.9ms  | 💚 nanogit        | 7.3 MB       |
-| CompareCommits_few_commits_medium      | 🚀 nanogit    | 157.6ms  | 💚 nanogit        | 2.3 MB       |
-| CompareCommits_few_commits_small       | 🐹 go-git     | 68.6ms   | 💚 nanogit        | 2.4 MB       |
-| CompareCommits_few_commits_xlarge      | 🚀 nanogit    | 209.4ms  | 💚 nanogit        | 17.5 MB      |
-| CompareCommits_max_commits_large       | 🚀 nanogit    | 253.5ms  | 💚 nanogit        | 7.3 MB       |
-| CompareCommits_max_commits_medium      | 🚀 nanogit    | 235.8ms  | 💚 nanogit        | 2.6 MB       |
-| CompareCommits_max_commits_small       | 🐹 go-git     | 68.3ms   | 💚 nanogit        | 3.0 MB       |
-| CompareCommits_max_commits_xlarge      | 🚀 nanogit    | 336.7ms  | 💚 nanogit        | 16.9 MB      |
-| CreateFile_large_repo                  | 🚀 nanogit    | 63.5ms   | 💚 nanogit        | 3.5 MB       |
-| CreateFile_medium_repo                 | 🚀 nanogit    | 60.6ms   | 💚 nanogit        | 1.5 MB       |
-| CreateFile_small_repo                  | 🚀 nanogit    | 52.2ms   | 💚 nanogit        | 1.4 MB       |
-| CreateFile_xlarge_repo                 | 🚀 nanogit    | 80.7ms   | 💚 nanogit        | 11.2 MB      |
-| DeleteFile_large_repo                  | 🚀 nanogit    | 64.7ms   | 💚 nanogit        | 3.4 MB       |
-| DeleteFile_medium_repo                 | 🚀 nanogit    | 55.2ms   | 💚 nanogit        | 1.5 MB       |
-| DeleteFile_small_repo                  | 🚀 nanogit    | 51.9ms   | 💚 nanogit        | 1.6 MB       |
-| DeleteFile_xlarge_repo                 | 🚀 nanogit    | 77.4ms   | 💚 nanogit        | 11.4 MB      |
-| GetFlatTree_large_tree                 | 🚀 nanogit    | 58.4ms   | 💚 nanogit        | 3.6 MB       |
-| GetFlatTree_medium_tree                | 🚀 nanogit    | 53.3ms   | 💚 nanogit        | 1.3 MB       |
-| GetFlatTree_small_tree                 | 🚀 nanogit    | 52.9ms   | 💚 nanogit        | 697.8 KB     |
-| GetFlatTree_xlarge_tree                | 🚀 nanogit    | 77.5ms   | 💚 nanogit        | 10.2 MB      |
-| UpdateFile_large_repo                  | 🚀 nanogit    | 63.0ms   | 💚 nanogit        | 3.2 MB       |
-| UpdateFile_medium_repo                 | 🚀 nanogit    | 59.8ms   | 💚 nanogit        | 1.4 MB       |
-| UpdateFile_small_repo                  | 🚀 nanogit    | 50.9ms   | 💚 nanogit        | 1.4 MB       |
-| UpdateFile_xlarge_repo                 | 🚀 nanogit    | 79.2ms   | 💚 nanogit        | 11.3 MB      |
+| BulkCreateFiles_bulk_1000_files_medium | 🚀 nanogit    | 102.8ms  | 💚 nanogit        | 3.4 MB       |
+| BulkCreateFiles_bulk_1000_files_small  | 🚀 nanogit    | 83.2ms   | 💚 nanogit        | 3.4 MB       |
+| BulkCreateFiles_bulk_100_files_medium  | 🚀 nanogit    | 86.3ms   | 💚 nanogit        | 2.6 MB       |
+| BulkCreateFiles_bulk_100_files_small   | 🚀 nanogit    | 83.4ms   | 💚 nanogit        | 2.0 MB       |
+| CompareCommits_adjacent_commits_large  | 🚀 nanogit    | 94.2ms   | 💚 nanogit        | 6.3 MB       |
+| CompareCommits_adjacent_commits_medium | 🚀 nanogit    | 78.0ms   | 💚 nanogit        | 2.7 MB       |
+| CompareCommits_adjacent_commits_small  | 🚀 nanogit    | 67.2ms   | 💚 nanogit        | 1.4 MB       |
+| CompareCommits_adjacent_commits_xlarge | 🚀 nanogit    | 122.8ms  | 💚 nanogit        | 16.7 MB      |
+| CompareCommits_few_commits_large       | 🚀 nanogit    | 170.0ms  | 💚 nanogit        | 6.3 MB       |
+| CompareCommits_few_commits_medium      | 🚀 nanogit    | 156.4ms  | 💚 nanogit        | 3.4 MB       |
+| CompareCommits_few_commits_small       | 🐹 go-git     | 72.6ms   | 💚 nanogit        | 2.3 MB       |
+| CompareCommits_few_commits_xlarge      | 🚀 nanogit    | 206.0ms  | 💚 nanogit        | 17.1 MB      |
+| CompareCommits_max_commits_large       | 🚀 nanogit    | 250.5ms  | 💚 nanogit        | 7.0 MB       |
+| CompareCommits_max_commits_medium      | 🚀 nanogit    | 233.4ms  | 💚 nanogit        | 4.4 MB       |
+| CompareCommits_max_commits_small       | 🐹 go-git     | 76.5ms   | 🐹 go-git         | 2.4 MB       |
+| CompareCommits_max_commits_xlarge      | 🚀 nanogit    | 333.5ms  | 💚 nanogit        | 16.6 MB      |
+| CreateFile_large_repo                  | 🚀 nanogit    | 60.7ms   | 💚 nanogit        | 3.3 MB       |
+| CreateFile_medium_repo                 | 🚀 nanogit    | 54.0ms   | 💚 nanogit        | 2.2 MB       |
+| CreateFile_small_repo                  | 🚀 nanogit    | 58.0ms   | 💚 nanogit        | 1.5 MB       |
+| CreateFile_xlarge_repo                 | 🚀 nanogit    | 79.4ms   | 💚 nanogit        | 10.6 MB      |
+| DeleteFile_large_repo                  | 🚀 nanogit    | 57.4ms   | 💚 nanogit        | 2.8 MB       |
+| DeleteFile_medium_repo                 | 🚀 nanogit    | 50.3ms   | 💚 nanogit        | 1.2 MB       |
+| DeleteFile_small_repo                  | 🚀 nanogit    | 46.4ms   | 💚 nanogit        | 1.2 MB       |
+| DeleteFile_xlarge_repo                 | 🚀 nanogit    | 79.6ms   | 💚 nanogit        | 10.0 MB      |
+| GetFlatTree_large_tree                 | 🚀 nanogit    | 56.5ms   | 💚 nanogit        | 3.5 MB       |
+| GetFlatTree_medium_tree                | 🚀 nanogit    | 53.2ms   | 💚 nanogit        | 1.3 MB       |
+| GetFlatTree_small_tree                 | 🚀 nanogit    | 52.3ms   | 💚 nanogit        | 695.3 KB     |
+| GetFlatTree_xlarge_tree                | 🚀 nanogit    | 76.1ms   | 💚 nanogit        | 10.4 MB      |
+| UpdateFile_large_repo                  | 🚀 nanogit    | 59.7ms   | 💚 nanogit        | 2.8 MB       |
+| UpdateFile_medium_repo                 | 🚀 nanogit    | 49.7ms   | 💚 nanogit        | 1.5 MB       |
+| UpdateFile_small_repo                  | 🚀 nanogit    | 48.0ms   | 💚 nanogit        | 1.4 MB       |
+| UpdateFile_xlarge_repo                 | 🚀 nanogit    | 75.1ms   | 💚 nanogit        | 10.7 MB      |
 
 ## ⚡ Duration Comparison
 
 | Operation                              | git-cli   | go-git    | nanogit   |
 | -------------------------------------- | --------- | --------- | --------- |
-| BulkCreateFiles_bulk_1000_files_medium | 10.59s 🐌  | 70.20s 🐌  | 115.7ms 🏆 |
-| BulkCreateFiles_bulk_1000_files_small  | 9.73s 🐌   | 18.85s 🐌  | 111.1ms 🏆 |
-| BulkCreateFiles_bulk_100_files_medium  | 1.83s 🐌   | 6.30s 🐌   | 83.0ms 🏆  |
-| BulkCreateFiles_bulk_100_files_small   | 1.60s 🐌   | 838.9ms 🐌 | 76.8ms 🏆  |
-| CompareCommits_adjacent_commits_large  | 1.33s 🐌   | 2.60s 🐌   | 100.1ms 🏆 |
-| CompareCommits_adjacent_commits_medium | 732.5ms 🐌 | 409.3ms   | 82.7ms 🏆  |
-| CompareCommits_adjacent_commits_small  | 628.3ms 🐌 | 72.4ms ✅  | 67.6ms 🏆  |
-| CompareCommits_adjacent_commits_xlarge | 7.65s 🐌   | 20.37s 🐌  | 111.5ms 🏆 |
-| CompareCommits_few_commits_large       | 1.40s 🐌   | 2.61s 🐌   | 154.9ms 🏆 |
-| CompareCommits_few_commits_medium      | 723.0ms   | 406.9ms   | 157.6ms 🏆 |
-| CompareCommits_few_commits_small       | 572.3ms 🐌 | 68.6ms 🏆  | 148.6ms   |
-| CompareCommits_few_commits_xlarge      | 7.15s 🐌   | 20.25s 🐌  | 209.4ms 🏆 |
-| CompareCommits_max_commits_large       | 1.39s 🐌   | 2.60s 🐌   | 253.5ms 🏆 |
-| CompareCommits_max_commits_medium      | 722.5ms   | 406.7ms ✅ | 235.8ms 🏆 |
-| CompareCommits_max_commits_small       | 577.3ms 🐌 | 68.3ms 🏆  | 227.6ms   |
-| CompareCommits_max_commits_xlarge      | 6.44s 🐌   | 20.30s 🐌  | 336.7ms 🏆 |
-| CreateFile_large_repo                  | 2.86s 🐌   | 3.05s 🐌   | 63.5ms 🏆  |
-| CreateFile_medium_repo                 | 1.47s 🐌   | 518.7ms 🐌 | 60.6ms 🏆  |
-| CreateFile_small_repo                  | 1.31s 🐌   | 106.9ms   | 52.2ms 🏆  |
-| CreateFile_xlarge_repo                 | 7.41s 🐌   | 24.71s 🐌  | 80.7ms 🏆  |
-| DeleteFile_large_repo                  | 3.01s 🐌   | 3.05s 🐌   | 64.7ms 🏆  |
-| DeleteFile_medium_repo                 | 1.51s 🐌   | 517.2ms 🐌 | 55.2ms 🏆  |
-| DeleteFile_small_repo                  | 1.33s 🐌   | 107.5ms   | 51.9ms 🏆  |
-| DeleteFile_xlarge_repo                 | 6.91s 🐌   | 23.36s 🐌  | 77.4ms 🏆  |
-| GetFlatTree_large_tree                 | 1.30s 🐌   | 2.63s 🐌   | 58.4ms 🏆  |
-| GetFlatTree_medium_tree                | 682.2ms 🐌 | 450.4ms 🐌 | 53.3ms 🏆  |
-| GetFlatTree_small_tree                 | 577.9ms 🐌 | 78.3ms ✅  | 52.9ms 🏆  |
-| GetFlatTree_xlarge_tree                | 5.54s 🐌   | 20.03s 🐌  | 77.5ms 🏆  |
-| UpdateFile_large_repo                  | 2.98s 🐌   | 3.06s 🐌   | 63.0ms 🏆  |
-| UpdateFile_medium_repo                 | 1.49s 🐌   | 513.5ms 🐌 | 59.8ms 🏆  |
-| UpdateFile_small_repo                  | 1.31s 🐌   | 104.6ms   | 50.9ms 🏆  |
-| UpdateFile_xlarge_repo                 | 7.27s 🐌   | 23.08s 🐌  | 79.2ms 🏆  |
+| BulkCreateFiles_bulk_1000_files_medium | 10.70s 🐌  | 72.43s 🐌  | 102.8ms 🏆 |
+| BulkCreateFiles_bulk_1000_files_small  | 9.89s 🐌   | 19.45s 🐌  | 83.2ms 🏆  |
+| BulkCreateFiles_bulk_100_files_medium  | 1.70s 🐌   | 6.31s 🐌   | 86.3ms 🏆  |
+| BulkCreateFiles_bulk_100_files_small   | 1.85s 🐌   | 820.5ms 🐌 | 83.4ms 🏆  |
+| CompareCommits_adjacent_commits_large  | 1.52s 🐌   | 2.59s 🐌   | 94.2ms 🏆  |
+| CompareCommits_adjacent_commits_medium | 757.9ms 🐌 | 411.6ms 🐌 | 78.0ms 🏆  |
+| CompareCommits_adjacent_commits_small  | 581.6ms 🐌 | 67.8ms ✅  | 67.2ms 🏆  |
+| CompareCommits_adjacent_commits_xlarge | 5.77s 🐌   | 20.30s 🐌  | 122.8ms 🏆 |
+| CompareCommits_few_commits_large       | 1.47s 🐌   | 2.59s 🐌   | 170.0ms 🏆 |
+| CompareCommits_few_commits_medium      | 839.0ms 🐌 | 407.1ms   | 156.4ms 🏆 |
+| CompareCommits_few_commits_small       | 580.9ms 🐌 | 72.6ms 🏆  | 148.3ms   |
+| CompareCommits_few_commits_xlarge      | 5.86s 🐌   | 20.32s 🐌  | 206.0ms 🏆 |
+| CompareCommits_max_commits_large       | 1.47s 🐌   | 2.57s 🐌   | 250.5ms 🏆 |
+| CompareCommits_max_commits_medium      | 769.8ms   | 423.4ms ✅ | 233.4ms 🏆 |
+| CompareCommits_max_commits_small       | 588.1ms 🐌 | 76.5ms 🏆  | 225.1ms   |
+| CompareCommits_max_commits_xlarge      | 5.90s 🐌   | 20.39s 🐌  | 333.5ms 🏆 |
+| CreateFile_large_repo                  | 2.23s 🐌   | 2.92s 🐌   | 60.7ms 🏆  |
+| CreateFile_medium_repo                 | 1.50s 🐌   | 519.5ms 🐌 | 54.0ms 🏆  |
+| CreateFile_small_repo                  | 1.31s 🐌   | 114.0ms ✅ | 58.0ms 🏆  |
+| CreateFile_xlarge_repo                 | 7.09s 🐌   | 22.34s 🐌  | 79.4ms 🏆  |
+| DeleteFile_large_repo                  | 2.26s 🐌   | 2.92s 🐌   | 57.4ms 🏆  |
+| DeleteFile_medium_repo                 | 1.51s 🐌   | 520.4ms 🐌 | 50.3ms 🏆  |
+| DeleteFile_small_repo                  | 1.32s 🐌   | 99.5ms    | 46.4ms 🏆  |
+| DeleteFile_xlarge_repo                 | 6.85s 🐌   | 22.34s 🐌  | 79.6ms 🏆  |
+| GetFlatTree_large_tree                 | 1.42s 🐌   | 2.61s 🐌   | 56.5ms 🏆  |
+| GetFlatTree_medium_tree                | 761.7ms 🐌 | 445.8ms 🐌 | 53.2ms 🏆  |
+| GetFlatTree_small_tree                 | 576.4ms 🐌 | 75.1ms ✅  | 52.3ms 🏆  |
+| GetFlatTree_xlarge_tree                | 6.53s 🐌   | 19.84s 🐌  | 76.1ms 🏆  |
+| UpdateFile_large_repo                  | 2.21s 🐌   | 2.91s 🐌   | 59.7ms 🏆  |
+| UpdateFile_medium_repo                 | 1.50s 🐌   | 517.6ms 🐌 | 49.7ms 🏆  |
+| UpdateFile_small_repo                  | 1.35s 🐌   | 101.9ms   | 48.0ms 🏆  |
+| UpdateFile_xlarge_repo                 | 6.97s 🐌   | 22.33s 🐌  | 75.1ms 🏆  |
 
 ## 💾 Memory Usage Comparison
 
@@ -83,77 +83,77 @@
 
 | Operation                              | git-cli      | go-git     | nanogit    |
 | -------------------------------------- | ------------ | ---------- | ---------- |
-| BulkCreateFiles_bulk_1000_files_medium | -2902688 B 💾 | 43.1 MB 🔥  | 3.8 MB 🏆   |
-| BulkCreateFiles_bulk_1000_files_small  | 1.5 MB 💾     | 15.3 MB    | 3.1 MB 🏆   |
-| BulkCreateFiles_bulk_100_files_medium  | 5.1 MB 💾     | 51.6 MB 🔥  | 2.4 MB 🏆   |
-| BulkCreateFiles_bulk_100_files_small   | -999952 B 💾  | 9.7 MB 🔥   | 1.7 MB 🏆   |
-| CompareCommits_adjacent_commits_large  | 70.5 KB 💾    | 227.7 MB 🔥 | 6.3 MB 🏆   |
-| CompareCommits_adjacent_commits_medium | 70.5 KB 💾    | 39.3 MB 🔥  | 2.8 MB 🏆   |
-| CompareCommits_adjacent_commits_small  | 70.1 KB 💾    | 5.6 MB     | 1.6 MB 🏆   |
-| CompareCommits_adjacent_commits_xlarge | 70.5 KB 💾    | 1.6 GB 🔥   | 16.0 MB 🏆  |
-| CompareCommits_few_commits_large       | 71.0 KB 💾    | 228.1 MB 🔥 | 7.3 MB 🏆   |
-| CompareCommits_few_commits_medium      | 70.2 KB 💾    | 45.0 MB 🔥  | 2.3 MB 🏆   |
-| CompareCommits_few_commits_small       | 70.5 KB 💾    | 6.0 MB     | 2.4 MB 🏆   |
-| CompareCommits_few_commits_xlarge      | 70.5 KB 💾    | 1.6 GB 🔥   | 17.5 MB 🏆  |
-| CompareCommits_max_commits_large       | 70.5 KB 💾    | 235.7 MB 🔥 | 7.3 MB 🏆   |
-| CompareCommits_max_commits_medium      | 71.0 KB 💾    | 40.3 MB 🔥  | 2.6 MB 🏆   |
-| CompareCommits_max_commits_small       | 70.5 KB 💾    | 3.2 MB ✅   | 3.0 MB 🏆   |
-| CompareCommits_max_commits_xlarge      | 70.5 KB 💾    | 1.6 GB 🔥   | 16.9 MB 🏆  |
-| CreateFile_large_repo                  | 135.6 KB 💾   | 293.4 MB 🔥 | 3.5 MB 🏆   |
-| CreateFile_medium_repo                 | 136.5 KB 💾   | 36.8 MB 🔥  | 1.5 MB 🏆   |
-| CreateFile_small_repo                  | 135.7 KB 💾   | 3.4 MB     | 1.4 MB 🏆   |
-| CreateFile_xlarge_repo                 | 135.6 KB 💾   | 2.0 GB 🔥   | 11.2 MB 🏆  |
-| DeleteFile_large_repo                  | 135.6 KB 💾   | 281.3 MB 🔥 | 3.4 MB 🏆   |
-| DeleteFile_medium_repo                 | 135.6 KB 💾   | 41.0 MB 🔥  | 1.5 MB 🏆   |
-| DeleteFile_small_repo                  | 135.9 KB 💾   | 3.1 MB ✅   | 1.6 MB 🏆   |
-| DeleteFile_xlarge_repo                 | 136.1 KB 💾   | 2.0 GB 🔥   | 11.4 MB 🏆  |
-| GetFlatTree_large_tree                 | 3.2 MB 💾     | 265.7 MB 🔥 | 3.6 MB 🏆   |
-| GetFlatTree_medium_tree                | 740.1 KB 💾   | 33.0 MB 🔥  | 1.3 MB 🏆   |
-| GetFlatTree_small_tree                 | 154.6 KB 💾   | 4.3 MB 🔥   | 697.8 KB 🏆 |
-| GetFlatTree_xlarge_tree                | 18.7 MB 💾    | 1.6 GB 🔥   | 10.2 MB 🏆  |
-| UpdateFile_large_repo                  | 135.3 KB 💾   | 280.0 MB 🔥 | 3.2 MB 🏆   |
-| UpdateFile_medium_repo                 | 135.5 KB 💾   | 37.2 MB 🔥  | 1.4 MB 🏆   |
-| UpdateFile_small_repo                  | 135.9 KB 💾   | 4.5 MB     | 1.4 MB 🏆   |
-| UpdateFile_xlarge_repo                 | 135.3 KB 💾   | 2.0 GB 🔥   | 11.3 MB 🏆  |
+| BulkCreateFiles_bulk_1000_files_medium | -3106536 B 💾 | 31.8 MB 🔥  | 3.4 MB 🏆   |
+| BulkCreateFiles_bulk_1000_files_small  | 2.9 MB 💾     | 7.3 MB     | 3.4 MB 🏆   |
+| BulkCreateFiles_bulk_100_files_medium  | 5.1 MB 💾     | 31.0 MB 🔥  | 2.6 MB 🏆   |
+| BulkCreateFiles_bulk_100_files_small   | -1046224 B 💾 | 8.3 MB     | 2.0 MB 🏆   |
+| CompareCommits_adjacent_commits_large  | 71.4 KB 💾    | 234.9 MB 🔥 | 6.3 MB 🏆   |
+| CompareCommits_adjacent_commits_medium | 70.2 KB 💾    | 45.3 MB 🔥  | 2.7 MB 🏆   |
+| CompareCommits_adjacent_commits_small  | 70.5 KB 💾    | 6.1 MB     | 1.4 MB 🏆   |
+| CompareCommits_adjacent_commits_xlarge | 70.2 KB 💾    | 1.4 GB 🔥   | 16.7 MB 🏆  |
+| CompareCommits_few_commits_large       | 71.4 KB 💾    | 231.7 MB 🔥 | 6.3 MB 🏆   |
+| CompareCommits_few_commits_medium      | 70.5 KB 💾    | 44.1 MB 🔥  | 3.4 MB 🏆   |
+| CompareCommits_few_commits_small       | 70.5 KB 💾    | 2.3 MB ✅   | 2.3 MB 🏆   |
+| CompareCommits_few_commits_xlarge      | 70.2 KB 💾    | 1.6 GB 🔥   | 17.1 MB 🏆  |
+| CompareCommits_max_commits_large       | 70.2 KB 💾    | 229.0 MB 🔥 | 7.0 MB 🏆   |
+| CompareCommits_max_commits_medium      | 70.5 KB 💾    | 35.3 MB 🔥  | 4.4 MB 🏆   |
+| CompareCommits_max_commits_small       | 70.2 KB 💾    | 2.4 MB 🏆   | 3.2 MB ✅   |
+| CompareCommits_max_commits_xlarge      | 70.5 KB 💾    | 1.6 GB 🔥   | 16.6 MB 🏆  |
+| CreateFile_large_repo                  | 135.8 KB 💾   | 278.7 MB 🔥 | 3.3 MB 🏆   |
+| CreateFile_medium_repo                 | 136.2 KB 💾   | 38.8 MB 🔥  | 2.2 MB 🏆   |
+| CreateFile_small_repo                  | 136.7 KB 💾   | 3.0 MB     | 1.5 MB 🏆   |
+| CreateFile_xlarge_repo                 | 135.8 KB 💾   | 2.0 GB 🔥   | 10.6 MB 🏆  |
+| DeleteFile_large_repo                  | 135.6 KB 💾   | 277.3 MB 🔥 | 2.8 MB 🏆   |
+| DeleteFile_medium_repo                 | 135.8 KB 💾   | 34.6 MB 🔥  | 1.2 MB 🏆   |
+| DeleteFile_small_repo                  | 135.8 KB 💾   | 3.4 MB     | 1.2 MB 🏆   |
+| DeleteFile_xlarge_repo                 | 135.8 KB 💾   | 2.0 GB 🔥   | 10.0 MB 🏆  |
+| GetFlatTree_large_tree                 | 3.2 MB 💾     | 245.7 MB 🔥 | 3.5 MB 🏆   |
+| GetFlatTree_medium_tree                | 740.1 KB 💾   | 31.9 MB 🔥  | 1.3 MB 🏆   |
+| GetFlatTree_small_tree                 | 154.9 KB 💾   | 4.4 MB 🔥   | 695.3 KB 🏆 |
+| GetFlatTree_xlarge_tree                | 18.7 MB 💾    | 1.6 GB 🔥   | 10.4 MB 🏆  |
+| UpdateFile_large_repo                  | 135.0 KB 💾   | 281.5 MB 🔥 | 2.8 MB 🏆   |
+| UpdateFile_medium_repo                 | 136.2 KB 💾   | 29.7 MB 🔥  | 1.5 MB 🏆   |
+| UpdateFile_small_repo                  | 135.2 KB 💾   | 4.5 MB     | 1.4 MB 🏆   |
+| UpdateFile_xlarge_repo                 | 135.1 KB 💾   | 2.0 GB 🔥   | 10.7 MB 🏆  |
 
 ## 🎯 Nanogit Performance Analysis
 
 ### ⚡ Speed Comparison
 
-| Operation                              | vs git-cli     | vs go-git       |
-| -------------------------------------- | -------------- | --------------- |
-| BulkCreateFiles_bulk_1000_files_medium | 91.5x faster 🚀 | 606.5x faster 🚀 |
-| BulkCreateFiles_bulk_1000_files_small  | 87.6x faster 🚀 | 169.6x faster 🚀 |
-| BulkCreateFiles_bulk_100_files_medium  | 22.1x faster 🚀 | 76.0x faster 🚀  |
-| BulkCreateFiles_bulk_100_files_small   | 20.9x faster 🚀 | 10.9x faster 🚀  |
-| CompareCommits_adjacent_commits_large  | 13.3x faster 🚀 | 25.9x faster 🚀  |
-| CompareCommits_adjacent_commits_medium | 8.9x faster 🚀  | 4.9x faster 🚀   |
-| CompareCommits_adjacent_commits_small  | 9.3x faster 🚀  | ~same ⚖️         |
-| CompareCommits_adjacent_commits_xlarge | 68.7x faster 🚀 | 182.7x faster 🚀 |
-| CompareCommits_few_commits_large       | 9.1x faster 🚀  | 16.8x faster 🚀  |
-| CompareCommits_few_commits_medium      | 4.6x faster 🚀  | 2.6x faster 🚀   |
-| CompareCommits_few_commits_small       | 3.9x faster 🚀  | 2.2x slower 🐌   |
-| CompareCommits_few_commits_xlarge      | 34.1x faster 🚀 | 96.7x faster 🚀  |
-| CompareCommits_max_commits_large       | 5.5x faster 🚀  | 10.3x faster 🚀  |
-| CompareCommits_max_commits_medium      | 3.1x faster 🚀  | 1.7x faster ✅   |
-| CompareCommits_max_commits_small       | 2.5x faster 🚀  | 3.3x slower 🐌   |
-| CompareCommits_max_commits_xlarge      | 19.1x faster 🚀 | 60.3x faster 🚀  |
-| CreateFile_large_repo                  | 45.1x faster 🚀 | 48.0x faster 🚀  |
-| CreateFile_medium_repo                 | 24.3x faster 🚀 | 8.6x faster 🚀   |
-| CreateFile_small_repo                  | 25.1x faster 🚀 | 2.0x faster 🚀   |
-| CreateFile_xlarge_repo                 | 91.8x faster 🚀 | 306.2x faster 🚀 |
-| DeleteFile_large_repo                  | 46.4x faster 🚀 | 47.2x faster 🚀  |
-| DeleteFile_medium_repo                 | 27.3x faster 🚀 | 9.4x faster 🚀   |
-| DeleteFile_small_repo                  | 25.6x faster 🚀 | 2.1x faster 🚀   |
-| DeleteFile_xlarge_repo                 | 89.3x faster 🚀 | 301.7x faster 🚀 |
-| GetFlatTree_large_tree                 | 22.3x faster 🚀 | 45.0x faster 🚀  |
-| GetFlatTree_medium_tree                | 12.8x faster 🚀 | 8.5x faster 🚀   |
-| GetFlatTree_small_tree                 | 10.9x faster 🚀 | 1.5x faster ✅   |
-| GetFlatTree_xlarge_tree                | 71.5x faster 🚀 | 258.3x faster 🚀 |
-| UpdateFile_large_repo                  | 47.3x faster 🚀 | 48.5x faster 🚀  |
-| UpdateFile_medium_repo                 | 24.9x faster 🚀 | 8.6x faster 🚀   |
-| UpdateFile_small_repo                  | 25.7x faster 🚀 | 2.1x faster 🚀   |
-| UpdateFile_xlarge_repo                 | 91.8x faster 🚀 | 291.4x faster 🚀 |
+| Operation                              | vs git-cli      | vs go-git       |
+| -------------------------------------- | --------------- | --------------- |
+| BulkCreateFiles_bulk_1000_files_medium | 104.1x faster 🚀 | 704.3x faster 🚀 |
+| BulkCreateFiles_bulk_1000_files_small  | 118.8x faster 🚀 | 233.6x faster 🚀 |
+| BulkCreateFiles_bulk_100_files_medium  | 19.8x faster 🚀  | 73.1x faster 🚀  |
+| BulkCreateFiles_bulk_100_files_small   | 22.2x faster 🚀  | 9.8x faster 🚀   |
+| CompareCommits_adjacent_commits_large  | 16.2x faster 🚀  | 27.4x faster 🚀  |
+| CompareCommits_adjacent_commits_medium | 9.7x faster 🚀   | 5.3x faster 🚀   |
+| CompareCommits_adjacent_commits_small  | 8.7x faster 🚀   | ~same ⚖️         |
+| CompareCommits_adjacent_commits_xlarge | 47.0x faster 🚀  | 165.3x faster 🚀 |
+| CompareCommits_few_commits_large       | 8.7x faster 🚀   | 15.2x faster 🚀  |
+| CompareCommits_few_commits_medium      | 5.4x faster 🚀   | 2.6x faster 🚀   |
+| CompareCommits_few_commits_small       | 3.9x faster 🚀   | 2.0x slower 🐌   |
+| CompareCommits_few_commits_xlarge      | 28.5x faster 🚀  | 98.6x faster 🚀  |
+| CompareCommits_max_commits_large       | 5.9x faster 🚀   | 10.3x faster 🚀  |
+| CompareCommits_max_commits_medium      | 3.3x faster 🚀   | 1.8x faster ✅   |
+| CompareCommits_max_commits_small       | 2.6x faster 🚀   | 2.9x slower 🐌   |
+| CompareCommits_max_commits_xlarge      | 17.7x faster 🚀  | 61.1x faster 🚀  |
+| CreateFile_large_repo                  | 36.7x faster 🚀  | 48.1x faster 🚀  |
+| CreateFile_medium_repo                 | 27.7x faster 🚀  | 9.6x faster 🚀   |
+| CreateFile_small_repo                  | 22.5x faster 🚀  | 2.0x faster ✅   |
+| CreateFile_xlarge_repo                 | 89.4x faster 🚀  | 281.6x faster 🚀 |
+| DeleteFile_large_repo                  | 39.3x faster 🚀  | 50.9x faster 🚀  |
+| DeleteFile_medium_repo                 | 30.1x faster 🚀  | 10.4x faster 🚀  |
+| DeleteFile_small_repo                  | 28.4x faster 🚀  | 2.1x faster 🚀   |
+| DeleteFile_xlarge_repo                 | 86.0x faster 🚀  | 280.5x faster 🚀 |
+| GetFlatTree_large_tree                 | 25.1x faster 🚀  | 46.1x faster 🚀  |
+| GetFlatTree_medium_tree                | 14.3x faster 🚀  | 8.4x faster 🚀   |
+| GetFlatTree_small_tree                 | 11.0x faster 🚀  | 1.4x faster ✅   |
+| GetFlatTree_xlarge_tree                | 85.8x faster 🚀  | 260.8x faster 🚀 |
+| UpdateFile_large_repo                  | 37.1x faster 🚀  | 48.7x faster 🚀  |
+| UpdateFile_medium_repo                 | 30.2x faster 🚀  | 10.4x faster 🚀  |
+| UpdateFile_small_repo                  | 28.2x faster 🚀  | 2.1x faster 🚀   |
+| UpdateFile_xlarge_repo                 | 92.8x faster 🚀  | 297.3x faster 🚀 |
 
 ### 💾 Memory Comparison
 
@@ -161,38 +161,38 @@
 
 | Operation                              | vs git-cli    | vs go-git     |
 | -------------------------------------- | ------------- | ------------- |
-| BulkCreateFiles_bulk_1000_files_medium | -1.4x more 💾  | 11.3x less 💚  |
-| BulkCreateFiles_bulk_1000_files_small  | 2.1x more 💾   | 5.0x less 💚   |
-| BulkCreateFiles_bulk_100_files_medium  | 0.5x more 💾   | 21.8x less 💚  |
-| BulkCreateFiles_bulk_100_files_small   | -1.8x more 💾  | 5.8x less 💚   |
-| CompareCommits_adjacent_commits_large  | 91.2x more 💾  | 36.3x less 💚  |
-| CompareCommits_adjacent_commits_medium | 41.0x more 💾  | 13.9x less 💚  |
-| CompareCommits_adjacent_commits_small  | 24.1x more 💾  | 3.4x less 💚   |
-| CompareCommits_adjacent_commits_xlarge | 232.3x more 💾 | 102.8x less 💚 |
-| CompareCommits_few_commits_large       | 105.0x more 💾 | 31.3x less 💚  |
-| CompareCommits_few_commits_medium      | 33.4x more 💾  | 19.6x less 💚  |
-| CompareCommits_few_commits_small       | 35.4x more 💾  | 2.5x less 💚   |
-| CompareCommits_few_commits_xlarge      | 254.0x more 💾 | 92.6x less 💚  |
-| CompareCommits_max_commits_large       | 105.5x more 💾 | 32.4x less 💚  |
-| CompareCommits_max_commits_medium      | 37.9x more 💾  | 15.3x less 💚  |
-| CompareCommits_max_commits_small       | 43.4x more 💾  | 1.1x less ✅   |
-| CompareCommits_max_commits_xlarge      | 245.7x more 💾 | 96.3x less 💚  |
-| CreateFile_large_repo                  | 26.2x more 💾  | 84.6x less 💚  |
-| CreateFile_medium_repo                 | 11.4x more 💾  | 24.2x less 💚  |
-| CreateFile_small_repo                  | 10.8x more 💾  | 2.4x less 💚   |
-| CreateFile_xlarge_repo                 | 84.7x more 💾  | 185.8x less 💚 |
-| DeleteFile_large_repo                  | 25.9x more 💾  | 82.0x less 💚  |
-| DeleteFile_medium_repo                 | 11.0x more 💾  | 28.1x less 💚  |
-| DeleteFile_small_repo                  | 11.8x more 💾  | 2.0x less ✅   |
-| DeleteFile_xlarge_repo                 | 86.1x more 💾  | 175.0x less 💚 |
-| GetFlatTree_large_tree                 | 1.1x more 💾   | 74.7x less 💚  |
-| GetFlatTree_medium_tree                | 1.8x more 💾   | 25.6x less 💚  |
-| GetFlatTree_small_tree                 | 4.5x more 💾   | 6.3x less 💚   |
-| GetFlatTree_xlarge_tree                | 0.5x more 💾   | 160.2x less 💚 |
-| UpdateFile_large_repo                  | 24.4x more 💾  | 86.9x less 💚  |
-| UpdateFile_medium_repo                 | 10.9x more 💾  | 25.7x less 💚  |
-| UpdateFile_small_repo                  | 10.5x more 💾  | 3.2x less 💚   |
-| UpdateFile_xlarge_repo                 | 85.7x more 💾  | 178.0x less 💚 |
+| BulkCreateFiles_bulk_1000_files_medium | -1.2x more 💾  | 9.3x less 💚   |
+| BulkCreateFiles_bulk_1000_files_small  | 1.2x more 💾   | 2.1x less 💚   |
+| BulkCreateFiles_bulk_100_files_medium  | 0.5x more 💾   | 11.7x less 💚  |
+| BulkCreateFiles_bulk_100_files_small   | -2.1x more 💾  | 4.1x less 💚   |
+| CompareCommits_adjacent_commits_large  | 90.5x more 💾  | 37.2x less 💚  |
+| CompareCommits_adjacent_commits_medium | 39.3x more 💾  | 16.8x less 💚  |
+| CompareCommits_adjacent_commits_small  | 20.6x more 💾  | 4.3x less 💚   |
+| CompareCommits_adjacent_commits_xlarge | 243.1x more 💾 | 88.3x less 💚  |
+| CompareCommits_few_commits_large       | 90.7x more 💾  | 36.6x less 💚  |
+| CompareCommits_few_commits_medium      | 49.8x more 💾  | 12.8x less 💚  |
+| CompareCommits_few_commits_small       | 33.5x more 💾  | 1.0x less ✅   |
+| CompareCommits_few_commits_xlarge      | 249.5x more 💾 | 95.6x less 💚  |
+| CompareCommits_max_commits_large       | 101.6x more 💾 | 32.9x less 💚  |
+| CompareCommits_max_commits_medium      | 64.4x more 💾  | 8.0x less 💚   |
+| CompareCommits_max_commits_small       | 46.1x more 💾  | 1.3x more ⚠️   |
+| CompareCommits_max_commits_xlarge      | 240.8x more 💾 | 98.1x less 💚  |
+| CreateFile_large_repo                  | 25.2x more 💾  | 83.3x less 💚  |
+| CreateFile_medium_repo                 | 16.5x more 💾  | 17.7x less 💚  |
+| CreateFile_small_repo                  | 11.2x more 💾  | 2.0x less 💚   |
+| CreateFile_xlarge_repo                 | 79.7x more 💾  | 198.4x less 💚 |
+| DeleteFile_large_repo                  | 21.5x more 💾  | 97.6x less 💚  |
+| DeleteFile_medium_repo                 | 8.8x more 💾   | 29.5x less 💚  |
+| DeleteFile_small_repo                  | 8.9x more 💾   | 2.9x less 💚   |
+| DeleteFile_xlarge_repo                 | 75.6x more 💾  | 200.5x less 💚 |
+| GetFlatTree_large_tree                 | 1.1x more 💾   | 69.3x less 💚  |
+| GetFlatTree_medium_tree                | 1.8x more 💾   | 24.8x less 💚  |
+| GetFlatTree_small_tree                 | 4.5x more 💾   | 6.5x less 💚   |
+| GetFlatTree_xlarge_tree                | 0.6x more 💾   | 154.3x less 💚 |
+| UpdateFile_large_repo                  | 21.3x more 💾  | 100.2x less 💚 |
+| UpdateFile_medium_repo                 | 11.1x more 💾  | 20.1x less 💚  |
+| UpdateFile_small_repo                  | 10.8x more 💾  | 3.1x less 💚   |
+| UpdateFile_xlarge_repo                 | 81.1x more 💾  | 189.2x less 💚 |
 
 ## 📈 Detailed Statistics
 
@@ -200,255 +200,255 @@
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 10.59s       | 10.59s       | -2902688 B | -2902688 B    |
-| go-git  | 1    | ⚠️ 0.0%   | 70.20s       | 70.20s       | 43.1 MB    | 43.1 MB       |
-| nanogit | 1    | ✅ 100.0% | 115.7ms      | 115.7ms      | 3.8 MB     | 3.8 MB        |
+| git-cli | 1    | ✅ 100.0% | 10.70s       | 10.70s       | -3106536 B | -3106536 B    |
+| go-git  | 1    | ⚠️ 0.0%   | 72.43s       | 72.43s       | 31.8 MB    | 31.8 MB       |
+| nanogit | 1    | ✅ 100.0% | 102.8ms      | 102.8ms      | 3.4 MB     | 3.4 MB        |
 
 ### BulkCreateFiles_bulk_1000_files_small
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 9.73s        | 9.73s        | 1.5 MB     | 1.5 MB        |
-| go-git  | 1    | ⚠️ 0.0%   | 18.85s       | 18.85s       | 15.3 MB    | 15.3 MB       |
-| nanogit | 1    | ✅ 100.0% | 111.1ms      | 111.1ms      | 3.1 MB     | 3.1 MB        |
+| git-cli | 1    | ✅ 100.0% | 9.89s        | 9.89s        | 2.9 MB     | 2.9 MB        |
+| go-git  | 1    | ⚠️ 0.0%   | 19.45s       | 19.45s       | 7.3 MB     | 7.3 MB        |
+| nanogit | 1    | ✅ 100.0% | 83.2ms       | 83.2ms       | 3.4 MB     | 3.4 MB        |
 
 ### BulkCreateFiles_bulk_100_files_medium
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 1.83s        | 1.83s        | 5.1 MB     | 5.1 MB        |
-| go-git  | 1    | ⚠️ 0.0%   | 6.30s        | 6.30s        | 51.6 MB    | 51.6 MB       |
-| nanogit | 1    | ✅ 100.0% | 83.0ms       | 83.0ms       | 2.4 MB     | 2.4 MB        |
+| git-cli | 1    | ✅ 100.0% | 1.70s        | 1.70s        | 5.1 MB     | 5.1 MB        |
+| go-git  | 1    | ⚠️ 0.0%   | 6.31s        | 6.31s        | 31.0 MB    | 31.0 MB       |
+| nanogit | 1    | ✅ 100.0% | 86.3ms       | 86.3ms       | 2.6 MB     | 2.6 MB        |
 
 ### BulkCreateFiles_bulk_100_files_small
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 1.60s        | 1.60s        | -999952 B  | -999952 B     |
-| go-git  | 1    | ⚠️ 0.0%   | 838.9ms      | 838.9ms      | 9.7 MB     | 9.7 MB        |
-| nanogit | 1    | ✅ 100.0% | 76.8ms       | 76.8ms       | 1.7 MB     | 1.7 MB        |
+| git-cli | 1    | ✅ 100.0% | 1.85s        | 1.85s        | -1046224 B | -1046224 B    |
+| go-git  | 1    | ⚠️ 0.0%   | 820.5ms      | 820.5ms      | 8.3 MB     | 8.3 MB        |
+| nanogit | 1    | ✅ 100.0% | 83.4ms       | 83.4ms       | 2.0 MB     | 2.0 MB        |
 
 ### CompareCommits_adjacent_commits_large
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 1.33s        | 1.33s        | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 2.60s        | 2.60s        | 227.7 MB   | 227.7 MB      |
-| nanogit | 1    | ✅ 100.0% | 100.1ms      | 100.1ms      | 6.3 MB     | 6.3 MB        |
+| git-cli | 1    | ✅ 100.0% | 1.52s        | 1.52s        | 71.4 KB    | 71.4 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 2.59s        | 2.59s        | 234.9 MB   | 234.9 MB      |
+| nanogit | 1    | ✅ 100.0% | 94.2ms       | 94.2ms       | 6.3 MB     | 6.3 MB        |
 
 ### CompareCommits_adjacent_commits_medium
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 732.5ms      | 732.5ms      | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 409.3ms      | 409.3ms      | 39.3 MB    | 39.3 MB       |
-| nanogit | 1    | ✅ 100.0% | 82.7ms       | 82.7ms       | 2.8 MB     | 2.8 MB        |
+| git-cli | 1    | ✅ 100.0% | 757.9ms      | 757.9ms      | 70.2 KB    | 70.2 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 411.6ms      | 411.6ms      | 45.3 MB    | 45.3 MB       |
+| nanogit | 1    | ✅ 100.0% | 78.0ms       | 78.0ms       | 2.7 MB     | 2.7 MB        |
 
 ### CompareCommits_adjacent_commits_small
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 628.3ms      | 628.3ms      | 70.1 KB    | 70.1 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 72.4ms       | 72.4ms       | 5.6 MB     | 5.6 MB        |
-| nanogit | 1    | ✅ 100.0% | 67.6ms       | 67.6ms       | 1.6 MB     | 1.6 MB        |
+| git-cli | 1    | ✅ 100.0% | 581.6ms      | 581.6ms      | 70.5 KB    | 70.5 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 67.8ms       | 67.8ms       | 6.1 MB     | 6.1 MB        |
+| nanogit | 1    | ✅ 100.0% | 67.2ms       | 67.2ms       | 1.4 MB     | 1.4 MB        |
 
 ### CompareCommits_adjacent_commits_xlarge
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 7.65s        | 7.65s        | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 20.37s       | 20.37s       | 1.6 GB     | 1.6 GB        |
-| nanogit | 1    | ✅ 100.0% | 111.5ms      | 111.5ms      | 16.0 MB    | 16.0 MB       |
+| git-cli | 1    | ✅ 100.0% | 5.77s        | 5.77s        | 70.2 KB    | 70.2 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 20.30s       | 20.30s       | 1.4 GB     | 1.4 GB        |
+| nanogit | 1    | ✅ 100.0% | 122.8ms      | 122.8ms      | 16.7 MB    | 16.7 MB       |
 
 ### CompareCommits_few_commits_large
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 1.40s        | 1.40s        | 71.0 KB    | 71.0 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 2.61s        | 2.61s        | 228.1 MB   | 228.1 MB      |
-| nanogit | 1    | ✅ 100.0% | 154.9ms      | 154.9ms      | 7.3 MB     | 7.3 MB        |
+| git-cli | 1    | ✅ 100.0% | 1.47s        | 1.47s        | 71.4 KB    | 71.4 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 2.59s        | 2.59s        | 231.7 MB   | 231.7 MB      |
+| nanogit | 1    | ✅ 100.0% | 170.0ms      | 170.0ms      | 6.3 MB     | 6.3 MB        |
 
 ### CompareCommits_few_commits_medium
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 723.0ms      | 723.0ms      | 70.2 KB    | 70.2 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 406.9ms      | 406.9ms      | 45.0 MB    | 45.0 MB       |
-| nanogit | 1    | ✅ 100.0% | 157.6ms      | 157.6ms      | 2.3 MB     | 2.3 MB        |
+| git-cli | 1    | ✅ 100.0% | 839.0ms      | 839.0ms      | 70.5 KB    | 70.5 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 407.1ms      | 407.1ms      | 44.1 MB    | 44.1 MB       |
+| nanogit | 1    | ✅ 100.0% | 156.4ms      | 156.4ms      | 3.4 MB     | 3.4 MB        |
 
 ### CompareCommits_few_commits_small
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 572.3ms      | 572.3ms      | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 68.6ms       | 68.6ms       | 6.0 MB     | 6.0 MB        |
-| nanogit | 1    | ✅ 100.0% | 148.6ms      | 148.6ms      | 2.4 MB     | 2.4 MB        |
+| git-cli | 1    | ✅ 100.0% | 580.9ms      | 580.9ms      | 70.5 KB    | 70.5 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 72.6ms       | 72.6ms       | 2.3 MB     | 2.3 MB        |
+| nanogit | 1    | ✅ 100.0% | 148.3ms      | 148.3ms      | 2.3 MB     | 2.3 MB        |
 
 ### CompareCommits_few_commits_xlarge
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 7.15s        | 7.15s        | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 20.25s       | 20.25s       | 1.6 GB     | 1.6 GB        |
-| nanogit | 1    | ✅ 100.0% | 209.4ms      | 209.4ms      | 17.5 MB    | 17.5 MB       |
+| git-cli | 1    | ✅ 100.0% | 5.86s        | 5.86s        | 70.2 KB    | 70.2 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 20.32s       | 20.32s       | 1.6 GB     | 1.6 GB        |
+| nanogit | 1    | ✅ 100.0% | 206.0ms      | 206.0ms      | 17.1 MB    | 17.1 MB       |
 
 ### CompareCommits_max_commits_large
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 1.39s        | 1.39s        | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 2.60s        | 2.60s        | 235.7 MB   | 235.7 MB      |
-| nanogit | 1    | ✅ 100.0% | 253.5ms      | 253.5ms      | 7.3 MB     | 7.3 MB        |
+| git-cli | 1    | ✅ 100.0% | 1.47s        | 1.47s        | 70.2 KB    | 70.2 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 2.57s        | 2.57s        | 229.0 MB   | 229.0 MB      |
+| nanogit | 1    | ✅ 100.0% | 250.5ms      | 250.5ms      | 7.0 MB     | 7.0 MB        |
 
 ### CompareCommits_max_commits_medium
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 722.5ms      | 722.5ms      | 71.0 KB    | 71.0 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 406.7ms      | 406.7ms      | 40.3 MB    | 40.3 MB       |
-| nanogit | 1    | ✅ 100.0% | 235.8ms      | 235.8ms      | 2.6 MB     | 2.6 MB        |
+| git-cli | 1    | ✅ 100.0% | 769.8ms      | 769.8ms      | 70.5 KB    | 70.5 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 423.4ms      | 423.4ms      | 35.3 MB    | 35.3 MB       |
+| nanogit | 1    | ✅ 100.0% | 233.4ms      | 233.4ms      | 4.4 MB     | 4.4 MB        |
 
 ### CompareCommits_max_commits_small
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 577.3ms      | 577.3ms      | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 68.3ms       | 68.3ms       | 3.2 MB     | 3.2 MB        |
-| nanogit | 1    | ✅ 100.0% | 227.6ms      | 227.6ms      | 3.0 MB     | 3.0 MB        |
+| git-cli | 1    | ✅ 100.0% | 588.1ms      | 588.1ms      | 70.2 KB    | 70.2 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 76.5ms       | 76.5ms       | 2.4 MB     | 2.4 MB        |
+| nanogit | 1    | ✅ 100.0% | 225.1ms      | 225.1ms      | 3.2 MB     | 3.2 MB        |
 
 ### CompareCommits_max_commits_xlarge
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 6.44s        | 6.44s        | 70.5 KB    | 70.5 KB       |
-| go-git  | 1    | ⚠️ 0.0%   | 20.30s       | 20.30s       | 1.6 GB     | 1.6 GB        |
-| nanogit | 1    | ✅ 100.0% | 336.7ms      | 336.7ms      | 16.9 MB    | 16.9 MB       |
+| git-cli | 1    | ✅ 100.0% | 5.90s        | 5.90s        | 70.5 KB    | 70.5 KB       |
+| go-git  | 1    | ⚠️ 0.0%   | 20.39s       | 20.39s       | 1.6 GB     | 1.6 GB        |
+| nanogit | 1    | ✅ 100.0% | 333.5ms      | 333.5ms      | 16.6 MB    | 16.6 MB       |
 
 ### CreateFile_large_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 2.86s        | 2.93s        | 135.6 KB   | 135.5 KB      |
-| go-git  | 3    | ✅ 100.0% | 3.05s        | 3.20s        | 293.4 MB   | 285.0 MB      |
-| nanogit | 3    | ✅ 100.0% | 63.5ms       | 67.3ms       | 3.5 MB     | 3.5 MB        |
+| git-cli | 3    | ✅ 100.0% | 2.23s        | 2.32s        | 135.8 KB   | 135.9 KB      |
+| go-git  | 3    | ✅ 100.0% | 2.92s        | 2.95s        | 278.7 MB   | 280.2 MB      |
+| nanogit | 3    | ✅ 100.0% | 60.7ms       | 63.1ms       | 3.3 MB     | 2.8 MB        |
 
 ### CreateFile_medium_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 1.47s        | 1.52s        | 136.5 KB   | 136.8 KB      |
-| go-git  | 3    | ✅ 100.0% | 518.7ms      | 534.5ms      | 36.8 MB    | 41.5 MB       |
-| nanogit | 3    | ✅ 100.0% | 60.6ms       | 69.3ms       | 1.5 MB     | 1.5 MB        |
+| git-cli | 3    | ✅ 100.0% | 1.50s        | 1.51s        | 136.2 KB   | 136.2 KB      |
+| go-git  | 3    | ✅ 100.0% | 519.5ms      | 541.3ms      | 38.8 MB    | 33.1 MB       |
+| nanogit | 3    | ✅ 100.0% | 54.0ms       | 56.6ms       | 2.2 MB     | 2.2 MB        |
 
 ### CreateFile_small_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 1.31s        | 1.33s        | 135.7 KB   | 135.6 KB      |
-| go-git  | 3    | ✅ 100.0% | 106.9ms      | 110.8ms      | 3.4 MB     | 4.2 MB        |
-| nanogit | 3    | ✅ 100.0% | 52.2ms       | 59.1ms       | 1.4 MB     | 1.4 MB        |
+| git-cli | 3    | ✅ 100.0% | 1.31s        | 1.32s        | 136.7 KB   | 135.9 KB      |
+| go-git  | 3    | ✅ 100.0% | 114.0ms      | 146.7ms      | 3.0 MB     | 2.8 MB        |
+| nanogit | 3    | ✅ 100.0% | 58.0ms       | 79.6ms       | 1.5 MB     | 1.6 MB        |
 
 ### CreateFile_xlarge_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 7.41s        | 8.02s        | 135.6 KB   | 135.5 KB      |
-| go-git  | 3    | ✅ 100.0% | 24.71s       | 29.00s       | 2.0 GB     | 2.0 GB        |
-| nanogit | 3    | ✅ 100.0% | 80.7ms       | 88.9ms       | 11.2 MB    | 11.3 MB       |
+| git-cli | 3    | ✅ 100.0% | 7.09s        | 8.43s        | 135.8 KB   | 135.9 KB      |
+| go-git  | 3    | ✅ 100.0% | 22.34s       | 22.53s       | 2.0 GB     | 2.0 GB        |
+| nanogit | 3    | ✅ 100.0% | 79.4ms       | 83.0ms       | 10.6 MB    | 10.3 MB       |
 
 ### DeleteFile_large_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 3.01s        | 3.13s        | 135.6 KB   | 135.8 KB      |
-| go-git  | 3    | ✅ 100.0% | 3.05s        | 3.17s        | 281.3 MB   | 281.8 MB      |
-| nanogit | 3    | ✅ 100.0% | 64.7ms       | 71.4ms       | 3.4 MB     | 3.7 MB        |
+| git-cli | 3    | ✅ 100.0% | 2.26s        | 2.27s        | 135.6 KB   | 135.8 KB      |
+| go-git  | 3    | ✅ 100.0% | 2.92s        | 2.93s        | 277.3 MB   | 274.8 MB      |
+| nanogit | 3    | ✅ 100.0% | 57.4ms       | 61.3ms       | 2.8 MB     | 2.8 MB        |
 
 ### DeleteFile_medium_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 1.51s        | 1.52s        | 135.6 KB   | 135.8 KB      |
-| go-git  | 3    | ✅ 100.0% | 517.2ms      | 519.7ms      | 41.0 MB    | 40.4 MB       |
-| nanogit | 3    | ✅ 100.0% | 55.2ms       | 58.3ms       | 1.5 MB     | 1.5 MB        |
+| git-cli | 3    | ✅ 100.0% | 1.51s        | 1.54s        | 135.8 KB   | 135.8 KB      |
+| go-git  | 3    | ✅ 100.0% | 520.4ms      | 530.3ms      | 34.6 MB    | 39.5 MB       |
+| nanogit | 3    | ✅ 100.0% | 50.3ms       | 50.9ms       | 1.2 MB     | 1.3 MB        |
 
 ### DeleteFile_small_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 1.33s        | 1.34s        | 135.9 KB   | 135.8 KB      |
-| go-git  | 3    | ✅ 100.0% | 107.5ms      | 109.4ms      | 3.1 MB     | 2.8 MB        |
-| nanogit | 3    | ✅ 100.0% | 51.9ms       | 55.6ms       | 1.6 MB     | 1.6 MB        |
+| git-cli | 3    | ✅ 100.0% | 1.32s        | 1.34s        | 135.8 KB   | 135.8 KB      |
+| go-git  | 3    | ✅ 100.0% | 99.5ms       | 100.4ms      | 3.4 MB     | 3.4 MB        |
+| nanogit | 3    | ✅ 100.0% | 46.4ms       | 49.0ms       | 1.2 MB     | 862.9 KB      |
 
 ### DeleteFile_xlarge_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 6.91s        | 7.17s        | 136.1 KB   | 135.8 KB      |
-| go-git  | 3    | ✅ 100.0% | 23.36s       | 25.22s       | 2.0 GB     | 2.0 GB        |
-| nanogit | 3    | ✅ 100.0% | 77.4ms       | 79.6ms       | 11.4 MB    | 11.4 MB       |
+| git-cli | 3    | ✅ 100.0% | 6.85s        | 7.15s        | 135.8 KB   | 135.8 KB      |
+| go-git  | 3    | ✅ 100.0% | 22.34s       | 22.47s       | 2.0 GB     | 2.0 GB        |
+| nanogit | 3    | ✅ 100.0% | 79.6ms       | 83.9ms       | 10.0 MB    | 10.4 MB       |
 
 ### GetFlatTree_large_tree
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 1.30s        | 1.30s        | 3.2 MB     | 3.2 MB        |
-| go-git  | 1    | ✅ 100.0% | 2.63s        | 2.63s        | 265.7 MB   | 265.7 MB      |
-| nanogit | 1    | ✅ 100.0% | 58.4ms       | 58.4ms       | 3.6 MB     | 3.6 MB        |
+| git-cli | 1    | ✅ 100.0% | 1.42s        | 1.42s        | 3.2 MB     | 3.2 MB        |
+| go-git  | 1    | ✅ 100.0% | 2.61s        | 2.61s        | 245.7 MB   | 245.7 MB      |
+| nanogit | 1    | ✅ 100.0% | 56.5ms       | 56.5ms       | 3.5 MB     | 3.5 MB        |
 
 ### GetFlatTree_medium_tree
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 682.2ms      | 682.2ms      | 740.1 KB   | 740.1 KB      |
-| go-git  | 1    | ✅ 100.0% | 450.4ms      | 450.4ms      | 33.0 MB    | 33.0 MB       |
-| nanogit | 1    | ✅ 100.0% | 53.3ms       | 53.3ms       | 1.3 MB     | 1.3 MB        |
+| git-cli | 1    | ✅ 100.0% | 761.7ms      | 761.7ms      | 740.1 KB   | 740.1 KB      |
+| go-git  | 1    | ✅ 100.0% | 445.8ms      | 445.8ms      | 31.9 MB    | 31.9 MB       |
+| nanogit | 1    | ✅ 100.0% | 53.2ms       | 53.2ms       | 1.3 MB     | 1.3 MB        |
 
 ### GetFlatTree_small_tree
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 577.9ms      | 577.9ms      | 154.6 KB   | 154.6 KB      |
-| go-git  | 1    | ✅ 100.0% | 78.3ms       | 78.3ms       | 4.3 MB     | 4.3 MB        |
-| nanogit | 1    | ✅ 100.0% | 52.9ms       | 52.9ms       | 697.8 KB   | 697.8 KB      |
+| git-cli | 1    | ✅ 100.0% | 576.4ms      | 576.4ms      | 154.9 KB   | 154.9 KB      |
+| go-git  | 1    | ✅ 100.0% | 75.1ms       | 75.1ms       | 4.4 MB     | 4.4 MB        |
+| nanogit | 1    | ✅ 100.0% | 52.3ms       | 52.3ms       | 695.3 KB   | 695.3 KB      |
 
 ### GetFlatTree_xlarge_tree
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 1    | ✅ 100.0% | 5.54s        | 5.54s        | 18.7 MB    | 18.7 MB       |
-| go-git  | 1    | ✅ 100.0% | 20.03s       | 20.03s       | 1.6 GB     | 1.6 GB        |
-| nanogit | 1    | ✅ 100.0% | 77.5ms       | 77.5ms       | 10.2 MB    | 10.2 MB       |
+| git-cli | 1    | ✅ 100.0% | 6.53s        | 6.53s        | 18.7 MB    | 18.7 MB       |
+| go-git  | 1    | ✅ 100.0% | 19.84s       | 19.84s       | 1.6 GB     | 1.6 GB        |
+| nanogit | 1    | ✅ 100.0% | 76.1ms       | 76.1ms       | 10.4 MB    | 10.4 MB       |
 
 ### UpdateFile_large_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 2.98s        | 3.14s        | 135.3 KB   | 135.1 KB      |
-| go-git  | 3    | ✅ 100.0% | 3.06s        | 3.14s        | 280.0 MB   | 282.9 MB      |
-| nanogit | 3    | ✅ 100.0% | 63.0ms       | 65.3ms       | 3.2 MB     | 3.5 MB        |
+| git-cli | 3    | ✅ 100.0% | 2.21s        | 2.28s        | 135.0 KB   | 135.1 KB      |
+| go-git  | 3    | ✅ 100.0% | 2.91s        | 2.92s        | 281.5 MB   | 281.4 MB      |
+| nanogit | 3    | ✅ 100.0% | 59.7ms       | 63.5ms       | 2.8 MB     | 2.9 MB        |
 
 ### UpdateFile_medium_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 1.49s        | 1.51s        | 135.5 KB   | 135.1 KB      |
-| go-git  | 3    | ✅ 100.0% | 513.5ms      | 516.0ms      | 37.2 MB    | 41.7 MB       |
-| nanogit | 3    | ✅ 100.0% | 59.8ms       | 69.3ms       | 1.4 MB     | 1.4 MB        |
+| git-cli | 3    | ✅ 100.0% | 1.50s        | 1.52s        | 136.2 KB   | 136.2 KB      |
+| go-git  | 3    | ✅ 100.0% | 517.6ms      | 531.7ms      | 29.7 MB    | 26.4 MB       |
+| nanogit | 3    | ✅ 100.0% | 49.7ms       | 53.3ms       | 1.5 MB     | 1.5 MB        |
 
 ### UpdateFile_small_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 1.31s        | 1.34s        | 135.9 KB   | 135.6 KB      |
-| go-git  | 3    | ✅ 100.0% | 104.6ms      | 105.8ms      | 4.5 MB     | 4.9 MB        |
-| nanogit | 3    | ✅ 100.0% | 50.9ms       | 53.5ms       | 1.4 MB     | 1.4 MB        |
+| git-cli | 3    | ✅ 100.0% | 1.35s        | 1.42s        | 135.2 KB   | 135.1 KB      |
+| go-git  | 3    | ✅ 100.0% | 101.9ms      | 106.5ms      | 4.5 MB     | 4.3 MB        |
+| nanogit | 3    | ✅ 100.0% | 48.0ms       | 51.9ms       | 1.4 MB     | 1.3 MB        |
 
 ### UpdateFile_xlarge_repo
 
 | Client  | Runs | Success  | Avg Duration | P95 Duration | Avg Memory | Median Memory |
 | ------- | ---- | -------- | ------------ | ------------ | ---------- | ------------- |
-| git-cli | 3    | ✅ 100.0% | 7.27s        | 8.42s        | 135.3 KB   | 135.1 KB      |
-| go-git  | 3    | ✅ 100.0% | 23.08s       | 24.56s       | 2.0 GB     | 2.0 GB        |
-| nanogit | 3    | ✅ 100.0% | 79.2ms       | 82.6ms       | 11.3 MB    | 11.3 MB       |
+| git-cli | 3    | ✅ 100.0% | 6.97s        | 7.21s        | 135.1 KB   | 135.1 KB      |
+| go-git  | 3    | ✅ 100.0% | 22.33s       | 22.44s       | 2.0 GB     | 2.0 GB        |
+| nanogit | 3    | ✅ 100.0% | 75.1ms       | 76.9ms       | 10.7 MB    | 10.4 MB       |
 
