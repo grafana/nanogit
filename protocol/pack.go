@@ -90,13 +90,13 @@ var (
 	}
 
 	// Pre-compiled error detection patterns to avoid repeated allocations
-	errPattern        = []byte("ERR ")
-	errorPattern      = []byte("error:")
-	fatalPattern      = []byte("fatal:")
-	ngPattern         = []byte("ng ")
-	unpackPattern     = []byte("unpack ")
-	unpackOkPattern   = []byte("ok")
-	unpackOkFull      = []byte("unpack ok") // Most common success case
+	errPattern      = []byte("ERR ")
+	errorPattern    = []byte("error:")
+	fatalPattern    = []byte("fatal:")
+	ngPattern       = []byte("ng ")
+	unpackPattern   = []byte("unpack ")
+	unpackOkPattern = []byte("ok")
+	unpackOkFull    = []byte("unpack ok") // Most common success case
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -449,7 +449,7 @@ func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err 
 	pooledBuf := packetLengthPool.Get().([]byte)
 	//lint:ignore SA6002 byte slices are correct for sync.Pool
 	defer packetLengthPool.Put(pooledBuf) //nolint:staticcheck
-	
+
 	n, err := io.ReadFull(reader, pooledBuf)
 	if err != nil {
 		if err == io.EOF && n == 0 {
@@ -482,10 +482,10 @@ func readPacketLength(reader io.Reader) (lengthBytes []byte, length uint64, err 
 // readPacketData reads the packet data portion using buffer pooling to reduce allocations
 func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte, error) {
 	dataLength := length - 4
-	
+
 	// Get buffer from pool and ensure it has enough capacity
 	pooledBuf := packetDataPool.Get().([]byte)
-	
+
 	// Ensure buffer has sufficient capacity
 	if cap(pooledBuf) < int(dataLength) {
 		// Buffer too small, allocate new one and return old to pool
@@ -502,7 +502,7 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 		}
 		return packetData, nil
 	}
-	
+
 	// Use pooled buffer
 	packetData := pooledBuf[:dataLength]
 	n, err := io.ReadFull(reader, packetData)
@@ -516,13 +516,13 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 		}
 		return nil, NewPackParseError(fullPacket, fmt.Errorf("reading packet data: %w", err))
 	}
-	
+
 	// Make a copy to return, then return buffer to pool
 	result := make([]byte, dataLength)
 	copy(result, packetData)
 	//lint:ignore SA6002 byte slices are correct for sync.Pool
 	packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck
-	
+
 	return result, nil
 }
 
@@ -531,7 +531,7 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // Returns an error if any error condition is detected, otherwise returns nil to continue processing.
 func detectError(lengthBytes, packetData []byte) error {
 	// Avoid allocation by building fullPacket only when needed
-	
+
 	switch {
 	case bytes.HasPrefix(packetData, errPattern):
 		fullPacket := append(lengthBytes, packetData...)
@@ -550,7 +550,7 @@ func detectError(lengthBytes, packetData []byte) error {
 		if bytes.Equal(packetData, unpackOkFull) {
 			return nil // Success case, no error
 		}
-		
+
 		// Optimize unpack handling with byte comparison instead of string conversion
 		unpackData := packetData[len(unpackPattern):]
 		if !bytes.Equal(unpackData, unpackOkPattern) {

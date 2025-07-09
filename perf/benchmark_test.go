@@ -179,10 +179,10 @@ func NewBenchmarkSuiteWithSelectedRepos(ctx context.Context, networkLatency time
 
 	// Initialize clients based on environment variables
 	var allClients []GitClient
-	
+
 	// Always include nanogit
 	allClients = append(allClients, NewNanogitClientWrapper())
-	
+
 	// Only include other clients if profiling mode is not enabled
 	if os.Getenv("NANOGIT_PROFILE_MODE") != "true" {
 		allClients = append(allClients, NewGoGitClientWrapper())

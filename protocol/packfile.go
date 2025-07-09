@@ -3,7 +3,6 @@ package protocol
 import (
 	"bufio"
 	"bytes"
-	"compress/zlib"
 	"context"
 	"crypto"
 	"encoding/binary"
@@ -18,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/klauspost/compress/zlib"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -57,7 +58,6 @@ var (
 			return make([]byte, 4096)
 		},
 	}
-
 )
 
 // getHexString gets a hex string from a hash, allocating a new string
@@ -76,14 +76,14 @@ func estimateTreeSize(data []byte) int {
 	if len(data) < 25 {
 		return 4 // minimum reasonable capacity
 	}
-	
+
 	// Use average entry size based on typical Git tree structure
 	// Mode (6) + space (1) + avg filename (12) + null (1) + hash (20) = 40 bytes average
 	estimate := len(data) / 40
-	
+
 	// Add 25% buffer for safety
 	estimate = estimate + (estimate / 4)
-	
+
 	// Apply reasonable bounds
 	if estimate < 8 {
 		return 8
@@ -545,20 +545,20 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// carries, and we should limit that size above (i.e. if the packet
 	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
-	
+
 	// Use pooled buffer if size is reasonable, otherwise allocate directly
 	var data []byte
 	var pooledBuf []byte
-	
+
 	if sz <= 65536 { // Use pooled buffer for objects <= 64KB
 		pooledBuf = dataBufferPool.Get().([]byte)
 		//lint:ignore SA6002 byte slices are correct for sync.Pool
 		defer dataBufferPool.Put(pooledBuf) //nolint:staticcheck
-		data = pooledBuf[:sz] // Slice to exact size needed
+		data = pooledBuf[:sz]               // Slice to exact size needed
 	} else {
 		data = make([]byte, sz) // Allocate directly for large objects
 	}
-	
+
 	n, err := io.ReadFull(lr, data)
 	if err != nil {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -577,7 +577,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	discardBuf := discardBufferPool.Get().([]byte)
 	//lint:ignore SA6002 byte slices are correct for sync.Pool
 	defer discardBufferPool.Put(discardBuf) //nolint:staticcheck
-	
+
 	for {
 		_, err := lr.Read(discardBuf)
 		if err != nil {
@@ -607,38 +607,38 @@ func (p *PackfileReader) calculateObjectHash(objType ObjectType, data []byte) (h
 	} else {
 		p.hasher.Reset()
 	}
-	
+
 	// Write Git object header exactly as NewHasher does for compatibility
 	// This ensures we get the same hash as the Object function
 	typeBytes := objType.Bytes()
 	if _, err := p.hasher.Write(typeBytes); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	if _, err := p.hasher.Write([]byte(" ")); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	sizeBytes := []byte(strconv.FormatInt(int64(len(data)), 10))
 	if _, err := p.hasher.Write(sizeBytes); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	if _, err := p.hasher.Write([]byte{0}); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	// Write object data
 	if _, err := p.hasher.Write(data); err != nil {
 		return hash.Zero, err
 	}
-	
+
 	// Get hash sum
 	sum := p.hasher.Sum(nil)
 	if len(sum) != 20 {
 		return hash.Zero, fmt.Errorf("expected 20-byte hash, got %d bytes", len(sum))
 	}
-	
+
 	var result hash.Hash
 	copy(result[:], sum)
 	return result, nil
@@ -765,12 +765,9 @@ func (w *PackfileWriter) Cleanup() error {
 	var err error
 
 	// Clean up zlib writer first (before closing temp file)
-	if w.zlibWriter != nil {
-		if closeErr := w.zlibWriter.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-		w.zlibWriter = nil
-	}
+	// Since we create a new zlib writer for each use, we don't need to close it
+	// The writer is automatically closed when the object is written
+	w.zlibWriter = nil
 
 	// Clean up temporary file if it exists
 	if w.tempFile != nil {
@@ -1153,13 +1150,9 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 
 // getOrResetZlibWriter returns the reusable zlib writer, creating or resetting as needed
 func (pw *PackfileWriter) getOrResetZlibWriter(writer io.Writer) (*zlib.Writer, error) {
-	if pw.zlibWriter == nil {
-		pw.zlibWriter = zlib.NewWriter(writer)
-		return pw.zlibWriter, nil
-	}
-
-	// Reset the writer for a new stream
-	pw.zlibWriter.Reset(writer)
+	// Always create a new zlib writer instead of reusing
+	// klauspost/compress zlib writer may not handle Reset() correctly after Close()
+	pw.zlibWriter = zlib.NewWriter(writer)
 	return pw.zlibWriter, nil
 }
 
