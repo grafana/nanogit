@@ -58,6 +58,13 @@ var (
 			return make([]byte, 4096)
 		},
 	}
+
+	// Pool for zlib writers to reduce allocations
+	zlibWriterPool = sync.Pool{
+		New: func() interface{} {
+			return zlib.NewWriter(nil)
+		},
+	}
 )
 
 // getHexString gets a hex string from a hash, allocating a new string
@@ -69,6 +76,18 @@ func getHexString(hash [20]byte) string {
 	//lint:ignore SA6002 byte slices are correct for sync.Pool
 	hexBufferPool.Put(buf) //nolint:staticcheck
 	return result
+}
+
+// getPooledZlibWriter gets a zlib writer from the pool and resets it for the given writer
+func getPooledZlibWriter(writer io.Writer) *zlib.Writer {
+	zw := zlibWriterPool.Get().(*zlib.Writer)
+	zw.Reset(writer)
+	return zw
+}
+
+// returnPooledZlibWriter returns a zlib writer to the pool
+func returnPooledZlibWriter(zw *zlib.Writer) {
+	zlibWriterPool.Put(zw)
 }
 
 // estimateTreeSize estimates the number of entries in tree data using improved heuristics
@@ -723,9 +742,6 @@ type PackfileWriter struct {
 	totalBytes int
 	// Track if cleanup has been called
 	isCleanedUp bool
-	// Reusable zlib writer for performance
-	zlibWriter *zlib.Writer
-
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
 }
@@ -764,10 +780,7 @@ func (w *PackfileWriter) Cleanup() error {
 
 	var err error
 
-	// Clean up zlib writer first (before closing temp file)
-	// Since we create a new zlib writer for each use, we don't need to close it
-	// The writer is automatically closed when the object is written
-	w.zlibWriter = nil
+	// No need to clean up zlib writer since we create a new one for each object
 
 	// Clean up temporary file if it exists
 	if w.tempFile != nil {
@@ -1133,11 +1146,11 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data using reusable zlib writer
-	zw, err := pw.getOrResetZlibWriter(writer)
-	if err != nil {
-		return fmt.Errorf("getting zlib writer: %w", err)
-	}
+	// Compress and write data using pooled zlib writer
+	// This ensures proper zlib stream boundaries for each Git object
+	zw := getPooledZlibWriter(writer)
+	defer returnPooledZlibWriter(zw)
+	
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
@@ -1148,13 +1161,6 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 	return nil
 }
 
-// getOrResetZlibWriter returns the reusable zlib writer, creating or resetting as needed
-func (pw *PackfileWriter) getOrResetZlibWriter(writer io.Writer) (*zlib.Writer, error) {
-	// Always create a new zlib writer instead of reusing
-	// klauspost/compress zlib writer may not handle Reset() correctly after Close()
-	pw.zlibWriter = zlib.NewWriter(writer)
-	return pw.zlibWriter, nil
-}
 
 // addObject adds an object using the appropriate storage method based on the storage mode.
 func (pw *PackfileWriter) addObject(obj PackfileObject) error {
@@ -1255,11 +1261,11 @@ func (w *PackfileWriter) writeObjectToFile(obj PackfileObject) error {
 		return fmt.Errorf("writing object header: %w", err)
 	}
 
-	// Compress and write data using reusable zlib writer
-	zw, err := w.getOrResetZlibWriter(w.tempFile)
-	if err != nil {
-		return fmt.Errorf("getting zlib writer: %w", err)
-	}
+	// Compress and write data using pooled zlib writer
+	// This ensures proper zlib stream boundaries for each Git object
+	zw := getPooledZlibWriter(w.tempFile)
+	defer returnPooledZlibWriter(zw)
+	
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
