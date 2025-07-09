@@ -67,6 +67,16 @@ var (
 			return zw
 		},
 	}
+
+	// Pool for zlib readers to reduce allocations
+	zlibReaderPool = sync.Pool{
+		New: func() interface{} {
+			// Create a reader with valid empty zlib data - will be reset before use
+			emptyZlibData := []byte{0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01} // Empty zlib stream
+			zr, _ := zlib.NewReader(bytes.NewReader(emptyZlibData))
+			return zr
+		},
+	}
 )
 
 // getHexString gets a hex string from a hash, allocating a new string
@@ -90,6 +100,27 @@ func getPooledZlibWriter(writer io.Writer) *zlib.Writer {
 // returnPooledZlibWriter returns a zlib writer to the pool
 func returnPooledZlibWriter(zw *zlib.Writer) {
 	zlibWriterPool.Put(zw)
+}
+
+// getPooledZlibReader gets a zlib reader from the pool and resets it for the given reader
+func getPooledZlibReader(reader io.Reader) (io.ReadCloser, error) {
+	zr := zlibReaderPool.Get().(io.ReadCloser)
+	if resetter, ok := zr.(zlib.Resetter); ok {
+		if err := resetter.Reset(reader, nil); err != nil {
+			zlibReaderPool.Put(zr)
+			return nil, err
+		}
+		return zr, nil
+	}
+	// Fallback: close and get a new reader
+	_ = zr.Close()
+	zlibReaderPool.Put(zr)
+	return zlib.NewReader(reader)
+}
+
+// returnPooledZlibReader returns a zlib reader to the pool
+func returnPooledZlibReader(zr io.ReadCloser) {
+	zlibReaderPool.Put(zr)
 }
 
 // estimateTreeSize estimates the number of entries in tree data using improved heuristics
@@ -390,6 +421,8 @@ type PackfileReader struct {
 func (p *PackfileReader) Close() error {
 	if p.zlibReader != nil {
 		err := p.zlibReader.Close()
+		// Return reader to pool for reuse
+		returnPooledZlibReader(p.zlibReader)
 		p.zlibReader = nil
 		return err
 	}
@@ -541,7 +574,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	// Reuse zlib reader for performance - avoid creating new reader for each object
 	if p.zlibReader == nil {
 		var err error
-		p.zlibReader, err = zlib.NewReader(p.reader)
+		p.zlibReader, err = getPooledZlibReader(p.reader)
 		if err != nil {
 			return nil, err
 		}
@@ -552,10 +585,10 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 				return nil, err
 			}
 		} else {
-			// Fallback: close and recreate if Reset is not available
+			// Fallback: close and recreate using pool
 			_ = p.zlibReader.Close()
 			var err error
-			p.zlibReader, err = zlib.NewReader(p.reader)
+			p.zlibReader, err = getPooledZlibReader(p.reader)
 			if err != nil {
 				return nil, err
 			}
