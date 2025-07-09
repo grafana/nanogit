@@ -62,7 +62,9 @@ var (
 	// Pool for zlib writers to reduce allocations
 	zlibWriterPool = sync.Pool{
 		New: func() interface{} {
-			return zlib.NewWriter(nil)
+			// Use BestSpeed for better performance
+			zw, _ := zlib.NewWriterLevel(nil, zlib.BestSpeed)
+			return zw
 		},
 	}
 )
