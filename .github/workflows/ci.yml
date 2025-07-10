@@ -95,11 +95,21 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
+    # These permissions are needed to assume roles from Github's OIDC.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
+          repo_secrets: |
+            CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -121,7 +131,7 @@ jobs:
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ env.CODECOV_TOKEN }}
 
   test-integration:
     name: Integration Tests
@@ -156,11 +166,22 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
+    # These permissions are needed to assume roles from Github's OIDC.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
+          repo_secrets: |
+            GH_REPO_USER=github:GH_REPO_USER
+            GH_REPO_TOKEN=github:GH_REPO_TOKEN
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -192,11 +213,22 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
+    # These permissions are needed to assume roles from Github's OIDC.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
+          repo_secrets: |
+            GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
+            GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -213,8 +245,8 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
-          TEST_USER: ${{ secrets.GITLAB_REPO_USER }}
-          TEST_TOKEN: ${{ secrets.GITLAB_REPO_TOKEN }}
+          TEST_USER: ${{ env.GITLAB_REPO_USER }}
+          TEST_TOKEN: ${{ env.GITLAB_REPO_TOKEN }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -227,11 +259,22 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
+    # These permissions are needed to assume roles from Github's OIDC.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
+          repo_secrets: |
+            BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
+            BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -248,8 +291,8 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
-          TEST_USER: ${{ secrets.BITBUCKET_REPO_USER }}
-          TEST_TOKEN: ${{ secrets.BITBUCKET_REPO_TOKEN }}
+          TEST_USER: ${{ env.BITBUCKET_REPO_USER }}
+          TEST_TOKEN: ${{ env.BITBUCKET_REPO_TOKEN }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
