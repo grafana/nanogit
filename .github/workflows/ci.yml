@@ -95,7 +95,17 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: golang:1.24-alpine
+    # These permissions are needed to assume roles from Github's OIDC.
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
+          repo_secrets: |
+            CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
@@ -121,7 +131,7 @@ jobs:
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ env.CODECOV_TOKEN }}
 
   test-integration:
     name: Integration Tests
