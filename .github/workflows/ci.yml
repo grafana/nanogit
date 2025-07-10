@@ -94,7 +94,7 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-ubuntu
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
