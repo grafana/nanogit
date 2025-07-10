@@ -94,22 +94,22 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-bullseye
+      image: golang:1.24-alpine
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:CODECOV_TOKEN
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -165,12 +165,16 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-bullseye
+      image: golang:1.24-alpine
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         with:
@@ -178,10 +182,6 @@ jobs:
           repo_secrets: |
             GH_REPO_USER=github:GH_REPO_USER
             GH_REPO_TOKEN=github:GH_REPO_TOKEN
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -212,12 +212,16 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-bullseye
+      image: golang:1.24-alpine
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         with:
@@ -225,10 +229,6 @@ jobs:
           repo_secrets: |
             GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
             GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -258,12 +258,16 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-bullseye
+      image: golang:1.24-alpine
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
         with:
@@ -271,10 +275,6 @@ jobs:
           repo_secrets: |
             BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
             BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
