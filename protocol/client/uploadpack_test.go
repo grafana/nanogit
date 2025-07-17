@@ -80,8 +80,8 @@ func TestUploadPack(t *testing.T) {
 			var server *httptest.Server
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path != "/git-upload-pack" {
-						t.Errorf("expected path /git-upload-pack, got %s", r.URL.Path)
+					if r.URL.Path != "/repo.git/git-upload-pack" {
+						t.Errorf("expected path /repo.git/git-upload-pack, got %s", r.URL.Path)
 						return
 					}
 					if r.Method != http.MethodPost {
@@ -108,9 +108,9 @@ func TestUploadPack(t *testing.T) {
 				defer server.Close()
 			}
 
-			url := "http://127.0.0.1:0"
+			url := "http://127.0.0.1:0/repo"
 			if server != nil {
-				url = server.URL
+				url = server.URL + "/repo"
 			}
 
 			var (

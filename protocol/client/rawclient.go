@@ -78,6 +78,9 @@ func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 	}
 
 	u.Path = strings.TrimRight(u.Path, "/")
+	if u.Path != "" && !strings.HasSuffix(u.Path, ".git") {
+		u.Path += ".git"
+	}
 
 	options := &options.Options{
 		HTTPClient: &http.Client{},

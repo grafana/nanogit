@@ -62,7 +62,7 @@ func TestAuthentication(t *testing.T) {
 			}))
 			defer server.Close()
 
-			c, err := NewRawClient(server.URL, tt.authOption)
+			c, err := NewRawClient(server.URL + "/repo", tt.authOption)
 			require.NoError(t, err)
 
 			responseReader, err := c.UploadPack(context.Background(), strings.NewReader("test"))
@@ -129,8 +129,8 @@ func TestIsAuthorized(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/info/refs" {
-					t.Errorf("expected path /info/refs, got %s", r.URL.Path)
+				if r.URL.Path != "/repo.git/info/refs" {
+					t.Errorf("expected path /repo.git/info/refs, got %s", r.URL.Path)
 					return
 				}
 				if r.URL.Query().Get("service") != "git-upload-pack" {
@@ -146,7 +146,7 @@ func TestIsAuthorized(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewRawClient(server.URL)
+			client, err := NewRawClient(server.URL + "/repo")
 			require.NoError(t, err)
 
 			tt.setupAuth(client)

@@ -35,6 +35,30 @@ func TestNewClient(t *testing.T) {
 			wantErr: nil,
 		},
 		{
+			name:    "repo URL without .git extension gets .git appended",
+			repo:    "https://github.com/owner/repo",
+			options: nil,
+			wantErr: nil,
+		},
+		{
+			name:    "repo URL with .git extension remains unchanged",
+			repo:    "https://github.com/owner/repo.git",
+			options: nil,
+			wantErr: nil,
+		},
+		{
+			name:    "repo URL with trailing slash gets .git appended",
+			repo:    "https://github.com/owner/repo/",
+			options: nil,
+			wantErr: nil,
+		},
+		{
+			name:    "repo URL with trailing slash and .git remains unchanged",
+			repo:    "https://github.com/owner/repo.git/",
+			options: nil,
+			wantErr: nil,
+		},
+		{
 			name:    "invalid repo URL",
 			repo:    "://invalid-url-with-no-scheme",
 			options: nil,
@@ -180,6 +204,71 @@ func TestWithHTTPClient(t *testing.T) {
 			} else {
 				require.Equal(t, tt.httpClient, client.client, "http client should match the provided client")
 			}
+		})
+	}
+}
+
+func TestNewRawClient_GitExtensionAppending(t *testing.T) {
+	tests := []struct {
+		name         string
+		inputURL     string
+		expectedPath string
+	}{
+		{
+			name:         "URL without .git extension gets .git appended",
+			inputURL:     "https://github.com/owner/repo",
+			expectedPath: "/owner/repo.git",
+		},
+		{
+			name:         "URL with .git extension remains unchanged",
+			inputURL:     "https://github.com/owner/repo.git",
+			expectedPath: "/owner/repo.git",
+		},
+		{
+			name:         "URL with trailing slash gets .git appended",
+			inputURL:     "https://github.com/owner/repo/",
+			expectedPath: "/owner/repo.git",
+		},
+		{
+			name:         "URL with trailing slash and .git remains unchanged",
+			inputURL:     "https://github.com/owner/repo.git/",
+			expectedPath: "/owner/repo.git",
+		},
+		{
+			name:         "URL with multiple trailing slashes gets .git appended",
+			inputURL:     "https://github.com/owner/repo///",
+			expectedPath: "/owner/repo.git",
+		},
+		{
+			name:         "URL with .git in middle of path gets .git appended",
+			inputURL:     "https://github.com/owner/repo.git.backup",
+			expectedPath: "/owner/repo.git.backup.git",
+		},
+		{
+			name:         "Complex path without .git extension",
+			inputURL:     "https://gitlab.com/group/subgroup/project",
+			expectedPath: "/group/subgroup/project.git",
+		},
+		{
+			name:         "Root path with slash remains empty",
+			inputURL:     "https://example.com/",
+			expectedPath: "",
+		},
+		{
+			name:         "Root path without slash remains empty",
+			inputURL:     "https://example.com",
+			expectedPath: "",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			client, err := NewRawClient(tt.inputURL)
+			require.NoError(t, err)
+			require.NotNil(t, client)
+			require.Equal(t, tt.expectedPath, client.base.Path)
 		})
 	}
 }

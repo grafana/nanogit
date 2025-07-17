@@ -73,8 +73,8 @@ func TestSmartInfo(t *testing.T) {
 			var server *httptest.Server
 			if tt.setupClient == nil {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if !strings.HasPrefix(r.URL.Path, "/info/refs") {
-						t.Errorf("expected path starting with /info/refs, got %s", r.URL.Path)
+					if !strings.HasPrefix(r.URL.Path, "/repo.git/info/refs") {
+						t.Errorf("expected path starting with /repo.git/info/refs, got %s", r.URL.Path)
 						return
 					}
 					if r.URL.Query().Get("service") != "custom-service" {
@@ -105,9 +105,9 @@ func TestSmartInfo(t *testing.T) {
 				defer server.Close()
 			}
 
-			url := "http://127.0.0.1:0"
+			url := "http://127.0.0.1:0/repo"
 			if server != nil {
-				url = server.URL
+				url = server.URL + "/repo"
 			}
 
 			var (
