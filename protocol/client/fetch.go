@@ -199,18 +199,32 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		logger.Debug("Early termination enabled", "pendingObjects", len(pendingWantedHashes))
 	}
 
-	objectCount := 0
-	foundWantedCount := 0
-
+	var count, objectCount, foundWantedCount, totalDelta int
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount)
+			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
 			break
 		}
+
 		if obj.Object == nil {
 			break
 		}
+		count++
+
+		// Skip delta objects as we only want to process full objects and we cannot apply them
+		if obj.Object.Type == protocol.ObjectTypeRefDelta {
+			totalDelta++
+			logger.Debug("Skipping delta object", "hash", obj.Object.Hash.String())
+			continue
+		}
+
+		if storage != nil {
+			storage.Add(obj.Object)
+		}
+
+		objects[obj.Object.Hash.String()] = obj.Object
+		objectCount++
 
 		if storage != nil {
 			storage.Add(obj.Object)
@@ -228,8 +242,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 
 				// Stop reading if we've found all wanted objects
 				if foundWantedCount >= len(pendingWantedHashes) {
-					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount)
-					break
+					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount, "skippingRemaining", len(objects)-count)
 				}
 			}
 		}
