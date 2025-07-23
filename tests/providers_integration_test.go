@@ -199,33 +199,126 @@ func TestProviders(t *testing.T) {
 	_, err = client.GetBlobByPath(ctx, deleteCommit.Tree, "a/b/c/test.txt")
 	require.Error(t, err)
 
+	// Test MoveBlob operation
+	_, err = writer.CreateBlob(ctx, "a/b/c/test.txt", []byte("content for move"))
+	require.NoError(t, err)
+	createAfterDeleteCommit, err := writer.Commit(ctx, "Recreate test file for move", author, committer)
+	require.NoError(t, err)
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+
+	// Move the file to a new location
+	movedBlobHash, err := writer.MoveBlob(ctx, "a/b/c/test.txt", "a/moved-test.txt")
+	require.NoError(t, err)
+	moveCommit, err := writer.Commit(ctx, "Move test file", author, committer)
+	require.NoError(t, err)
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+
+	// Verify original location no longer exists
+	_, err = client.GetBlobByPath(ctx, moveCommit.Tree, "a/b/c/test.txt")
+	require.Error(t, err)
+
+	// Verify new location exists with correct content
+	movedBlob, err := client.GetBlobByPath(ctx, moveCommit.Tree, "a/moved-test.txt")
+	require.NoError(t, err)
+	require.Equal(t, "content for move", string(movedBlob.Content))
+	require.Equal(t, movedBlobHash, movedBlob.Hash)
+
+	// Verify the blob hash is the same (moved, not copied)
+	retrievedMovedBlob, err := client.GetBlob(ctx, movedBlobHash)
+	require.NoError(t, err)
+	require.Equal(t, "content for move", string(retrievedMovedBlob.Content))
+
+	// Test MoveTree operation
+	_, err = writer.CreateBlob(ctx, "tree-test/subdir/file1.txt", []byte("tree file 1"))
+	require.NoError(t, err)
+	_, err = writer.CreateBlob(ctx, "tree-test/subdir/file2.txt", []byte("tree file 2"))
+	require.NoError(t, err)
+	_, err = writer.CreateBlob(ctx, "tree-test/file3.txt", []byte("tree file 3"))
+	require.NoError(t, err)
+	createTreeCommit, err := writer.Commit(ctx, "Create tree structure for move test", author, committer)
+	require.NoError(t, err)
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+
+	// Move the entire directory tree
+	movedTreeHash, err := writer.MoveTree(ctx, "tree-test", "moved-tree")
+	require.NoError(t, err)
+	moveTreeCommit, err := writer.Commit(ctx, "Move directory tree", author, committer)
+	require.NoError(t, err)
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+
+	// Verify original tree location no longer exists
+	_, err = client.GetTreeByPath(ctx, moveTreeCommit.Tree, "tree-test")
+	require.Error(t, err)
+
+	// Verify new tree location exists with correct structure
+	movedTreeObj, err := client.GetTreeByPath(ctx, moveTreeCommit.Tree, "moved-tree")
+	require.NoError(t, err)
+	require.Equal(t, movedTreeHash, movedTreeObj.Hash)
+	require.Len(t, movedTreeObj.Entries, 2) // subdir and file3.txt
+
+	// Verify all files moved to new location with correct content
+	movedFile1, err := client.GetBlobByPath(ctx, moveTreeCommit.Tree, "moved-tree/subdir/file1.txt")
+	require.NoError(t, err)
+	require.Equal(t, "tree file 1", string(movedFile1.Content))
+
+	movedFile2, err := client.GetBlobByPath(ctx, moveTreeCommit.Tree, "moved-tree/subdir/file2.txt")
+	require.NoError(t, err)
+	require.Equal(t, "tree file 2", string(movedFile2.Content))
+
+	movedFile3, err := client.GetBlobByPath(ctx, moveTreeCommit.Tree, "moved-tree/file3.txt")
+	require.NoError(t, err)
+	require.Equal(t, "tree file 3", string(movedFile3.Content))
+
+	// Verify original file locations no longer exist
+	_, err = client.GetBlobByPath(ctx, moveTreeCommit.Tree, "tree-test/subdir/file1.txt")
+	require.Error(t, err)
+	_, err = client.GetBlobByPath(ctx, moveTreeCommit.Tree, "tree-test/file3.txt")
+	require.Error(t, err)
+
 	branchRef, err = client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)
-	require.Equal(t, deleteCommit.Hash, branchRef.Hash)
+	require.Equal(t, moveTreeCommit.Hash, branchRef.Hash)
 
 	// List commits without options
-	commits, err := client.ListCommits(ctx, deleteCommit.Hash, nanogit.ListCommitsOptions{})
+	commits, err := client.ListCommits(ctx, moveTreeCommit.Hash, nanogit.ListCommitsOptions{})
 	require.NoError(t, err)
-	require.Len(t, commits, 4)
-	require.Equal(t, deleteCommit.Hash, commits[0].Hash)
-	require.Equal(t, "Delete test file", commits[0].Message)
-	require.Equal(t, updateCommit.Hash, commits[1].Hash)
-	require.Equal(t, "Update test file", commits[1].Message)
-	require.Equal(t, commit.Hash, commits[2].Hash)
-	require.Equal(t, "Add test file", commits[2].Message)
-	require.Equal(t, commit.Parent, commits[3].Hash)
+	require.Len(t, commits, 8)
+	require.Equal(t, moveTreeCommit.Hash, commits[0].Hash)
+	require.Equal(t, "Move directory tree", commits[0].Message)
+	require.Equal(t, createTreeCommit.Hash, commits[1].Hash)
+	require.Equal(t, "Create tree structure for move test", commits[1].Message)
+	require.Equal(t, moveCommit.Hash, commits[2].Hash)
+	require.Equal(t, "Move test file", commits[2].Message)
+	require.Equal(t, createAfterDeleteCommit.Hash, commits[3].Hash)
+	require.Equal(t, "Recreate test file for move", commits[3].Message)
+	require.Equal(t, deleteCommit.Hash, commits[4].Hash)
+	require.Equal(t, "Delete test file", commits[4].Message)
+	require.Equal(t, updateCommit.Hash, commits[5].Hash)
+	require.Equal(t, "Update test file", commits[5].Message)
+	require.Equal(t, commit.Hash, commits[6].Hash)
+	require.Equal(t, "Add test file", commits[6].Message)
+	require.Equal(t, commit.Parent, commits[7].Hash)
 
-	// List commits with path filter
-	commits, err = client.ListCommits(ctx, deleteCommit.Hash, nanogit.ListCommitsOptions{
+	// List commits with path filter - should include move, create after delete, delete, update, and original create
+	commits, err = client.ListCommits(ctx, moveTreeCommit.Hash, nanogit.ListCommitsOptions{
 		Path: "a/b/c/test.txt",
 	})
 	require.NoError(t, err)
-	require.Len(t, commits, 3)
-	require.Equal(t, deleteCommit.Hash, commits[0].Hash)
-	require.Equal(t, "Delete test file", commits[0].Message)
-	require.Equal(t, updateCommit.Hash, commits[1].Hash)
-	require.Equal(t, "Update test file", commits[1].Message)
-	require.Equal(t, commit.Hash, commits[2].Hash)
+	require.Len(t, commits, 5) // move (delete), create after delete, delete, update, original create
+	require.Equal(t, moveCommit.Hash, commits[0].Hash)
+	require.Equal(t, "Move test file", commits[0].Message)
+	require.Equal(t, createAfterDeleteCommit.Hash, commits[1].Hash)
+	require.Equal(t, "Recreate test file for move", commits[1].Message)
+	require.Equal(t, deleteCommit.Hash, commits[2].Hash)
+	require.Equal(t, "Delete test file", commits[2].Message)
+	require.Equal(t, updateCommit.Hash, commits[3].Hash)
+	require.Equal(t, "Update test file", commits[3].Message)
+	require.Equal(t, commit.Hash, commits[4].Hash)
+	require.Equal(t, "Add test file", commits[4].Message)
 
 	// List only last N commits for path
 	// add a couple of commits in between
@@ -248,10 +341,10 @@ func TestProviders(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, commits, 2)
-	require.Equal(t, deleteCommit.Hash, commits[0].Hash)
-	require.Equal(t, "Delete test file", commits[0].Message)
-	require.Equal(t, updateCommit.Hash, commits[1].Hash)
-	require.Equal(t, "Update test file", commits[1].Message)
+	require.Equal(t, moveCommit.Hash, commits[0].Hash)
+	require.Equal(t, "Move test file", commits[0].Message)
+	require.Equal(t, createAfterDeleteCommit.Hash, commits[1].Hash)
+	require.Equal(t, "Recreate test file for move", commits[1].Message)
 }
 
 func TestProvidersLargeBlob(t *testing.T) {

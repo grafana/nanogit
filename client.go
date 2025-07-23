@@ -30,12 +30,22 @@ type StagedWriter interface {
 	// Returns the hash of the tree after deletion.
 	DeleteBlob(ctx context.Context, path string) (hash.Hash, error)
 
+	// MoveBlob stages the move of a file from srcPath to destPath.
+	// This is equivalent to copying the file to the new location and deleting the original.
+	// Returns the hash of the moved blob.
+	MoveBlob(ctx context.Context, srcPath, destPath string) (hash.Hash, error)
+
 	// GetTree gets the tree object at the given path.
 	GetTree(ctx context.Context, path string) (*Tree, error)
 
 	// DeleteTree stages the deletion of a directory and all its contents at the given path.
 	// Returns the hash of the deleted tree.
 	DeleteTree(ctx context.Context, path string) (hash.Hash, error)
+
+	// MoveTree stages the move of a directory and all its contents from srcPath to destPath.
+	// This recursively moves all files and subdirectories within the specified path.
+	// Returns the hash of the moved tree.
+	MoveTree(ctx context.Context, srcPath, destPath string) (hash.Hash, error)
 
 	// Commit creates a new commit with all staged changes.
 	// Returns the hash of the created commit.
