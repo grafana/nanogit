@@ -633,42 +633,78 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 		return hash.Zero, err
 	}
 
-	if srcPath == "" {
-		return hash.Zero, ErrEmptyPath
-	}
-
-	if destPath == "" {
-		return hash.Zero, ErrEmptyPath
-	}
-
-	if srcPath == destPath {
-		return hash.Zero, fmt.Errorf("source and destination paths are the same: %q", srcPath)
+	if err := w.validateMoveTreePaths(srcPath, destPath); err != nil {
+		return hash.Zero, err
 	}
 
 	logger := log.FromContext(ctx)
-	logger.Debug("Move tree",
-		"src_path", srcPath,
-		"dest_path", destPath)
+	logger.Debug("Move tree", "src_path", srcPath, "dest_path", destPath)
 
-	// Check that source exists and is a tree
+	_, treeHash, err := w.validateMoveTreeSource(srcPath)
+	if err != nil {
+		return hash.Zero, err
+	}
+
+	if err := w.validateMoveTreeDestination(destPath); err != nil {
+		return hash.Zero, err
+	}
+
+	entriesToMove := w.findTreeEntriesToMove(srcPath)
+	logger.Debug("Found entries to move", "count", len(entriesToMove))
+
+	if err := w.moveTreeEntries(ctx, srcPath, destPath, entriesToMove); err != nil {
+		return hash.Zero, err
+	}
+
+	if err := w.updateTreeStructuresForMove(ctx, srcPath, destPath, treeHash); err != nil {
+		return hash.Zero, err
+	}
+
+	logger.Debug("Tree moved",
+		"src_path", srcPath,
+		"dest_path", destPath,
+		"tree_hash", treeHash.String(),
+		"entries_moved", len(entriesToMove))
+
+	return treeHash, nil
+}
+
+// validateMoveTreePaths validates the source and destination paths for MoveTree
+func (w *stagedWriter) validateMoveTreePaths(srcPath, destPath string) error {
+	if srcPath == "" {
+		return ErrEmptyPath
+	}
+	if destPath == "" {
+		return ErrEmptyPath
+	}
+	if srcPath == destPath {
+		return fmt.Errorf("source and destination paths are the same: %q", srcPath)
+	}
+	return nil
+}
+
+// validateMoveTreeSource validates the source path exists and is a tree
+func (w *stagedWriter) validateMoveTreeSource(srcPath string) (*FlatTreeEntry, hash.Hash, error) {
 	srcEntry, ok := w.treeEntries[srcPath]
 	if !ok {
-		return hash.Zero, NewPathNotFoundError(srcPath)
+		return nil, hash.Zero, NewPathNotFoundError(srcPath)
 	}
-
 	if srcEntry.Type != protocol.ObjectTypeTree {
-		return hash.Zero, NewUnexpectedObjectTypeError(srcEntry.Hash, protocol.ObjectTypeTree, srcEntry.Type)
+		return nil, hash.Zero, NewUnexpectedObjectTypeError(srcEntry.Hash, protocol.ObjectTypeTree, srcEntry.Type)
 	}
+	return srcEntry, srcEntry.Hash, nil
+}
 
-	// Check that destination doesn't already exist
+// validateMoveTreeDestination validates the destination path doesn't already exist
+func (w *stagedWriter) validateMoveTreeDestination(destPath string) error {
 	if destEntry, exists := w.treeEntries[destPath]; exists {
-		return hash.Zero, NewObjectAlreadyExistsError(destEntry.Hash)
+		return NewObjectAlreadyExistsError(destEntry.Hash)
 	}
+	return nil
+}
 
-	// Get the tree hash before moving
-	treeHash := srcEntry.Hash
-
-	// Find all entries that are part of this tree (including the tree itself)
+// findTreeEntriesToMove finds all entries that belong to the source tree
+func (w *stagedWriter) findTreeEntriesToMove(srcPath string) []string {
 	srcPathPrefix := srcPath + "/"
 	var entriesToMove []string
 
@@ -677,24 +713,17 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 			entriesToMove = append(entriesToMove, entryPath)
 		}
 	}
+	return entriesToMove
+}
 
-	logger.Debug("Found entries to move", "count", len(entriesToMove))
-
-	// Move all entries by updating their paths
+// moveTreeEntries moves all entries from source to destination paths
+func (w *stagedWriter) moveTreeEntries(ctx context.Context, srcPath, destPath string, entriesToMove []string) error {
+	logger := log.FromContext(ctx)
+	
 	for _, entryPath := range entriesToMove {
 		entry := w.treeEntries[entryPath]
-		
-		// Calculate new path
-		var newPath string
-		if entryPath == srcPath {
-			newPath = destPath
-		} else {
-			// Replace the source path prefix with destination path prefix
-			relativePath := entryPath[len(srcPath)+1:] // +1 for the "/"
-			newPath = destPath + "/" + relativePath
-		}
+		newPath := w.calculateNewTreeEntryPath(srcPath, destPath, entryPath)
 
-		// Create new entry at destination
 		w.treeEntries[newPath] = &FlatTreeEntry{
 			Path: newPath,
 			Hash: entry.Hash,
@@ -705,28 +734,37 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 		logger.Debug("Moved entry", "from", entryPath, "to", newPath, "type", entry.Type)
 	}
 
-	// Update tree structure for destination - mark all parent directories as dirty
-	if err := w.addMissingOrStaleTreeEntries(ctx, destPath, treeHash); err != nil {
-		return hash.Zero, fmt.Errorf("update tree structure for destination %q: %w", destPath, err)
-	}
-
 	// Remove all entries from their original locations
 	for _, entryPath := range entriesToMove {
 		delete(w.treeEntries, entryPath)
 	}
 
-	// Update tree structure for source removal
-	if err := w.removeTreeFromTree(ctx, srcPath); err != nil {
-		return hash.Zero, fmt.Errorf("remove tree from source %q: %w", srcPath, err)
+	return nil
+}
+
+// calculateNewTreeEntryPath calculates the new path for a tree entry during move
+func (w *stagedWriter) calculateNewTreeEntryPath(srcPath, destPath, entryPath string) string {
+	if entryPath == srcPath {
+		return destPath
+	}
+	// Replace the source path prefix with destination path prefix
+	relativePath := entryPath[len(srcPath)+1:] // +1 for the "/"
+	return destPath + "/" + relativePath
+}
+
+// updateTreeStructuresForMove updates tree structures for both source and destination
+func (w *stagedWriter) updateTreeStructuresForMove(ctx context.Context, srcPath, destPath string, treeHash hash.Hash) error {
+	// Update tree structure for destination - mark all parent directories as dirty
+	if err := w.addMissingOrStaleTreeEntries(ctx, destPath, treeHash); err != nil {
+		return fmt.Errorf("update tree structure for destination %q: %w", destPath, err)
 	}
 
-	logger.Debug("Tree moved",
-		"src_path", srcPath,
-		"dest_path", destPath,
-		"tree_hash", treeHash.String(),
-		"entries_moved", len(entriesToMove))
+	// Update tree structure for source removal
+	if err := w.removeTreeFromTree(ctx, srcPath); err != nil {
+		return fmt.Errorf("remove tree from source %q: %w", srcPath, err)
+	}
 
-	return treeHash, nil
+	return nil
 }
 
 // Commit creates a new commit object with all the staged changes and the specified metadata.

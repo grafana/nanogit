@@ -1246,11 +1246,11 @@ var _ = Describe("Writer Operations", func() {
 
 			// All files should exist at destination with correct content
 			testFiles := map[string]string{
-				"moved-complex/root-file.txt":              "root content",
-				"moved-complex/sub1/sub1-file.txt":         "sub1 content",
-				"moved-complex/sub1/deep1/deep1-file.txt":  "deep1 content",
-				"moved-complex/sub1/deep2/deep2-file.txt":  "deep2 content",
-				"moved-complex/sub2/sub2-file.txt":         "sub2 content",
+				"moved-complex/root-file.txt":             "root content",
+				"moved-complex/sub1/sub1-file.txt":        "sub1 content",
+				"moved-complex/sub1/deep1/deep1-file.txt": "deep1 content",
+				"moved-complex/sub1/deep2/deep2-file.txt": "deep2 content",
+				"moved-complex/sub2/sub2-file.txt":        "sub2 content",
 			}
 
 			for filePath, expectedContent := range testFiles {
