@@ -366,6 +366,95 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 	return blobHash, nil
 }
 
+// MoveBlob moves a file from srcPath to destPath by copying the content and deleting the original.
+// This operation stages both the creation at the destination and deletion at the source.
+// If intermediate directories don't exist at the destination, they will be created automatically.
+//
+// This operation stages the move but does not immediately commit it.
+// You must call Commit() and Push() to persist the changes.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - srcPath: Source file path to move from
+//   - destPath: Destination file path to move to
+//
+// Returns:
+//   - hash.Hash: The SHA-1 hash of the moved blob object
+//   - error: Error if the source path doesn't exist, destination already exists, or move fails
+//
+// Example:
+//
+//	hash, err := writer.MoveBlob(ctx, "old/path/file.txt", "new/path/file.txt")
+func (w *stagedWriter) MoveBlob(ctx context.Context, srcPath, destPath string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
+	if srcPath == "" {
+		return hash.Zero, ErrEmptyPath
+	}
+
+	if destPath == "" {
+		return hash.Zero, ErrEmptyPath
+	}
+
+	if srcPath == destPath {
+		return hash.Zero, fmt.Errorf("source and destination paths are the same: %q", srcPath)
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Move blob",
+		"src_path", srcPath,
+		"dest_path", destPath)
+
+	// Check that source exists and is a blob
+	srcEntry, ok := w.treeEntries[srcPath]
+	if !ok {
+		return hash.Zero, NewPathNotFoundError(srcPath)
+	}
+
+	if srcEntry.Type != protocol.ObjectTypeBlob {
+		return hash.Zero, NewUnexpectedObjectTypeError(srcEntry.Hash, protocol.ObjectTypeBlob, srcEntry.Type)
+	}
+
+	// Check that destination doesn't already exist
+	if destEntry, exists := w.treeEntries[destPath]; exists {
+		return hash.Zero, NewObjectAlreadyExistsError(destEntry.Hash)
+	}
+
+	// Get the blob content - since it's already staged, we need to get it from the writer
+	// The blob hash is the same, so we just need to copy the tree entry and update paths
+	blobHash := srcEntry.Hash
+
+	// Create the blob at the destination path
+	w.treeEntries[destPath] = &FlatTreeEntry{
+		Path: destPath,
+		Hash: blobHash,
+		Type: protocol.ObjectTypeBlob,
+		Mode: srcEntry.Mode,
+	}
+
+	// Update tree structure for destination
+	if err := w.addMissingOrStaleTreeEntries(ctx, destPath, blobHash); err != nil {
+		return hash.Zero, fmt.Errorf("update tree structure for destination %q: %w", destPath, err)
+	}
+
+	// Remove the blob from the source path
+	delete(w.treeEntries, srcPath)
+
+	// Update tree structure for source removal
+	if err := w.removeBlobFromTree(ctx, srcPath); err != nil {
+		return hash.Zero, fmt.Errorf("remove blob from tree at source %q: %w", srcPath, err)
+	}
+
+	logger.Debug("Blob moved",
+		"src_path", srcPath,
+		"dest_path", destPath,
+		"blob_hash", blobHash.String())
+
+	return blobHash, nil
+}
+
 // GetTree retrieves the tree object at the specified path from the repository.
 // The tree represents a directory structure containing files and subdirectories.
 // The path must exist and must be a directory (tree), otherwise an error is returned.

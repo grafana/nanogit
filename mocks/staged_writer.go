@@ -108,6 +108,21 @@ type FakeStagedWriter struct {
 		result1 *nanogit.Tree
 		result2 error
 	}
+	MoveBlobStub        func(context.Context, string, string) (hash.Hash, error)
+	moveBlobMutex       sync.RWMutex
+	moveBlobArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+	}
+	moveBlobReturns struct {
+		result1 hash.Hash
+		result2 error
+	}
+	moveBlobReturnsOnCall map[int]struct {
+		result1 hash.Hash
+		result2 error
+	}
 	PushStub        func(context.Context) error
 	pushMutex       sync.RWMutex
 	pushArgsForCall []struct {
@@ -597,6 +612,72 @@ func (fake *FakeStagedWriter) GetTreeReturnsOnCall(i int, result1 *nanogit.Tree,
 	}{result1, result2}
 }
 
+func (fake *FakeStagedWriter) MoveBlob(arg1 context.Context, arg2 string, arg3 string) (hash.Hash, error) {
+	fake.moveBlobMutex.Lock()
+	ret, specificReturn := fake.moveBlobReturnsOnCall[len(fake.moveBlobArgsForCall)]
+	fake.moveBlobArgsForCall = append(fake.moveBlobArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+	}{arg1, arg2, arg3})
+	stub := fake.MoveBlobStub
+	fakeReturns := fake.moveBlobReturns
+	fake.recordInvocation("MoveBlob", []interface{}{arg1, arg2, arg3})
+	fake.moveBlobMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeStagedWriter) MoveBlobCallCount() int {
+	fake.moveBlobMutex.RLock()
+	defer fake.moveBlobMutex.RUnlock()
+	return len(fake.moveBlobArgsForCall)
+}
+
+func (fake *FakeStagedWriter) MoveBlobCalls(stub func(context.Context, string, string) (hash.Hash, error)) {
+	fake.moveBlobMutex.Lock()
+	defer fake.moveBlobMutex.Unlock()
+	fake.MoveBlobStub = stub
+}
+
+func (fake *FakeStagedWriter) MoveBlobArgsForCall(i int) (context.Context, string, string) {
+	fake.moveBlobMutex.RLock()
+	defer fake.moveBlobMutex.RUnlock()
+	argsForCall := fake.moveBlobArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeStagedWriter) MoveBlobReturns(result1 hash.Hash, result2 error) {
+	fake.moveBlobMutex.Lock()
+	defer fake.moveBlobMutex.Unlock()
+	fake.MoveBlobStub = nil
+	fake.moveBlobReturns = struct {
+		result1 hash.Hash
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeStagedWriter) MoveBlobReturnsOnCall(i int, result1 hash.Hash, result2 error) {
+	fake.moveBlobMutex.Lock()
+	defer fake.moveBlobMutex.Unlock()
+	fake.MoveBlobStub = nil
+	if fake.moveBlobReturnsOnCall == nil {
+		fake.moveBlobReturnsOnCall = make(map[int]struct {
+			result1 hash.Hash
+			result2 error
+		})
+	}
+	fake.moveBlobReturnsOnCall[i] = struct {
+		result1 hash.Hash
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeStagedWriter) Push(arg1 context.Context) error {
 	fake.pushMutex.Lock()
 	ret, specificReturn := fake.pushReturnsOnCall[len(fake.pushArgsForCall)]
@@ -746,6 +827,8 @@ func (fake *FakeStagedWriter) Invocations() map[string][][]interface{} {
 	defer fake.deleteTreeMutex.RUnlock()
 	fake.getTreeMutex.RLock()
 	defer fake.getTreeMutex.RUnlock()
+	fake.moveBlobMutex.RLock()
+	defer fake.moveBlobMutex.RUnlock()
 	fake.pushMutex.RLock()
 	defer fake.pushMutex.RUnlock()
 	fake.updateBlobMutex.RLock()

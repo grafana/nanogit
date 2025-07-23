@@ -30,6 +30,11 @@ type StagedWriter interface {
 	// Returns the hash of the tree after deletion.
 	DeleteBlob(ctx context.Context, path string) (hash.Hash, error)
 
+	// MoveBlob stages the move of a file from srcPath to destPath.
+	// This is equivalent to copying the file to the new location and deleting the original.
+	// Returns the hash of the moved blob.
+	MoveBlob(ctx context.Context, srcPath, destPath string) (hash.Hash, error)
+
 	// GetTree gets the tree object at the given path.
 	GetTree(ctx context.Context, path string) (*Tree, error)
 
