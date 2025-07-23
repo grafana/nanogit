@@ -42,6 +42,11 @@ type StagedWriter interface {
 	// Returns the hash of the deleted tree.
 	DeleteTree(ctx context.Context, path string) (hash.Hash, error)
 
+	// MoveTree stages the move of a directory and all its contents from srcPath to destPath.
+	// This recursively moves all files and subdirectories within the specified path.
+	// Returns the hash of the moved tree.
+	MoveTree(ctx context.Context, srcPath, destPath string) (hash.Hash, error)
+
 	// Commit creates a new commit with all staged changes.
 	// Returns the hash of the created commit.
 	Commit(ctx context.Context, message string, author Author, committer Committer) (*Commit, error)

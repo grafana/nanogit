@@ -853,6 +853,429 @@ var _ = Describe("Writer Operations", func() {
 		})
 	})
 
+	Context("Move Tree Operations", func() {
+		It("should move a directory to a new location", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit initial directory structure
+			local.CreateDirPath("source-dir")
+			local.CreateFile("source-dir/file1.txt", "content 1")
+			local.CreateFile("source-dir/file2.txt", "content 2")
+			local.CreateFile("other.txt", "other content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with directory")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			srcPath := "source-dir"
+			destPath := "dest-dir"
+			commitMsg := "Move directory"
+
+			// Verify source tree exists
+			srcTree, err := writer.GetTree(ctx, srcPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(srcTree.Entries).To(HaveLen(2))
+
+			// Perform move
+			treeHash, err := writer.MoveTree(ctx, srcPath, destPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			// Verify source no longer exists and destination exists
+			_, err = writer.GetTree(ctx, srcPath)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
+
+			destTree, err := writer.GetTree(ctx, destPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destTree.Entries).To(HaveLen(2))
+			Expect(destTree.Hash).To(Equal(treeHash))
+
+			// Verify files exist at new location
+			exists, err := writer.BlobExists(ctx, "dest-dir/file1.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			exists, err = writer.BlobExists(ctx, "dest-dir/file2.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Verify files don't exist at old location
+			exists, err = writer.BlobExists(ctx, "source-dir/file1.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+
+			_, err = writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+
+			// Source directory should not exist
+			_, err = os.Stat(filepath.Join(local.Path, srcPath))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			// Destination directory should exist with correct files
+			destInfo, err := os.Stat(filepath.Join(local.Path, destPath))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destInfo.IsDir()).To(BeTrue())
+
+			content1, err := os.ReadFile(filepath.Join(local.Path, "dest-dir/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content1).To(Equal([]byte("content 1")))
+
+			content2, err := os.ReadFile(filepath.Join(local.Path, "dest-dir/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content2).To(Equal([]byte("content 2")))
+
+			// Other file should be preserved
+			otherContent, err := os.ReadFile(filepath.Join(local.Path, "other.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(otherContent).To(Equal([]byte("other content")))
+
+			verifyCommitAuthorship(local)
+		})
+
+		It("should move a nested directory structure", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit nested directory structure
+			local.CreateDirPath("parent/source-dir/subdir")
+			local.CreateFile("parent/source-dir/file1.txt", "nested content 1")
+			local.CreateFile("parent/source-dir/subdir/file2.txt", "nested content 2")
+			local.CreateFile("parent/preserved.txt", "preserved content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			srcPath := "parent/source-dir"
+			destPath := "parent/moved-dir"
+			commitMsg := "Move nested directory"
+
+			// Perform move
+			treeHash, err := writer.MoveTree(ctx, srcPath, destPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			// Verify tree structure at destination
+			destTree, err := writer.GetTree(ctx, destPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destTree.Entries).To(HaveLen(2)) // file1.txt and subdir
+
+			subdirTree, err := writer.GetTree(ctx, "parent/moved-dir/subdir")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(subdirTree.Entries).To(HaveLen(1)) // file2.txt
+
+			_, err = writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+
+			// Source should not exist
+			_, err = os.Stat(filepath.Join(local.Path, srcPath))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			// Destination should exist with correct structure
+			content1, err := os.ReadFile(filepath.Join(local.Path, "parent/moved-dir/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content1).To(Equal([]byte("nested content 1")))
+
+			content2, err := os.ReadFile(filepath.Join(local.Path, "parent/moved-dir/subdir/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content2).To(Equal([]byte("nested content 2")))
+
+			// Preserved file should still exist
+			preservedContent, err := os.ReadFile(filepath.Join(local.Path, "parent/preserved.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(preservedContent).To(Equal([]byte("preserved content")))
+		})
+
+		It("should move a directory to a new nested location", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit directory at root
+			local.CreateDirPath("root-dir")
+			local.CreateFile("root-dir/file.txt", "root file content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			srcPath := "root-dir"
+			destPath := "new/nested/location"
+			commitMsg := "Move directory to nested location"
+
+			// Perform move
+			treeHash, err := writer.MoveTree(ctx, srcPath, destPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(treeHash).NotTo(BeNil())
+
+			// Verify nested tree structure was created
+			newTree, err := writer.GetTree(ctx, "new")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(newTree.Entries).To(HaveLen(1))
+			Expect(newTree.Entries[0].Name).To(Equal("nested"))
+
+			nestedTree, err := writer.GetTree(ctx, "new/nested")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nestedTree.Entries).To(HaveLen(1))
+			Expect(nestedTree.Entries[0].Name).To(Equal("location"))
+
+			locationTree, err := writer.GetTree(ctx, destPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(locationTree.Entries).To(HaveLen(1))
+			Expect(locationTree.Entries[0].Name).To(Equal("file.txt"))
+
+			_, err = writer.Commit(ctx, commitMsg, testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+
+			// Source should not exist
+			_, err = os.Stat(filepath.Join(local.Path, srcPath))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			// Destination should exist with correct content
+			content, err := os.ReadFile(filepath.Join(local.Path, "new/nested/location/file.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal([]byte("root file content")))
+
+			// Directory structure should exist
+			for _, dirPath := range []string{"new", "new/nested", "new/nested/location"} {
+				dirInfo, err := os.Stat(filepath.Join(local.Path, dirPath))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dirInfo.IsDir()).To(BeTrue())
+			}
+		})
+
+		It("should fail to move if source doesn't exist", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.MoveTree(ctx, "nonexistent", "destination")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectNotFound))
+		})
+
+		It("should fail to move if destination already exists", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit directories
+			local.CreateDirPath("source")
+			local.CreateFile("source/file.txt", "source content")
+			local.CreateDirPath("destination")
+			local.CreateFile("destination/file.txt", "destination content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.MoveTree(ctx, "source", "destination")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrObjectAlreadyExists))
+		})
+
+		It("should fail to move if source and destination are the same", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit directory
+			local.CreateDirPath("directory")
+			local.CreateFile("directory/file.txt", "content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.MoveTree(ctx, "directory", "directory")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("source and destination paths are the same"))
+		})
+
+		It("should fail to move if source is empty path", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.MoveTree(ctx, "", "destination")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrEmptyPath))
+		})
+
+		It("should fail to move if destination is empty path", func() {
+			client, _, local, _ := QuickSetup()
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.MoveTree(ctx, "source", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(nanogit.ErrEmptyPath))
+		})
+
+		It("should fail to move if source is a blob", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit file
+			local.CreateFile("file.txt", "content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			_, err := writer.MoveTree(ctx, "file.txt", "moved-file")
+			Expect(err).To(HaveOccurred())
+			Expect(errors.Is(err, nanogit.ErrUnexpectedObjectType)).To(BeTrue())
+		})
+
+		It("should move multiple directories in same commit", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create and commit multiple directories
+			local.CreateDirPath("dir1")
+			local.CreateFile("dir1/file1.txt", "content 1")
+			local.CreateDirPath("dir2")
+			local.CreateFile("dir2/file2.txt", "content 2")
+			local.CreateFile("preserved.txt", "preserved")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			// Move both directories
+			_, err := writer.MoveTree(ctx, "dir1", "moved1")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.MoveTree(ctx, "dir2", "nested/moved2")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "Move multiple directories", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+
+			// Original directories should not exist
+			_, err = os.Stat(filepath.Join(local.Path, "dir1"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+			_, err = os.Stat(filepath.Join(local.Path, "dir2"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			// Moved directories should exist with correct content
+			content1, err := os.ReadFile(filepath.Join(local.Path, "moved1/file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content1).To(Equal([]byte("content 1")))
+
+			content2, err := os.ReadFile(filepath.Join(local.Path, "nested/moved2/file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content2).To(Equal([]byte("content 2")))
+
+			// Preserved file should still exist
+			preservedContent, err := os.ReadFile(filepath.Join(local.Path, "preserved.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(preservedContent).To(Equal([]byte("preserved")))
+		})
+
+		It("should move directory with complex nested structure", func() {
+			client, _, local, _ := QuickSetup()
+
+			// Create complex directory structure
+			local.CreateDirPath("complex/sub1/deep1")
+			local.CreateDirPath("complex/sub1/deep2")
+			local.CreateDirPath("complex/sub2")
+			local.CreateFile("complex/root-file.txt", "root content")
+			local.CreateFile("complex/sub1/sub1-file.txt", "sub1 content")
+			local.CreateFile("complex/sub1/deep1/deep1-file.txt", "deep1 content")
+			local.CreateFile("complex/sub1/deep2/deep2-file.txt", "deep2 content")
+			local.CreateFile("complex/sub2/sub2-file.txt", "sub2 content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Create complex structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+
+			srcPath := "complex"
+			destPath := "moved-complex"
+
+			// Perform move
+			_, err := writer.MoveTree(ctx, srcPath, destPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "Move complex directory structure", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify results
+			local.Git("pull")
+
+			// Source should not exist
+			_, err = os.Stat(filepath.Join(local.Path, srcPath))
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+
+			// All files should exist at destination with correct content
+			testFiles := map[string]string{
+				"moved-complex/root-file.txt":              "root content",
+				"moved-complex/sub1/sub1-file.txt":         "sub1 content",
+				"moved-complex/sub1/deep1/deep1-file.txt":  "deep1 content",
+				"moved-complex/sub1/deep2/deep2-file.txt":  "deep2 content",
+				"moved-complex/sub2/sub2-file.txt":         "sub2 content",
+			}
+
+			for filePath, expectedContent := range testFiles {
+				content, err := os.ReadFile(filepath.Join(local.Path, filePath))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+
+			// All directories should exist
+			testDirs := []string{
+				"moved-complex",
+				"moved-complex/sub1",
+				"moved-complex/sub1/deep1",
+				"moved-complex/sub1/deep2",
+				"moved-complex/sub2",
+			}
+
+			for _, dirPath := range testDirs {
+				dirInfo, err := os.Stat(filepath.Join(local.Path, dirPath))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dirInfo.IsDir()).To(BeTrue())
+			}
+		})
+	})
+
 	Context("Delete Tree Operations", func() {
 		It("should delete the entire tree with empty path", func() {
 			client, _, local, _ := QuickSetup()

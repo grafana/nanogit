@@ -609,6 +609,126 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 	return treeHash, nil
 }
 
+// MoveTree moves an entire directory tree from srcPath to destPath.
+// This operation recursively moves all files and subdirectories within the specified path.
+// If intermediate directories don't exist at the destination, they will be created automatically.
+//
+// This operation stages the move but does not immediately commit it.
+// You must call Commit() and Push() to persist the changes.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - srcPath: Source directory path to move from
+//   - destPath: Destination directory path to move to
+//
+// Returns:
+//   - hash.Hash: The SHA-1 hash of the moved tree object
+//   - error: Error if the source path doesn't exist, destination already exists, or move fails
+//
+// Example:
+//
+//	hash, err := writer.MoveTree(ctx, "old/directory", "new/location")
+func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (hash.Hash, error) {
+	if err := w.checkCleanupState(); err != nil {
+		return hash.Zero, err
+	}
+
+	if srcPath == "" {
+		return hash.Zero, ErrEmptyPath
+	}
+
+	if destPath == "" {
+		return hash.Zero, ErrEmptyPath
+	}
+
+	if srcPath == destPath {
+		return hash.Zero, fmt.Errorf("source and destination paths are the same: %q", srcPath)
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Move tree",
+		"src_path", srcPath,
+		"dest_path", destPath)
+
+	// Check that source exists and is a tree
+	srcEntry, ok := w.treeEntries[srcPath]
+	if !ok {
+		return hash.Zero, NewPathNotFoundError(srcPath)
+	}
+
+	if srcEntry.Type != protocol.ObjectTypeTree {
+		return hash.Zero, NewUnexpectedObjectTypeError(srcEntry.Hash, protocol.ObjectTypeTree, srcEntry.Type)
+	}
+
+	// Check that destination doesn't already exist
+	if destEntry, exists := w.treeEntries[destPath]; exists {
+		return hash.Zero, NewObjectAlreadyExistsError(destEntry.Hash)
+	}
+
+	// Get the tree hash before moving
+	treeHash := srcEntry.Hash
+
+	// Find all entries that are part of this tree (including the tree itself)
+	srcPathPrefix := srcPath + "/"
+	var entriesToMove []string
+
+	for entryPath := range w.treeEntries {
+		if entryPath == srcPath || strings.HasPrefix(entryPath, srcPathPrefix) {
+			entriesToMove = append(entriesToMove, entryPath)
+		}
+	}
+
+	logger.Debug("Found entries to move", "count", len(entriesToMove))
+
+	// Move all entries by updating their paths
+	for _, entryPath := range entriesToMove {
+		entry := w.treeEntries[entryPath]
+		
+		// Calculate new path
+		var newPath string
+		if entryPath == srcPath {
+			newPath = destPath
+		} else {
+			// Replace the source path prefix with destination path prefix
+			relativePath := entryPath[len(srcPath)+1:] // +1 for the "/"
+			newPath = destPath + "/" + relativePath
+		}
+
+		// Create new entry at destination
+		w.treeEntries[newPath] = &FlatTreeEntry{
+			Path: newPath,
+			Hash: entry.Hash,
+			Type: entry.Type,
+			Mode: entry.Mode,
+		}
+
+		logger.Debug("Moved entry", "from", entryPath, "to", newPath, "type", entry.Type)
+	}
+
+	// Update tree structure for destination - mark all parent directories as dirty
+	if err := w.addMissingOrStaleTreeEntries(ctx, destPath, treeHash); err != nil {
+		return hash.Zero, fmt.Errorf("update tree structure for destination %q: %w", destPath, err)
+	}
+
+	// Remove all entries from their original locations
+	for _, entryPath := range entriesToMove {
+		delete(w.treeEntries, entryPath)
+	}
+
+	// Update tree structure for source removal
+	if err := w.removeTreeFromTree(ctx, srcPath); err != nil {
+		return hash.Zero, fmt.Errorf("remove tree from source %q: %w", srcPath, err)
+	}
+
+	logger.Debug("Tree moved",
+		"src_path", srcPath,
+		"dest_path", destPath,
+		"tree_hash", treeHash.String(),
+		"entries_moved", len(entriesToMove))
+
+	return treeHash, nil
+}
+
 // Commit creates a new commit object with all the staged changes and the specified metadata.
 // This operation takes all the changes that have been staged via CreateBlob, UpdateBlob,
 // DeleteBlob, and DeleteTree operations and creates a single commit containing all of them.
