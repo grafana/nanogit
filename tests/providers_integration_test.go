@@ -303,12 +303,12 @@ func TestProviders(t *testing.T) {
 	require.Equal(t, "Add test file", commits[6].Message)
 	require.Equal(t, commit.Parent, commits[7].Hash)
 
-	// List commits with path filter - should include move, create after delete, delete, update, and create
+	// List commits with path filter - should include move, create after delete, delete, update, and original create
 	commits, err = client.ListCommits(ctx, moveTreeCommit.Hash, nanogit.ListCommitsOptions{
 		Path: "a/b/c/test.txt",
 	})
 	require.NoError(t, err)
-	require.Len(t, commits, 4) // move (delete), create after delete, delete, update, create
+	require.Len(t, commits, 5) // move (delete), create after delete, delete, update, original create
 	require.Equal(t, moveCommit.Hash, commits[0].Hash)
 	require.Equal(t, "Move test file", commits[0].Message)
 	require.Equal(t, createAfterDeleteCommit.Hash, commits[1].Hash)
@@ -317,6 +317,8 @@ func TestProviders(t *testing.T) {
 	require.Equal(t, "Delete test file", commits[2].Message)
 	require.Equal(t, updateCommit.Hash, commits[3].Hash)
 	require.Equal(t, "Update test file", commits[3].Message)
+	require.Equal(t, commit.Hash, commits[4].Hash)
+	require.Equal(t, "Add test file", commits[4].Message)
 
 	// List only last N commits for path
 	// add a couple of commits in between
