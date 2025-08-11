@@ -353,8 +353,10 @@ func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Ha
 		"batch_count", numBatches,
 		"batch_size", batchSize)
 
-	// Process batches sequentially to avoid race conditions
+	// Process batches sequentially and collect all missing blobs
 	allObjects := make(map[string]*protocol.PackfileObject)
+	allMissingHashes := make([]hash.Hash, 0)
+	
 	for i := 0; i < numBatches; i++ {
 		start := i * batchSize
 		end := start + batchSize
@@ -381,34 +383,78 @@ func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Ha
 			"requested", len(batchHashes),
 			"received", len(objects))
 
-		// Check for missing blobs in this batch and try to fetch them individually
+		// Check for missing blobs in this batch and collect them for later retry
 		if len(objects) != len(batchHashes) {
-			logger.Warn("Batch blob count mismatch - trying individual fetch for missing blobs",
+			logger.Debug("Batch blob count mismatch - collecting missing blobs for batch retry",
 				"batch_id", i,
 				"requested", len(batchHashes),
 				"received", len(objects))
 			
-			// Find missing blobs and try to fetch them individually
-			missingHashes := make([]hash.Hash, 0)
+			// Find missing blobs and add them to the collection for batch retry
+			batchMissingHashes := make([]hash.Hash, 0)
 			for _, expectedHash := range batchHashes {
 				if _, found := objects[expectedHash.String()]; !found {
-					missingHashes = append(missingHashes, expectedHash)
-					logger.Debug("Will retry missing blob individually",
-						"batch_id", i,
-						"blob_hash", expectedHash.String())
+					batchMissingHashes = append(batchMissingHashes, expectedHash)
+					allMissingHashes = append(allMissingHashes, expectedHash)
 				}
 			}
 			
-			// Try to fetch missing blobs individually using the old GetBlob method
-			logger.Debug("Fetching missing blobs individually",
+			logger.Debug("Missing blobs collected from batch",
 				"batch_id", i,
-				"missing_count", len(missingHashes))
+				"missing_in_batch", len(batchMissingHashes),
+				"total_missing_so_far", len(allMissingHashes))
+		}
+
+		// Merge objects from this batch
+		for hash, obj := range objects {
+			allObjects[hash] = obj
+		}
+
+		logger.Debug("Batch completed",
+			"batch_id", i,
+			"objects_fetched", len(objects),
+			"total_objects_so_far", len(allObjects))
+	}
+	
+	// Now try to batch fetch all missing blobs together
+	if len(allMissingHashes) > 0 {
+		logger.Debug("Attempting batch retry for all missing blobs",
+			"missing_count", len(allMissingHashes))
+		
+		missingObjects, err := c.fetchMissingBlobsBatched(ctx, allMissingHashes)
+		if err != nil {
+			logger.Warn("Batch retry for missing blobs failed, falling back to individual requests",
+				"missing_count", len(allMissingHashes),
+				"error", err)
+		} else {
+			// Merge successfully fetched missing objects
+			for hash, obj := range missingObjects {
+				allObjects[hash] = obj
+			}
 			
-			for _, missingHash := range missingHashes {
+			logger.Debug("Batch retry completed",
+				"missing_requested", len(allMissingHashes),
+				"missing_received", len(missingObjects),
+				"total_objects_now", len(allObjects))
+		}
+		
+		// Check if we still have missing blobs and fall back to individual requests
+		stillMissingHashes := make([]hash.Hash, 0)
+		for _, missingHash := range allMissingHashes {
+			if _, found := allObjects[missingHash.String()]; !found {
+				stillMissingHashes = append(stillMissingHashes, missingHash)
+			}
+		}
+		
+		if len(stillMissingHashes) > 0 {
+			logger.Debug("Some blobs still missing after batch retry, fetching individually",
+				"still_missing_count", len(stillMissingHashes))
+			
+			for _, missingHash := range stillMissingHashes {
 				logger.Debug("Fetching individual blob",
 					"blob_hash", missingHash.String())
 				
-				// Use the old GetBlob method as fallback
+				// Use the old GetBlob method as final fallback
 				blob, err := c.GetBlob(ctx, missingHash)
 				if err != nil {
 					logger.Error("Failed to fetch missing blob individually",
@@ -424,27 +470,16 @@ func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Ha
 					Data: blob.Content,
 				}
 				
-				objects[missingHash.String()] = blobObj
+				allObjects[missingHash.String()] = blobObj
 				logger.Debug("Successfully fetched missing blob individually",
 					"blob_hash", missingHash.String(),
 					"size", len(blob.Content))
 			}
 			
-			logger.Debug("Individual fetch completed",
-				"batch_id", i,
-				"missing_attempted", len(missingHashes),
-				"total_in_batch_now", len(objects))
+			logger.Debug("Individual fallback completed",
+				"individual_attempts", len(stillMissingHashes),
+				"final_total_objects", len(allObjects))
 		}
-
-		// Merge objects from this batch
-		for hash, obj := range objects {
-			allObjects[hash] = obj
-		}
-
-		logger.Debug("Batch completed",
-			"batch_id", i,
-			"objects_fetched", len(objects),
-			"total_objects_so_far", len(allObjects))
 	}
 
 	logger.Debug("All batches completed",
@@ -493,4 +528,74 @@ func (c *httpClient) fetchBlobBatch(ctx context.Context, blobHashes []hash.Hash)
 		"received_count", len(blobObjects))
 
 	return blobObjects, nil
+}
+
+// fetchMissingBlobsBatched attempts to fetch missing blobs in batches before falling back to individual requests.
+// This method is optimized for handling missing blobs that couldn't be fetched in the original batches.
+func (c *httpClient) fetchMissingBlobsBatched(ctx context.Context, missingHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Fetching missing blobs in batches",
+		"missing_count", len(missingHashes))
+
+	if len(missingHashes) == 0 {
+		return make(map[string]*protocol.PackfileObject), nil
+	}
+
+	// For small numbers of missing blobs, try them all at once
+	const maxSingleBatch = 50
+	if len(missingHashes) <= maxSingleBatch {
+		logger.Debug("Fetching all missing blobs in single batch",
+			"missing_count", len(missingHashes))
+		return c.fetchBlobBatch(ctx, missingHashes)
+	}
+
+	// For larger numbers, split into smaller batches
+	const batchSize = 25 // Smaller batches for missing blobs to increase success rate
+	numBatches := (len(missingHashes) + batchSize - 1) / batchSize
+	
+	logger.Debug("Splitting missing blobs into multiple batches",
+		"missing_count", len(missingHashes),
+		"batch_count", numBatches,
+		"batch_size", batchSize)
+
+	allObjects := make(map[string]*protocol.PackfileObject)
+	
+	for i := 0; i < numBatches; i++ {
+		start := i * batchSize
+		end := start + batchSize
+		if end > len(missingHashes) {
+			end = len(missingHashes)
+		}
+		
+		batchHashes := missingHashes[start:end]
+		
+		logger.Debug("Processing missing blob batch",
+			"batch_id", i,
+			"blob_count", len(batchHashes))
+		
+		objects, err := c.fetchBlobBatch(ctx, batchHashes)
+		if err != nil {
+			logger.Warn("Missing blob batch failed, continuing with next batch",
+				"batch_id", i,
+				"error", err)
+			continue // Continue with other batches, don't fail entirely
+		}
+
+		// Merge objects from this batch
+		for hash, obj := range objects {
+			allObjects[hash] = obj
+		}
+
+		logger.Debug("Missing blob batch completed",
+			"batch_id", i,
+			"requested", len(batchHashes),
+			"received", len(objects),
+			"total_missing_fetched", len(allObjects))
+	}
+
+	logger.Debug("Missing blob batch processing completed",
+		"total_missing_requested", len(missingHashes),
+		"total_missing_fetched", len(allObjects))
+
+	return allObjects, nil
 }
