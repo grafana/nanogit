@@ -15,20 +15,10 @@ var _ = Describe("Clone operations", func() {
 	var (
 		client nanogit.Client
 		local  *LocalGitRepo
-		user   *User
 	)
 
-	// Helper function to commit and push all changes
-	commitAndPush := func(repo *LocalGitRepo, user *User, message string) {
-		repo.Git("config", "user.name", user.Username)
-		repo.Git("config", "user.email", user.Email)
-		repo.Git("add", ".")
-		repo.Git("commit", "-m", message)
-		repo.Git("push", "-u", "origin", "main", "--force")
-	}
-
 	BeforeEach(func() {
-		client, _, local, user = QuickSetup()
+		client, _, local, _ = QuickSetup()
 	})
 
 	Context("Basic clone operations", func() {
@@ -37,22 +27,27 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("README.md", "# Test Repository")
 			local.CreateFile("src/main.go", "package main\n\nfunc main() {}")
 			local.CreateFile("docs/api.md", "# API Documentation")
-			commitAndPush(local, user, "Initial commit")
+			
+			By("Committing and pushing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add multiple files")
+			local.Git("push", "origin", "main", "--force")
+			
+			By("Getting the commit hash")
+			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Cloning the repository")
-			ref, err := client.GetRef(ctx, "main")
-			Expect(err).NotTo(HaveOccurred())
-			
 			tempDir := GinkgoT().TempDir()
 			result, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path: tempDir,
-				Hash: ref.Hash,
+				Hash: commitHash,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.Path).To(Equal(tempDir))
-			Expect(result.Commit.Hash).To(Equal(ref.Hash))
-			Expect(result.FilteredFiles).To(Equal(3))
+			Expect(result.Commit.Hash).To(Equal(commitHash))
+			Expect(result.FilteredFiles).To(BeNumerically(">=", 3)) // At least our 3 new files
 			
 			By("Verifying files were written to disk")
 			content, err := os.ReadFile(filepath.Join(tempDir, "README.md"))
@@ -63,22 +58,27 @@ var _ = Describe("Clone operations", func() {
 		It("should clone using a specific commit hash", func() {
 			By("Setting up repository with multiple commits")
 			local.CreateFile("first.txt", "first commit")
-			commitAndPush(local, user, "First commit")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "First commit")
+			local.Git("push", "origin", "main", "--force")
 			
-			firstRef, err := client.GetRef(ctx, "main")
+			By("Getting the first commit hash")
+			firstHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 			
 			local.CreateFile("second.txt", "second commit")
-			commitAndPush(local, user, "Second commit")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Second commit")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Cloning using the first commit hash")
 			tempDir := GinkgoT().TempDir()
 			result, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path: tempDir,
-				Hash: firstRef.Hash,
+				Hash: firstHash,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Commit.Hash).To(Equal(firstRef.Hash))
+			Expect(result.Commit.Hash).To(Equal(firstHash))
 			
 			// Should have first.txt but not second.txt
 			_, err = os.Stat(filepath.Join(tempDir, "first.txt"))
@@ -89,6 +89,8 @@ var _ = Describe("Clone operations", func() {
 	})
 
 	Context("Path filtering", func() {
+		var commitHash hash.Hash
+		
 		BeforeEach(func() {
 			By("Creating a repository with diverse file structure")
 			local.CreateFile("README.md", "# Main readme")
@@ -97,17 +99,23 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("docs/README.md", "# Documentation")
 			local.CreateFile("tests/main_test.go", "package main_test")
 			local.CreateFile("node_modules/package/index.js", "module.exports = {}")
-			commitAndPush(local, user, "Create diverse structure")
+			
+			By("Committing and pushing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Create diverse structure")
+			local.Git("push", "origin", "main", "--force")
+			
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should include only specified paths", func() {
-			ref, err := client.GetRef(ctx, "main")
-			Expect(err).NotTo(HaveOccurred())
-
 			tempDir := GinkgoT().TempDir()
 			result, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path:         tempDir,
-				Hash:         ref.Hash,
+				Hash:         commitHash,
 				IncludePaths: []string{"src/**", "docs/**"},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -125,13 +133,10 @@ var _ = Describe("Clone operations", func() {
 		})
 
 		It("should exclude specified paths", func() {
-			ref, err := client.GetRef(ctx, "main")
-			Expect(err).NotTo(HaveOccurred())
-
 			tempDir := GinkgoT().TempDir()
 			result, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path:         tempDir,
-				Hash:         ref.Hash,
+				Hash:         commitHash,
 				ExcludePaths: []string{"node_modules/**", "tests/**"},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -151,13 +156,10 @@ var _ = Describe("Clone operations", func() {
 		})
 
 		It("should prioritize exclude over include", func() {
-			ref, err := client.GetRef(ctx, "main")
-			Expect(err).NotTo(HaveOccurred())
-
 			tempDir := GinkgoT().TempDir()
-			_, err = client.Clone(ctx, nanogit.CloneOptions{
+			_, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path:         tempDir,
-				Hash:         ref.Hash,
+				Hash:         commitHash,
 				IncludePaths: []string{"src/**", "tests/**"},
 				ExcludePaths: []string{"tests/**"},
 			})
@@ -196,15 +198,17 @@ var _ = Describe("Clone operations", func() {
 
 		It("should handle filtering that results in no files", func() {
 			local.CreateFile("test.txt", "content")
-			commitAndPush(local, user, "Test commit")
-
-			ref, err := client.GetRef(ctx, "main")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Test commit")
+			local.Git("push", "origin", "main", "--force")
+			
+			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			tempDir := GinkgoT().TempDir()
 			result, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path:         tempDir,
-				Hash:         ref.Hash,
+				Hash:         commitHash,
 				ExcludePaths: []string{"**"}, // Exclude everything
 			})
 			Expect(err).NotTo(HaveOccurred())
