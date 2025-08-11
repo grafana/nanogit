@@ -87,6 +87,8 @@ type Client interface {
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
+	// Clone operations
+	Clone(ctx context.Context, opts CloneOptions) (*CloneResult, error)
 	// Write operations
 	NewStagedWriter(ctx context.Context, ref Ref, options ...WriterOption) (StagedWriter, error)
 }

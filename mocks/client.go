@@ -10,6 +10,20 @@ import (
 )
 
 type FakeClient struct {
+	CloneStub        func(context.Context, nanogit.CloneOptions) (*nanogit.CloneResult, error)
+	cloneMutex       sync.RWMutex
+	cloneArgsForCall []struct {
+		arg1 context.Context
+		arg2 nanogit.CloneOptions
+	}
+	cloneReturns struct {
+		result1 *nanogit.CloneResult
+		result2 error
+	}
+	cloneReturnsOnCall map[int]struct {
+		result1 *nanogit.CloneResult
+		result2 error
+	}
 	CompareCommitsStub        func(context.Context, hash.Hash, hash.Hash) ([]nanogit.CommitFile, error)
 	compareCommitsMutex       sync.RWMutex
 	compareCommitsArgsForCall []struct {
@@ -232,6 +246,71 @@ type FakeClient struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeClient) Clone(arg1 context.Context, arg2 nanogit.CloneOptions) (*nanogit.CloneResult, error) {
+	fake.cloneMutex.Lock()
+	ret, specificReturn := fake.cloneReturnsOnCall[len(fake.cloneArgsForCall)]
+	fake.cloneArgsForCall = append(fake.cloneArgsForCall, struct {
+		arg1 context.Context
+		arg2 nanogit.CloneOptions
+	}{arg1, arg2})
+	stub := fake.CloneStub
+	fakeReturns := fake.cloneReturns
+	fake.recordInvocation("Clone", []interface{}{arg1, arg2})
+	fake.cloneMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeClient) CloneCallCount() int {
+	fake.cloneMutex.RLock()
+	defer fake.cloneMutex.RUnlock()
+	return len(fake.cloneArgsForCall)
+}
+
+func (fake *FakeClient) CloneCalls(stub func(context.Context, nanogit.CloneOptions) (*nanogit.CloneResult, error)) {
+	fake.cloneMutex.Lock()
+	defer fake.cloneMutex.Unlock()
+	fake.CloneStub = stub
+}
+
+func (fake *FakeClient) CloneArgsForCall(i int) (context.Context, nanogit.CloneOptions) {
+	fake.cloneMutex.RLock()
+	defer fake.cloneMutex.RUnlock()
+	argsForCall := fake.cloneArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeClient) CloneReturns(result1 *nanogit.CloneResult, result2 error) {
+	fake.cloneMutex.Lock()
+	defer fake.cloneMutex.Unlock()
+	fake.CloneStub = nil
+	fake.cloneReturns = struct {
+		result1 *nanogit.CloneResult
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) CloneReturnsOnCall(i int, result1 *nanogit.CloneResult, result2 error) {
+	fake.cloneMutex.Lock()
+	defer fake.cloneMutex.Unlock()
+	fake.CloneStub = nil
+	if fake.cloneReturnsOnCall == nil {
+		fake.cloneReturnsOnCall = make(map[int]struct {
+			result1 *nanogit.CloneResult
+			result2 error
+		})
+	}
+	fake.cloneReturnsOnCall[i] = struct {
+		result1 *nanogit.CloneResult
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeClient) CompareCommits(arg1 context.Context, arg2 hash.Hash, arg3 hash.Hash) ([]nanogit.CommitFile, error) {
@@ -1270,6 +1349,8 @@ func (fake *FakeClient) UpdateRefReturnsOnCall(i int, result1 error) {
 func (fake *FakeClient) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.cloneMutex.RLock()
+	defer fake.cloneMutex.RUnlock()
 	fake.compareCommitsMutex.RLock()
 	defer fake.compareCommitsMutex.RUnlock()
 	fake.createRefMutex.RLock()
