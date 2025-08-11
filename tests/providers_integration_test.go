@@ -454,3 +454,268 @@ func TestProvidersLargeBlob(t *testing.T) {
 
 	t.Logf("Successfully tested large blob operations with %d bytes", len(retrievedFile.Content))
 }
+
+func TestProvidersClone(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping testproviders suite in short mode")
+		return
+	}
+
+	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" || os.Getenv("TEST_USER") == "" {
+		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN or TEST_USER not set")
+		return
+	}
+
+	ctx := log.ToContext(context.Background(), NewTestLogger(t.Logf))
+	client, err := nanogit.NewHTTPClient(
+		os.Getenv("TEST_REPO"),
+		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
+	)
+	require.NoError(t, err)
+
+	// Create a test branch with multiple files for cloning
+	branchName := fmt.Sprintf("test-clone-%d", time.Now().Unix())
+	mainRef, err := client.GetRef(ctx, "refs/heads/main")
+	require.NoError(t, err)
+
+	err = client.CreateRef(ctx, nanogit.Ref{
+		Name: "refs/heads/" + branchName,
+		Hash: mainRef.Hash,
+	})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err = client.DeleteRef(ctx, "refs/heads/"+branchName)
+		require.NoError(t, err)
+	})
+
+	branchRef, err := client.GetRef(ctx, "refs/heads/"+branchName)
+	require.NoError(t, err)
+
+	writer, err := client.NewStagedWriter(ctx, branchRef)
+	require.NoError(t, err)
+
+	author := nanogit.Author{
+		Name:  "Clone Test User",
+		Email: "clone-test@example.com",
+		Time:  time.Now(),
+	}
+	committer := nanogit.Committer{
+		Name:  "Clone Test User",
+		Email: "clone-test@example.com",
+		Time:  time.Now(),
+	}
+
+	// Create a diverse set of files for comprehensive clone testing
+	testFiles := map[string]string{
+		"README.md":                  "# Test Repository\nThis is a test repository for clone operations.",
+		"src/main.go":               "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
+		"src/utils/helper.go":       "package utils\n\nfunc Helper() string {\n\treturn \"helper\"\n}",
+		"docs/api/endpoints.md":     "# API Endpoints\n\n## GET /api/v1/health\n\nReturns health status.",
+		"docs/user/guide.md":        "# User Guide\n\nThis guide explains how to use the application.",
+		"config/app.yaml":           "app:\n  name: test-app\n  port: 8080\n  debug: true",
+		"config/database.yaml":      "database:\n  host: localhost\n  port: 5432\n  name: testdb",
+		"scripts/build.sh":          "#!/bin/bash\necho \"Building application...\"\ngo build -o app src/main.go",
+		"tests/unit/main_test.go":   "package main\n\nimport \"testing\"\n\nfunc TestMain(t *testing.T) {\n\t// Test main function\n}",
+		"vendor/lib/external.txt":   "External library placeholder",
+		".gitignore":                "*.log\n*.tmp\nbuild/\ndist/",
+		"Makefile":                  "build:\n\tgo build -o app src/main.go\n\ntest:\n\tgo test ./...",
+	}
+
+	t.Logf("Creating %d test files for clone operation...", len(testFiles))
+	for filePath, content := range testFiles {
+		_, err := writer.CreateBlob(ctx, filePath, []byte(content))
+		require.NoError(t, err, "Failed to create file: %s", filePath)
+	}
+
+	commit, err := writer.Commit(ctx, "Add test files for clone operation", author, committer)
+	require.NoError(t, err)
+
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+
+	// Verify the commit was pushed
+	branchRef, err = client.GetRef(ctx, "refs/heads/"+branchName)
+	require.NoError(t, err)
+	require.Equal(t, commit.Hash, branchRef.Hash)
+
+	t.Log("Testing Clone operation without filters...")
+
+	// Test 1: Clone all files without any filters
+	tempDir := t.TempDir()
+	cloneDir := filepath.Join(tempDir, "full-clone")
+
+	result, err := client.Clone(ctx, nanogit.CloneOptions{
+		Path: cloneDir,
+		Hash: commit.Hash,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Verify clone result metadata
+	require.Equal(t, cloneDir, result.Path)
+	require.Equal(t, commit.Hash, result.Commit.Hash)
+	require.Equal(t, "Add test files for clone operation", result.Commit.Message)
+	require.Equal(t, author.Email, result.Commit.Author.Email)
+	
+	// The repository may have pre-existing files, so we should have at least our test files
+	require.GreaterOrEqual(t, result.FilteredFiles, len(testFiles), "Should clone at least our test files")
+	totalFilesInRepo := result.TotalFiles
+	actualTestFiles := result.FilteredFiles
+
+	// Verify all our test files exist on disk with correct content
+	for expectedPath, expectedContent := range testFiles {
+		fullPath := filepath.Join(cloneDir, expectedPath)
+		require.FileExists(t, fullPath, "Our test file should exist: %s", expectedPath)
+
+		actualContent, err := os.ReadFile(fullPath)
+		require.NoError(t, err, "Should be able to read our test file: %s", expectedPath)
+		require.Equal(t, expectedContent, string(actualContent), "Our test file content should match: %s", expectedPath)
+	}
+	
+	t.Logf("Full clone completed: %d total files in repo, %d files cloned, %d test files created",
+		totalFilesInRepo, actualTestFiles, len(testFiles))
+
+	t.Log("Testing Clone operation with include filters...")
+
+	// Test 2: Clone with include filters (only source files)
+	sourceCloneDir := filepath.Join(tempDir, "source-clone")
+	result, err = client.Clone(ctx, nanogit.CloneOptions{
+		Path: sourceCloneDir,
+		Hash: commit.Hash,
+		IncludePaths: []string{
+			"src/**",
+			"*.md",
+			"Makefile",
+		},
+	})
+	require.NoError(t, err)
+
+	// Should include: README.md, Makefile, src/main.go, src/utils/helper.go from our test files
+	// Plus any pre-existing files that match the include patterns
+	require.Greater(t, result.FilteredFiles, 0, "Should include matching files")
+	t.Logf("Include filter result: %d files matched include patterns", result.FilteredFiles)
+
+	// Verify our expected test files exist (the ones we created that should match include patterns)
+	expectedSourceFiles := []string{"README.md", "Makefile", "src/main.go", "src/utils/helper.go"}
+	for _, expectedPath := range expectedSourceFiles {
+		fullPath := filepath.Join(sourceCloneDir, expectedPath)
+		require.FileExists(t, fullPath, "Our expected test file should exist: %s", expectedPath)
+		
+		// Verify content matches our test data
+		if expectedContent, exists := testFiles[expectedPath]; exists {
+			actualContent, err := os.ReadFile(fullPath)
+			require.NoError(t, err)
+			require.Equal(t, expectedContent, string(actualContent), "Test file content should match: %s", expectedPath)
+		}
+	}
+
+	// Verify our test files that should be filtered out don't exist
+	unexpectedSourceFiles := []string{"config/app.yaml", "docs/api/endpoints.md", "vendor/lib/external.txt"}
+	for _, unexpectedPath := range unexpectedSourceFiles {
+		fullPath := filepath.Join(sourceCloneDir, unexpectedPath)
+		require.NoFileExists(t, fullPath, "Our filtered test file should not exist: %s", unexpectedPath)
+	}
+
+	t.Log("Testing Clone operation with exclude filters...")
+
+	// Test 3: Clone with exclude filters (exclude vendor and config)
+	filteredCloneDir := filepath.Join(tempDir, "filtered-clone")
+	result, err = client.Clone(ctx, nanogit.CloneOptions{
+		Path: filteredCloneDir,
+		Hash: commit.Hash,
+		ExcludePaths: []string{
+			"vendor/**",
+			"config/**",
+			"tests/**",
+		},
+	})
+	require.NoError(t, err)
+
+	// Should exclude vendor/, config/, tests/ directories from our test files, plus any pre-existing
+	// We can't predict exact count due to pre-existing files, but should be less than total
+	require.Greater(t, result.FilteredFiles, 0, "Should have some files after exclusion")
+	require.Less(t, result.FilteredFiles, totalFilesInRepo, "Should exclude some files")
+	t.Logf("Exclude filter result: %d files remaining after exclusion", result.FilteredFiles)
+
+	// Verify our test files that should be excluded don't exist
+	excludedFiles := []string{"vendor/lib/external.txt", "config/app.yaml", "config/database.yaml", "tests/unit/main_test.go"}
+	for _, excludedPath := range excludedFiles {
+		fullPath := filepath.Join(filteredCloneDir, excludedPath)
+		require.NoFileExists(t, fullPath, "Our excluded test file should not exist: %s", excludedPath)
+	}
+
+	// Verify our test files that should be included exist with correct content
+	includedFiles := []string{"README.md", "src/main.go", "docs/api/endpoints.md", "scripts/build.sh"}
+	for _, includedPath := range includedFiles {
+		fullPath := filepath.Join(filteredCloneDir, includedPath)
+		require.FileExists(t, fullPath, "Our non-excluded test file should exist: %s", includedPath)
+		
+		// Verify content matches our test data
+		if expectedContent, exists := testFiles[includedPath]; exists {
+			actualContent, err := os.ReadFile(fullPath)
+			require.NoError(t, err)
+			require.Equal(t, expectedContent, string(actualContent), "Test file content should match: %s", includedPath)
+		}
+	}
+
+	t.Log("Testing Clone operation with both include and exclude filters...")
+
+	// Test 4: Clone with both include and exclude (exclude takes precedence)
+	complexCloneDir := filepath.Join(tempDir, "complex-clone")
+	result, err = client.Clone(ctx, nanogit.CloneOptions{
+		Path: complexCloneDir,
+		Hash: commit.Hash,
+		IncludePaths: []string{
+			"docs/**",
+			"src/**",
+		},
+		ExcludePaths: []string{
+			"docs/api/**", // Exclude docs/api but include docs/user
+		},
+	})
+	require.NoError(t, err)
+
+	// Should include docs/** and src/** but exclude docs/api/**
+	// Plus any pre-existing files matching the same patterns
+	require.Greater(t, result.FilteredFiles, 0, "Should have files matching complex filters")
+	t.Logf("Complex filter result: %d files matched include/exclude patterns", result.FilteredFiles)
+
+	// Verify correct filtering of our test files
+	require.FileExists(t, filepath.Join(complexCloneDir, "docs/user/guide.md"), "Our included test file should exist")
+	require.FileExists(t, filepath.Join(complexCloneDir, "src/main.go"), "Our included test file should exist")
+	require.FileExists(t, filepath.Join(complexCloneDir, "src/utils/helper.go"), "Our included test file should exist")
+	require.NoFileExists(t, filepath.Join(complexCloneDir, "docs/api/endpoints.md"), "Our excluded test file should not exist")
+	require.NoFileExists(t, filepath.Join(complexCloneDir, "README.md"), "Our non-included test file should not exist")
+	
+	// Verify content of files we know should exist
+	testFilesToCheck := []string{"docs/user/guide.md", "src/main.go", "src/utils/helper.go"}
+	for _, filePath := range testFilesToCheck {
+		fullPath := filepath.Join(complexCloneDir, filePath)
+		if expectedContent, exists := testFiles[filePath]; exists {
+			actualContent, err := os.ReadFile(fullPath)
+			require.NoError(t, err)
+			require.Equal(t, expectedContent, string(actualContent), "Complex filter test file content should match: %s", filePath)
+		}
+	}
+
+	t.Log("Testing Clone operation error cases...")
+
+	// Test 5: Error case - missing path
+	_, err = client.Clone(ctx, nanogit.CloneOptions{
+		Hash: commit.Hash,
+		// Path is missing
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "clone path is required")
+
+	// Test 6: Error case - missing hash
+	_, err = client.Clone(ctx, nanogit.CloneOptions{
+		Path: filepath.Join(tempDir, "error-clone"),
+		// Hash is missing
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "commit hash is required")
+
+	t.Logf("Successfully completed comprehensive Clone operation testing with %d test files", len(testFiles))
+}
