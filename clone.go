@@ -21,9 +21,9 @@ type CloneOptions struct {
 	// This field is required for clone operations.
 	Path string
 
-	// Ref specifies the Git reference to clone (branch, tag, or commit hash).
-	// If empty, defaults to the repository's default branch (typically "main" or "master").
-	Ref string
+	// Hash specifies the commit hash to clone from.
+	// Use client.GetRef() to resolve branch/tag names to hashes first.
+	Hash hash.Hash
 
 	// IncludePaths specifies which paths to include in the clone.
 	// Only files and directories matching these patterns will be included.
@@ -78,10 +78,16 @@ type CloneResult struct {
 //
 // Example:
 //
-//	// Clone only the src/ and docs/ directories from main branch
+//	// Get the commit hash for main branch
+//	ref, err := client.GetRef(ctx, "main")
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// Clone only the src/ and docs/ directories
 //	result, err := client.Clone(ctx, nanogit.CloneOptions{
 //	    Path: "/tmp/repo",
-//	    Ref: "main",
+//	    Hash: ref.Hash,
 //	    IncludePaths: []string{"src/**", "docs/**"},
 //	})
 //	if err != nil {
@@ -91,47 +97,20 @@ type CloneResult struct {
 //	    result.FilteredFiles, result.Commit.Hash.String()[:8])
 func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult, error) {
 	logger := log.FromContext(ctx)
+	// Validate that hash is provided
+	if opts.Hash == hash.Zero {
+		return nil, fmt.Errorf("commit hash is required - use client.GetRef() to resolve branch/tag names to hashes")
+	}
+
 	logger.Debug("Starting clone operation",
-		"ref", opts.Ref,
+		"commit_hash", opts.Hash.String(),
 		"include_paths", opts.IncludePaths,
 		"exclude_paths", opts.ExcludePaths)
 
-	// Resolve the ref to a commit hash
-	ref := opts.Ref
-	if ref == "" {
-		// Get the default branch if no ref specified
-		refs, err := c.ListRefs(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("list refs to find default branch: %w", err)
-		}
-
-		// Look for HEAD or main/master as fallbacks
-		for _, r := range refs {
-			if r.Name == "HEAD" || r.Name == "refs/heads/main" || r.Name == "refs/heads/master" {
-				ref = r.Name
-				break
-			}
-		}
-
-		if ref == "" {
-			return nil, fmt.Errorf("no default branch found and no ref specified")
-		}
-	}
-
-	// Get the ref to resolve to commit hash
-	gitRef, err := c.GetRef(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("resolve ref %s: %w", ref, err)
-	}
-
-	logger.Debug("Resolved ref to commit",
-		"ref", ref,
-		"commit_hash", gitRef.Hash.String())
-
 	// Get the commit object
-	commit, err := c.GetCommit(ctx, gitRef.Hash)
+	commit, err := c.GetCommit(ctx, opts.Hash)
 	if err != nil {
-		return nil, fmt.Errorf("get commit %s: %w", gitRef.Hash.String(), err)
+		return nil, fmt.Errorf("get commit %s: %w", opts.Hash.String(), err)
 	}
 
 	// Get the full tree structure
@@ -173,8 +152,7 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		"commit_hash", commit.Hash.String(),
 		"total_files", result.TotalFiles,
 		"filtered_files", result.FilteredFiles,
-		"output_path", opts.Path,
-		"ref", ref)
+		"output_path", opts.Path)
 
 	return result, nil
 }

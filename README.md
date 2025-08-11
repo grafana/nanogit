@@ -117,12 +117,25 @@ writer.Push(ctx)
 nanogit provides efficient selective cloning that downloads and extracts only the files you need, with flexible path filtering. This is different from traditional Git clones - instead of creating a .git directory with full history, it fetches specific files from a commit and writes them directly to the filesystem.
 
 ```go
-// Clone specific directories only (perfect for CI with no caching)
+// First, get the commit hash for the branch you want to clone
+ref, err := client.GetRef(ctx, "main")
+if err != nil {
+    return err
+}
+
+// Clone specific directories from a branch
 result, err := client.Clone(ctx, nanogit.CloneOptions{
     Path:         "/tmp/my-repo",        // Local filesystem path (required)
-    Ref:          "main",                // Branch, tag, or commit hash
+    Hash:         ref.Hash,              // Commit hash from GetRef
     IncludePaths: []string{"src/**", "docs/**"}, // Include only these paths
     ExcludePaths: []string{"*.tmp", "node_modules/**"}, // Exclude these paths
+})
+
+// Or clone from a specific commit hash directly
+result, err := client.Clone(ctx, nanogit.CloneOptions{
+    Path:         "/tmp/my-repo",
+    Hash:         commitHash,            // Specific commit hash
+    IncludePaths: []string{"src/**", "docs/**"},
 })
 
 // Access clone results
@@ -154,24 +167,36 @@ Key clone features:
 
 ```go
 // CI: Clone only source code, exclude tests and docs
+releaseRef, err := client.GetRef(ctx, "v1.2.3")  // Get specific release tag
+if err != nil {
+    return err
+}
 result, err := client.Clone(ctx, nanogit.CloneOptions{
     Path:         "/build/src",
-    Ref:          "v1.2.3",  // Specific release tag
+    Hash:         releaseRef.Hash,
     IncludePaths: []string{"src/**", "*.go", "go.mod", "go.sum"},
     ExcludePaths: []string{"src/**/*_test.go", "docs/**"},
 })
 
 // Documentation site: Clone only documentation
+mainRef, err := client.GetRef(ctx, "main")
+if err != nil {
+    return err
+}
 result, err := client.Clone(ctx, nanogit.CloneOptions{
     Path:         "/site/content", 
-    Ref:          "main",
+    Hash:         mainRef.Hash,
     IncludePaths: []string{"docs/**", "*.md"},
 })
 
 // Config deployment: Clone only configuration files
+prodRef, err := client.GetRef(ctx, "production")
+if err != nil {
+    return err
+}
 result, err := client.Clone(ctx, nanogit.CloneOptions{
     Path:         "/etc/myapp",
-    Ref:          "production",
+    Hash:         prodRef.Hash,
     IncludePaths: []string{"config/**", "*.yaml", "*.json"},
     ExcludePaths: []string{"config/dev/**", "*.example.*"},
 })
