@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -221,7 +222,7 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 }
 
 // writeFilesToDisk writes all files from the filtered tree to the specified directory path.
-// It creates the necessary directory structure and downloads blob content for each file.
+// It creates the necessary directory structure and downloads blob content in batches for better performance.
 func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree *FlatTree) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Writing files to disk",
@@ -233,11 +234,62 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 		return fmt.Errorf("create base directory %s: %w", basePath, err)
 	}
 
-	// Process each file in the tree
+	// Collect all blob hashes and create path mapping
+	blobEntries := make([]FlatTreeEntry, 0, len(tree.Entries))
+	blobHashes := make([]hash.Hash, 0, len(tree.Entries))
+	hashToEntry := make(map[string]FlatTreeEntry)
+
 	for _, entry := range tree.Entries {
-		// Skip tree entries (directories are created automatically when needed)
-		if entry.Type != protocol.ObjectTypeBlob {
-			continue
+		// Only process blob entries (files)
+		if entry.Type == protocol.ObjectTypeBlob {
+			blobEntries = append(blobEntries, entry)
+			blobHashes = append(blobHashes, entry.Hash)
+			hashToEntry[entry.Hash.String()] = entry
+		}
+	}
+
+	if len(blobHashes) == 0 {
+		logger.Debug("No blob files to write")
+		return nil
+	}
+
+	// Fetch all blobs in batches for better performance
+	blobMap, err := c.fetchBlobsBatched(ctx, blobHashes)
+	if err != nil {
+		return fmt.Errorf("fetch blobs in batches: %w", err)
+	}
+
+	logger.Debug("Blob fetch summary",
+		"requested_blobs", len(blobHashes),
+		"received_blobs", len(blobMap),
+		"expected_files", len(blobEntries))
+
+	// Check if we got all the blobs we requested
+	if len(blobMap) != len(blobHashes) {
+		logger.Warn("Blob count mismatch",
+			"requested", len(blobHashes),
+			"received", len(blobMap))
+		
+		// Find missing blobs
+		for _, expectedHash := range blobHashes {
+			if _, found := blobMap[expectedHash.String()]; !found {
+				if entry, exists := hashToEntry[expectedHash.String()]; exists {
+					logger.Error("Missing blob for file",
+						"file_path", entry.Path,
+						"blob_hash", expectedHash.String())
+				}
+			}
+		}
+	}
+
+	// Write all files to disk
+	filesWritten := 0
+	for _, blobObj := range blobMap {
+		entry, exists := hashToEntry[blobObj.Hash.String()]
+		if !exists {
+			logger.Warn("Received unexpected blob",
+				"blob_hash", blobObj.Hash.String())
+			continue // Skip unexpected blobs
 		}
 
 		filePath := filepath.Join(basePath, entry.Path)
@@ -248,25 +300,197 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 			return fmt.Errorf("create parent directory for %s: %w", entry.Path, err)
 		}
 
-		// Get the blob content
-		blob, err := c.GetBlob(ctx, entry.Hash)
-		if err != nil {
-			return fmt.Errorf("get blob content for %s: %w", entry.Path, err)
-		}
-
 		// Write the file content
-		if err := os.WriteFile(filePath, blob.Content, 0644); err != nil {
+		if err := os.WriteFile(filePath, blobObj.Data, 0644); err != nil {
 			return fmt.Errorf("write file %s: %w", entry.Path, err)
 		}
 
+		filesWritten++
 		logger.Debug("File written",
 			"path", entry.Path,
-			"size", len(blob.Content))
+			"size", len(blobObj.Data))
 	}
 
 	logger.Debug("All files written to disk",
 		"base_path", basePath,
-		"file_count", len(tree.Entries))
+		"expected_files", len(blobEntries),
+		"files_written", filesWritten)
+
+	// Final validation
+	if filesWritten != len(blobEntries) {
+		logger.Error("File count mismatch after writing",
+			"expected_files", len(blobEntries),
+			"files_written", filesWritten)
+		return fmt.Errorf("expected to write %d files but only wrote %d", len(blobEntries), filesWritten)
+	}
 
 	return nil
+}
+
+// fetchBlobsBatched efficiently fetches multiple blobs in batches to reduce HTTP requests
+// and improve performance for cloning operations with many files.
+func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Fetching blobs in batches",
+		"total_blobs", len(blobHashes),
+		"batch_size", 100) // We'll use a reasonable batch size
+
+	if len(blobHashes) == 0 {
+		return make(map[string]*protocol.PackfileObject), nil
+	}
+
+	// For small numbers of blobs, fetch them all at once
+	const maxSingleBatch = 100
+	if len(blobHashes) <= maxSingleBatch {
+		return c.fetchBlobBatch(ctx, blobHashes)
+	}
+
+	// For larger numbers, split into multiple batches and process sequentially (to debug issues)
+	const batchSize = 50
+	numBatches := (len(blobHashes) + batchSize - 1) / batchSize
+	
+	logger.Debug("Splitting into multiple batches (sequential processing)",
+		"batch_count", numBatches,
+		"batch_size", batchSize)
+
+	// Process batches sequentially to avoid race conditions
+	allObjects := make(map[string]*protocol.PackfileObject)
+	for i := 0; i < numBatches; i++ {
+		start := i * batchSize
+		end := start + batchSize
+		if end > len(blobHashes) {
+			end = len(blobHashes)
+		}
+		
+		batchHashes := blobHashes[start:end]
+		
+		logger.Debug("Processing batch",
+			"batch_id", i,
+			"blob_count", len(batchHashes))
+		
+		objects, err := c.fetchBlobBatch(ctx, batchHashes)
+		if err != nil {
+			logger.Error("Batch fetch failed",
+				"batch_id", i,
+				"error", err)
+			return nil, fmt.Errorf("batch %d failed: %w", i, err)
+		}
+
+		logger.Debug("Batch fetch completed",
+			"batch_id", i,
+			"requested", len(batchHashes),
+			"received", len(objects))
+
+		// Check for missing blobs in this batch and try to fetch them individually
+		if len(objects) != len(batchHashes) {
+			logger.Warn("Batch blob count mismatch - trying individual fetch for missing blobs",
+				"batch_id", i,
+				"requested", len(batchHashes),
+				"received", len(objects))
+			
+			// Find missing blobs and try to fetch them individually
+			missingHashes := make([]hash.Hash, 0)
+			for _, expectedHash := range batchHashes {
+				if _, found := objects[expectedHash.String()]; !found {
+					missingHashes = append(missingHashes, expectedHash)
+					logger.Debug("Will retry missing blob individually",
+						"batch_id", i,
+						"blob_hash", expectedHash.String())
+				}
+			}
+			
+			// Try to fetch missing blobs individually using the old GetBlob method
+			logger.Debug("Fetching missing blobs individually",
+				"batch_id", i,
+				"missing_count", len(missingHashes))
+			
+			for _, missingHash := range missingHashes {
+				logger.Debug("Fetching individual blob",
+					"blob_hash", missingHash.String())
+				
+				// Use the old GetBlob method as fallback
+				blob, err := c.GetBlob(ctx, missingHash)
+				if err != nil {
+					logger.Error("Failed to fetch missing blob individually",
+						"blob_hash", missingHash.String(),
+						"error", err)
+					continue // Skip this blob, but continue with others
+				}
+				
+				// Convert Blob to PackfileObject format
+				blobObj := &protocol.PackfileObject{
+					Hash: missingHash,
+					Type: protocol.ObjectTypeBlob,
+					Data: blob.Content,
+				}
+				
+				objects[missingHash.String()] = blobObj
+				logger.Debug("Successfully fetched missing blob individually",
+					"blob_hash", missingHash.String(),
+					"size", len(blob.Content))
+			}
+			
+			logger.Debug("Individual fetch completed",
+				"batch_id", i,
+				"missing_attempted", len(missingHashes),
+				"total_in_batch_now", len(objects))
+		}
+
+		// Merge objects from this batch
+		for hash, obj := range objects {
+			allObjects[hash] = obj
+		}
+
+		logger.Debug("Batch completed",
+			"batch_id", i,
+			"objects_fetched", len(objects),
+			"total_objects_so_far", len(allObjects))
+	}
+
+	logger.Debug("All batches completed",
+		"total_objects", len(allObjects),
+		"total_batches", numBatches)
+
+	return allObjects, nil
+}
+
+// fetchBlobBatch fetches a single batch of blobs using the underlying Fetch API
+func (c *httpClient) fetchBlobBatch(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	if len(blobHashes) == 0 {
+		return make(map[string]*protocol.PackfileObject), nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Fetching blob batch",
+		"blob_count", len(blobHashes))
+
+	// Use the existing Fetch method to get multiple blobs at once
+	objects, err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:     true,
+		Want:           blobHashes,
+		Done:           true,
+		NoExtraObjects: true, // Only get the blobs we requested
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetch blob batch: %w", err)
+	}
+
+	// Verify we only got blob objects
+	blobObjects := make(map[string]*protocol.PackfileObject)
+	for hash, obj := range objects {
+		if obj.Type != protocol.ObjectTypeBlob {
+			logger.Warn("Unexpected object type in blob batch",
+				"hash", hash,
+				"expected_type", protocol.ObjectTypeBlob,
+				"actual_type", obj.Type)
+			continue
+		}
+		blobObjects[hash] = obj
+	}
+
+	logger.Debug("Blob batch fetched successfully",
+		"requested_count", len(blobHashes),
+		"received_count", len(blobObjects))
+
+	return blobObjects, nil
 }
