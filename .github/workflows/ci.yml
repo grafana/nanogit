@@ -198,8 +198,8 @@ jobs:
           CGO_ENABLED: 1
           GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
-          TEST_USER: ${{ secrets.GH_REPO_USER }}
-          TEST_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+          TEST_USER: ${{ env.GH_REPO_USER }}
+          TEST_TOKEN: ${{ env.GH_REPO_TOKEN }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
