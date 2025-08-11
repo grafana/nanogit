@@ -21,7 +21,7 @@ nanogit is a lightweight, cloud-native Git implementation designed for applicati
 
 - **Cloud-native authentication** - Built-in support for Basic Auth and API tokens, designed for automated workflows and CI/CD systems without interactive authentication
 
-- **Essential Git operations** - Focused on core functionality (read/write objects, commit operations, cloning with path filtering, diffing) without the complexity of full Git implementations, reducing attack surface and resource requirements
+- **Essential Git operations** - Focused on core functionality (read/write objects, commit operations, diffing) without the complexity of full Git implementations, reducing attack surface and resource requirements
 
 - **High performance** - Significantly faster than traditional Git implementations for common cloud operations, with up to 300x speed improvements for certain scenarios
 
@@ -32,7 +32,6 @@ The following features are explicitly not supported:
 - `git://` and Git-over-SSH protocols
 - File protocol (local Git operations)
 - Commit signing and signature verification
-- Traditional full repository clones (with .git directory and full history)
 - Git hooks
 - Git configuration management
 - Direct .git directory access
@@ -47,6 +46,7 @@ While [go-git](https://github.com/go-git/go-git) is a mature Git implementation,
 | -------------- | ------------------------------------------------------ | ---------------------- |
 | Protocol       | HTTPS-only                                             | All protocols          |
 | Storage        | Stateless, configurable object storage + writing modes | Local disk operations  |
+| Cloning        | Path filtering with glob patterns, shallow clones      | Full repository clones |
 | Scope          | Essential operations only                              | Full Git functionality |
 | Use Case       | Cloud services, multitenant                            | General purpose        |
 | Resource Usage | Minimal footprint                                      | Full Git features      |
@@ -112,9 +112,9 @@ commit, err := writer.Commit(ctx, "Add feature and update docs", author, committ
 writer.Push(ctx)
 ```
 
-### Selective Repository Cloning
+### Cloning Repositories with Path Filtering
 
-nanogit provides efficient selective cloning that downloads and extracts only the files you need, with flexible path filtering. This is different from traditional Git clones - instead of creating a .git directory with full history, it fetches specific files from a commit and writes them directly to the filesystem.
+nanogit provides efficient cloning with flexible path filtering, ideal for CI environments where only specific directories are needed:
 
 ```go
 // First, get the commit hash for the branch you want to clone
@@ -123,84 +123,31 @@ if err != nil {
     return err
 }
 
-// Clone specific directories from a branch
+// Clone specific directories only (perfect for CI with no caching)
 result, err := client.Clone(ctx, nanogit.CloneOptions{
     Path:         "/tmp/my-repo",        // Local filesystem path (required)
-    Hash:         ref.Hash,              // Commit hash from GetRef
+    Hash:         ref.Hash,              // Commit hash (required)
     IncludePaths: []string{"src/**", "docs/**"}, // Include only these paths
     ExcludePaths: []string{"*.tmp", "node_modules/**"}, // Exclude these paths
 })
+if err != nil {
+    return err
+}
 
-// Or clone from a specific commit hash directly
-result, err := client.Clone(ctx, nanogit.CloneOptions{
-    Path:         "/tmp/my-repo",
-    Hash:         commitHash,            // Specific commit hash
-    IncludePaths: []string{"src/**", "docs/**"},
-})
-
-// Access clone results
-fmt.Printf("Cloned %d of %d files to %s\n", 
+// result.Commit contains the commit information
+// result.FlatTree contains filtered file tree
+// Files are automatically written to result.Path
+fmt.Printf("Cloned %d of %d files to %s\n",
     result.FilteredFiles, result.TotalFiles, result.Path)
-fmt.Printf("Commit: %s by %s\n", 
-    result.Commit.Hash.String()[:8], result.Commit.Author.Name)
 ```
-
-#### How nanogit Clone differs from `git clone`:
-
-| Feature | nanogit Clone | Traditional `git clone` |
-|---------|---------------|-------------------------|
-| **Output** | Working files only | Full repository + .git directory |
-| **History** | Single commit snapshot | Complete commit history |
-| **Filtering** | Include/exclude paths with glob patterns | No built-in path filtering |
-| **Use Case** | CI builds, file extraction | Full development workflow |
-| **Size** | Minimal (filtered files only) | Full repository size |
-| **Speed** | Fast (single commit, filtered) | Slower (full history) |
 
 Key clone features:
-- **Selective file extraction**: Download only the files you need from any commit
-- **Path filtering**: Use glob patterns to include/exclude specific files and directories  
-- **Direct filesystem output**: Files written directly to specified path, no .git directory
-- **CI/Build optimized**: Perfect for build environments that need specific files without Git history
-- **Bandwidth efficient**: Only transfers needed files, not entire repository history
 
-#### Common Use Cases
-
-```go
-// CI: Clone only source code, exclude tests and docs
-releaseRef, err := client.GetRef(ctx, "v1.2.3")  // Get specific release tag
-if err != nil {
-    return err
-}
-result, err := client.Clone(ctx, nanogit.CloneOptions{
-    Path:         "/build/src",
-    Hash:         releaseRef.Hash,
-    IncludePaths: []string{"src/**", "*.go", "go.mod", "go.sum"},
-    ExcludePaths: []string{"src/**/*_test.go", "docs/**"},
-})
-
-// Documentation site: Clone only documentation
-mainRef, err := client.GetRef(ctx, "main")
-if err != nil {
-    return err
-}
-result, err := client.Clone(ctx, nanogit.CloneOptions{
-    Path:         "/site/content", 
-    Hash:         mainRef.Hash,
-    IncludePaths: []string{"docs/**", "*.md"},
-})
-
-// Config deployment: Clone only configuration files
-prodRef, err := client.GetRef(ctx, "production")
-if err != nil {
-    return err
-}
-result, err := client.Clone(ctx, nanogit.CloneOptions{
-    Path:         "/etc/myapp",
-    Hash:         prodRef.Hash,
-    IncludePaths: []string{"config/**", "*.yaml", "*.json"},
-    ExcludePaths: []string{"config/dev/**", "*.example.*"},
-})
-```
+- **Path filtering**: Use glob patterns to include/exclude specific files and directories
+- **Filesystem output**: Automatically writes filtered files to specified local path
+- **Shallow clones**: Fetch only the latest commit to minimize bandwidth
+- **Branch isolation**: Clone only specific branches to reduce transfer time
+- **CI optimized**: Perfect for build environments with no persistent storage
 
 ### Configurable Writing Modes
 

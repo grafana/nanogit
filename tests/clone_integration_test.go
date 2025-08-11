@@ -47,7 +47,7 @@ var _ = Describe("Clone operations", func() {
 			Expect(result).NotTo(BeNil())
 			Expect(result.Path).To(Equal(tempDir))
 			Expect(result.Commit.Hash).To(Equal(commitHash))
-			Expect(result.FilteredFiles).To(BeNumerically(">=", 3)) // At least our 3 new files
+			Expect(result.FilteredFiles).To(Equal(6)) // All files in the repository at this commit
 			
 			By("Verifying files were written to disk")
 			content, err := os.ReadFile(filepath.Join(tempDir, "README.md"))
@@ -186,7 +186,8 @@ var _ = Describe("Clone operations", func() {
 		})
 
 		It("should handle non-existent commit hashes", func() {
-			invalidHash := hash.MustFromHex("0000000000000000000000000000000000000000")
+			// Use a valid-looking hash that doesn't exist
+			invalidHash := hash.MustFromHex("1234567890abcdef1234567890abcdef12345678")
 			tempDir := GinkgoT().TempDir()
 			_, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path: tempDir,
