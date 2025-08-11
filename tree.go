@@ -692,12 +692,11 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 // This method provides a non-recursive view of a directory, similar to running
 // 'ls' in a Unix directory - you see only the immediate contents, not subdirectories.
 //
-// The method can accept either a tree hash directly or a commit hash (in which
-// case it will extract the tree from the commit).
+// The method can accept only a tree hash directly.
 //
 // Parameters:
 //   - ctx: Context for the operation
-//   - h: Hash of either a tree object
+//   - treeHash: Hash of a tree object
 //
 // Returns:
 //   - *Tree: Tree object containing direct children only
@@ -713,23 +712,23 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 //	        fmt.Printf("📄 %s\n", entry.Name)
 //	    }
 //	}
-func (c *httpClient) GetTree(ctx context.Context, h hash.Hash) (*Tree, error) {
+func (c *httpClient) GetTree(ctx context.Context, treeHash hash.Hash) (*Tree, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Get tree",
-		"tree_hash", h.String())
+		"tree_hash", treeHash.String())
 
-	tree, err := c.getTree(ctx, h)
+	tree, err := c.getTree(ctx, treeHash)
 	if err != nil {
-		return nil, fmt.Errorf("get tree object %s: %w", h.String(), err)
+		return nil, fmt.Errorf("get tree object %s: %w", treeHash.String(), err)
 	}
 
 	result, err := packfileObjectToTree(tree)
 	if err != nil {
-		return nil, fmt.Errorf("convert tree object %s: %w", h.String(), err)
+		return nil, fmt.Errorf("convert tree object %s: %w", treeHash.String(), err)
 	}
 
 	logger.Debug("Tree retrieved",
-		"tree_hash", h.String(),
+		"tree_hash", treeHash.String(),
 		"entry_count", len(result.Entries))
 	return result, nil
 }

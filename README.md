@@ -32,7 +32,6 @@ The following features are explicitly not supported:
 - `git://` and Git-over-SSH protocols
 - File protocol (local Git operations)
 - Commit signing and signature verification
-- Full Git clones
 - Git hooks
 - Git configuration management
 - Direct .git directory access
@@ -47,6 +46,7 @@ While [go-git](https://github.com/go-git/go-git) is a mature Git implementation,
 | -------------- | ------------------------------------------------------ | ---------------------- |
 | Protocol       | HTTPS-only                                             | All protocols          |
 | Storage        | Stateless, configurable object storage + writing modes | Local disk operations  |
+| Cloning        | Path filtering with glob patterns, shallow clones      | Full repository clones |
 | Scope          | Essential operations only                              | Full Git functionality |
 | Use Case       | Cloud services, multitenant                            | General purpose        |
 | Resource Usage | Minimal footprint                                      | Full Git features      |
@@ -111,6 +111,43 @@ committer := nanogit.Committer{
 commit, err := writer.Commit(ctx, "Add feature and update docs", author, committer)
 writer.Push(ctx)
 ```
+
+### Cloning Repositories with Path Filtering
+
+nanogit provides efficient cloning with flexible path filtering, ideal for CI environments where only specific directories are needed:
+
+```go
+// First, get the commit hash for the branch you want to clone
+ref, err := client.GetRef(ctx, "main")
+if err != nil {
+    return err
+}
+
+// Clone specific directories only (perfect for CI with no caching)
+result, err := client.Clone(ctx, nanogit.CloneOptions{
+    Path:         "/tmp/my-repo",        // Local filesystem path (required)
+    Hash:         ref.Hash,              // Commit hash (required)
+    IncludePaths: []string{"src/**", "docs/**"}, // Include only these paths
+    ExcludePaths: []string{"*.tmp", "node_modules/**"}, // Exclude these paths
+})
+if err != nil {
+    return err
+}
+
+// result.Commit contains the commit information
+// result.FlatTree contains filtered file tree
+// Files are automatically written to result.Path
+fmt.Printf("Cloned %d of %d files to %s\n",
+    result.FilteredFiles, result.TotalFiles, result.Path)
+```
+
+Key clone features:
+
+- **Path filtering**: Use glob patterns to include/exclude specific files and directories
+- **Filesystem output**: Automatically writes filtered files to specified local path
+- **Shallow clones**: Fetch only the latest commit to minimize bandwidth
+- **Branch isolation**: Clone only specific branches to reduce transfer time
+- **CI optimized**: Perfect for build environments with no persistent storage
 
 ### Configurable Writing Modes
 
