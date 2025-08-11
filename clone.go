@@ -13,6 +13,14 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// batchResult represents the result of processing a batch of blobs
+type batchResult struct {
+	batchID      int
+	objects      map[string]*protocol.PackfileObject
+	missingBlobs []hash.Hash
+	err          error
+}
+
 // CloneOptions provides configuration options for repository cloning operations.
 // It supports flexible folder filtering to optimize clones of large repositories
 // by only including or excluding specific paths, which is ideal for CI environments
@@ -331,9 +339,7 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 // and improve performance for cloning operations with many files.
 func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Fetching blobs in batches",
-		"total_blobs", len(blobHashes),
-		"batch_size", 100) // We'll use a reasonable batch size
+	logger.Debug("Fetching blobs in batches", "total_blobs", len(blobHashes))
 
 	if len(blobHashes) == 0 {
 		return make(map[string]*protocol.PackfileObject), nil
@@ -345,68 +351,95 @@ func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Ha
 		return c.fetchBlobBatch(ctx, blobHashes)
 	}
 
-	// For larger numbers, split into multiple batches and process in parallel
+	// For larger numbers, process in parallel batches
+	return c.fetchBlobsInParallel(ctx, blobHashes)
+}
+
+// fetchBlobsInParallel processes large numbers of blobs using parallel workers
+func (c *httpClient) fetchBlobsInParallel(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
 	const batchSize = 50
-	const maxConcurrency = 5 // Stay well within provider limits
+	const maxConcurrency = 5
+	
+	logger := log.FromContext(ctx)
 	numBatches := (len(blobHashes) + batchSize - 1) / batchSize
 	
-	logger.Debug("Splitting into multiple batches (parallel processing)",
-		"batch_count", numBatches,
-		"batch_size", batchSize,
+	logger.Debug("Processing blobs in parallel", 
+		"batch_count", numBatches, 
+		"batch_size", batchSize, 
 		"max_concurrency", maxConcurrency)
 
-	// Process batches in parallel with controlled concurrency
-	allObjects := make(map[string]*protocol.PackfileObject)
-	allMissingHashes := make([]hash.Hash, 0)
+	// Process batches and collect results
+	allObjects, allMissingHashes := c.processBatchesInParallel(ctx, blobHashes, batchSize, maxConcurrency)
 	
-	// Create channels for batch processing
-	type batchResult struct {
-		batchID      int
-		objects      map[string]*protocol.PackfileObject
-		missingBlobs []hash.Hash
-		err          error
-	}
+	// Handle missing blobs with sophisticated fallback
+	return c.handleMissingBlobs(ctx, allObjects, allMissingHashes)
+}
+
+// processBatchesInParallel executes blob fetching across multiple workers
+func (c *httpClient) processBatchesInParallel(ctx context.Context, blobHashes []hash.Hash, batchSize, maxConcurrency int) (map[string]*protocol.PackfileObject, []hash.Hash) {
+	numBatches := (len(blobHashes) + batchSize - 1) / batchSize
 	
 	batchChan := make(chan []hash.Hash, numBatches)
 	resultChan := make(chan batchResult, numBatches)
 	
 	// Start worker goroutines
+	c.startBatchWorkers(ctx, batchChan, resultChan, maxConcurrency, numBatches)
+	
+	// Send batches to workers
+	c.sendBatchesToWorkers(batchChan, blobHashes, batchSize, numBatches)
+	
+	// Collect and merge results
+	return c.collectBatchResults(ctx, resultChan, numBatches)
+}
+
+// startBatchWorkers launches the parallel worker goroutines
+func (c *httpClient) startBatchWorkers(ctx context.Context, batchChan <-chan []hash.Hash, resultChan chan<- batchResult, maxConcurrency, numBatches int) {
 	concurrency := maxConcurrency
 	if numBatches < maxConcurrency {
 		concurrency = numBatches
 	}
+	
 	for w := 0; w < concurrency; w++ {
-		go func(workerID int) {
-			for batchHashes := range batchChan {
-				batchID := len(batchHashes) // Use length as simple ID
-				
-				logger.Debug("Worker processing batch",
-					"worker_id", workerID,
-					"batch_size", len(batchHashes))
-				
-				objects, err := c.fetchBlobBatch(ctx, batchHashes)
-				
-				// Find missing blobs in this batch
-				missingBlobs := make([]hash.Hash, 0)
-				if err == nil && len(objects) != len(batchHashes) {
-					for _, expectedHash := range batchHashes {
-						if _, found := objects[expectedHash.String()]; !found {
-							missingBlobs = append(missingBlobs, expectedHash)
-						}
-					}
-				}
-				
-				resultChan <- batchResult{
-					batchID:      batchID,
-					objects:      objects,
-					missingBlobs: missingBlobs,
-					err:          err,
-				}
-			}
-		}(w)
+		go c.batchWorker(ctx, w, batchChan, resultChan)
+	}
+}
+
+// batchWorker processes individual batches of blobs
+func (c *httpClient) batchWorker(ctx context.Context, workerID int, batchChan <-chan []hash.Hash, resultChan chan<- batchResult) {
+	logger := log.FromContext(ctx)
+	
+	for batchHashes := range batchChan {
+		logger.Debug("Worker processing batch", "worker_id", workerID, "batch_size", len(batchHashes))
+		
+		objects, err := c.fetchBlobBatch(ctx, batchHashes)
+		missingBlobs := c.findMissingBlobs(batchHashes, objects)
+		
+		resultChan <- batchResult{
+			batchID:      len(batchHashes), // Simple ID based on batch size
+			objects:      objects,
+			missingBlobs: missingBlobs,
+			err:          err,
+		}
+	}
+}
+
+// findMissingBlobs identifies which blobs were not returned in a batch
+func (c *httpClient) findMissingBlobs(requestedHashes []hash.Hash, receivedObjects map[string]*protocol.PackfileObject) []hash.Hash {
+	if len(receivedObjects) == len(requestedHashes) {
+		return nil
 	}
 	
-	// Send batches to workers
+	missingBlobs := make([]hash.Hash, 0)
+	for _, expectedHash := range requestedHashes {
+		if _, found := receivedObjects[expectedHash.String()]; !found {
+			missingBlobs = append(missingBlobs, expectedHash)
+		}
+	}
+	return missingBlobs
+}
+
+// sendBatchesToWorkers distributes blob batches to worker goroutines
+func (c *httpClient) sendBatchesToWorkers(batchChan chan<- []hash.Hash, blobHashes []hash.Hash, batchSize, numBatches int) {
 	go func() {
 		defer close(batchChan)
 		for i := 0; i < numBatches; i++ {
@@ -418,113 +451,104 @@ func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Ha
 			batchChan <- blobHashes[start:end]
 		}
 	}()
+}
+
+// collectBatchResults gathers results from all worker goroutines
+func (c *httpClient) collectBatchResults(ctx context.Context, resultChan <-chan batchResult, numBatches int) (map[string]*protocol.PackfileObject, []hash.Hash) {
+	logger := log.FromContext(ctx)
+	allObjects := make(map[string]*protocol.PackfileObject)
+	allMissingHashes := make([]hash.Hash, 0)
 	
-	// Collect results from all batches
 	for i := 0; i < numBatches; i++ {
 		result := <-resultChan
 		
 		if result.err != nil {
-			logger.Error("Batch fetch failed",
-				"batch_id", result.batchID,
-				"error", result.err)
-			return nil, fmt.Errorf("batch %d failed: %w", result.batchID, result.err)
+			logger.Error("Batch fetch failed", "batch_id", result.batchID, "error", result.err)
+			continue // Continue with other batches
 		}
 
-		logger.Debug("Batch fetch completed",
-			"batch_id", result.batchID,
-			"received", len(result.objects))
-
-		// Collect missing blobs for later retry
-		if len(result.missingBlobs) > 0 {
-			logger.Debug("Batch blob count mismatch - collecting missing blobs for batch retry",
-				"batch_id", result.batchID,
-				"missing_in_batch", len(result.missingBlobs),
-				"total_missing_so_far", len(allMissingHashes)+len(result.missingBlobs))
-			
-			allMissingHashes = append(allMissingHashes, result.missingBlobs...)
-		}
-
-		// Merge objects from this batch
+		// Merge objects and collect missing hashes
 		for hash, obj := range result.objects {
 			allObjects[hash] = obj
 		}
-
-		logger.Debug("Batch completed",
-			"batch_id", result.batchID,
-			"objects_fetched", len(result.objects),
-			"total_objects_so_far", len(allObjects))
+		allMissingHashes = append(allMissingHashes, result.missingBlobs...)
+		
+		logger.Debug("Batch completed", "batch_id", result.batchID, "objects_fetched", len(result.objects))
 	}
 	
-	// Now try to batch fetch all missing blobs together
-	if len(allMissingHashes) > 0 {
-		logger.Debug("Attempting batch retry for all missing blobs",
-			"missing_count", len(allMissingHashes))
-		
-		missingObjects, err := c.fetchMissingBlobsBatched(ctx, allMissingHashes)
-		if err != nil {
-			logger.Warn("Batch retry for missing blobs failed, falling back to individual requests",
-				"missing_count", len(allMissingHashes),
-				"error", err)
-		} else {
-			// Merge successfully fetched missing objects
-			for hash, obj := range missingObjects {
-				allObjects[hash] = obj
-			}
-			
-			logger.Debug("Batch retry completed",
-				"missing_requested", len(allMissingHashes),
-				"missing_received", len(missingObjects),
-				"total_objects_now", len(allObjects))
-		}
-		
-		// Check if we still have missing blobs and fall back to individual requests
-		stillMissingHashes := make([]hash.Hash, 0)
-		for _, missingHash := range allMissingHashes {
-			if _, found := allObjects[missingHash.String()]; !found {
-				stillMissingHashes = append(stillMissingHashes, missingHash)
-			}
-		}
-		
-		if len(stillMissingHashes) > 0 {
-			logger.Debug("Some blobs still missing after batch retry, fetching individually",
-				"still_missing_count", len(stillMissingHashes))
-			
-			for _, missingHash := range stillMissingHashes {
-				logger.Debug("Fetching individual blob",
-					"blob_hash", missingHash.String())
-				
-				// Use the old GetBlob method as final fallback
-				blob, err := c.GetBlob(ctx, missingHash)
-				if err != nil {
-					logger.Error("Failed to fetch missing blob individually",
-						"blob_hash", missingHash.String(),
-						"error", err)
-					continue // Skip this blob, but continue with others
-				}
-				
-				// Convert Blob to PackfileObject format
-				blobObj := &protocol.PackfileObject{
-					Hash: missingHash,
-					Type: protocol.ObjectTypeBlob,
-					Data: blob.Content,
-				}
-				
-				allObjects[missingHash.String()] = blobObj
-				logger.Debug("Successfully fetched missing blob individually",
-					"blob_hash", missingHash.String(),
-					"size", len(blob.Content))
-			}
-			
-			logger.Debug("Individual fallback completed",
-				"individual_attempts", len(stillMissingHashes),
-				"final_total_objects", len(allObjects))
+	return allObjects, allMissingHashes
+}
+
+// handleMissingBlobs implements the sophisticated fallback strategy for missing blobs
+func (c *httpClient) handleMissingBlobs(ctx context.Context, allObjects map[string]*protocol.PackfileObject, allMissingHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	if len(allMissingHashes) == 0 {
+		return allObjects, nil
+	}
+	
+	logger := log.FromContext(ctx)
+	logger.Debug("Handling missing blobs", "missing_count", len(allMissingHashes))
+	
+	// Try batch retry for missing blobs
+	allObjects = c.retryMissingBlobsBatch(ctx, allObjects, allMissingHashes)
+	
+	// Individual fallback for any remaining missing blobs
+	return c.individualFallbackForMissingBlobs(ctx, allObjects, allMissingHashes)
+}
+
+// retryMissingBlobsBatch attempts to fetch all missing blobs in a single batch retry
+func (c *httpClient) retryMissingBlobsBatch(ctx context.Context, allObjects map[string]*protocol.PackfileObject, allMissingHashes []hash.Hash) map[string]*protocol.PackfileObject {
+	logger := log.FromContext(ctx)
+	logger.Debug("Attempting batch retry for missing blobs", "missing_count", len(allMissingHashes))
+	
+	missingObjects, err := c.fetchMissingBlobsBatched(ctx, allMissingHashes)
+	if err != nil {
+		logger.Warn("Batch retry failed", "missing_count", len(allMissingHashes), "error", err)
+		return allObjects
+	}
+	
+	// Merge successfully fetched missing objects
+	for hash, obj := range missingObjects {
+		allObjects[hash] = obj
+	}
+	
+	logger.Debug("Batch retry completed", "missing_received", len(missingObjects))
+	return allObjects
+}
+
+// individualFallbackForMissingBlobs fetches any remaining missing blobs individually
+func (c *httpClient) individualFallbackForMissingBlobs(ctx context.Context, allObjects map[string]*protocol.PackfileObject, allMissingHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	
+	// Find blobs still missing after batch retry
+	stillMissingHashes := make([]hash.Hash, 0)
+	for _, missingHash := range allMissingHashes {
+		if _, found := allObjects[missingHash.String()]; !found {
+			stillMissingHashes = append(stillMissingHashes, missingHash)
 		}
 	}
-
-	logger.Debug("All batches completed",
-		"total_objects", len(allObjects),
-		"total_batches", numBatches)
-
+	
+	if len(stillMissingHashes) == 0 {
+		return allObjects, nil
+	}
+	
+	logger.Debug("Fetching remaining blobs individually", "still_missing_count", len(stillMissingHashes))
+	
+	for _, missingHash := range stillMissingHashes {
+		blob, err := c.GetBlob(ctx, missingHash)
+		if err != nil {
+			logger.Error("Failed to fetch missing blob", "blob_hash", missingHash.String(), "error", err)
+			continue
+		}
+		
+		blobObj := &protocol.PackfileObject{
+			Hash: missingHash,
+			Type: protocol.ObjectTypeBlob,
+			Data: blob.Content,
+		}
+		allObjects[missingHash.String()] = blobObj
+		logger.Debug("Individual blob fetched", "blob_hash", missingHash.String(), "size", len(blob.Content))
+	}
+	
 	return allObjects, nil
 }
 
