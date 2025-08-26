@@ -2,7 +2,6 @@ package performance
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +57,6 @@ func TestInvestigateMissingFiles(t *testing.T) {
 		// NO IncludePaths - fetch everything
 		// NO ExcludePaths - fetch everything for 100% completeness
 		OnFileWritten: tracker.onFileWritten,
-		OnFileFailed:  tracker.onFileFailed,
 	})
 	cloneDuration := time.Since(start)
 
@@ -73,12 +71,12 @@ func TestInvestigateMissingFiles(t *testing.T) {
 
 	t.Logf("🔍 Investigation Results:")
 	t.Logf("   • Total files in repository: %d", result.TotalFiles)
-	t.Logf("   • Files matching filters: %d", result.FilteredFiles)
+	t.Logf("   • Files matching filters: %d", result.TotalFilteredFiles)
 	t.Logf("   • Files successfully written: %d", finalWritten)
 	t.Logf("   • Files failed: %d", finalFailed)
 	t.Logf("   • Total data written: %.1f MB", float64(finalSize)/(1024*1024))
 	t.Logf("   • Clone time: %v", cloneDuration)
-	
+
 	// List all failed files
 	t.Logf("🚨 FAILED FILES (%d total):", len(tracker.failedFiles))
 	for i, failedFile := range tracker.failedFiles {
@@ -146,7 +144,3 @@ func (t *investigationProgressTracker) onFileWritten(path string, size int64) {
 	atomic.AddInt64(&t.totalSize, size)
 }
 
-func (t *investigationProgressTracker) onFileFailed(path string, err error) {
-	atomic.AddInt64(&t.filesFailed, 1)
-	t.failedFiles = append(t.failedFiles, fmt.Sprintf("%s (error: %v)", path, err))
-}

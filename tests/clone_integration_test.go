@@ -27,12 +27,12 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("README.md", "# Test Repository")
 			local.CreateFile("src/main.go", "package main\n\nfunc main() {}")
 			local.CreateFile("docs/api.md", "# API Documentation")
-			
+
 			By("Committing and pushing the files")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Add multiple files")
 			local.Git("push", "origin", "main", "--force")
-			
+
 			By("Getting the commit hash")
 			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -47,8 +47,8 @@ var _ = Describe("Clone operations", func() {
 			Expect(result).NotTo(BeNil())
 			Expect(result.Path).To(Equal(tempDir))
 			Expect(result.Commit.Hash).To(Equal(commitHash))
-			Expect(result.FilteredFiles).To(Equal(6)) // All files in the repository at this commit
-			
+			Expect(result.TotalFilteredFiles).To(Equal(6)) // All files in the repository at this commit
+
 			By("Verifying files were written to disk")
 			content, err := os.ReadFile(filepath.Join(tempDir, "README.md"))
 			Expect(err).NotTo(HaveOccurred())
@@ -61,11 +61,11 @@ var _ = Describe("Clone operations", func() {
 			local.Git("add", ".")
 			local.Git("commit", "-m", "First commit")
 			local.Git("push", "origin", "main", "--force")
-			
+
 			By("Getting the first commit hash")
 			firstHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
-			
+
 			local.CreateFile("second.txt", "second commit")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Second commit")
@@ -79,7 +79,7 @@ var _ = Describe("Clone operations", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Commit.Hash).To(Equal(firstHash))
-			
+
 			// Should have first.txt but not second.txt
 			_, err = os.Stat(filepath.Join(tempDir, "first.txt"))
 			Expect(err).NotTo(HaveOccurred())
@@ -90,7 +90,7 @@ var _ = Describe("Clone operations", func() {
 
 	Context("Path filtering", func() {
 		var commitHash hash.Hash
-		
+
 		BeforeEach(func() {
 			By("Creating a repository with diverse file structure")
 			local.CreateFile("README.md", "# Main readme")
@@ -99,12 +99,12 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("docs/README.md", "# Documentation")
 			local.CreateFile("tests/main_test.go", "package main_test")
 			local.CreateFile("node_modules/package/index.js", "module.exports = {}")
-			
+
 			By("Committing and pushing the files")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Create diverse structure")
 			local.Git("push", "origin", "main", "--force")
-			
+
 			By("Getting the commit hash")
 			var err error
 			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
@@ -119,7 +119,7 @@ var _ = Describe("Clone operations", func() {
 				IncludePaths: []string{"src/**", "docs/**"},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.FilteredFiles).To(BeNumerically("<", result.TotalFiles))
+			Expect(result.TotalFilteredFiles).To(BeNumerically("<", result.TotalFiles))
 
 			// Should include src and docs files
 			_, err = os.Stat(filepath.Join(tempDir, "src", "main.go"))
@@ -140,7 +140,7 @@ var _ = Describe("Clone operations", func() {
 				ExcludePaths: []string{"node_modules/**", "tests/**"},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.FilteredFiles).To(BeNumerically("<", result.TotalFiles))
+			Expect(result.TotalFilteredFiles).To(BeNumerically("<", result.TotalFiles))
 
 			// Should include main files
 			_, err = os.Stat(filepath.Join(tempDir, "README.md"))
@@ -202,7 +202,7 @@ var _ = Describe("Clone operations", func() {
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Test commit")
 			local.Git("push", "origin", "main", "--force")
-			
+
 			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -213,7 +213,8 @@ var _ = Describe("Clone operations", func() {
 				ExcludePaths: []string{"**"}, // Exclude everything
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.FilteredFiles).To(Equal(0))
+			Expect(result.TotalFilteredFiles).To(Equal(0))
 		})
 	})
 })
+

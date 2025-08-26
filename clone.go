@@ -9,7 +9,6 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
-	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -51,12 +50,6 @@ type CloneOptions struct {
 	// This can be used for progress tracking, logging, or custom processing.
 	// The callback should be fast and non-blocking to avoid slowing down the clone.
 	OnFileWritten func(filePath string, size int64)
-
-	// OnFileFailed is called when a file cannot be written due to missing blob data.
-	// It receives the relative file path and the error that occurred.
-	// This can be used to track which files couldn't be cloned and why.
-	// The callback should be fast and non-blocking to avoid slowing down the clone.
-	OnFileFailed func(filePath string, err error)
 }
 
 // CloneResult contains the results of a clone operation.
@@ -74,8 +67,8 @@ type CloneResult struct {
 	// TotalFiles is the total number of files (not directories) in the repository.
 	TotalFiles int
 
-	// FilteredFiles is the number of files (not directories) after applying include/exclude filters.
-	FilteredFiles int
+	// TotalFilteredFiles is the number of files (not directories) after applying include/exclude filters.
+	TotalFilteredFiles int
 }
 
 // Clone clones a repository for the given reference with optional path filtering.
@@ -153,13 +146,12 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		"commit_hash", commit.Hash.String(),
 		"total_entries", len(fullTree.Entries))
 
-	filteredTree, err := c.filterTree(ctx, fullTree, opts.IncludePaths, opts.ExcludePaths)
+	filteredTree, err := c.filterFilesInTree(ctx, fullTree, opts.IncludePaths, opts.ExcludePaths)
 	if err != nil {
 		return nil, fmt.Errorf("filter tree: %w", err)
 	}
 
-	// Write files to filesystem
-	err = c.writeFilesToDisk(ctx, opts, filteredTree)
+	err = c.fetchAndWriteFilesToDisk(ctx, opts, filteredTree)
 	if err != nil {
 		return nil, fmt.Errorf("write files to disk: %w", err)
 	}
@@ -172,27 +164,26 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		}
 	}
 
-	// FilteredFiles can now just use len() since filterTree only includes files
 	result := &CloneResult{
-		Path:          opts.Path,
-		Commit:        commit,
-		FlatTree:      filteredTree,
-		TotalFiles:    totalFileCount,
-		FilteredFiles: len(filteredTree.Entries),
+		Path:               opts.Path,
+		Commit:             commit,
+		FlatTree:           filteredTree,
+		TotalFiles:         totalFileCount,
+		TotalFilteredFiles: len(filteredTree.Entries),
 	}
 
 	logger.Debug("Clone completed",
 		"commit_hash", commit.Hash.String(),
 		"total_files", result.TotalFiles,
-		"filtered_files", result.FilteredFiles,
+		"total_filtered_files", result.TotalFilteredFiles,
 		"output_path", opts.Path)
 
 	return result, nil
 }
 
-// filterTree applies include and exclude path patterns to filter a FlatTree.
+// filterFilesInTree applies include and exclude path patterns to filter a FlatTree.
 // It returns a new FlatTree containing only entries that match the criteria.
-func (c *httpClient) filterTree(ctx context.Context, tree *FlatTree, includePaths, excludePaths []string) (*FlatTree, error) {
+func (c *httpClient) filterFilesInTree(ctx context.Context, tree *FlatTree, includePaths, excludePaths []string) (*FlatTree, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Starting filterFilesInTree",
 		"total_entries", len(tree.Entries),
@@ -314,12 +305,12 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 	return false
 }
 
-// writeFilesToDisk writes all files from the filtered tree to the specified directory path.
+// fetchAndWriteFilesToDisk writes all files from the filtered tree to the specified directory path.
 // It creates the necessary directory structure and downloads blob content in batches for better performance.
-func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tree *FlatTree) error {
+func (c *httpClient) fetchAndWriteFilesToDisk(ctx context.Context, opts CloneOptions, tree *FlatTree) error {
 	logger := log.FromContext(ctx)
 	basePath := opts.Path
-	logger.Debug("Writing files to disk",
+	logger.Debug("Fetch and write files to disk",
 		"base_path", basePath,
 		"file_count", len(tree.Entries))
 
@@ -328,92 +319,61 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 		return fmt.Errorf("create base directory %s: %w", basePath, err)
 	}
 
-	// Collect all blob hashes and create path mapping
-	blobEntries := make([]FlatTreeEntry, 0, len(tree.Entries))
-	blobHashes := make([]hash.Hash, 0, len(tree.Entries))
-	hashToEntry := make(map[string]FlatTreeEntry)
-	nonBlobCount := 0
-
-	for _, entry := range tree.Entries {
-		// Only process blob entries (files)
-		if entry.Type == protocol.ObjectTypeBlob {
-			blobEntries = append(blobEntries, entry)
-			blobHashes = append(blobHashes, entry.Hash)
-			hashToEntry[entry.Hash.String()] = entry
-		} else {
-			nonBlobCount++
-			logger.Debug("Non-blob entry found in filtered tree",
-				"path", entry.Path,
-				"type", entry.Type,
-				"mode", fmt.Sprintf("0o%o", entry.Mode))
-		}
-	}
-
-	if nonBlobCount > 0 {
-		logger.Warn("Found non-blob entries in filtered tree",
-			"total_filtered_entries", len(tree.Entries),
-			"blob_entries", len(blobEntries),
-			"non_blob_entries", nonBlobCount)
-	}
-
-	if len(blobHashes) == 0 {
-		logger.Debug("No blob files to write")
+	if len(tree.Entries) == 0 {
+		logger.Debug("No files files to write")
 		return nil
 	}
 
-	// Fetch all blobs in batches for better performance
-	blobMap, err := c.fetchBlobsBatched(ctx, blobHashes)
-	if err != nil {
-		return fmt.Errorf("fetch blobs in batches: %w", err)
+	// prepare variables to track blobs and their paths
+	hashToBlobs := make(map[string][]FlatTreeEntry)
+	pendingBlobs := make(map[hash.Hash]struct{})
+	for _, entry := range tree.Entries {
+		pendingBlobs[entry.Hash] = struct{}{}
+		if _, exists := hashToBlobs[entry.Hash.String()]; !exists {
+			hashToBlobs[entry.Hash.String()] = make([]FlatTreeEntry, 0)
+		}
+		hashToBlobs[entry.Hash.String()] = append(hashToBlobs[entry.Hash.String()], entry)
+	}
+	totalBlobs := len(hashToBlobs)
+
+	var attempt int
+	for attempt <= 3 && len(pendingBlobs) > 0 {
+		attempt++
+		// pendingBlobs, err = c.fetchAndWriteInBatches(ctx, pendingBlobs)
+		// if err != nil {
+		// 	return fmt.Errorf("fetch and write in batches in attempt %d: %w", attempt, err)
+		// }
 	}
 
-	logger.Debug("Blob fetch summary",
-		"requested_blobs", len(blobHashes),
-		"received_blobs", len(blobMap),
-		"expected_files", len(blobEntries))
+	if len(pendingBlobs) > 0 {
+		logger.Debug("Some blobs are still pending after multiple batch attempts",
+			"pending_blob_count", len(pendingBlobs),
+			"total_blobs", totalBlobs,
+			"attempts", attempt,
+		)
 
-	// Check if we got all the blobs we requested
-	if len(blobMap) != len(blobHashes) {
-		logger.Warn("Blob count mismatch - some files couldn't be fetched",
-			"requested", len(blobHashes),
-			"received", len(blobMap),
-			"missing", len(blobHashes)-len(blobMap))
+		for hash := range pendingBlobs {
+			blob, err := c.GetBlob(ctx, hash)
+			if err != nil {
+				return fmt.Errorf("get individual blob %s: %w", hash.String(), err)
+			}
 
-		// Find missing blobs and log them for investigation
-		missingCount := 0
-		for _, expectedHash := range blobHashes {
-			if _, found := blobMap[expectedHash.String()]; !found {
-				if entry, exists := hashToEntry[expectedHash.String()]; exists {
-					missingCount++
-					if missingCount <= 5 { // Only log first 5 to avoid spam
-						logger.Warn("Missing blob for filtered file",
-							"file_path", entry.Path,
-							"blob_hash", expectedHash.String()[:8]+"...")
-					}
-				}
+			if err := c.writeBlobToDisk(ctx, opts, blob, hashToBlobs); err != nil {
+				return fmt.Errorf("write individual blob %s to disk: %w", hash.String(), err)
 			}
 		}
-		if missingCount > 5 {
-			logger.Warn("Additional missing blobs not shown", "hidden_count", missingCount-5)
-		}
 	}
 
-	// Write all files to disk
-	filesWritten := 0
-	failedFiles := 0
-	writtenFiles := make(map[string]bool) // Track which files were written
+	return nil
+}
 
-	// First, write all files we have blobs for
-	for _, blobObj := range blobMap {
-		entry, exists := hashToEntry[blobObj.Hash.String()]
-		if !exists {
-			logger.Warn("Received unexpected blob",
-				"blob_hash", blobObj.Hash.String())
-			continue // Skip unexpected blobs
-		}
+func (c *httpClient) writeBlobToDisk(ctx context.Context, opts CloneOptions, blob *Blob, hashToBlobs map[string][]FlatTreeEntry) error {
+	logger := log.FromContext(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-		filePath := filepath.Join(basePath, entry.Path)
-
+	for _, entry := range hashToBlobs[blob.Hash.String()] {
+		filePath := filepath.Join(opts.Path, entry.Path)
 		// Create parent directories if needed
 		parentDir := filepath.Dir(filePath)
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
@@ -421,441 +381,14 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 		}
 
 		// Write the file content
-		if err := os.WriteFile(filePath, blobObj.Data, 0644); err != nil {
+		if err := os.WriteFile(filePath, blob.Content, 0644); err != nil {
 			return fmt.Errorf("write file %s: %w", entry.Path, err)
 		}
-
-		filesWritten++
-		writtenFiles[entry.Path] = true // Mark as written
-		fileSize := int64(len(blobObj.Data))
-		logger.Debug("File written",
-			"path", entry.Path,
-			"size", fileSize)
-
-		// Call the callback if provided
+		logger.Debug("Wrote file to disk", "path", entry.Path, "size", len(blob.Content))
 		if opts.OnFileWritten != nil {
-			opts.OnFileWritten(entry.Path, fileSize)
+			opts.OnFileWritten(entry.Path, int64(len(blob.Content)))
 		}
-	}
-
-	// Now handle missing blobs - call OnFileFailed callback for each missing file
-	for _, entry := range blobEntries {
-		if _, found := blobMap[entry.Hash.String()]; !found {
-			failedFiles++
-			missingErr := fmt.Errorf("blob not found: %s", entry.Hash.String())
-
-			logger.Debug("File failed to write - missing blob",
-				"path", entry.Path,
-				"blob_hash", entry.Hash.String())
-
-			// Call the failure callback if provided
-			if opts.OnFileFailed != nil {
-				opts.OnFileFailed(entry.Path, missingErr)
-			}
-		}
-	}
-
-	// Final check: identify any filtered files that weren't written
-	// This helps debug the discrepancy between FilteredFiles and written files
-	missingFromFiltered := 0
-	for _, entry := range tree.Entries {
-		if !writtenFiles[entry.Path] {
-			missingFromFiltered++
-			if missingFromFiltered <= 5 { // Only show first 5 to avoid spam
-				logger.Warn("Filtered file was not written",
-					"path", entry.Path,
-					"type", entry.Type,
-					"mode", fmt.Sprintf("0o%o", entry.Mode))
-			}
-		}
-	}
-
-	if missingFromFiltered > 0 {
-		logger.Warn("Discrepancy found between filtered and written files",
-			"filtered_files", len(tree.Entries),
-			"written_files", filesWritten,
-			"missing_from_filtered", missingFromFiltered)
-	}
-
-	logger.Debug("All files processed",
-		"base_path", basePath,
-		"expected_files", len(blobEntries),
-		"files_written", filesWritten,
-		"files_failed", failedFiles)
-
-	// Return error if any files failed to be written
-	if failedFiles > 0 {
-		return fmt.Errorf("clone incomplete: %d files written successfully, %d files failed due to missing blobs", filesWritten, failedFiles)
 	}
 
 	return nil
-}
-
-// fetchBlobsBatched efficiently fetches multiple blobs in batches to reduce HTTP requests
-// and improve performance for cloning operations with many files.
-func (c *httpClient) fetchBlobsBatched(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	logger := log.FromContext(ctx)
-	logger.Debug("Fetching blobs in batches", "total_blobs", len(blobHashes))
-
-	if len(blobHashes) == 0 {
-		return make(map[string]*protocol.PackfileObject), nil
-	}
-
-	// For small numbers of blobs, fetch them all at once
-	const maxSingleBatch = 100
-	if len(blobHashes) <= maxSingleBatch {
-		return c.fetchBlobBatch(ctx, blobHashes)
-	}
-
-	// For larger numbers, process in parallel batches
-	return c.fetchBlobsInParallel(ctx, blobHashes)
-}
-
-// fetchBlobsInParallel processes large numbers of blobs using parallel workers
-func (c *httpClient) fetchBlobsInParallel(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	const batchSize = 50
-	const maxConcurrency = 5
-
-	logger := log.FromContext(ctx)
-	numBatches := (len(blobHashes) + batchSize - 1) / batchSize
-
-	logger.Debug("Processing blobs in parallel",
-		"batch_count", numBatches,
-		"batch_size", batchSize,
-		"max_concurrency", maxConcurrency)
-
-	// Process batches and collect results
-	allObjects, allMissingHashes := c.processBatchesInParallel(ctx, blobHashes, batchSize, maxConcurrency)
-
-	// Handle missing blobs with sophisticated fallback
-	return c.handleMissingBlobs(ctx, allObjects, allMissingHashes)
-}
-
-// processBatchesInParallel executes blob fetching across multiple workers
-func (c *httpClient) processBatchesInParallel(ctx context.Context, blobHashes []hash.Hash, batchSize, maxConcurrency int) (map[string]*protocol.PackfileObject, []hash.Hash) {
-	numBatches := (len(blobHashes) + batchSize - 1) / batchSize
-
-	batchChan := make(chan []hash.Hash, numBatches)
-	resultChan := make(chan batchResult, numBatches)
-
-	// Start worker goroutines
-	c.startBatchWorkers(ctx, batchChan, resultChan, maxConcurrency, numBatches)
-
-	// Send batches to workers
-	c.sendBatchesToWorkers(batchChan, blobHashes, batchSize, numBatches)
-
-	// Collect and merge results
-	return c.collectBatchResults(ctx, resultChan, numBatches)
-}
-
-// startBatchWorkers launches the parallel worker goroutines
-func (c *httpClient) startBatchWorkers(ctx context.Context, batchChan <-chan []hash.Hash, resultChan chan<- batchResult, maxConcurrency, numBatches int) {
-	concurrency := maxConcurrency
-	if numBatches < maxConcurrency {
-		concurrency = numBatches
-	}
-
-	for w := 0; w < concurrency; w++ {
-		go c.batchWorker(ctx, w, batchChan, resultChan)
-	}
-}
-
-// batchWorker processes individual batches of blobs
-func (c *httpClient) batchWorker(ctx context.Context, workerID int, batchChan <-chan []hash.Hash, resultChan chan<- batchResult) {
-	logger := log.FromContext(ctx)
-
-	for batchHashes := range batchChan {
-		logger.Debug("Worker processing batch", "worker_id", workerID, "batch_size", len(batchHashes))
-
-		objects, err := c.fetchBlobBatch(ctx, batchHashes)
-		missingBlobs := c.findMissingBlobs(batchHashes, objects)
-
-		resultChan <- batchResult{
-			batchID:      len(batchHashes), // Simple ID based on batch size
-			objects:      objects,
-			missingBlobs: missingBlobs,
-			err:          err,
-		}
-	}
-}
-
-// findMissingBlobs identifies which blobs were not returned in a batch
-func (c *httpClient) findMissingBlobs(requestedHashes []hash.Hash, receivedObjects map[string]*protocol.PackfileObject) []hash.Hash {
-	if len(receivedObjects) == len(requestedHashes) {
-		return nil
-	}
-
-	missingBlobs := make([]hash.Hash, 0)
-	for _, expectedHash := range requestedHashes {
-		if _, found := receivedObjects[expectedHash.String()]; !found {
-			missingBlobs = append(missingBlobs, expectedHash)
-		}
-	}
-	return missingBlobs
-}
-
-// sendBatchesToWorkers distributes blob batches to worker goroutines
-func (c *httpClient) sendBatchesToWorkers(batchChan chan<- []hash.Hash, blobHashes []hash.Hash, batchSize, numBatches int) {
-	go func() {
-		defer close(batchChan)
-		for i := 0; i < numBatches; i++ {
-			start := i * batchSize
-			end := start + batchSize
-			if end > len(blobHashes) {
-				end = len(blobHashes)
-			}
-			batchChan <- blobHashes[start:end]
-		}
-	}()
-}
-
-// collectBatchResults gathers results from all worker goroutines
-func (c *httpClient) collectBatchResults(ctx context.Context, resultChan <-chan batchResult, numBatches int) (map[string]*protocol.PackfileObject, []hash.Hash) {
-	logger := log.FromContext(ctx)
-	allObjects := make(map[string]*protocol.PackfileObject)
-	allMissingHashes := make([]hash.Hash, 0)
-
-	for i := 0; i < numBatches; i++ {
-		result := <-resultChan
-
-		if result.err != nil {
-			logger.Error("Batch fetch failed", "batch_id", result.batchID, "error", result.err)
-			continue // Continue with other batches
-		}
-
-		// Merge objects and collect missing hashes
-		for hash, obj := range result.objects {
-			allObjects[hash] = obj
-		}
-		allMissingHashes = append(allMissingHashes, result.missingBlobs...)
-
-		logger.Debug("Batch completed", "batch_id", result.batchID, "objects_fetched", len(result.objects))
-	}
-
-	return allObjects, allMissingHashes
-}
-
-// handleMissingBlobs implements the sophisticated fallback strategy for missing blobs
-func (c *httpClient) handleMissingBlobs(ctx context.Context, allObjects map[string]*protocol.PackfileObject, allMissingHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	if len(allMissingHashes) == 0 {
-		return allObjects, nil
-	}
-
-	logger := log.FromContext(ctx)
-	logger.Debug("Handling missing blobs", "missing_count", len(allMissingHashes))
-
-	// Try batch retry for missing blobs
-	allObjects = c.retryMissingBlobsBatch(ctx, allObjects, allMissingHashes)
-
-	// Individual fallback for any remaining missing blobs
-	return c.individualFallbackForMissingBlobs(ctx, allObjects, allMissingHashes)
-}
-
-// retryMissingBlobsBatch attempts to fetch all missing blobs in a single batch retry
-func (c *httpClient) retryMissingBlobsBatch(ctx context.Context, allObjects map[string]*protocol.PackfileObject, allMissingHashes []hash.Hash) map[string]*protocol.PackfileObject {
-	logger := log.FromContext(ctx)
-	logger.Debug("Attempting batch retry for missing blobs", "missing_count", len(allMissingHashes))
-
-	missingObjects, err := c.fetchMissingBlobsBatched(ctx, allMissingHashes)
-	if err != nil {
-		logger.Warn("Batch retry failed", "missing_count", len(allMissingHashes), "error", err)
-		return allObjects
-	}
-
-	// Merge successfully fetched missing objects
-	for hash, obj := range missingObjects {
-		allObjects[hash] = obj
-	}
-
-	logger.Debug("Batch retry completed", "missing_received", len(missingObjects))
-	return allObjects
-}
-
-// individualFallbackForMissingBlobs fetches any remaining missing blobs individually
-func (c *httpClient) individualFallbackForMissingBlobs(ctx context.Context, allObjects map[string]*protocol.PackfileObject, allMissingHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	logger := log.FromContext(ctx)
-
-	// Find blobs still missing after batch retry
-	stillMissingHashes := make([]hash.Hash, 0)
-	for _, missingHash := range allMissingHashes {
-		if _, found := allObjects[missingHash.String()]; !found {
-			stillMissingHashes = append(stillMissingHashes, missingHash)
-		}
-	}
-
-	if len(stillMissingHashes) == 0 {
-		return allObjects, nil
-	}
-
-	logger.Debug("Fetching remaining blobs individually", "still_missing_count", len(stillMissingHashes))
-
-	for _, missingHash := range stillMissingHashes {
-		blob, err := c.GetBlob(ctx, missingHash)
-		if err != nil {
-			logger.Error("Failed to fetch missing blob", "blob_hash", missingHash.String(), "error", err)
-			continue
-		}
-
-		blobObj := &protocol.PackfileObject{
-			Hash: missingHash,
-			Type: protocol.ObjectTypeBlob,
-			Data: blob.Content,
-		}
-		allObjects[missingHash.String()] = blobObj
-		logger.Debug("Individual blob fetched", "blob_hash", missingHash.String(), "size", len(blob.Content))
-	}
-
-	return allObjects, nil
-}
-
-// fetchBlobBatch fetches a single batch of blobs using the underlying Fetch API
-func (c *httpClient) fetchBlobBatch(ctx context.Context, blobHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	if len(blobHashes) == 0 {
-		return make(map[string]*protocol.PackfileObject), nil
-	}
-
-	logger := log.FromContext(ctx)
-	logger.Debug("Fetching blob batch",
-		"blob_count", len(blobHashes))
-
-	// Use the existing Fetch method to get multiple blobs at once
-	// Disable NoExtraObjects optimization to ensure complete blob retrieval like Git CLI
-	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		Want:           blobHashes,
-		Done:           true,
-		NoExtraObjects: false, // Allow extra objects to ensure completeness like Git CLI
-	})
-	if err != nil {
-		return nil, fmt.Errorf("fetch blob batch: %w", err)
-	}
-
-	// Verify we only got blob objects
-	blobObjects := make(map[string]*protocol.PackfileObject)
-	for hash, obj := range objects {
-		if obj.Type != protocol.ObjectTypeBlob {
-			logger.Warn("Unexpected object type in blob batch",
-				"hash", hash,
-				"expected_type", protocol.ObjectTypeBlob,
-				"actual_type", obj.Type)
-			continue
-		}
-		blobObjects[hash] = obj
-	}
-
-	logger.Debug("Blob batch fetched successfully",
-		"requested_count", len(blobHashes),
-		"received_count", len(blobObjects))
-
-	// Check if we're missing any blobs and attempt individual fallback
-	if len(blobObjects) < len(blobHashes) {
-		missingCount := len(blobHashes) - len(blobObjects)
-		logger.Debug("Some blobs missing from batch, attempting individual fallback",
-			"missing_count", missingCount)
-
-		// Find missing blob hashes
-		missingHashes := make([]hash.Hash, 0, missingCount)
-		for _, requestedHash := range blobHashes {
-			if _, found := blobObjects[requestedHash.String()]; !found {
-				missingHashes = append(missingHashes, requestedHash)
-			}
-		}
-
-		// Attempt to fetch missing blobs individually
-		for _, missingHash := range missingHashes {
-			logger.Debug("Attempting individual blob fetch", "blob_hash", missingHash.String())
-
-			blob, err := c.GetBlob(ctx, missingHash)
-			if err != nil {
-				logger.Warn("Individual blob fetch failed", "blob_hash", missingHash.String(), "error", err)
-				continue
-			}
-
-			// Successfully fetched individual blob
-			blobObj := &protocol.PackfileObject{
-				Hash: missingHash,
-				Type: protocol.ObjectTypeBlob,
-				Data: blob.Content,
-			}
-			blobObjects[missingHash.String()] = blobObj
-			logger.Debug("Individual blob fetch succeeded", "blob_hash", missingHash.String(), "size", len(blob.Content))
-		}
-
-		logger.Debug("Individual fallback completed",
-			"original_missing", missingCount,
-			"final_received", len(blobObjects),
-			"final_missing", len(blobHashes)-len(blobObjects))
-	}
-
-	return blobObjects, nil
-}
-
-// fetchMissingBlobsBatched attempts to fetch missing blobs in batches before falling back to individual requests.
-// This method is optimized for handling missing blobs that couldn't be fetched in the original batches.
-func (c *httpClient) fetchMissingBlobsBatched(ctx context.Context, missingHashes []hash.Hash) (map[string]*protocol.PackfileObject, error) {
-	logger := log.FromContext(ctx)
-	logger.Debug("Fetching missing blobs in batches",
-		"missing_count", len(missingHashes))
-
-	if len(missingHashes) == 0 {
-		return make(map[string]*protocol.PackfileObject), nil
-	}
-
-	// For small numbers of missing blobs, try them all at once
-	const maxSingleBatch = 50
-	if len(missingHashes) <= maxSingleBatch {
-		logger.Debug("Fetching all missing blobs in single batch",
-			"missing_count", len(missingHashes))
-		return c.fetchBlobBatch(ctx, missingHashes)
-	}
-
-	// For larger numbers, split into smaller batches
-	const batchSize = 25 // Smaller batches for missing blobs to increase success rate
-	numBatches := (len(missingHashes) + batchSize - 1) / batchSize
-
-	logger.Debug("Splitting missing blobs into multiple batches",
-		"missing_count", len(missingHashes),
-		"batch_count", numBatches,
-		"batch_size", batchSize)
-
-	allObjects := make(map[string]*protocol.PackfileObject)
-
-	for i := 0; i < numBatches; i++ {
-		start := i * batchSize
-		end := start + batchSize
-		if end > len(missingHashes) {
-			end = len(missingHashes)
-		}
-
-		batchHashes := missingHashes[start:end]
-
-		logger.Debug("Processing missing blob batch",
-			"batch_id", i,
-			"blob_count", len(batchHashes))
-
-		objects, err := c.fetchBlobBatch(ctx, batchHashes)
-		if err != nil {
-			logger.Warn("Missing blob batch failed, continuing with next batch",
-				"batch_id", i,
-				"error", err)
-			continue // Continue with other batches, don't fail entirely
-		}
-
-		// Merge objects from this batch
-		for hash, obj := range objects {
-			allObjects[hash] = obj
-		}
-
-		logger.Debug("Missing blob batch completed",
-			"batch_id", i,
-			"requested", len(batchHashes),
-			"received", len(objects),
-			"total_missing_fetched", len(allObjects))
-	}
-
-	logger.Debug("Missing blob batch processing completed",
-		"total_missing_requested", len(missingHashes),
-		"total_missing_fetched", len(allObjects))
-
-	return allObjects, nil
 }

@@ -19,18 +19,18 @@ type simpleLogger struct {
 }
 
 func (l *simpleLogger) Debug(msg string, keysAndValues ...any) {
-	if strings.Contains(msg, "missing blob") || 
-	   strings.Contains(msg, "Blob fetch summary") ||
-	   strings.Contains(msg, "Missing blobs") ||
-	   strings.Contains(msg, "Individual fallback") ||
-	   strings.Contains(msg, "individually") ||
-	   strings.Contains(msg, "batch retry") ||
-	   strings.Contains(msg, "still_missing") ||
-	   strings.Contains(msg, "GetBlob") ||
-	   strings.Contains(msg, "Failed to fetch") ||
-	   strings.Contains(msg, "Handling missing blobs") ||
-	   strings.Contains(msg, "processBatchesInParallel") ||
-	   strings.Contains(msg, "handleMissingBlobs") {
+	if strings.Contains(msg, "missing blob") ||
+		strings.Contains(msg, "Blob fetch summary") ||
+		strings.Contains(msg, "Missing blobs") ||
+		strings.Contains(msg, "Individual fallback") ||
+		strings.Contains(msg, "individually") ||
+		strings.Contains(msg, "batch retry") ||
+		strings.Contains(msg, "still_missing") ||
+		strings.Contains(msg, "GetBlob") ||
+		strings.Contains(msg, "Failed to fetch") ||
+		strings.Contains(msg, "Handling missing blobs") ||
+		strings.Contains(msg, "processBatchesInParallel") ||
+		strings.Contains(msg, "handleMissingBlobs") {
 		args := make([]string, len(keysAndValues))
 		for i, v := range keysAndValues {
 			args[i] = fmt.Sprint(v)
@@ -121,17 +121,14 @@ func TestDebugMissingFiles(t *testing.T) {
 		OnFileWritten: func(path string, size int64) {
 			t.Logf("✅ Written: %s (%d bytes)", path, size)
 		},
-		OnFileFailed: func(path string, err error) {
-			t.Logf("❌ Failed: %s - %v", path, err)
-		},
 	})
-
 	if err != nil {
 		t.Fatalf("Debug clone failed: %v", err)
 	}
 
 	t.Logf("🔍 Debug Results:")
 	t.Logf("   • Total files in repository: %d", result.TotalFiles)
-	t.Logf("   • Files matching filters: %d", result.FilteredFiles)
+	t.Logf("   • Files matching filters: %d", result.TotalFilteredFiles)
 	t.Logf("   • Logger failure count: %d", atomic.LoadInt64(&logger.failureCount))
 }
+

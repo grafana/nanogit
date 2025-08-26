@@ -2,6 +2,7 @@ package nanogit
 
 import (
 	"context"
+	"sync"
 
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol/client"
@@ -97,6 +98,8 @@ type Client interface {
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
 	client.RawClient
+	// FIXME: lock is probably a bottleneck
+	mu sync.RWMutex
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.

@@ -670,7 +670,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 					logger.Debug("Tree object not found in collection, attempting individual fetch",
 						"hash", entryHash.String(),
 						"path", entryPath)
-					
+
 					missingTreeObj, err := c.fetchSingleTreeObject(ctx, entryHash)
 					if err != nil {
 						logger.Debug("Failed to fetch missing tree object",
@@ -679,7 +679,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 							"error", err)
 						return fmt.Errorf("tree object %s not found in collection", entry.Hash)
 					}
-					
+
 					// Add to storage and use it
 					allTreeObjects.Add(missingTreeObj)
 					childTree = missingTreeObj

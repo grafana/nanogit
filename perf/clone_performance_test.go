@@ -83,11 +83,6 @@ func (p *cloneProgressTracker) onFileWritten(filePath string, size int64) {
 	p.writtenList = append(p.writtenList, filePath)
 }
 
-func (p *cloneProgressTracker) onFileFailed(filePath string, err error) {
-	atomic.AddInt64(&p.filesFailed, 1)
-	p.failedList = append(p.failedList, fmt.Sprintf("%s: %v", filePath, err))
-}
-
 // TestClonePerformanceSmall tests clone performance with a small subset of grafana/grafana
 func TestClonePerformanceSmall(t *testing.T) {
 	ctx := context.Background()
@@ -151,7 +146,6 @@ func TestClonePerformanceSmall(t *testing.T) {
 			"pkg/services/**",
 		},
 		OnFileWritten: tracker.onFileWritten,
-		OnFileFailed:  tracker.onFileFailed,
 	})
 	cloneDuration := time.Since(start)
 
@@ -173,8 +167,8 @@ func TestClonePerformanceSmall(t *testing.T) {
 	if result.TotalFiles != expectedTotalFiles {
 		t.Errorf("Expected exactly %d total files, got %d", expectedTotalFiles, result.TotalFiles)
 	}
-	if result.FilteredFiles != expectedFilteredFiles {
-		t.Errorf("Expected exactly %d filtered files, got %d", expectedFilteredFiles, result.FilteredFiles)
+	if result.TotalFilteredFiles != expectedFilteredFiles {
+		t.Errorf("Expected exactly %d filtered files, got %d", expectedFilteredFiles, result.TotalFilteredFiles)
 	}
 	if finalWritten != int64(expectedWrittenFiles) {
 		t.Errorf("Expected exactly %d written files, got %d", expectedWrittenFiles, finalWritten)
@@ -189,11 +183,11 @@ func TestClonePerformanceSmall(t *testing.T) {
 	// Performance benchmarks
 	throughputMBps := float64(finalSize) / (1024 * 1024) / cloneDuration.Seconds()
 	// Now FilteredFiles only counts files (not directories), so success rate should be 100%
-	successRate := float64(finalWritten) / float64(result.FilteredFiles) * 100
+	successRate := float64(finalWritten) / float64(result.TotalFilteredFiles) * 100
 
 	t.Logf("🎉 Small Clone Performance Results:")
 	t.Logf("   • Total files in repository: %d", result.TotalFiles)
-	t.Logf("   • Files matching filters: %d", result.FilteredFiles)
+	t.Logf("   • Files matching filters: %d", result.TotalFilteredFiles)
 	t.Logf("   • Files successfully written: %d", finalWritten)
 	t.Logf("   • Files failed: %d", finalFailed)
 	t.Logf("   • Success rate: %.1f%%", successRate)
@@ -221,7 +215,7 @@ func TestClonePerformanceSmall(t *testing.T) {
 	// If < 100%, it means some files passed filtering but couldn't be written (missing blobs)
 	if finalFailed == 0 && successRate != 100.0 {
 		t.Logf("⚠️  Note: %d files passed filtering but weren't written (FilteredFiles=%d, Written=%d)",
-			result.FilteredFiles-int(finalWritten), result.FilteredFiles, finalWritten)
+			result.TotalFilteredFiles-int(finalWritten), result.TotalFilteredFiles, finalWritten)
 		t.Logf("This could indicate files that exist in the tree but have missing blob data")
 
 		// Let's identify which files are missing by examining the clone destination
@@ -310,10 +304,10 @@ func TestClonePerformanceSmall(t *testing.T) {
 		}
 
 		// This proves the discrepancy: we expect FilteredFiles == finalWritten, but we found missing files
-		if missingCount != (result.FilteredFiles - int(finalWritten)) {
+		if missingCount != (result.TotalFilteredFiles - int(finalWritten)) {
 			t.Logf("🚨 INCONSISTENCY DETECTED!")
 			t.Logf("   Expected missing files: %d (FilteredFiles - Written = %d - %d)",
-				result.FilteredFiles-int(finalWritten), result.FilteredFiles, finalWritten)
+				result.TotalFilteredFiles-int(finalWritten), result.TotalFilteredFiles, finalWritten)
 			t.Logf("   Actual missing files found: %d", missingCount)
 		}
 
@@ -428,7 +422,6 @@ func TestClonePerformanceLarge(t *testing.T) {
 			// Note: Removed .gen.ts exclusions - these files should be fetchable like Git CLI does
 		},
 		OnFileWritten: tracker.onFileWritten,
-		OnFileFailed:  tracker.onFileFailed,
 	})
 	cloneDuration := time.Since(start)
 
@@ -441,18 +434,18 @@ func TestClonePerformanceLarge(t *testing.T) {
 	finalFailed := atomic.LoadInt64(&tracker.filesFailed)
 	finalSize := atomic.LoadInt64(&tracker.totalSize)
 
-	// Performance assertions (based on known commit ac641e07fe82669e01f7eeb84dc9256259ff1323)  
-	expectedTotalFiles := 18347   // Only files, not directories (same as small test)
-	expectedFilteredFiles := 580  // Includes .gen.ts files (should be fetchable like Git CLI)
-	expectedWrittenFiles := 570   // Improved: 98.3% success rate with enhanced fallback mechanisms
+	// Performance assertions (based on known commit ac641e07fe82669e01f7eeb84dc9256259ff1323)
+	expectedTotalFiles := 18347  // Only files, not directories (same as small test)
+	expectedFilteredFiles := 580 // Includes .gen.ts files (should be fetchable like Git CLI)
+	expectedWrittenFiles := 570  // Improved: 98.3% success rate with enhanced fallback mechanisms
 	// Note: 10 files still can't be fetched due to server-side protocol differences with Git CLI
 	maxDuration := 10 * time.Second
 
 	if result.TotalFiles != expectedTotalFiles {
 		t.Errorf("Expected exactly %d total files, got %d", expectedTotalFiles, result.TotalFiles)
 	}
-	if result.FilteredFiles != expectedFilteredFiles {
-		t.Errorf("Expected exactly %d filtered files, got %d", expectedFilteredFiles, result.FilteredFiles)
+	if result.TotalFilteredFiles != expectedFilteredFiles {
+		t.Errorf("Expected exactly %d filtered files, got %d", expectedFilteredFiles, result.TotalFilteredFiles)
 	}
 	if finalWritten != int64(expectedWrittenFiles) {
 		t.Errorf("Expected exactly %d written files, got %d", expectedWrittenFiles, finalWritten)
@@ -467,11 +460,11 @@ func TestClonePerformanceLarge(t *testing.T) {
 	// Performance metrics
 	throughputMBps := float64(finalSize) / (1024 * 1024) / cloneDuration.Seconds()
 	// Now FilteredFiles only counts files (not directories), so success rate should be 100%
-	successRate := float64(finalWritten) / float64(result.FilteredFiles) * 100
+	successRate := float64(finalWritten) / float64(result.TotalFilteredFiles) * 100
 
 	t.Logf("🎉 Large Clone Performance Results:")
 	t.Logf("   • Total files in repository: %d", result.TotalFiles)
-	t.Logf("   • Files matching filters: %d", result.FilteredFiles)
+	t.Logf("   • Files matching filters: %d", result.TotalFilteredFiles)
 	t.Logf("   • Files successfully written: %d", finalWritten)
 	t.Logf("   • Files failed: %d", finalFailed)
 	t.Logf("   • Success rate: %.1f%%", successRate)
