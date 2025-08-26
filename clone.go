@@ -45,6 +45,18 @@ type CloneOptions struct {
 	// Supports glob patterns (e.g., "node_modules/**", "*.tmp", "test/**").
 	// ExcludePaths takes precedence over IncludePaths.
 	ExcludePaths []string
+
+	// OnFileWritten is called after each file is successfully written to disk.
+	// It receives the relative file path and the file size in bytes.
+	// This can be used for progress tracking, logging, or custom processing.
+	// The callback should be fast and non-blocking to avoid slowing down the clone.
+	OnFileWritten func(filePath string, size int64)
+
+	// OnFileFailed is called when a file cannot be written due to missing blob data.
+	// It receives the relative file path and the error that occurred.
+	// This can be used to track which files couldn't be cloned and why.
+	// The callback should be fast and non-blocking to avoid slowing down the clone.
+	OnFileFailed func(filePath string, err error)
 }
 
 // CloneResult contains the results of a clone operation.
@@ -93,17 +105,23 @@ type CloneResult struct {
 //	    return err
 //	}
 //
-//	// Clone only the src/ and docs/ directories
+//	// Clone with progress tracking
+//	var totalSize int64
 //	result, err := client.Clone(ctx, nanogit.CloneOptions{
 //	    Path: "/tmp/repo",
 //	    Hash: ref.Hash,
 //	    IncludePaths: []string{"src/**", "docs/**"},
+//	    OnFileWritten: func(filePath string, size int64) {
+//	        totalSize += size
+//	        fmt.Printf("Written: %s (%d bytes, total: %d bytes)\n", 
+//	            filePath, size, totalSize)
+//	    },
 //	})
 //	if err != nil {
 //	    return err
 //	}
-//	fmt.Printf("Cloned %d files from commit %s\n",
-//	    result.FilteredFiles, result.Commit.Hash.String()[:8])
+//	fmt.Printf("Cloned %d files (%d total bytes) from commit %s\n",
+//	    result.FilteredFiles, totalSize, result.Commit.Hash.String()[:8])
 func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult, error) {
 	logger := log.FromContext(ctx)
 	// Validate that hash is provided
@@ -144,7 +162,7 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	}
 
 	// Write files to filesystem
-	err = c.writeFilesToDisk(ctx, opts.Path, filteredTree)
+	err = c.writeFilesToDisk(ctx, opts, filteredTree)
 	if err != nil {
 		return nil, fmt.Errorf("write files to disk: %w", err)
 	}
@@ -231,8 +249,9 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 
 // writeFilesToDisk writes all files from the filtered tree to the specified directory path.
 // It creates the necessary directory structure and downloads blob content in batches for better performance.
-func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree *FlatTree) error {
+func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tree *FlatTree) error {
 	logger := log.FromContext(ctx)
+	basePath := opts.Path
 	logger.Debug("Writing files to disk",
 		"base_path", basePath,
 		"file_count", len(tree.Entries))
@@ -292,6 +311,9 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 
 	// Write all files to disk
 	filesWritten := 0
+	failedFiles := 0
+	
+	// First, write all files we have blobs for
 	for _, blobObj := range blobMap {
 		entry, exists := hashToEntry[blobObj.Hash.String()]
 		if !exists {
@@ -314,22 +336,43 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 		}
 
 		filesWritten++
+		fileSize := int64(len(blobObj.Data))
 		logger.Debug("File written",
 			"path", entry.Path,
-			"size", len(blobObj.Data))
+			"size", fileSize)
+
+		// Call the callback if provided
+		if opts.OnFileWritten != nil {
+			opts.OnFileWritten(entry.Path, fileSize)
+		}
+	}
+	
+	// Now handle missing blobs - call OnFileFailed callback for each missing file
+	for _, entry := range blobEntries {
+		if _, found := blobMap[entry.Hash.String()]; !found {
+			failedFiles++
+			missingErr := fmt.Errorf("blob not found: %s", entry.Hash.String())
+			
+			logger.Debug("File failed to write - missing blob",
+				"path", entry.Path,
+				"blob_hash", entry.Hash.String())
+			
+			// Call the failure callback if provided
+			if opts.OnFileFailed != nil {
+				opts.OnFileFailed(entry.Path, missingErr)
+			}
+		}
 	}
 
-	logger.Debug("All files written to disk",
+	logger.Debug("All files processed",
 		"base_path", basePath,
 		"expected_files", len(blobEntries),
-		"files_written", filesWritten)
+		"files_written", filesWritten,
+		"files_failed", failedFiles)
 
-	// Final validation
-	if filesWritten != len(blobEntries) {
-		logger.Error("File count mismatch after writing",
-			"expected_files", len(blobEntries),
-			"files_written", filesWritten)
-		return fmt.Errorf("expected to write %d files but only wrote %d", len(blobEntries), filesWritten)
+	// Return error if any files failed to be written
+	if failedFiles > 0 {
+		return fmt.Errorf("clone incomplete: %d files written successfully, %d files failed due to missing blobs", filesWritten, failedFiles)
 	}
 
 	return nil
