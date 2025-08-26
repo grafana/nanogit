@@ -279,6 +279,7 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 	blobEntries := make([]FlatTreeEntry, 0, len(tree.Entries))
 	blobHashes := make([]hash.Hash, 0, len(tree.Entries))
 	hashToEntry := make(map[string]FlatTreeEntry)
+	nonBlobCount := 0
 
 	for _, entry := range tree.Entries {
 		// Only process blob entries (files)
@@ -286,7 +287,20 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 			blobEntries = append(blobEntries, entry)
 			blobHashes = append(blobHashes, entry.Hash)
 			hashToEntry[entry.Hash.String()] = entry
+		} else {
+			nonBlobCount++
+			logger.Debug("Non-blob entry found in filtered tree",
+				"path", entry.Path,
+				"type", entry.Type,
+				"mode", fmt.Sprintf("0o%o", entry.Mode))
 		}
+	}
+
+	if nonBlobCount > 0 {
+		logger.Warn("Found non-blob entries in filtered tree",
+			"total_filtered_entries", len(tree.Entries),
+			"blob_entries", len(blobEntries),
+			"non_blob_entries", nonBlobCount)
 	}
 
 	if len(blobHashes) == 0 {
@@ -307,19 +321,27 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 
 	// Check if we got all the blobs we requested
 	if len(blobMap) != len(blobHashes) {
-		logger.Warn("Blob count mismatch",
+		logger.Warn("Blob count mismatch - some files couldn't be fetched",
 			"requested", len(blobHashes),
-			"received", len(blobMap))
+			"received", len(blobMap),
+			"missing", len(blobHashes)-len(blobMap))
 		
-		// Find missing blobs
+		// Find missing blobs and log them for investigation
+		missingCount := 0
 		for _, expectedHash := range blobHashes {
 			if _, found := blobMap[expectedHash.String()]; !found {
 				if entry, exists := hashToEntry[expectedHash.String()]; exists {
-					logger.Error("Missing blob for file",
-						"file_path", entry.Path,
-						"blob_hash", expectedHash.String())
+					missingCount++
+					if missingCount <= 5 { // Only log first 5 to avoid spam
+						logger.Warn("Missing blob for filtered file",
+							"file_path", entry.Path,
+							"blob_hash", expectedHash.String()[:8]+"...")
+					}
 				}
 			}
+		}
+		if missingCount > 5 {
+			logger.Warn("Additional missing blobs not shown", "hidden_count", missingCount-5)
 		}
 	}
 
