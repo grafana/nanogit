@@ -71,10 +71,10 @@ type CloneResult struct {
 	// filtered according to the CloneOptions.
 	FlatTree *FlatTree
 
-	// TotalFiles is the total number of files in the cloned tree.
+	// TotalFiles is the total number of files (not directories) in the repository.
 	TotalFiles int
 
-	// FilteredFiles is the number of files after applying include/exclude filters.
+	// FilteredFiles is the number of files (not directories) after applying include/exclude filters.
 	FilteredFiles int
 }
 
@@ -167,11 +167,20 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		return nil, fmt.Errorf("write files to disk: %w", err)
 	}
 
+	// Count only files (not directories) for TotalFiles
+	totalFileCount := 0
+	for _, entry := range fullTree.Entries {
+		if entry.Mode&0o40000 == 0 { // Not a directory
+			totalFileCount++
+		}
+	}
+	
+	// FilteredFiles can now just use len() since filterTree only includes files
 	result := &CloneResult{
 		Path:          opts.Path,
 		Commit:        commit,
 		FlatTree:      filteredTree,
-		TotalFiles:    len(fullTree.Entries),
+		TotalFiles:    totalFileCount,
 		FilteredFiles: len(filteredTree.Entries),
 	}
 
@@ -197,6 +206,11 @@ func (c *httpClient) filterTree(tree *FlatTree, includePaths, excludePaths []str
 	}
 
 	for _, entry := range tree.Entries {
+		// Skip directories - we only want files in the filtered tree
+		if entry.Mode&0o40000 != 0 {
+			continue
+		}
+		
 		included := c.shouldIncludePath(entry.Path, includePaths, excludePaths)
 		if included {
 			filtered.Entries = append(filtered.Entries, entry)
