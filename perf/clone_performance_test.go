@@ -2,6 +2,7 @@ package performance
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,15 +19,53 @@ import (
 type cloneTestLogger struct{}
 
 func (l *cloneTestLogger) Debug(msg string, keysAndValues ...any) {
-	if strings.Contains(msg, "missing") || strings.Contains(msg, "batch retry") ||
-		strings.Contains(msg, "individual fallback") || strings.Contains(msg, "Fetch single missing tree object") {
-		// Only log important debug messages during performance tests
+	// Log all debug messages for investigation
+	args := make([]string, len(keysAndValues))
+	for i, v := range keysAndValues {
+		args[i] = fmt.Sprint(v)
+	}
+	if len(args) > 0 {
+		println("DEBUG: " + msg + " | " + strings.Join(args, " "))
+	} else {
+		println("DEBUG: " + msg)
 	}
 }
 
-func (l *cloneTestLogger) Info(msg string, keysAndValues ...any)  {}
-func (l *cloneTestLogger) Warn(msg string, keysAndValues ...any)  {}
-func (l *cloneTestLogger) Error(msg string, keysAndValues ...any) {}
+func (l *cloneTestLogger) Info(msg string, keysAndValues ...any) {
+	args := make([]string, len(keysAndValues))
+	for i, v := range keysAndValues {
+		args[i] = fmt.Sprint(v)
+	}
+	if len(args) > 0 {
+		println("INFO: " + msg + " | " + strings.Join(args, " "))
+	} else {
+		println("INFO: " + msg)
+	}
+}
+
+func (l *cloneTestLogger) Warn(msg string, keysAndValues ...any) {
+	args := make([]string, len(keysAndValues))
+	for i, v := range keysAndValues {
+		args[i] = fmt.Sprint(v)
+	}
+	if len(args) > 0 {
+		println("WARN: " + msg + " | " + strings.Join(args, " "))
+	} else {
+		println("WARN: " + msg)
+	}
+}
+
+func (l *cloneTestLogger) Error(msg string, keysAndValues ...any) {
+	args := make([]string, len(keysAndValues))
+	for i, v := range keysAndValues {
+		args[i] = fmt.Sprint(v)
+	}
+	if len(args) > 0 {
+		println("ERROR: " + msg + " | " + strings.Join(args, " "))
+	} else {
+		println("ERROR: " + msg)
+	}
+}
 
 // cloneProgressTracker tracks clone progress for performance tests
 type cloneProgressTracker struct {

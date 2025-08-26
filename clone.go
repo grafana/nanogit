@@ -348,6 +348,7 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 	// Write all files to disk
 	filesWritten := 0
 	failedFiles := 0
+	writtenFiles := make(map[string]bool) // Track which files were written
 	
 	// First, write all files we have blobs for
 	for _, blobObj := range blobMap {
@@ -372,6 +373,7 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 		}
 
 		filesWritten++
+		writtenFiles[entry.Path] = true // Mark as written
 		fileSize := int64(len(blobObj.Data))
 		logger.Debug("File written",
 			"path", entry.Path,
@@ -398,6 +400,28 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, opts CloneOptions, tr
 				opts.OnFileFailed(entry.Path, missingErr)
 			}
 		}
+	}
+
+	// Final check: identify any filtered files that weren't written
+	// This helps debug the discrepancy between FilteredFiles and written files
+	missingFromFiltered := 0
+	for _, entry := range tree.Entries {
+		if !writtenFiles[entry.Path] {
+			missingFromFiltered++
+			if missingFromFiltered <= 5 { // Only show first 5 to avoid spam
+				logger.Warn("Filtered file was not written",
+					"path", entry.Path,
+					"type", entry.Type,
+					"mode", fmt.Sprintf("0o%o", entry.Mode))
+			}
+		}
+	}
+	
+	if missingFromFiltered > 0 {
+		logger.Warn("Discrepancy found between filtered and written files",
+			"filtered_files", len(tree.Entries),
+			"written_files", filesWritten,
+			"missing_from_filtered", missingFromFiltered)
 	}
 
 	logger.Debug("All files processed",
