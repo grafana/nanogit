@@ -2,6 +2,7 @@ package performance
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,13 +12,14 @@ import (
 
 	"github.com/grafana/nanogit"
 	nanolog "github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 // testLogger implements simple logging for clone performance tests
 type cloneTestLogger struct{}
 
 func (l *cloneTestLogger) Debug(msg string, keysAndValues ...any) {
-	if strings.Contains(msg, "missing") || strings.Contains(msg, "batch retry") || 
+	if strings.Contains(msg, "missing") || strings.Contains(msg, "batch retry") ||
 		strings.Contains(msg, "individual fallback") || strings.Contains(msg, "Fetch single missing tree object") {
 		// Only log important debug messages during performance tests
 	}
@@ -46,10 +48,6 @@ func (p *cloneProgressTracker) onFileFailed(filePath string, err error) {
 
 // TestClonePerformanceSmall tests clone performance with a small subset of grafana/grafana
 func TestClonePerformanceSmall(t *testing.T) {
-	if os.Getenv("RUN_PERFORMANCE_TESTS") != "true" {
-		t.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
-	}
-
 	ctx := context.Background()
 	logger := &cloneTestLogger{}
 	ctx = nanolog.ToContext(ctx, logger)
@@ -60,13 +58,14 @@ func TestClonePerformanceSmall(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Get the main branch reference
-	ref, err := client.GetRef(ctx, "refs/heads/main")
+	// Use fixed commit hash for consistent testing
+	targetCommitHash := "ac641e07fe82669e01f7eeb84dc9256259ff1323"
+	commitHash, err := hash.FromHex(targetCommitHash)
 	if err != nil {
-		t.Fatalf("Failed to get main branch: %v", err)
+		t.Fatalf("Failed to parse target commit hash: %v", err)
 	}
 
-	t.Logf("📌 Testing against commit: %s", ref.Hash.String())
+	t.Logf("📌 Testing against fixed commit: %s", targetCommitHash)
 
 	// Create temporary directory for clone
 	tempDir, err := os.MkdirTemp("", "nanogit-clone-perf-small-*")
@@ -74,6 +73,8 @@ func TestClonePerformanceSmall(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
+
+	t.Logf("📁 Clone destination: %s", tempDir)
 
 	// Set up progress tracking
 	tracker := &cloneProgressTracker{
@@ -84,10 +85,10 @@ func TestClonePerformanceSmall(t *testing.T) {
 	start := time.Now()
 	result, err := client.Clone(ctx, nanogit.CloneOptions{
 		Path: tempDir,
-		Hash: ref.Hash,
+		Hash: commitHash,
 		IncludePaths: []string{
 			"go.mod",
-			"go.sum", 
+			"go.sum",
 			"package.json",
 			"Makefile",
 			"README.md",
@@ -121,27 +122,35 @@ func TestClonePerformanceSmall(t *testing.T) {
 	finalFailed := atomic.LoadInt64(&tracker.filesFailed)
 	finalSize := atomic.LoadInt64(&tracker.totalSize)
 
-	// Performance assertions
-	if result.TotalFiles <= 20000 {
-		t.Errorf("Expected large repository (>20k files), got %d", result.TotalFiles)
+	// Performance assertions (based on known commit ac641e07fe82669e01f7eeb84dc9256259ff1323)
+	expectedTotalFiles := 22188
+	expectedFilteredFiles := 164
+	expectedWrittenFiles := 150
+	maxDuration := 5 * time.Second
+
+	if result.TotalFiles != expectedTotalFiles {
+		t.Errorf("Expected exactly %d total files, got %d", expectedTotalFiles, result.TotalFiles)
 	}
-	if result.FilteredFiles <= 100 {
-		t.Errorf("Expected substantial filtered files (>100), got %d", result.FilteredFiles)
+	if result.FilteredFiles != expectedFilteredFiles {
+		t.Errorf("Expected exactly %d filtered files, got %d", expectedFilteredFiles, result.FilteredFiles)
 	}
-	if finalWritten < 140 {
-		t.Errorf("Expected to write most files (>=140), wrote %d", finalWritten)
+	if finalWritten != int64(expectedWrittenFiles) {
+		t.Errorf("Expected exactly %d written files, got %d", expectedWrittenFiles, finalWritten)
 	}
 	if finalFailed > 0 {
 		t.Errorf("Expected no failures, got %d failures", finalFailed)
 	}
-	
+	if cloneDuration > maxDuration {
+		t.Errorf("Clone took too long: %v (expected <= %v)", cloneDuration, maxDuration)
+	}
+
 	// Performance benchmarks
 	throughputMBps := float64(finalSize) / (1024 * 1024) / cloneDuration.Seconds()
 	successRate := float64(finalWritten) / float64(result.FilteredFiles) * 100
 
 	t.Logf("🎉 Small Clone Performance Results:")
 	t.Logf("   • Total files in repository: %d", result.TotalFiles)
-	t.Logf("   • Files matching filters: %d", result.FilteredFiles) 
+	t.Logf("   • Files matching filters: %d", result.FilteredFiles)
 	t.Logf("   • Files successfully written: %d", finalWritten)
 	t.Logf("   • Files failed: %d", finalFailed)
 	t.Logf("   • Success rate: %.1f%%", successRate)
@@ -150,19 +159,20 @@ func TestClonePerformanceSmall(t *testing.T) {
 	t.Logf("   • Throughput: %.1f MB/s", throughputMBps)
 	t.Logf("   • Commit: %s", result.Commit.Hash.String())
 
-	// Performance requirements
-	if cloneDuration > 10*time.Second {
-		t.Errorf("Clone took too long: %v (expected < 10s)", cloneDuration)
+	// Additional validation (success rate should be 100% for exact expected counts)
+	if successRate != 100.0 {
+		t.Errorf("Success rate should be exactly 100%%, got %.1f%%", successRate)
 	}
-	if successRate < 90.0 {
-		t.Errorf("Success rate too low: %.1f%% (expected >= 90%%)", successRate)
-	}
+
+	// Print tree structure for debugging
+	t.Logf("📂 Cloned tree structure:")
+	printTreeStructure(t, tempDir, "", 0, 3) // Max depth of 3 levels
 
 	// Verify some expected files exist
 	expectedFiles := []string{
 		"README.md", "go.mod", "go.sum", "package.json", "LICENSE", "Makefile",
 	}
-	
+
 	for _, expectedFile := range expectedFiles {
 		filePath := filepath.Join(tempDir, expectedFile)
 		if _, err := os.Stat(filePath); err != nil {
@@ -187,13 +197,14 @@ func TestClonePerformanceLarge(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Get the main branch reference  
-	ref, err := client.GetRef(ctx, "refs/heads/main")
+	// Use fixed commit hash for consistent testing
+	targetCommitHash := "ac641e07fe82669e01f7eeb84dc9256259ff1323"
+	commitHash, err := hash.FromHex(targetCommitHash)
 	if err != nil {
-		t.Fatalf("Failed to get main branch: %v", err)
+		t.Fatalf("Failed to parse target commit hash: %v", err)
 	}
 
-	t.Logf("📌 Testing against commit: %s", ref.Hash.String())
+	t.Logf("📌 Testing against fixed commit: %s", targetCommitHash)
 
 	// Create temporary directory for clone
 	tempDir, err := os.MkdirTemp("", "nanogit-clone-perf-large-*")
@@ -201,6 +212,8 @@ func TestClonePerformanceLarge(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
+
+	t.Logf("📁 Clone destination: %s", tempDir)
 
 	// Set up progress tracking
 	tracker := &cloneProgressTracker{
@@ -211,17 +224,17 @@ func TestClonePerformanceLarge(t *testing.T) {
 	start := time.Now()
 	result, err := client.Clone(ctx, nanogit.CloneOptions{
 		Path: tempDir,
-		Hash: ref.Hash,
+		Hash: commitHash,
 		IncludePaths: []string{
 			// Core files
 			"go.mod",
 			"go.sum",
 			"package.json",
 			"Makefile",
-			"README.md", 
+			"README.md",
 			"LICENSE",
 			"CHANGELOG.md",
-			// Essential directories 
+			// Essential directories
 			"pkg/api/**",
 			"pkg/infra/**",
 			"pkg/models/**",
@@ -265,17 +278,28 @@ func TestClonePerformanceLarge(t *testing.T) {
 	finalFailed := atomic.LoadInt64(&tracker.filesFailed)
 	finalSize := atomic.LoadInt64(&tracker.totalSize)
 
-	// Performance assertions (adjusted based on actual grafana/grafana structure)
-	if result.FilteredFiles <= 500 {
-		t.Errorf("Expected substantial filtered files (>500), got %d", result.FilteredFiles)
+	// Performance assertions (based on known commit ac641e07fe82669e01f7eeb84dc9256259ff1323)
+	expectedTotalFiles := 22188
+	expectedFilteredFiles := 781 // Larger set includes more directories
+	expectedWrittenFiles := 570  // Some files filtered out at clone time
+	maxDuration := 10 * time.Second
+
+	if result.TotalFiles != expectedTotalFiles {
+		t.Errorf("Expected exactly %d total files, got %d", expectedTotalFiles, result.TotalFiles)
 	}
-	if finalWritten < 400 {
-		t.Errorf("Expected to write significant files (>=400), wrote %d", finalWritten)  
+	if result.FilteredFiles != expectedFilteredFiles {
+		t.Errorf("Expected exactly %d filtered files, got %d", expectedFilteredFiles, result.FilteredFiles)
 	}
-	if finalFailed > 50 {
-		t.Errorf("Too many failures for large clone: %d (expected <= 50)", finalFailed)
+	if finalWritten != int64(expectedWrittenFiles) {
+		t.Errorf("Expected exactly %d written files, got %d", expectedWrittenFiles, finalWritten)
 	}
-	
+	if finalFailed > 10 {
+		t.Errorf("Too many failures for large clone: %d (expected <= 10)", finalFailed)
+	}
+	if cloneDuration > maxDuration {
+		t.Errorf("Clone took too long: %v (expected <= %v)", cloneDuration, maxDuration)
+	}
+
 	// Performance metrics
 	throughputMBps := float64(finalSize) / (1024 * 1024) / cloneDuration.Seconds()
 	successRate := float64(finalWritten) / float64(result.FilteredFiles) * 100
@@ -288,16 +312,12 @@ func TestClonePerformanceLarge(t *testing.T) {
 	t.Logf("   • Success rate: %.1f%%", successRate)
 	t.Logf("   • Total data written: %.1f MB", float64(finalSize)/(1024*1024))
 	t.Logf("   • Clone time: %v", cloneDuration)
-	t.Logf("   • Throughput: %.1f MB/s", throughputMBps) 
+	t.Logf("   • Throughput: %.1f MB/s", throughputMBps)
 	t.Logf("   • Commit: %s", result.Commit.Hash.String())
 
-	// Performance requirements (more lenient for large clone)
-	if cloneDuration > 60*time.Second {
-		t.Errorf("Large clone took too long: %v (expected < 60s)", cloneDuration)
-	}
-	if successRate < 70.0 {
-		t.Errorf("Success rate too low: %.1f%% (expected >= 70%%)", successRate)
-	}
+	// Print tree structure for debugging
+	t.Logf("📂 Cloned tree structure (large clone):")
+	printTreeStructure(t, tempDir, "", 0, 2) // Max depth of 2 levels for large clone
 }
 
 // TestCloneConsistency tests that clone operations are consistent across multiple runs
@@ -307,7 +327,7 @@ func TestCloneConsistency(t *testing.T) {
 	}
 
 	const numAttempts = 3
-	
+
 	ctx := context.Background()
 	logger := &cloneTestLogger{}
 	ctx = nanolog.ToContext(ctx, logger)
@@ -317,20 +337,22 @@ func TestCloneConsistency(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	ref, err := client.GetRef(ctx, "refs/heads/main")
+	// Use fixed commit hash for consistent testing
+	targetCommitHash := "ac641e07fe82669e01f7eeb84dc9256259ff1323"
+	commitHash, err := hash.FromHex(targetCommitHash)
 	if err != nil {
-		t.Fatalf("Failed to get main branch: %v", err)
+		t.Fatalf("Failed to parse target commit hash: %v", err)
 	}
-	
+
 	var results []struct {
 		filesWritten int64
 		filesFailed  int64
 		duration     time.Duration
 	}
-	
+
 	for i := 0; i < numAttempts; i++ {
 		t.Logf("=== Consistency Test Attempt %d ===", i+1)
-		
+
 		tempDir, err := os.MkdirTemp("", "nanogit-clone-consistency-*")
 		if err != nil {
 			t.Fatalf("Failed to create temp dir: %v", err)
@@ -344,7 +366,7 @@ func TestCloneConsistency(t *testing.T) {
 		start := time.Now()
 		result, err := client.Clone(ctx, nanogit.CloneOptions{
 			Path: tempDir,
-			Hash: ref.Hash,
+			Hash: commitHash,
 			IncludePaths: []string{
 				"go.mod", "go.sum", "package.json", "README.md", "LICENSE",
 				"pkg/api/admin.go", "pkg/api/api.go", "pkg/api/user.go",
@@ -353,29 +375,29 @@ func TestCloneConsistency(t *testing.T) {
 			OnFileFailed:  tracker.onFileFailed,
 		})
 		duration := time.Since(start)
-		
+
 		if err != nil {
 			t.Fatalf("Consistency test attempt %d failed: %v", i+1, err)
 		}
-		
+
 		// Basic validation of result
 		if result.FilteredFiles < 5 {
 			t.Errorf("Unexpected filtered files count: %d", result.FilteredFiles)
 		}
-		
+
 		finalWritten := atomic.LoadInt64(&tracker.filesWritten)
 		finalFailed := atomic.LoadInt64(&tracker.filesFailed)
-		
+
 		results = append(results, struct {
 			filesWritten int64
 			filesFailed  int64
 			duration     time.Duration
 		}{finalWritten, finalFailed, duration})
-		
-		t.Logf("✅ Attempt %d: %d files written, %d failed, %v duration", 
+
+		t.Logf("✅ Attempt %d: %d files written, %d failed, %v duration",
 			i+1, finalWritten, finalFailed, duration)
 
-		// Should be consistent per attempt  
+		// Should be consistent per attempt
 		if finalWritten < 7 {
 			t.Errorf("Attempt %d: too few files written: %d (expected >= 7)", i+1, finalWritten)
 		}
@@ -383,7 +405,7 @@ func TestCloneConsistency(t *testing.T) {
 			t.Errorf("Attempt %d: unexpected failures: %d", i+1, finalFailed)
 		}
 	}
-	
+
 	// Check consistency across attempts
 	baseWritten := results[0].filesWritten
 	for i := 1; i < len(results); i++ {
@@ -392,6 +414,53 @@ func TestCloneConsistency(t *testing.T) {
 				baseWritten, i+1, results[i].filesWritten)
 		}
 	}
-	
+
 	t.Logf("🎉 All %d attempts succeeded consistently!", numAttempts)
+}
+
+// printTreeStructure recursively prints the directory structure for debugging
+func printTreeStructure(t *testing.T, path string, prefix string, depth int, maxDepth int) {
+	if depth > maxDepth {
+		return
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		t.Logf("%s❌ Error reading %s: %v", prefix, path, err)
+		return
+	}
+
+	for i, entry := range entries {
+		isLast := i == len(entries)-1
+		var currentPrefix, nextPrefix string
+
+		if isLast {
+			currentPrefix = prefix + "└── "
+			nextPrefix = prefix + "    "
+		} else {
+			currentPrefix = prefix + "├── "
+			nextPrefix = prefix + "│   "
+		}
+
+		if entry.IsDir() {
+			t.Logf("%s📁 %s/", currentPrefix, entry.Name())
+			if depth < maxDepth {
+				printTreeStructure(t, filepath.Join(path, entry.Name()), nextPrefix, depth+1, maxDepth)
+			}
+		} else {
+			// Get file size
+			info, err := entry.Info()
+			var sizeStr string
+			if err == nil {
+				if info.Size() < 1024 {
+					sizeStr = fmt.Sprintf(" (%d B)", info.Size())
+				} else if info.Size() < 1024*1024 {
+					sizeStr = fmt.Sprintf(" (%.1f KB)", float64(info.Size())/1024)
+				} else {
+					sizeStr = fmt.Sprintf(" (%.1f MB)", float64(info.Size())/(1024*1024))
+				}
+			}
+			t.Logf("%s📄 %s%s", currentPrefix, entry.Name(), sizeStr)
+		}
+	}
 }
