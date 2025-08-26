@@ -47,7 +47,7 @@ var _ = Describe("Clone operations", func() {
 			Expect(result).NotTo(BeNil())
 			Expect(result.Path).To(Equal(tempDir))
 			Expect(result.Commit.Hash).To(Equal(commitHash))
-			Expect(result.TotalFilteredFiles).To(Equal(6)) // All files in the repository at this commit
+			Expect(result.TotalFilteredFiles).To(Equal(4)) // All files in the repository at this commit
 
 			By("Verifying files were written to disk")
 			content, err := os.ReadFile(filepath.Join(tempDir, "README.md"))

@@ -190,12 +190,6 @@ func (c *httpClient) filterFilesInTree(ctx context.Context, tree *FlatTree, incl
 		"include_paths", strings.Join(includePaths, ","),
 		"exclude_paths", strings.Join(excludePaths, ","))
 
-	if len(includePaths) == 0 && len(excludePaths) == 0 {
-		// No filtering needed
-		logger.Debug("No filtering needed, returning original tree")
-		return tree, nil
-	}
-
 	filtered := &FlatTree{
 		Entries: make([]FlatTreeEntry, 0, len(tree.Entries)),
 	}
@@ -203,8 +197,8 @@ func (c *httpClient) filterFilesInTree(ctx context.Context, tree *FlatTree, incl
 	var totalFileCount int
 	for _, entry := range tree.Entries {
 		// Skip directories - we only want files in the filtered tree
-		if entry.Mode&0o40000 != 0 {
-			logger.Debug("Skipping directory in filterTree", "path", entry.Path, "mode", fmt.Sprintf("0o%o", entry.Mode))
+		if entry.Type == protocol.ObjectTypeTree {
+			logger.Debug("Skipping directory in filterTree", "path", entry.Path)
 			continue
 		}
 
