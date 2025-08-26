@@ -271,6 +271,14 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 	return allObjects, rootTree, nil
 }
 
+// fetchSingleTreeObject fetches a single tree object that was missed during batch processing
+func (c *httpClient) fetchSingleTreeObject(ctx context.Context, treeHash hash.Hash) (*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Fetch single missing tree object", "hash", treeHash.String())
+
+	return c.getTree(ctx, treeHash)
+}
+
 // fetchMetrics tracks statistics during tree object fetching
 type fetchMetrics struct {
 	totalRequests       int
@@ -658,10 +666,26 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 			if entryType == protocol.ObjectTypeTree {
 				childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree)
 				if !exists {
-					logger.Debug("Child tree not found",
-						"hash", entry.Hash,
+					// Try to fetch the missing tree object individually as a last resort
+					logger.Debug("Tree object not found in collection, attempting individual fetch",
+						"hash", entryHash.String(),
 						"path", entryPath)
-					return fmt.Errorf("tree object %s not found in collection", entry.Hash)
+					
+					missingTreeObj, err := c.fetchSingleTreeObject(ctx, entryHash)
+					if err != nil {
+						logger.Debug("Failed to fetch missing tree object",
+							"hash", entryHash.String(),
+							"path", entryPath,
+							"error", err)
+						return fmt.Errorf("tree object %s not found in collection", entry.Hash)
+					}
+					
+					// Add to storage and use it
+					allTreeObjects.Add(missingTreeObj)
+					childTree = missingTreeObj
+					logger.Debug("Successfully fetched missing tree object",
+						"hash", entryHash.String(),
+						"path", entryPath)
 				}
 				// Recursively traverse the child tree
 				if err := traverseTree(childTree, entryPath); err != nil {
