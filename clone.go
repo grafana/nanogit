@@ -725,11 +725,12 @@ func (c *httpClient) fetchBlobBatch(ctx context.Context, blobHashes []hash.Hash)
 		"blob_count", len(blobHashes))
 
 	// Use the existing Fetch method to get multiple blobs at once
+	// Disable NoExtraObjects optimization to ensure complete blob retrieval like Git CLI
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:     true,
 		Want:           blobHashes,
 		Done:           true,
-		NoExtraObjects: true, // Only get the blobs we requested
+		NoExtraObjects: false, // Allow extra objects to ensure completeness like Git CLI
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch blob batch: %w", err)
@@ -751,6 +752,46 @@ func (c *httpClient) fetchBlobBatch(ctx context.Context, blobHashes []hash.Hash)
 	logger.Debug("Blob batch fetched successfully",
 		"requested_count", len(blobHashes),
 		"received_count", len(blobObjects))
+
+	// Check if we're missing any blobs and attempt individual fallback
+	if len(blobObjects) < len(blobHashes) {
+		missingCount := len(blobHashes) - len(blobObjects)
+		logger.Debug("Some blobs missing from batch, attempting individual fallback",
+			"missing_count", missingCount)
+		
+		// Find missing blob hashes
+		missingHashes := make([]hash.Hash, 0, missingCount)
+		for _, requestedHash := range blobHashes {
+			if _, found := blobObjects[requestedHash.String()]; !found {
+				missingHashes = append(missingHashes, requestedHash)
+			}
+		}
+		
+		// Attempt to fetch missing blobs individually
+		for _, missingHash := range missingHashes {
+			logger.Debug("Attempting individual blob fetch", "blob_hash", missingHash.String())
+			
+			blob, err := c.GetBlob(ctx, missingHash)
+			if err != nil {
+				logger.Warn("Individual blob fetch failed", "blob_hash", missingHash.String(), "error", err)
+				continue
+			}
+			
+			// Successfully fetched individual blob
+			blobObj := &protocol.PackfileObject{
+				Hash: missingHash,
+				Type: protocol.ObjectTypeBlob,
+				Data: blob.Content,
+			}
+			blobObjects[missingHash.String()] = blobObj
+			logger.Debug("Individual blob fetch succeeded", "blob_hash", missingHash.String(), "size", len(blob.Content))
+		}
+		
+		logger.Debug("Individual fallback completed",
+			"original_missing", missingCount,
+			"final_received", len(blobObjects),
+			"final_missing", len(blobHashes)-len(blobObjects))
+	}
 
 	return blobObjects, nil
 }

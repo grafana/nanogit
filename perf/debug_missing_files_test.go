@@ -27,7 +27,10 @@ func (l *simpleLogger) Debug(msg string, keysAndValues ...any) {
 	   strings.Contains(msg, "batch retry") ||
 	   strings.Contains(msg, "still_missing") ||
 	   strings.Contains(msg, "GetBlob") ||
-	   strings.Contains(msg, "Failed to fetch") {
+	   strings.Contains(msg, "Failed to fetch") ||
+	   strings.Contains(msg, "Handling missing blobs") ||
+	   strings.Contains(msg, "processBatchesInParallel") ||
+	   strings.Contains(msg, "handleMissingBlobs") {
 		args := make([]string, len(keysAndValues))
 		for i, v := range keysAndValues {
 			args[i] = fmt.Sprint(v)
