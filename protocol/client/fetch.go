@@ -226,13 +226,6 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		objects[obj.Object.Hash.String()] = obj.Object
 		objectCount++
 
-		if storage != nil {
-			storage.Add(obj.Object)
-		}
-
-		objects[obj.Object.Hash.String()] = obj.Object
-		objectCount++
-
 		// Check for early termination if enabled and we have pending wants
 		if pendingWantedHashes != nil {
 			objHashStr := obj.Object.Hash.String()
@@ -243,6 +236,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 				// Stop reading if we've found all wanted objects
 				if foundWantedCount >= len(pendingWantedHashes) {
 					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount, "skippingRemaining", len(objects)-count)
+					return nil
 				}
 			}
 		}
