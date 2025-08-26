@@ -124,7 +124,7 @@ func TestClonePerformanceSmall(t *testing.T) {
 
 	// Performance assertions (based on known commit ac641e07fe82669e01f7eeb84dc9256259ff1323)
 	expectedTotalFiles := 22188
-	expectedFilteredFiles := 164
+	expectedFilteredFiles := 150  // Should match written files now that directories are excluded
 	expectedWrittenFiles := 150
 	maxDuration := 5 * time.Second
 
