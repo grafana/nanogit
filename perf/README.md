@@ -19,6 +19,7 @@ make help                  # See all available targets
 
 - **Consistency Tests**: Verify all clients produce identical results
 - **Performance Benchmarks**: Measure duration and memory across repository sizes
+- **Clone Performance Tests**: Real-world clone operations against live repositories (e.g., grafana/grafana)
 - **Client-Specific**: Focus on individual Git implementations
 
 ### Repository Sizes
@@ -37,8 +38,9 @@ make help                  # See all available targets
 | `test-perf-file-ops` | File operations | ~8 min |
 | `test-perf-tree` | Tree listing | ~4 min |
 | `test-perf-bulk` | Bulk operations | ~7 min |
+| `test-perf-clone` | Clone performance | ~5 min |
 | `test-perf-small` | Small repos only | ~3 min |
-| `test-perf-all` | Everything | ~20 min |
+| `test-perf-all` | Everything | ~25 min |
 
 ## Requirements
 
@@ -83,6 +85,27 @@ Creates four archives in `testdata/`:
 
 Each archive contains a complete Git repository with realistic file structure, various file types, and full commit history. Benefits: fast startup, consistent data, reproducible test conditions.
 
+## Clone Performance Tests
+
+The clone performance tests validate real-world clone operations against live repositories:
+
+- **TestClonePerformanceSmall**: Filtered clone of grafana/grafana (~150 files)
+- **TestClonePerformanceLarge**: Larger filtered clone (~1000+ files)  
+- **TestCloneConsistency**: Multiple runs to verify consistent behavior
+
+These tests:
+- Use live GitHub repositories (no Docker required)
+- Test the clone fix for missing tree objects
+- Measure throughput, success rates, and reliability
+- Validate file filtering and progress tracking
+
+```bash
+cd perf
+make test-perf-clone
+```
+
+**Note**: Clone tests require internet connectivity and may be affected by GitHub rate limiting.
+
 ## Manual Execution
 
 ```bash
@@ -91,6 +114,7 @@ export RUN_PERFORMANCE_TESTS=true
 
 # Run specific tests
 go test -v -run TestFileOperationsPerformance .
+go test -v -run TestClonePerformance .
 
 # Run benchmarks
 go test -bench=. .
