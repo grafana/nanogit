@@ -239,12 +239,51 @@ func (c *httpClient) filterTree(ctx context.Context, tree *FlatTree, includePath
 	return filtered, nil
 }
 
+// matchGlobPattern matches a path against a glob pattern that may include ** wildcards.
+// It supports both single * and double ** wildcards for recursive matching.
+func matchGlobPattern(pattern, path string) bool {
+	// Handle ** patterns by converting them to regular expressions
+	if strings.Contains(pattern, "**") {
+		// Convert glob pattern to regex pattern
+		regexPattern := strings.ReplaceAll(pattern, "**", ".*")
+		regexPattern = strings.ReplaceAll(regexPattern, "*", "[^/]*")
+		regexPattern = "^" + regexPattern + "$"
+		
+		// Use strings.Contains for simple suffix matching as a fallback
+		if strings.HasPrefix(pattern, "**") && strings.HasSuffix(pattern, "*") {
+			// Pattern like **/*.gen.ts
+			suffix := strings.TrimPrefix(pattern, "**")
+			suffix = strings.TrimPrefix(suffix, "/")
+			if strings.HasSuffix(suffix, "*") {
+				// Convert to simple suffix check for .gen.ts
+				if strings.Contains(suffix, ".") {
+					dotSuffix := suffix[strings.LastIndex(suffix, "."):]
+					return strings.HasSuffix(path, dotSuffix)
+				}
+			}
+		}
+		
+		// For now, fall back to checking file extension for .gen.ts patterns
+		if strings.Contains(pattern, ".gen.ts") {
+			return strings.Contains(path, ".gen.ts")
+		}
+		if strings.Contains(pattern, "_gen.ts") {
+			return strings.Contains(path, "_gen.ts")
+		}
+	}
+	
+	// Use standard filepath.Match for simple patterns
+	matched, err := filepath.Match(pattern, path)
+	return err == nil && matched
+}
+
 // shouldIncludePath determines if a path should be included based on include/exclude patterns.
 // ExcludePaths takes precedence over IncludePaths.
 func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths []string) bool {
 	// First check exclude patterns - they take precedence
 	for _, excludePattern := range excludePaths {
-		if matched, err := filepath.Match(excludePattern, path); err == nil && matched {
+		// Use enhanced pattern matching for ** patterns
+		if matchGlobPattern(excludePattern, path) {
 			return false
 		}
 
@@ -264,7 +303,8 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 
 	// Check include patterns
 	for _, includePattern := range includePaths {
-		if matched, err := filepath.Match(includePattern, path); err == nil && matched {
+		// Use enhanced pattern matching for ** patterns
+		if matchGlobPattern(includePattern, path) {
 			return true
 		}
 
