@@ -156,7 +156,7 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	}
 
 	// Apply path filters to the tree
-	filteredTree, err := c.filterTree(fullTree, opts.IncludePaths, opts.ExcludePaths)
+	filteredTree, err := c.filterTree(ctx, fullTree, opts.IncludePaths, opts.ExcludePaths)
 	if err != nil {
 		return nil, fmt.Errorf("filter tree: %w", err)
 	}
@@ -195,27 +195,46 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 
 // filterTree applies include and exclude path patterns to filter a FlatTree.
 // It returns a new FlatTree containing only entries that match the criteria.
-func (c *httpClient) filterTree(tree *FlatTree, includePaths, excludePaths []string) (*FlatTree, error) {
+func (c *httpClient) filterTree(ctx context.Context, tree *FlatTree, includePaths, excludePaths []string) (*FlatTree, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Starting filterTree", 
+		"total_entries", len(tree.Entries), 
+		"include_paths", strings.Join(includePaths, ","), 
+		"exclude_paths", strings.Join(excludePaths, ","))
+		
 	if len(includePaths) == 0 && len(excludePaths) == 0 {
 		// No filtering needed
+		logger.Debug("No filtering needed, returning original tree")
 		return tree, nil
 	}
 
 	filtered := &FlatTree{
 		Entries: make([]FlatTreeEntry, 0, len(tree.Entries)),
 	}
+	
+	dirCount := 0
+	fileCount := 0
 
 	for _, entry := range tree.Entries {
 		// Skip directories - we only want files in the filtered tree
 		if entry.Mode&0o40000 != 0 {
+			// Directory found - should skip
+			dirCount++
+			logger.Debug("Skipping directory in filterTree", "path", entry.Path, "mode", fmt.Sprintf("0o%o", entry.Mode))
 			continue
 		}
 		
+		fileCount++
 		included := c.shouldIncludePath(entry.Path, includePaths, excludePaths)
 		if included {
 			filtered.Entries = append(filtered.Entries, entry)
 		}
 	}
+
+	logger.Debug("Completed filterTree", 
+		"input_dirs", dirCount,
+		"input_files", fileCount, 
+		"output_entries", len(filtered.Entries))
 
 	return filtered, nil
 }
