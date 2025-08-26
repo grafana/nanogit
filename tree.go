@@ -761,14 +761,33 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	logger := log.FromContext(ctx)
 	logger.Debug("Fetch tree object", "hash", want.String())
 
-	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{want},
-		Done:           true,
-		NoExtraObjects: false, // GetFlatTree is called after this one. Let's read all of them
-	})
-	if err != nil {
+	var foundObj *protocol.PackfileObject
+	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		if obj.Type != protocol.ObjectTypeTree {
+			logger.Debug("Unexpected object type",
+				"hash", want.String(),
+				"expectedType", protocol.ObjectTypeTree,
+				"actualType", obj.Type)
+			return true, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Type)
+		}
+
+		// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects
+		// in the path. We must filter the response to extract only the requested tree.
+		if obj.Hash.Is(want) {
+			foundObj = obj
+		}
+		// GetFlatTree is called after this one. Let's read all of them
+		return false, nil
+	}
+
+	if err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:      true,
+		NoBlobFilter:    true,
+		Want:            []hash.Hash{want},
+		Done:            true,
+		NoExtraObjects:  false, // GetFlatTree is called after this one. Let's read all of them
+		OnObjectFetched: callback,
+	}); err != nil {
 		// TODO: handle this at the client level
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(want)
@@ -778,31 +797,13 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		return nil, fmt.Errorf("fetching tree objects: %w", err)
 	}
 
-	if len(objects) == 0 {
-		logger.Debug("No objects returned", "hash", want.String())
+	if foundObj == nil {
+		logger.Debug("Object not found", "hash", want.String())
 		return nil, NewObjectNotFoundError(want)
 	}
 
-	// TODO: can we do in the fetch?
-	for _, obj := range objects {
-		if obj.Type != protocol.ObjectTypeTree {
-			logger.Debug("Unexpected object type",
-				"hash", want.String(),
-				"expectedType", protocol.ObjectTypeTree,
-				"actualType", obj.Type)
-			return nil, NewUnexpectedObjectTypeError(want, protocol.ObjectTypeTree, obj.Type)
-		}
-	}
-
-	// Due to Git protocol limitations, when fetching a tree object, we receive all tree objects
-	// in the path. We must filter the response to extract only the requested tree.
-	if obj, ok := objects[want.String()]; ok {
-		logger.Debug("Tree object found", "hash", want.String())
-		return obj, nil
-	}
-
-	logger.Debug("Tree object not found in response", "hash", want.String())
-	return nil, NewObjectNotFoundError(want)
+	logger.Debug("Tree object found", "hash", want.String())
+	return foundObj, nil
 }
 
 // packfileObjectToTree converts a packfile object to a tree object.

@@ -20,14 +20,16 @@ type FetchOptions struct {
 	Done         bool // not sure why we need this one
 	Deepen       int
 	Shallow      bool
-
+	// TODO: Deprecate this
 	// NoExtraObjects stops reading the packfile once all wanted objects have been found.
 	// This can significantly improve performance when fetching specific objects from large repositories,
 	// as it avoids downloading and processing unnecessary objects.
 	NoExtraObjects bool
+	// OnObjectFetched is called for each object fetched.
+	OnObjectFetched func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error)
 }
 
-func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
+func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Fetch", "wantCount", len(opts.Want), "noCache", opts.NoCache)
 
@@ -36,19 +38,19 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	cachedObjects, pendingOpts := c.checkCacheForObjects(ctx, opts, objects, storage)
 	if cachedObjects {
-		return objects, nil
+		return nil
 	}
 
 	pkt, err := c.buildFetchRequest(pendingOpts)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
 	responseReader, response, err := c.sendFetchRequest(ctx, pkt)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if responseReader != nil {
@@ -61,11 +63,12 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	logger.Debug("Fetch completed", "totalObjects", len(objects))
-	return objects, nil
+
+	return nil
 }
 
 // checkCacheForObjects checks if objects are available in cache and returns cached objects
@@ -225,6 +228,17 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 
 		objects[obj.Object.Hash.String()] = obj.Object
 		objectCount++
+
+		if opts.OnObjectFetched != nil {
+			stop, err := opts.OnObjectFetched(ctx, obj.Object)
+			if err != nil {
+				return fmt.Errorf("fetch callback: %w", err)
+			}
+
+			if stop {
+				return nil
+			}
+		}
 
 		// Check for early termination if enabled and we have pending wants
 		if pendingWantedHashes != nil {

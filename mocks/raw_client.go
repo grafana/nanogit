@@ -11,19 +11,17 @@ import (
 )
 
 type FakeRawClient struct {
-	FetchStub        func(context.Context, client.FetchOptions) (map[string]*protocol.PackfileObject, error)
+	FetchStub        func(context.Context, client.FetchOptions) error
 	fetchMutex       sync.RWMutex
 	fetchArgsForCall []struct {
 		arg1 context.Context
 		arg2 client.FetchOptions
 	}
 	fetchReturns struct {
-		result1 map[string]*protocol.PackfileObject
-		result2 error
+		result1 error
 	}
 	fetchReturnsOnCall map[int]struct {
-		result1 map[string]*protocol.PackfileObject
-		result2 error
+		result1 error
 	}
 	IsAuthorizedStub        func(context.Context) (bool, error)
 	isAuthorizedMutex       sync.RWMutex
@@ -94,7 +92,7 @@ type FakeRawClient struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 client.FetchOptions) (map[string]*protocol.PackfileObject, error) {
+func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 client.FetchOptions) error {
 	fake.fetchMutex.Lock()
 	ret, specificReturn := fake.fetchReturnsOnCall[len(fake.fetchArgsForCall)]
 	fake.fetchArgsForCall = append(fake.fetchArgsForCall, struct {
@@ -109,9 +107,9 @@ func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 client.FetchOptions)
 		return stub(arg1, arg2)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2
+		return ret.result1
 	}
-	return fakeReturns.result1, fakeReturns.result2
+	return fakeReturns.result1
 }
 
 func (fake *FakeRawClient) FetchCallCount() int {
@@ -120,7 +118,7 @@ func (fake *FakeRawClient) FetchCallCount() int {
 	return len(fake.fetchArgsForCall)
 }
 
-func (fake *FakeRawClient) FetchCalls(stub func(context.Context, client.FetchOptions) (map[string]*protocol.PackfileObject, error)) {
+func (fake *FakeRawClient) FetchCalls(stub func(context.Context, client.FetchOptions) error) {
 	fake.fetchMutex.Lock()
 	defer fake.fetchMutex.Unlock()
 	fake.FetchStub = stub
@@ -133,30 +131,27 @@ func (fake *FakeRawClient) FetchArgsForCall(i int) (context.Context, client.Fetc
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRawClient) FetchReturns(result1 map[string]*protocol.PackfileObject, result2 error) {
+func (fake *FakeRawClient) FetchReturns(result1 error) {
 	fake.fetchMutex.Lock()
 	defer fake.fetchMutex.Unlock()
 	fake.FetchStub = nil
 	fake.fetchReturns = struct {
-		result1 map[string]*protocol.PackfileObject
-		result2 error
-	}{result1, result2}
+		result1 error
+	}{result1}
 }
 
-func (fake *FakeRawClient) FetchReturnsOnCall(i int, result1 map[string]*protocol.PackfileObject, result2 error) {
+func (fake *FakeRawClient) FetchReturnsOnCall(i int, result1 error) {
 	fake.fetchMutex.Lock()
 	defer fake.fetchMutex.Unlock()
 	fake.FetchStub = nil
 	if fake.fetchReturnsOnCall == nil {
 		fake.fetchReturnsOnCall = make(map[int]struct {
-			result1 map[string]*protocol.PackfileObject
-			result2 error
+			result1 error
 		})
 	}
 	fake.fetchReturnsOnCall[i] = struct {
-		result1 map[string]*protocol.PackfileObject
-		result2 error
-	}{result1, result2}
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeRawClient) IsAuthorized(arg1 context.Context) (bool, error) {

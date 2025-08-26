@@ -22,7 +22,7 @@ type RawClient interface {
 	SmartInfo(ctx context.Context, service string) error
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
 	ReceivePack(ctx context.Context, data io.Reader) error
-	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
+	Fetch(ctx context.Context, opts FetchOptions) error
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }
 

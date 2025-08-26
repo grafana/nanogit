@@ -36,35 +36,35 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	logger.Debug("Get blob",
 		"blob_hash", blobID.String())
 
-	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		Want:           []hash.Hash{blobID},
-		Done:           true,
-		NoExtraObjects: true, // No need for extra objects in this case
-	})
-	if err != nil {
+	var foundObj *protocol.PackfileObject
+	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		if obj.Type != protocol.ObjectTypeBlob {
+			return false, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
+		}
+
+		if obj.Hash.Is(blobID) {
+			foundObj = obj
+			return true, nil
+		}
+
+		// Got more blobs than expected
+		return false, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{obj, obj})
+	}
+
+	if err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress: true,
+		Want:       []hash.Hash{blobID},
+		Done:       true,
+		// FIXME: this won't even execute as the callback will make it stop before that part of the code
+		NoExtraObjects:  true, // No need for extra objects in this case
+		OnObjectFetched: callback,
+	}); err != nil {
 		// TODO: handle this at the client level
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(blobID)
 		}
 
 		return nil, fmt.Errorf("fetch blob %s: %w", blobID.String(), err)
-	}
-
-	var foundObj *protocol.PackfileObject
-	for _, obj := range objects {
-		if obj.Type != protocol.ObjectTypeBlob {
-			return nil, NewUnexpectedObjectTypeError(blobID, protocol.ObjectTypeBlob, obj.Type)
-		}
-
-		// we got more blobs than expected
-		if foundObj != nil {
-			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
-		}
-
-		if obj.Hash.Is(blobID) {
-			foundObj = obj
-		}
 	}
 
 	if foundObj != nil {

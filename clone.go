@@ -156,10 +156,9 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		return nil, fmt.Errorf("write files to disk: %w", err)
 	}
 
-	// Count only files (not directories) for TotalFiles
 	totalFileCount := 0
 	for _, entry := range fullTree.Entries {
-		if entry.Mode&0o40000 == 0 { // Not a directory
+		if entry.Type == protocol.ObjectTypeBlob {
 			totalFileCount++
 		}
 	}

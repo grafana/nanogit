@@ -281,48 +281,42 @@ func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtr
 	logger.Debug("Get commit",
 		"commit_hash", commitHash.String())
 
-	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{commitHash},
-		Deepen:         1,
-		Shallow:        true,
-		Done:           true,
-		NoExtraObjects: noExtraObjects,
-	})
-	if err != nil {
+	var foundObj *protocol.PackfileObject
+	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		// Skip tree objects that are included in the response despite the blob:none filter.
+		// Most Git servers don't support tree:0 filter specification, so we may receive
+		// recursive tree objects that we need to filter out.
+		if obj.Type == protocol.ObjectTypeTree {
+			return false, nil
+		}
+
+		if obj.Type != protocol.ObjectTypeCommit {
+			return false, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+		}
+
+		if obj.Hash.Is(commitHash) {
+			foundObj = obj
+		}
+
+		return noExtraObjects, nil
+	}
+
+	if err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:      true,
+		NoBlobFilter:    true,
+		Want:            []hash.Hash{commitHash},
+		Deepen:          1,
+		Shallow:         true,
+		Done:            true,
+		NoExtraObjects:  noExtraObjects,
+		OnObjectFetched: callback,
+	}); err != nil {
 		// TODO: handle this at the client level
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, NewObjectNotFoundError(commitHash)
 		}
 
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
-	}
-
-	if len(objects) == 0 {
-		return nil, NewObjectNotFoundError(commitHash)
-	}
-
-	var foundObj *protocol.PackfileObject
-	for _, obj := range objects {
-		// Skip tree objects that are included in the response despite the blob:none filter.
-		// Most Git servers don't support tree:0 filter specification, so we may receive
-		// recursive tree objects that we need to filter out.
-		if obj.Type == protocol.ObjectTypeTree {
-			continue
-		}
-
-		if obj.Type != protocol.ObjectTypeCommit {
-			return nil, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
-		}
-
-		if foundObj != nil {
-			return nil, NewUnexpectedObjectCountError(1, []*protocol.PackfileObject{foundObj, obj})
-		}
-
-		if obj.Hash.Is(commitHash) {
-			foundObj = obj
-		}
 	}
 
 	if foundObj == nil {
@@ -524,20 +518,34 @@ func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash
 	logger.Debug("Process commit",
 		"commit_hash", commitHash.String())
 
-	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{commitHash},
-		Deepen:         perPage,
-		Done:           true,
-		NoExtraObjects: false, // we want to read other commits
-	})
-	if err != nil {
+	var commit *protocol.PackfileObject
+	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		if obj.Type != protocol.ObjectTypeCommit {
+			return false, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+		}
+
+		if obj.Hash.Is(commitHash) {
+			commit = obj
+		}
+
+		// we want to read other commits
+		return false, nil
+	}
+
+	if err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:      true,
+		NoBlobFilter:    true,
+		Want:            []hash.Hash{commitHash},
+		Deepen:          perPage,
+		Done:            true,
+		NoExtraObjects:  false, // we want to read other commits
+		OnObjectFetched: callback,
+	}); err != nil {
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
 	}
 
-	commit, ok := objects[commitHash.String()]
-	if !ok || commit.Type != protocol.ObjectTypeCommit {
+	if commit == nil || commit.Type != protocol.ObjectTypeCommit {
+		var ok bool
 		commit, ok = allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
 		if !ok {
 			return nil, NewObjectNotFoundError(commitHash)
@@ -685,22 +693,35 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	commit, ok := allObjects.GetByType(commitHash, protocol.ObjectTypeCommit)
 	if !ok {
 		logger.Debug("Commit not in storage, fetching", "commitHash", commitHash.String())
-		objects, err := c.Fetch(ctx, client.FetchOptions{
-			NoProgress:     true,
-			NoBlobFilter:   true,
-			Want:           []hash.Hash{commitHash},
-			Shallow:        true,
-			Done:           true,
-			NoExtraObjects: false, // let's read of other tree objects if possible
+
+		callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+			if obj.Type != protocol.ObjectTypeCommit {
+				return false, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+			}
+
+			if obj.Hash.Is(commitHash) {
+				commit = obj
+			}
+
+			// let's read other tree objects if possible
+			return false, nil
+		}
+
+		err := c.Fetch(ctx, client.FetchOptions{
+			NoProgress:      true,
+			NoBlobFilter:    true,
+			Want:            []hash.Hash{commitHash},
+			Shallow:         true,
+			Done:            true,
+			NoExtraObjects:  false, // let's read of other tree objects if possible
+			OnObjectFetched: callback,
 		})
 		if err != nil {
 			logger.Debug("Failed to fetch commit", "commitHash", commitHash.String(), "error", err)
 			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
 		}
 
-		// Try to find it in the objects we got but if not, get it from the storage
-		commit, ok = objects[commitHash.String()]
-		if !ok {
+		if commit == nil {
 			return hash.Zero, NewObjectNotFoundError(commitHash)
 		}
 	}
