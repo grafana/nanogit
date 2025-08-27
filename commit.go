@@ -519,6 +519,11 @@ func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash
 
 	var commit *protocol.PackfileObject
 	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		// Skip tree objects that are included in the response
+		if obj.Type == protocol.ObjectTypeTree {
+			return false, nil
+		}
+
 		if obj.Type != protocol.ObjectTypeCommit {
 			return false, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
 		}
@@ -694,7 +699,11 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 
 		callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
 			// When you fetch a commit, you may get tree objects as well
-			if obj.Type != protocol.ObjectTypeCommit && obj.Type != protocol.ObjectTypeTree {
+			if obj.Type == protocol.ObjectTypeTree {
+				return false, nil
+			}
+
+			if obj.Type != protocol.ObjectTypeCommit {
 				return false, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeCommit, obj.Type)
 			}
 
