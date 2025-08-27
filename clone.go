@@ -50,6 +50,14 @@ type CloneOptions struct {
 	// This can be used for progress tracking, logging, or custom processing.
 	// The callback should be fast and non-blocking to avoid slowing down the clone.
 	OnFileWritten func(filePath string, size int64)
+	// MaximumBatchAttempts specifies the maximum number of attempts to fetch and write blobs in batches.
+	// If a batch fails, it will be retried up to this number of times.
+	// Set it to 0 zero to disable batches and fetch blobs individually.
+	MaximumBatchAttempts int
+	// BatchSize specifies the number of blobs to fetch in each batch request.
+	// Larger batch sizes can improve performance but may increase memory usage.
+	// Default is 100 blobs per batch.
+	BatchSize int
 }
 
 // CloneResult contains the results of a clone operation.
@@ -329,9 +337,20 @@ func (c *httpClient) fetchAndWriteFilesToDisk(ctx context.Context, opts CloneOpt
 	}
 	totalBlobs := len(hashToBlobs)
 
-	var attempt int
-	for attempt <= 3 && len(pendingBlobs) > 0 {
-		attempt++
+	// Default to 100 blobs per batch if not specified
+	batchSize := opts.BatchSize
+	if batchSize == 0 {
+		batchSize = 100
+	}
+
+	for attempt := 0; attempt < opts.MaximumBatchAttempts && len(pendingBlobs) > 0; attempt++ {
+		logger.Debug("Fetching pending blobs in batch",
+			"batch_size", batchSize,
+			"total_blobs", totalBlobs,
+			"total_pending_blobs", len(pendingBlobs),
+			"attempts", attempt,
+		)
+
 		// pendingBlobs, err = c.fetchAndWriteInBatches(ctx, pendingBlobs)
 		// if err != nil {
 		// 	return fmt.Errorf("fetch and write in batches in attempt %d: %w", attempt, err)
@@ -339,11 +358,18 @@ func (c *httpClient) fetchAndWriteFilesToDisk(ctx context.Context, opts CloneOpt
 	}
 
 	if len(pendingBlobs) > 0 {
-		logger.Debug("Some blobs are still pending after multiple batch attempts",
-			"pending_blob_count", len(pendingBlobs),
-			"total_blobs", totalBlobs,
-			"attempts", attempt,
-		)
+		if opts.MaximumBatchAttempts > 0 {
+			logger.Debug("Some blobs are still pending after multiple batch attempts",
+				"total_blobs", totalBlobs,
+				"total_pending_blobs", len(pendingBlobs),
+				"attempts", opts.MaximumBatchAttempts,
+			)
+		} else {
+			logger.Debug("Fetching blobs individually since batching is disabled",
+				"total_pending_blobs", len(pendingBlobs),
+				"total_blobs", totalBlobs,
+			)
+		}
 
 		for hash := range pendingBlobs {
 			blob, err := c.GetBlob(ctx, hash)
