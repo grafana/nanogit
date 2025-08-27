@@ -288,28 +288,49 @@ type fetchMetrics struct {
 
 // fetchInitialCommitObjects performs the initial fetch of commit objects
 func (c *httpClient) fetchInitialCommitObjects(ctx context.Context, commitHash hash.Hash, metrics *fetchMetrics) (map[string]*protocol.PackfileObject, *protocol.PackfileObject, error) {
-	initialObjects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         []hash.Hash{commitHash},
-		Shallow:      true,
-		Deepen:       1,
-		Done:         true,
-	})
-	if err != nil {
+	logger := log.FromContext(ctx)
+	initialObjects := make(map[string]*protocol.PackfileObject)
+
+	var commitObj *protocol.PackfileObject
+	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		if obj.Hash.Is(commitHash) {
+			if obj.Type != protocol.ObjectTypeCommit {
+				return true, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
+			}
+
+			commitObj = obj
+		}
+
+		if obj.Type != protocol.ObjectTypeTree && obj.Type != protocol.ObjectTypeCommit {
+			logger.Debug("Unexpected object type",
+				"expectedType", protocol.ObjectTypeTree,
+				"actualType", obj.Type)
+			return true, NewUnexpectedObjectTypeError(hash.Zero, protocol.ObjectTypeTree, obj.Type)
+		}
+
+		initialObjects[obj.Hash.String()] = obj
+
+		return false, nil
+	}
+
+	if err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:      true,
+		NoBlobFilter:    true,
+		Want:            []hash.Hash{commitHash},
+		Shallow:         true,
+		Deepen:          1,
+		Done:            true,
+		OnObjectFetched: callback,
+	}); err != nil {
 		if strings.Contains(err.Error(), "not our ref") {
 			return nil, nil, NewObjectNotFoundError(commitHash)
 		}
+
 		return nil, nil, fmt.Errorf("fetch commit tree %s: %w", commitHash.String(), err)
 	}
 
-	commitObj, exists := initialObjects[commitHash.String()]
-	if !exists {
+	if commitObj == nil {
 		return nil, nil, NewObjectNotFoundError(commitHash)
-	}
-
-	if commitObj.Type != protocol.ObjectTypeCommit {
-		return nil, nil, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, commitObj.Type)
 	}
 
 	metrics.totalObjectsFetched = len(initialObjects)
@@ -432,19 +453,31 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 	logger := log.FromContext(ctx)
 
 	metrics.totalRequests++
-	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           currentBatch,
-		Done:           true,
-		NoExtraObjects: false, // we want to fetch all objects in this batch
-	})
-	if err != nil {
+	objects := make(map[string]*protocol.PackfileObject)
+	callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
+		if obj.Type != protocol.ObjectTypeTree {
+			logger.Debug("Unexpected object type",
+				"expectedType", protocol.ObjectTypeTree,
+				"actualType", obj.Type)
+			return true, NewUnexpectedObjectTypeError(hash.Zero, protocol.ObjectTypeTree, obj.Type)
+		}
+
+		objects[obj.Hash.String()] = obj
+		return false, nil
+	}
+
+	if err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:      true,
+		NoBlobFilter:    true,
+		Want:            currentBatch,
+		Done:            true,
+		NoExtraObjects:  false, // we want to fetch all objects in this batch
+		OnObjectFetched: callback,
+	}); err != nil {
 		return fmt.Errorf("fetch tree batch: %w", err)
 	}
 
 	metrics.totalObjectsFetched += len(objects)
-
 	requestedReceived := c.countRequestedReceived(currentBatch, objects)
 	additionalReceived := len(objects) - requestedReceived
 
@@ -455,7 +488,7 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 		"requested_received", requestedReceived,
 		"additional_received", additionalReceived)
 
-	err = c.handleMissingObjects(currentBatch, objects, retries, retryCount, requestedHashes, maxRetries, metrics.totalRequests)
+	err := c.handleMissingObjects(currentBatch, objects, retries, retryCount, requestedHashes, maxRetries, metrics.totalRequests)
 	if err != nil {
 		return err
 	}
