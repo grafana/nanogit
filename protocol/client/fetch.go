@@ -56,12 +56,10 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) error {
 		}()
 	}
 
-	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
+	err = c.processPackfileResponse(ctx, response, storage, pendingOpts)
 	if err != nil {
 		return err
 	}
-
-	logger.Debug("Fetch completed", "totalObjects", len(objects))
 
 	return nil
 }
@@ -183,9 +181,14 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (io.ReadCl
 }
 
 // processPackfileResponse processes the packfile response and extracts objects
-func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
+func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, storage storage.PackfileStorage, opts FetchOptions) error {
 	logger := log.FromContext(ctx)
 	var count, objectCount, foundWantedCount, totalDelta int
+	wanted := make(map[string]struct{}, len(opts.Want))
+	for _, w := range opts.Want {
+		wanted[w.String()] = struct{}{}
+	}
+
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
@@ -209,8 +212,11 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 			storage.Add(obj.Object)
 		}
 
-		objects[obj.Object.Hash.String()] = obj.Object
 		objectCount++
+		if _, ok := wanted[obj.Object.Hash.String()]; ok {
+			foundWantedCount++
+			delete(wanted, obj.Object.Hash.String())
+		}
 
 		if opts.OnObjectFetched != nil {
 			stop, err := opts.OnObjectFetched(ctx, obj.Object)
@@ -219,10 +225,12 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 			}
 
 			if stop {
-				return nil
+				break
 			}
 		}
 	}
+
+	logger.Debug("Finished processing fetch response", "totalRead", count, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
 
 	return nil
 }
