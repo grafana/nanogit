@@ -308,7 +308,6 @@ func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtr
 		Deepen:          1,
 		Shallow:         true,
 		Done:            true,
-		NoExtraObjects:  noExtraObjects,
 		OnObjectFetched: callback,
 	}); err != nil {
 		// TODO: handle this at the client level
@@ -538,7 +537,6 @@ func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash
 		Want:            []hash.Hash{commitHash},
 		Deepen:          perPage,
 		Done:            true,
-		NoExtraObjects:  false, // we want to read other commits
 		OnObjectFetched: callback,
 	}); err != nil {
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
@@ -713,7 +711,6 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			Want:            []hash.Hash{commitHash},
 			Shallow:         true,
 			Done:            true,
-			NoExtraObjects:  false, // let's read of other tree objects if possible
 			OnObjectFetched: callback,
 		})
 		if err != nil {

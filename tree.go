@@ -463,6 +463,7 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 		}
 
 		objects[obj.Hash.String()] = obj
+		// we want to collect all objects in this batch
 		return false, nil
 	}
 
@@ -471,7 +472,6 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 		NoBlobFilter:    true,
 		Want:            currentBatch,
 		Done:            true,
-		NoExtraObjects:  false, // we want to fetch all objects in this batch
 		OnObjectFetched: callback,
 	}); err != nil {
 		return fmt.Errorf("fetch tree batch: %w", err)
@@ -818,7 +818,6 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		NoBlobFilter:    true,
 		Want:            []hash.Hash{want},
 		Done:            true,
-		NoExtraObjects:  false, // GetFlatTree is called after this one. Let's read all of them
 		OnObjectFetched: callback,
 	}); err != nil {
 		// TODO: handle this at the client level

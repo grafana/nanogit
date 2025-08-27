@@ -20,11 +20,6 @@ type FetchOptions struct {
 	Done         bool // not sure why we need this one
 	Deepen       int
 	Shallow      bool
-	// TODO: Deprecate this
-	// NoExtraObjects stops reading the packfile once all wanted objects have been found.
-	// This can significantly improve performance when fetching specific objects from large repositories,
-	// as it avoids downloading and processing unnecessary objects.
-	NoExtraObjects bool
 	// OnObjectFetched is called for each object fetched.
 	OnObjectFetched func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error)
 }
@@ -162,12 +157,11 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 	logger.Debug("Send fetch request",
 		"requestSize", len(pkt),
 		"options", map[string]interface{}{
-			"noProgress":     opts.NoProgress,
-			"noBlobFilter":   opts.NoBlobFilter,
-			"deepen":         opts.Deepen,
-			"shallow":        opts.Shallow,
-			"done":           opts.Done,
-			"noExtraObjects": opts.NoExtraObjects,
+			"noProgress":   opts.NoProgress,
+			"noBlobFilter": opts.NoBlobFilter,
+			"deepen":       opts.Deepen,
+			"shallow":      opts.Shallow,
+			"done":         opts.Done,
 		})
 	logger.Debug("Fetch request raw data", "request", string(pkt))
 }
@@ -191,17 +185,6 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (io.ReadCl
 // processPackfileResponse processes the packfile response and extracts objects
 func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
 	logger := log.FromContext(ctx)
-	// Build a set of pending wanted object hashes for quick lookup if early termination is enabled
-	// Only build this if we have specific objects we want AND NoExtraObjects is enabled
-	var pendingWantedHashes map[string]bool
-	if opts.NoExtraObjects && len(opts.Want) > 0 {
-		pendingWantedHashes = make(map[string]bool, len(opts.Want))
-		for _, hash := range opts.Want {
-			pendingWantedHashes[hash.String()] = true
-		}
-		logger.Debug("Early termination enabled", "pendingObjects", len(pendingWantedHashes))
-	}
-
 	var count, objectCount, foundWantedCount, totalDelta int
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
@@ -237,21 +220,6 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 
 			if stop {
 				return nil
-			}
-		}
-
-		// Check for early termination if enabled and we have pending wants
-		if pendingWantedHashes != nil {
-			objHashStr := obj.Object.Hash.String()
-			if pendingWantedHashes[objHashStr] {
-				foundWantedCount++
-				logger.Debug("Found wanted object", "hash", objHashStr, "foundCount", foundWantedCount, "totalWanted", len(pendingWantedHashes))
-
-				// Stop reading if we've found all wanted objects
-				if foundWantedCount >= len(pendingWantedHashes) {
-					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount, "skippingRemaining", len(objects)-count)
-					return nil
-				}
 			}
 		}
 	}

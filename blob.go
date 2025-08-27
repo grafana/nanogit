@@ -52,11 +52,9 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 	}
 
 	if err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress: true,
-		Want:       []hash.Hash{blobID},
-		Done:       true,
-		// FIXME: this won't even execute as the callback will make it stop before that part of the code
-		NoExtraObjects:  true, // No need for extra objects in this case
+		NoProgress:      true,
+		Want:            []hash.Hash{blobID},
+		Done:            true,
 		OnObjectFetched: callback,
 	}); err != nil {
 		// TODO: handle this at the client level
