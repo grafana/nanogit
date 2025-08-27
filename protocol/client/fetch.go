@@ -28,11 +28,11 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Fetch", "wantCount", len(opts.Want), "noCache", opts.NoCache)
 
-	objects := make(map[string]*protocol.PackfileObject)
 	storage := storage.FromContext(ctx)
-
-	cachedObjects, pendingOpts := c.checkCacheForObjects(ctx, opts, objects, storage)
-	if cachedObjects {
+	cachedObjects, pendingOpts, err := c.checkCacheForObjects(ctx, opts, storage)
+	if err != nil {
+		return fmt.Errorf("check cache for objects: %w", err)
+	} else if cachedObjects {
 		return nil
 	}
 
@@ -65,31 +65,43 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) error {
 }
 
 // checkCacheForObjects checks if objects are available in cache and returns cached objects
-func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (bool, FetchOptions) {
+func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions, storage storage.PackfileStorage) (bool, FetchOptions, error) {
 	logger := log.FromContext(ctx)
-
 	if storage == nil || opts.NoCache {
-		return false, opts
+		return false, opts, nil
 	}
 
 	pending := make([]hash.Hash, 0, len(opts.Want))
+	var found int
 	for _, want := range opts.Want {
 		obj, ok := storage.Get(want)
 		if !ok {
 			pending = append(pending, want)
 		} else {
-			objects[want.String()] = obj
+			found++
+			if opts.OnObjectFetched != nil {
+				stop, err := opts.OnObjectFetched(ctx, obj)
+				if err != nil {
+					logger.Error("fetch callback error", "error", err, "object", want.String())
+					return true, opts, fmt.Errorf("fetch callback: %w", err)
+				}
+
+				if stop {
+					logger.Debug("Fetch callback requested to stop early", "object", want.String())
+					return true, opts, nil
+				}
+			}
 		}
 	}
 
-	if len(objects) == len(opts.Want) {
-		logger.Debug("All objects found in cache", "objectCount", len(objects))
-		return true, opts
+	if found == len(opts.Want) {
+		logger.Debug("All objects found in cache", "objectCount", len(opts.Want))
+		return true, opts, nil
 	}
 
-	logger.Debug("Some objects not found in cache", "foundInCache", len(objects), "pendingFetch", len(pending))
+	logger.Debug("Some objects not found in cache", "foundInCache", found, "pendingFetch", len(pending))
 	opts.Want = pending
-	return false, opts
+	return false, opts, nil
 }
 
 // buildFetchRequest constructs the fetch request packet
