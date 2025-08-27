@@ -693,11 +693,15 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 		logger.Debug("Commit not in storage, fetching", "commitHash", commitHash.String())
 
 		callback := func(ctx context.Context, obj *protocol.PackfileObject) (stop bool, err error) {
-			if obj.Type != protocol.ObjectTypeCommit {
-				return false, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+			// When you fetch a commit, you may get tree objects as well
+			if obj.Type != protocol.ObjectTypeCommit && obj.Type != protocol.ObjectTypeTree {
+				return false, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeCommit, obj.Type)
 			}
 
 			if obj.Hash.Is(commitHash) {
+				if obj.Type != protocol.ObjectTypeCommit {
+					return false, NewUnexpectedObjectTypeError(commitHash, protocol.ObjectTypeCommit, obj.Type)
+				}
 				commit = obj
 			}
 
@@ -705,15 +709,14 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			return false, nil
 		}
 
-		err := c.Fetch(ctx, client.FetchOptions{
+		if err := c.Fetch(ctx, client.FetchOptions{
 			NoProgress:      true,
 			NoBlobFilter:    true,
 			Want:            []hash.Hash{commitHash},
 			Shallow:         true,
 			Done:            true,
 			OnObjectFetched: callback,
-		})
-		if err != nil {
+		}); err != nil {
 			logger.Debug("Failed to fetch commit", "commitHash", commitHash.String(), "error", err)
 			return hash.Zero, fmt.Errorf("getting commit to get hash for path: %w", err)
 		}
