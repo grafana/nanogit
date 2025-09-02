@@ -236,6 +236,7 @@ func matchGlobPattern(pattern, path string) bool {
 			}
 		}
 
+		// HACK: wtf?
 		// For now, fall back to checking file extension for .gen.ts patterns
 		if strings.Contains(pattern, ".gen.ts") {
 			return strings.Contains(path, ".gen.ts")
