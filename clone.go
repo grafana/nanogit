@@ -12,14 +12,6 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-// batchResult represents the result of processing a batch of blobs
-type batchResult struct {
-	batchID      int
-	objects      map[string]*protocol.PackfileObject
-	missingBlobs []hash.Hash
-	err          error
-}
-
 // CloneOptions provides configuration options for repository cloning operations.
 // It supports flexible folder filtering to optimize clones of large repositories
 // by only including or excluding specific paths, which is ideal for CI environments
@@ -230,11 +222,6 @@ func (c *httpClient) filterFilesInTree(ctx context.Context, tree *FlatTree, incl
 func matchGlobPattern(pattern, path string) bool {
 	// Handle ** patterns by converting them to regular expressions
 	if strings.Contains(pattern, "**") {
-		// Convert glob pattern to regex pattern
-		regexPattern := strings.ReplaceAll(pattern, "**", ".*")
-		regexPattern = strings.ReplaceAll(regexPattern, "*", "[^/]*")
-		regexPattern = "^" + regexPattern + "$"
-
 		// Use strings.Contains for simple suffix matching as a fallback
 		if strings.HasPrefix(pattern, "**") && strings.HasSuffix(pattern, "*") {
 			// Pattern like **/*.gen.ts
