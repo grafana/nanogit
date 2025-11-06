@@ -132,6 +132,7 @@ func NewGitServer(logger *TestLogger) *GitServer {
 
 // CreateUser creates a new user in the Gitea server with the specified credentials.
 // The user is created with admin privileges and password change requirement disabled.
+// If the user already exists, it will be deleted and recreated to ensure a clean state.
 func (s *GitServer) CreateUser() *User {
 	var suffix uint32
 	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
@@ -144,6 +145,8 @@ func (s *GitServer) CreateUser() *User {
 		Password: fmt.Sprintf("testpass-%d", suffix),
 	}
 	s.logger.Logf("%s👤 Creating test user '%s'...%s", ColorBlue, user.Username, ColorReset)
+
+	// First try to create the user
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
 		"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
 	})
@@ -152,7 +155,33 @@ func (s *GitServer) CreateUser() *User {
 	execOutput, err := io.ReadAll(reader)
 	Expect(err).NotTo(HaveOccurred())
 	s.logger.Logf("%s📋 User creation output: %s%s", ColorCyan, string(execOutput), ColorReset)
-	Expect(execResult).To(Equal(0))
+
+	// If user already exists, delete and recreate
+	if execResult != 0 && strings.Contains(string(execOutput), "user already exists") {
+		s.logger.Logf("%s⚠️  User '%s' already exists, deleting...%s", ColorYellow, user.Username, ColorReset)
+
+		// Delete the existing user
+		delResult, delReader, delErr := s.container.Exec(context.Background(), []string{
+			"su", "git", "-c", fmt.Sprintf("gitea admin user delete --username %s", user.Username),
+		})
+		Expect(delErr).NotTo(HaveOccurred())
+		delOutput, delErr := io.ReadAll(delReader)
+		Expect(delErr).NotTo(HaveOccurred())
+		s.logger.Logf("%s📋 User deletion output: %s%s", ColorCyan, string(delOutput), ColorReset)
+		Expect(delResult).To(Equal(0), "Failed to delete existing user: %s", string(delOutput))
+
+		// Retry user creation
+		s.logger.Logf("%s👤 Recreating test user '%s'...%s", ColorBlue, user.Username, ColorReset)
+		execResult, reader, err = s.container.Exec(context.Background(), []string{
+			"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		execOutput, err = io.ReadAll(reader)
+		Expect(err).NotTo(HaveOccurred())
+		s.logger.Logf("%s📋 User recreation output: %s%s", ColorCyan, string(execOutput), ColorReset)
+	}
+
+	Expect(execResult).To(Equal(0), "Failed to create user: %s", string(execOutput))
 
 	s.logger.Logf("%s✅ Test user '%s' created successfully%s", ColorGreen, user.Username, ColorReset)
 	return user
