@@ -8,6 +8,7 @@
 .PHONY: test-perf-bulk-small test-perf-bulk-medium test-perf-bulk-large test-perf-bulk-xlarge
 .PHONY: test-perf-compare-small test-perf-compare-medium test-perf-compare-large test-perf-compare-xlarge
 .PHONY: profile-cpu profile-mem profile-all profile-compare profile-clean profile-baseline
+.PHONY: test-clone-perf test-clone-perf-subpath test-clone-perf-full
 
 # Default target
 help:
@@ -55,6 +56,11 @@ help:
 	@echo "  profile-nanogit-only - Generate profiles for all nanogit tests"
 	@echo "  profile-compare     - Compare profiles with baseline"
 	@echo "  profile-clean       - Clean up profile files"
+	@echo ""
+	@echo "Clone Performance Tests (separate from other perf tests):"
+	@echo "  test-clone-perf     - Run clone performance tests with subpath filtering"
+	@echo "  test-clone-perf-subpath - Same as test-clone-perf (alias)"
+	@echo "  test-clone-perf-full - Run full repository clone test (requires RUN_FULL_CLONE_TEST=true)"
 	@echo ""
 	@echo "Note: All profiling targets use NANOGIT_PROFILE_MODE=true to run nanogit-only"
 
@@ -270,3 +276,20 @@ profile-nanogit-only:
 	@echo "Profiles saved to profiles/"
 	@echo "Analyze CPU: go tool pprof profiles/cpu.prof"
 	@echo "Analyze Memory: go tool pprof profiles/mem.prof"
+
+# Clone Performance Tests
+# These tests clone the real grafana/grafana repository and are separate from other perf tests
+
+test-clone-perf:
+	@echo "Running clone performance tests with subpath filtering..."
+	@echo "This will clone grafana/grafana with various subpath filters"
+	RUN_CLONE_PERF_TESTS=true go test -v -timeout 30m -run TestCloneGrafanaGrafana .
+
+test-clone-perf-subpath: test-clone-perf
+	@echo "Alias for test-clone-perf"
+
+test-clone-perf-full:
+	@echo "Running full repository clone test..."
+	@echo "WARNING: This will clone the entire grafana/grafana repository"
+	@echo "This may take several minutes and use significant bandwidth"
+	RUN_CLONE_PERF_TESTS=true RUN_FULL_CLONE_TEST=true go test -v -timeout 60m -run TestCloneGrafanaGrafanaFullRepository .
