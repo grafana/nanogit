@@ -25,7 +25,8 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 	repoURL := "https://github.com/grafana/grafana.git"
 
 	// Test scenarios with different subpaths
-	// Expected file counts are for a specific commit and may need updating as the repository evolves
+	// Expected file counts are for commit fd14d4a5ed3ad8dfd5948a9f2d7b9074e15ea655
+	// These may need updating as the grafana/grafana repository evolves
 	scenarios := []struct {
 		name              string
 		includePaths      []string
@@ -36,25 +37,25 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 			name:              "pkg_api_subpath",
 			includePaths:      []string{"pkg/api/**"},
 			description:       "Clone only pkg/api directory",
-			expectedFileCount: 0, // Will be updated after first test run
+			expectedFileCount: 159,
 		},
 		{
 			name:              "docs_sources",
 			includePaths:      []string{"docs/sources/**/*.md"},
 			description:       "Clone only markdown files in docs/sources",
-			expectedFileCount: 0, // Will be updated after first test run
+			expectedFileCount: 69,
 		},
 		{
 			name:              "go_files_root",
 			includePaths:      []string{"*.go", "go.mod", "go.sum"},
 			description:       "Clone only Go files in root directory",
-			expectedFileCount: 0, // Will be updated after first test run
+			expectedFileCount: 4,
 		},
 		{
 			name:              "scripts_and_makefile",
 			includePaths:      []string{"scripts/**", "Makefile", "*.mk"},
 			description:       "Clone scripts directory and makefiles",
-			expectedFileCount: 0, // Will be updated after first test run
+			expectedFileCount: 142,
 		},
 	}
 
