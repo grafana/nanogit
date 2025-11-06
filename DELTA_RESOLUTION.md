@@ -48,30 +48,13 @@ Servers typically send deltas in these scenarios:
 
 ### Git Protocol v2 Capabilities
 
-nanogit uses Git protocol v2 (Smart HTTP protocol), which provides various fetch capabilities:
-
-```
-Available capabilities:
-- thin-pack: Allow thin pack format (requires local objects for resolution)
-- no-progress: Disable progress reporting
-- include-tag: Include tags in fetch
-- filter: Object filtering (blob:none, tree:0, etc.)
-```
+nanogit uses Git protocol v2 (Smart HTTP protocol), which provides various fetch capabilities including thin-pack, no-progress, include-tag, and object filtering.
 
 **Critical limitation**: There is **NO capability to disable delta objects** in Git protocol v2.
 
 ### Why "thin-pack" Doesn't Help
 
-The `thin-pack` capability controls whether the server can send "thin" packfiles that reference objects the client already has, but it does **NOT** control deltification:
-
-```go
-// This does NOT prevent deltas:
-client.Fetch(ctx, FetchOptions{
-    Want: []hash.Hash{wantHash},
-    Done: true,
-    // thin-pack is irrelevant for delta prevention
-})
-```
+The `thin-pack` capability controls whether the server can send "thin" packfiles that reference objects the client already has, but it does **NOT** control deltification. This is a common misunderstanding when working with Git protocols.
 
 ### Attempted Workarounds (All Failed)
 
@@ -84,17 +67,12 @@ We investigated several approaches to avoid deltas, all unsuccessful:
 
 ### Server-Side Behavior
 
-Even when requesting individual objects:
-
-```bash
-# Single object fetch still returns delta if server has deltified it
-git fetch origin <sha1>
-```
-
 The server's pack generation decides deltification based on:
 - Repository pack structure
 - Recent `git repack` operations
 - Server-side optimization settings
+
+Even when requesting individual objects, the server may still send them as deltas if they were deltified in the repository's pack files.
 
 **Conclusion**: Delta handling is mandatory for any Git client implementation.
 
@@ -111,238 +89,49 @@ Given the impossibility of disabling deltas, nanogit implements **stateless in-m
 
 ### Implementation Strategy
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Fetch Request (client → server)                         │
-├─────────────────────────────────────────────────────────────┤
-│   Want: [commit-hash]                                       │
-│   Capabilities: no-progress, object-format=sha1             │
-│   Done: true                                                │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 2. Packfile Response (server → client)                     │
-├─────────────────────────────────────────────────────────────┤
-│   • Regular objects (commit, tree, blob)                    │
-│   • Delta objects (REF_DELTA)                               │
-│   • All base objects included (self-contained)              │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 3. Object Collection (client processing)                   │
-├─────────────────────────────────────────────────────────────┤
-│   Regular objects → objects map                             │
-│   Delta objects → deltas array (deferred)                   │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 4. Delta Resolution (iterative)                            │
-├─────────────────────────────────────────────────────────────┤
-│   For each delta:                                           │
-│     1. Find base object (in objects map or storage)         │
-│     2. Apply delta instructions to base                     │
-│     3. Calculate resolved object hash                       │
-│     4. Parse resolved object (for trees/commits)            │
-│     5. Add to objects map                                   │
-│   Repeat until all deltas resolved or max iterations        │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 5. Return Complete Objects                                  │
-├─────────────────────────────────────────────────────────────┤
-│   All objects fully resolved and available                  │
-│   Storage contains both regular and resolved delta objects  │
-└─────────────────────────────────────────────────────────────┘
-```
+The delta resolution process follows these stages:
 
-### Code Implementation
-
-The delta resolution is implemented in `protocol/client/fetch.go`:
-
-```go
-func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
-    objects := make(map[string]*protocol.PackfileObject)
-    var deltas []*protocol.PackfileObject
-
-    // Step 1: Collect regular objects and deltas separately
-    for {
-        obj, err := response.Packfile.ReadObject(ctx)
-        if obj.Object.Type == protocol.ObjectTypeRefDelta {
-            deltas = append(deltas, obj.Object)
-            continue
-        }
-        objects[obj.Object.Hash.String()] = obj.Object
-    }
-
-    // Step 2: Resolve all deltas iteratively
-    if len(deltas) > 0 {
-        err := c.resolveDeltas(ctx, deltas, objects, storage)
-        if err != nil {
-            return nil, err
-        }
-    }
-
-    return objects, nil
-}
-```
-
-### Delta Resolution Algorithm
-
-```go
-func (c *rawClient) resolveDeltas(
-    ctx context.Context,
-    deltas []*protocol.PackfileObject,
-    objects map[string]*protocol.PackfileObject,
-    storage storage.PackfileStorage,
-) error {
-    remaining := deltas
-    maxIterations := len(deltas) + 1
-
-    for iteration := 1; len(remaining) > 0 && iteration <= maxIterations; iteration++ {
-        resolvedCount := 0
-        var stillPending []*protocol.PackfileObject
-
-        for _, delta := range remaining {
-            // Find base object (in-memory or storage)
-            baseObj, found := c.findBaseObject(ctx, delta.Delta.Parent, objects, storage)
-            if !found {
-                stillPending = append(stillPending, delta)
-                continue
-            }
-
-            // Apply delta to base
-            resolvedData, err := protocol.ApplyDelta(baseObj.Data, delta.Delta)
-            if err != nil {
-                stillPending = append(stillPending, delta)
-                continue
-            }
-
-            // Create resolved object
-            resolvedHash, resolvedType := inferObjectType(resolvedData, baseObj)
-            resolvedObj := &protocol.PackfileObject{
-                Type: resolvedType,
-                Data: resolvedData,
-                Hash: resolvedHash,
-            }
-
-            // Parse structured data (tree/commit)
-            resolvedObj.Parse()
-
-            // Store resolved object
-            objects[resolvedHash.String()] = resolvedObj
-            if storage != nil {
-                storage.Add(resolvedObj)
-            }
-
-            resolvedCount++
-        }
-
-        if resolvedCount == 0 && len(stillPending) > 0 {
-            return fmt.Errorf("unable to resolve deltas: missing base objects")
-        }
-
-        remaining = stillPending
-    }
-
-    return nil
-}
-```
+1. **Fetch Request**: Client requests objects from server using Git protocol v2
+2. **Packfile Response**: Server returns packfile containing regular objects and deltas
+3. **Object Collection**: Regular objects stored immediately, deltas collected separately
+4. **Delta Resolution**: Iteratively resolve deltas by finding bases and applying instructions
+5. **Return Complete Objects**: All objects fully resolved and available to caller
 
 ### Handling Delta Chains
 
-Delta chains occur when a delta's base object is itself a delta:
+Delta chains occur when a delta's base object is itself a delta (e.g., Object C depends on Object B which depends on Object A). nanogit resolves these chains iteratively:
 
-```
-Object A (base)
-    ↓
-Object B (delta of A)
-    ↓
-Object C (delta of B)
-```
+- **First iteration**: Resolve deltas whose bases are available
+- **Subsequent iterations**: Resolve deltas whose bases were just resolved
+- **Maximum iterations**: Limited to prevent infinite loops in case of errors
 
-nanogit resolves chains iteratively:
+### Delta Application Process
 
-1. **Iteration 1**: Resolve B (base A is available)
-2. **Iteration 2**: Resolve C (base B is now available)
+For each delta object, nanogit:
 
-Maximum iterations = number of deltas + 1 (safety limit).
-
-## Delta Application Process
-
-The `ApplyDelta` function processes delta instructions:
-
-```go
-func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
-    // Validate base size
-    if uint64(len(baseData)) != delta.ExpectedSourceLength {
-        return nil, fmt.Errorf("base data size mismatch")
-    }
-
-    result := make([]byte, 0, estimatedSize)
-
-    for _, change := range delta.Changes {
-        if change.DeltaData != nil {
-            // Insert instruction: add new data
-            result = append(result, change.DeltaData...)
-        } else {
-            // Copy instruction: copy from base
-            copyData := baseData[change.SourceOffset : change.SourceOffset+change.Length]
-            result = append(result, copyData...)
-        }
-    }
-
-    return result, nil
-}
-```
-
-### Example Delta Resolution
-
-Given a modified file:
-
-**Base object** (file.txt v1):
-```
-Line 1
-Line 2
-Line 3
-```
-
-**Delta instructions**:
-```
-1. Copy bytes 0-7 from base    ("Line 1\n")
-2. Insert "Modified Line 2\n"  (new content)
-3. Copy bytes 14-21 from base  ("Line 3\n")
-```
-
-**Resolved object** (file.txt v2):
-```
-Line 1
-Modified Line 2
-Line 3
-```
+1. Validates the base object size matches the delta's expectation
+2. Processes each delta instruction in sequence:
+   - **Copy instructions**: Extract bytes from base object
+   - **Insert instructions**: Add new literal bytes
+3. Reconstructs the complete target object
+4. Calculates the hash of the resolved object
+5. Parses structured data for trees and commits
 
 ## Storage Integration
 
-Delta resolution integrates with nanogit's pluggable storage:
+Delta resolution integrates with nanogit's pluggable storage system:
 
-```go
-// During fetch, resolved objects are added to storage
-if storage != nil {
-    storage.Add(resolvedObj)
-}
-
-// Base objects can be retrieved from storage for delta chains
-baseObj, exists := storage.Get(parentHash)
-```
+- Base objects can be retrieved from storage if previously fetched
+- Resolved objects are added to storage for use in resolving subsequent deltas
+- Storage contents remain available for the session duration
 
 ### Storage Lifecycle
 
-1. **Fetch starts**: Storage context injected
-2. **Regular objects**: Added to storage immediately
-3. **Delta resolution**:
-   - Check storage for base objects
-   - Add resolved objects to storage
-4. **Fetch completes**: All objects available in storage
-5. **Post-fetch**: Storage contents remain for session (not persisted between clients)
+1. Fetch starts with storage context injected
+2. Regular objects added to storage immediately
+3. Delta resolution checks storage for base objects
+4. Resolved objects added to storage
+5. All objects available post-fetch
 
 ## Limitations and Edge Cases
 
@@ -353,161 +142,66 @@ baseObj, exists := storage.Get(parentHash)
    - Mitigation: Most servers prefer REF_DELTA for network protocol
 
 2. **Thin-pack not supported**:
-   - Setting: `thin-pack` capability not requested
-   - Benefit: Ensures all base objects are in response
+   - Ensures all base objects are in response
    - Trade-off: Slightly larger packfile transfers
 
 3. **No persistent cache**:
-   - Design: Stateless operation
-   - Impact: Cannot use previously fetched objects as bases
-   - Mitigation: Self-contained packfiles include all bases
+   - Stateless operation by design
+   - Cannot use previously fetched objects as bases across sessions
 
 4. **Delta chain depth limit**:
-   - Max iterations: `len(deltas) + 1`
-   - Risk: Extremely deep chains could hit limit
-   - Reality: Git servers typically limit chain depth to 50
+   - Max iterations prevents infinite loops
+   - Git servers typically limit chain depth to 50
 
 ### Error Scenarios
 
-**Missing base object**:
-```
-Error: unable to resolve deltas: missing base objects [sha1, sha2]
-```
-Cause: Server sent thin-pack or incomplete packfile
-Solution: Verify `thin-pack` is not requested
+**Missing base object**: Occurs when server sends thin-pack or incomplete packfile. Verify thin-pack is not requested.
 
-**Base size mismatch**:
-```
-Error: base data size mismatch: got 100 bytes, delta expects 150 bytes
-```
-Cause: Base object corrupted or wrong base selected
-Solution: Check object integrity
+**Base size mismatch**: Base object corrupted or wrong base selected. Check object integrity.
 
-**Delta chain too deep**:
-```
-Error: failed to resolve all deltas after N iterations
-```
-Cause: Circular reference or extremely deep chain
-Solution: Increase max iterations or investigate server packfile
-
-## Testing
-
-### Unit Tests
-
-Delta application is tested in `protocol/delta_apply_test.go`:
-
-```go
-func TestApplyDelta(t *testing.T) {
-    t.Run("simple insert operation", ...)
-    t.Run("simple copy operation", ...)
-    t.Run("mixed copy and insert operations", ...)
-    t.Run("copy from multiple locations", ...)
-    t.Run("large copy operation", ...)
-    t.Run("error: base size mismatch", ...)
-    t.Run("error: copy out of bounds", ...)
-    // ... 15 test cases total
-}
-```
-
-### Integration Tests
-
-Delta resolution is tested in `tests/delta_integration_test.go`:
-
-```go
-It("should handle ref-delta objects for modified files", func() {
-    // Create file, modify multiple times, force repack with deltas
-    local.CreateFile("delta-test.txt", baseContent)
-    local.Git("commit", "-m", "Initial")
-
-    // Multiple modifications
-    for i := 1; i <= 5; i++ {
-        local.UpdateFile("delta-test.txt", modifiedContent)
-        local.Git("commit", "-m", "Modification")
-    }
-
-    // Force deltification
-    local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-
-    // Fetch deltified blob
-    blob, err := client.GetBlob(ctx, blobHash)
-    Expect(err).NotTo(HaveOccurred())
-    Expect(string(blob.Content)).To(Equal(expectedContent))
-})
-```
-
-### Test Coverage
-
-- ✅ Simple delta application (insert, copy)
-- ✅ Mixed operations
-- ✅ Delta chains (deltas of deltas)
-- ✅ Multiple deltified files in one fetch
-- ✅ Deltified tree objects
-- ✅ Deltified commit objects
-- ✅ GetBlobByPath with deltas
-- ✅ Clone with deltified repository
-- ✅ Empty file deltification
-- ✅ Large files with deltas
-- ✅ Error cases (missing base, size mismatch, out of bounds)
+**Delta chain too deep**: Circular reference or extremely deep chain. May require investigating server packfile generation.
 
 ## Performance Considerations
 
 ### Memory Usage
 
-Delta resolution operates in-memory:
+Delta resolution operates entirely in-memory, requiring space for:
+- Regular objects received from server
+- Delta objects awaiting resolution
+- Resolved objects after delta application
 
-```
-Memory = Regular objects + Delta objects + Resolved objects
-```
-
-For typical fetch:
-- 1000 objects, 30% deltified
-- Average object: 5KB
-- Peak memory: ~6.5MB (700 regular + 300 delta + 300 resolved)
+For typical fetches with moderate deltification, memory usage remains reasonable for cloud environments.
 
 ### CPU Cost
 
-Delta application is CPU-intensive:
-- Copy operations: Memory copy overhead
-- Insert operations: Minimal
-- Parsing: Tree/commit parsing after resolution
+Delta application is CPU-intensive as it involves:
+- Memory copy operations for copy instructions
+- Minimal overhead for insert operations
+- Object parsing for trees and commits after resolution
 
-Benchmark results:
-- Simple delta (1KB base): ~10μs
-- Complex delta (100KB base): ~500μs
-- Delta chain depth 5: ~50μs total
+The network bandwidth savings from deltas typically outweigh the CPU cost.
 
 ### Network Efficiency
 
-Deltas reduce network transfer:
+Deltas significantly reduce network transfer size:
 - Without deltas: 100% of object data
-- With deltas: 30-50% of object data (typical)
-- Benefit: Faster fetches outweigh CPU cost
+- With deltas: 30-50% of object data (typical savings)
+
+This makes delta support essential for acceptable fetch/clone performance.
 
 ## Comparison with Other Implementations
 
 ### go-git
 
-```go
-// go-git also resolves deltas in-memory
-// Uses similar iterative approach
-// Supports both OFS_DELTA and REF_DELTA
-```
+Uses similar iterative delta resolution approach in-memory. Supports both OFS_DELTA and REF_DELTA types.
 
 ### libgit2
 
-```c
-// libgit2 resolves deltas during index writing
-// Can use on-disk object database for bases
-// Supports streaming delta application
-```
+Resolves deltas during index writing phase. Can leverage on-disk object database for finding base objects. Supports streaming delta application.
 
 ### Git CLI
 
-```bash
-# git CLI resolves deltas while writing packfile
-# Uses .git/objects as base object source
-# Supports thin-pack with local objects
-```
+Resolves deltas while writing packfile to disk. Uses .git/objects as base object source. Supports thin-pack with local object database.
 
 ### nanogit Unique Characteristics
 
@@ -515,6 +209,30 @@ Deltas reduce network transfer:
 2. **No thin-pack**: Self-contained packfiles only
 3. **Storage-agnostic**: Pluggable storage backend
 4. **Cloud-focused**: Optimized for serverless/container environments
+
+## Testing Strategy
+
+nanogit includes comprehensive testing for delta resolution:
+
+### Unit Tests
+
+Cover delta application logic including:
+- Basic copy and insert operations
+- Mixed operation sequences
+- Error conditions (size mismatch, bounds checking)
+- Binary data handling
+
+### Integration Tests
+
+Verify end-to-end delta handling with real Git servers:
+- Deltified blobs from modified files
+- Deltified tree objects
+- Deltified commit objects
+- Delta chains (deltas of deltas)
+- Complex repository structures
+- Edge cases (empty files, large files)
+
+Test repositories are created with explicit deltification using `git repack` to ensure deltas are present.
 
 ## References
 
@@ -555,11 +273,12 @@ Deltas reduce network transfer:
 
 ### nanogit Implementation
 
-- `protocol/client/fetch.go`: Main delta resolution logic
-- `protocol/delta.go`: Delta structure and parsing
-- `protocol/delta_apply.go`: Delta application algorithm
-- `protocol/packfile.go`: Packfile object processing
-- `tests/delta_integration_test.go`: Integration test suite
+For implementation details, see:
+- `protocol/client/fetch.go` - Main delta resolution logic
+- `protocol/delta.go` - Delta structure and parsing
+- `protocol/delta_apply.go` - Delta application algorithm
+- `protocol/packfile.go` - Packfile object processing
+- `tests/delta_integration_test.go` - Integration test suite
 
 ### Related Issues and Pull Requests
 
