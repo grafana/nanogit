@@ -183,6 +183,20 @@ type PackfileObject struct {
 	Commit *PackfileCommit
 }
 
+// Parse parses the object's data based on its type and populates the appropriate fields.
+// This method should be called after creating a PackfileObject with raw data to ensure
+// that Tree or Commit fields are properly populated.
+func (obj *PackfileObject) Parse() error {
+	switch obj.Type {
+	case ObjectTypeTree:
+		return obj.parseTree()
+	case ObjectTypeCommit:
+		return obj.parseCommit()
+	default:
+		return nil
+	}
+}
+
 func (e *PackfileObject) parseTree() error {
 	// Get reader from pool to avoid allocation
 	reader := treeReaderPool.Get().(*bufio.Reader)
