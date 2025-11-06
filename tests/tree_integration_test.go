@@ -469,9 +469,10 @@ var _ = Describe("Trees", func() {
 			// Count directories and files
 			var dirCount, fileCount int
 			for _, entry := range flatTree.Entries {
-				if entry.Type == protocol.ObjectTypeTree {
+				switch entry.Type {
+				case protocol.ObjectTypeTree:
 					dirCount++
-				} else if entry.Type == protocol.ObjectTypeBlob {
+				case protocol.ObjectTypeBlob:
 					fileCount++
 				}
 			}
