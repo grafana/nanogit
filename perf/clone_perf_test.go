@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,11 +62,11 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 			clonePath := filepath.Join(tempDir, "clone")
 
 			// Create nanogit client
-			client, err := nanogit.NewHTTPClient(repoURL, options.WithInsecureSkipTLS(false))
+			client, err := nanogit.NewHTTPClient(repoURL)
 			require.NoError(t, err, "Failed to create nanogit client")
 
 			// Get main branch reference
-			ref, err := client.GetRef(ctx, "main")
+			ref, err := client.GetRef(ctx, "refs/heads/main")
 			require.NoError(t, err, "Failed to get main branch reference")
 
 			t.Logf("Cloning grafana/grafana with scenario: %s", scenario.description)
@@ -147,11 +146,11 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 	clonePath := filepath.Join(tempDir, "clone")
 
 	// Create nanogit client
-	client, err := nanogit.NewHTTPClient(repoURL, options.WithInsecureSkipTLS(false))
+	client, err := nanogit.NewHTTPClient(repoURL)
 	require.NoError(t, err, "Failed to create nanogit client")
 
 	// Get main branch reference
-	ref, err := client.GetRef(ctx, "main")
+	ref, err := client.GetRef(ctx, "refs/heads/main")
 	require.NoError(t, err, "Failed to get main branch reference")
 
 	t.Logf("Cloning full grafana/grafana repository")
