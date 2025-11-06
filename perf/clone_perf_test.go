@@ -155,6 +155,7 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 
 	t.Logf("Cloning full grafana/grafana repository")
 	t.Logf("Target commit: %s", ref.Hash.String()[:8])
+	t.Logf("Clone path: %s", clonePath)
 
 	// Measure clone time
 	startTime := time.Now()

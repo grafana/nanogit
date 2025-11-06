@@ -378,15 +378,12 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-perf-${{ hashFiles('perf/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Sync vendor directory
-        run: go mod vendor
+            ${{ runner.os }}-go-perf-
       - name: Run clone performance tests
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
         run: |
           cd perf
           make test-clone-perf
