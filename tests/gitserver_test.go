@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -132,21 +131,25 @@ func NewGitServer(logger *TestLogger) *GitServer {
 
 // CreateUser creates a new user in the Gitea server with the specified credentials.
 // The user is created with admin privileges and password change requirement disabled.
-// If the user already exists, it will be deleted and recreated to ensure a clean state.
+// Uses a unique suffix based on timestamp and random data to avoid collisions in parallel tests.
 func (s *GitServer) CreateUser() *User {
-	var suffix uint32
-	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
+	// Generate a unique suffix using nanosecond timestamp + random bytes
+	// This ensures uniqueness even when tests run in parallel
+	now := time.Now().UnixNano()
+	var randomBytes [4]byte
+	_, err := rand.Read(randomBytes[:])
 	Expect(err).NotTo(HaveOccurred())
-	suffix = suffix % 10000
+
+	// Combine timestamp and random data for a unique suffix
+	suffix := fmt.Sprintf("%d%x", now, randomBytes)
 
 	user := &User{
-		Username: fmt.Sprintf("testuser-%d", suffix),
-		Email:    fmt.Sprintf("test-%d@example.com", suffix),
-		Password: fmt.Sprintf("testpass-%d", suffix),
+		Username: fmt.Sprintf("testuser-%s", suffix),
+		Email:    fmt.Sprintf("test-%s@example.com", suffix),
+		Password: fmt.Sprintf("testpass-%s", suffix),
 	}
 	s.logger.Logf("%s👤 Creating test user '%s'...%s", ColorBlue, user.Username, ColorReset)
 
-	// First try to create the user
 	execResult, reader, err := s.container.Exec(context.Background(), []string{
 		"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
 	})
@@ -155,32 +158,6 @@ func (s *GitServer) CreateUser() *User {
 	execOutput, err := io.ReadAll(reader)
 	Expect(err).NotTo(HaveOccurred())
 	s.logger.Logf("%s📋 User creation output: %s%s", ColorCyan, string(execOutput), ColorReset)
-
-	// If user already exists, delete and recreate
-	if execResult != 0 && strings.Contains(string(execOutput), "user already exists") {
-		s.logger.Logf("%s⚠️  User '%s' already exists, deleting...%s", ColorYellow, user.Username, ColorReset)
-
-		// Delete the existing user
-		delResult, delReader, delErr := s.container.Exec(context.Background(), []string{
-			"su", "git", "-c", fmt.Sprintf("gitea admin user delete --username %s", user.Username),
-		})
-		Expect(delErr).NotTo(HaveOccurred())
-		delOutput, delErr := io.ReadAll(delReader)
-		Expect(delErr).NotTo(HaveOccurred())
-		s.logger.Logf("%s📋 User deletion output: %s%s", ColorCyan, string(delOutput), ColorReset)
-		Expect(delResult).To(Equal(0), "Failed to delete existing user: %s", string(delOutput))
-
-		// Retry user creation
-		s.logger.Logf("%s👤 Recreating test user '%s'...%s", ColorBlue, user.Username, ColorReset)
-		execResult, reader, err = s.container.Exec(context.Background(), []string{
-			"su", "git", "-c", fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin", user.Username, user.Email, user.Password),
-		})
-		Expect(err).NotTo(HaveOccurred())
-		execOutput, err = io.ReadAll(reader)
-		Expect(err).NotTo(HaveOccurred())
-		s.logger.Logf("%s📋 User recreation output: %s%s", ColorCyan, string(execOutput), ColorReset)
-	}
-
 	Expect(execResult).To(Equal(0), "Failed to create user: %s", string(execOutput))
 
 	s.logger.Logf("%s✅ Test user '%s' created successfully%s", ColorGreen, user.Username, ColorReset)
@@ -241,12 +218,14 @@ func (s *GitServer) CreateRepo(repoName string, user *User) *RemoteRepo {
 func (s *GitServer) TestRepo() (nanogit.Client, *RemoteRepo, *LocalGitRepo) {
 	user := s.CreateUser()
 
-	var suffix uint32
-	err := binary.Read(rand.Reader, binary.LittleEndian, &suffix)
+	// Generate a unique suffix using nanosecond timestamp + random bytes
+	now := time.Now().UnixNano()
+	var randomBytes [4]byte
+	_, err := rand.Read(randomBytes[:])
 	Expect(err).NotTo(HaveOccurred())
-	suffix = suffix % 10000
+	suffix := fmt.Sprintf("%d%x", now, randomBytes)
 
-	remote := s.CreateRepo(fmt.Sprintf("testrepo-%d", suffix), user)
+	remote := s.CreateRepo(fmt.Sprintf("testrepo-%s", suffix), user)
 	local := NewLocalGitRepo(s.logger)
 	client, _ := local.QuickInit(user, remote.AuthURL())
 
