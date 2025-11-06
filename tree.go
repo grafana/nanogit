@@ -658,10 +658,27 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 			if entryType == protocol.ObjectTypeTree {
 				childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree)
 				if !exists {
-					logger.Debug("Child tree not found",
-						"hash", entry.Hash,
+					logger.Debug("Child tree not found in collection, attempting individual fetch",
+						"hash", entryHash.String(),
 						"path", entryPath)
-					return fmt.Errorf("tree object %s not found in collection", entry.Hash)
+
+					// Fallback: try to fetch the missing tree object individually
+					fetchedTree, err := c.fetchMissingTreeObject(ctx, entryHash)
+					if err != nil {
+						logger.Error("Failed to fetch missing tree object",
+							"hash", entryHash.String(),
+							"path", entryPath,
+							"error", err)
+						return fmt.Errorf("tree object %s not found in collection and individual fetch failed: %w", entryHash.String(), err)
+					}
+
+					// Add the fetched tree to the collection for future lookups
+					allTreeObjects.Add(fetchedTree)
+					childTree = fetchedTree
+
+					logger.Debug("Successfully fetched missing tree object",
+						"hash", entryHash.String(),
+						"path", entryPath)
 				}
 				// Recursively traverse the child tree
 				if err := traverseTree(childTree, entryPath); err != nil {
@@ -686,6 +703,47 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 		Entries: entries,
 		Hash:    rootTree.Hash,
 	}, nil
+}
+
+// fetchMissingTreeObject attempts to fetch a single missing tree object individually.
+// This is a fallback mechanism used when a tree object is not found in the batch-fetched collection.
+// It performs an individual fetch for the specific tree hash and validates the result.
+func (c *httpClient) fetchMissingTreeObject(ctx context.Context, treeHash hash.Hash) (*protocol.PackfileObject, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Fetching missing tree object individually", "hash", treeHash.String())
+
+	objects, err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:     true,
+		NoBlobFilter:   true,
+		Want:           []hash.Hash{treeHash},
+		Done:           true,
+		NoExtraObjects: true, // We only want this specific object
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetch failed: %w", err)
+	}
+
+	// Check if we got any objects
+	if len(objects) == 0 {
+		return nil, fmt.Errorf("no objects returned from fetch")
+	}
+
+	// Find the requested tree object in the response
+	obj, exists := objects[treeHash.String()]
+	if !exists {
+		return nil, fmt.Errorf("requested tree %s not in response", treeHash.String())
+	}
+
+	// Validate that it's actually a tree object
+	if obj.Type != protocol.ObjectTypeTree {
+		return nil, fmt.Errorf("expected tree object but got %s", obj.Type)
+	}
+
+	logger.Debug("Successfully fetched missing tree object",
+		"hash", treeHash.String(),
+		"entries", len(obj.Tree))
+
+	return obj, nil
 }
 
 // GetTree retrieves a single Git tree object showing only direct children.

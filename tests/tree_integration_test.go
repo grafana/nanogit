@@ -397,4 +397,87 @@ var _ = Describe("Trees", func() {
 			Expect(tree).To(BeNil())
 		})
 	})
+
+	Context("GetFlatTree with fallback fetch", func() {
+		var (
+			client     nanogit.Client
+			local      *LocalGitRepo
+			commitHash hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating a complex nested directory structure")
+			// Create multiple levels of nested directories with files
+			local.CreateDirPath("level1/level2a/level3a")
+			local.CreateDirPath("level1/level2a/level3b")
+			local.CreateDirPath("level1/level2b/level3c")
+			local.CreateDirPath("level1/level2b/level3d/level4")
+
+			// Add files at various levels
+			local.CreateFile("level1/file1.txt", "content at level1")
+			local.CreateFile("level1/level2a/file2a.txt", "content at level2a")
+			local.CreateFile("level1/level2a/level3a/file3a.txt", "content at level3a")
+			local.CreateFile("level1/level2a/level3b/file3b.txt", "content at level3b")
+			local.CreateFile("level1/level2b/file2b.txt", "content at level2b")
+			local.CreateFile("level1/level2b/level3c/file3c.txt", "content at level3c")
+			local.CreateFile("level1/level2b/level3d/file3d.txt", "content at level3d")
+			local.CreateFile("level1/level2b/level3d/level4/file4.txt", "deep content at level4")
+
+			By("Committing the complex structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Complex nested tree structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should retrieve deeply nested tree structure with fallback if needed", func() {
+			By("Fetching the flat tree for the entire repository")
+			flatTree, err := client.GetFlatTree(ctx, commitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(flatTree).NotTo(BeNil())
+
+			By("Verifying all directories and files are present")
+			// We should have 4 directories (level2a, level2b, level3a, level3b, level3c, level3d, level4)
+			// and 8 files in the flat tree
+			Expect(len(flatTree.Entries)).To(BeNumerically(">", 10))
+
+			By("Verifying specific deep paths are accessible")
+			foundDeepFile := false
+			foundLevel3aFile := false
+			for _, entry := range flatTree.Entries {
+				if entry.Path == "level1/level2b/level3d/level4/file4.txt" {
+					foundDeepFile = true
+					Expect(entry.Type).To(Equal(protocol.ObjectTypeBlob))
+				}
+				if entry.Path == "level1/level2a/level3a/file3a.txt" {
+					foundLevel3aFile = true
+					Expect(entry.Type).To(Equal(protocol.ObjectTypeBlob))
+				}
+			}
+			Expect(foundDeepFile).To(BeTrue(), "Deep file should be found in flat tree")
+			Expect(foundLevel3aFile).To(BeTrue(), "Level3a file should be found in flat tree")
+
+			By("Verifying tree structure integrity")
+			// Count directories and files
+			var dirCount, fileCount int
+			for _, entry := range flatTree.Entries {
+				switch entry.Type {
+				case protocol.ObjectTypeTree:
+					dirCount++
+				case protocol.ObjectTypeBlob:
+					fileCount++
+				}
+			}
+			Expect(dirCount).To(BeNumerically(">=", 7), "Should have at least 7 directories")
+			Expect(fileCount).To(BeNumerically(">=", 8), "Should have at least 8 files")
+		})
+	})
 })
