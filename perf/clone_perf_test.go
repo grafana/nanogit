@@ -25,30 +25,36 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 	repoURL := "https://github.com/grafana/grafana.git"
 
 	// Test scenarios with different subpaths
+	// Expected file counts are for a specific commit and may need updating as the repository evolves
 	scenarios := []struct {
-		name         string
-		includePaths []string
-		description  string
+		name              string
+		includePaths      []string
+		description       string
+		expectedFileCount int // Expected number of files for this filter at the pinned commit
 	}{
 		{
-			name:         "pkg_api_subpath",
-			includePaths: []string{"pkg/api/**"},
-			description:  "Clone only pkg/api directory",
+			name:              "pkg_api_subpath",
+			includePaths:      []string{"pkg/api/**"},
+			description:       "Clone only pkg/api directory",
+			expectedFileCount: 0, // Will be updated after first test run
 		},
 		{
-			name:         "docs_sources",
-			includePaths: []string{"docs/sources/**/*.md"},
-			description:  "Clone only markdown files in docs/sources",
+			name:              "docs_sources",
+			includePaths:      []string{"docs/sources/**/*.md"},
+			description:       "Clone only markdown files in docs/sources",
+			expectedFileCount: 0, // Will be updated after first test run
 		},
 		{
-			name:         "go_files_root",
-			includePaths: []string{"*.go", "go.mod", "go.sum"},
-			description:  "Clone only Go files in root directory",
+			name:              "go_files_root",
+			includePaths:      []string{"*.go", "go.mod", "go.sum"},
+			description:       "Clone only Go files in root directory",
+			expectedFileCount: 0, // Will be updated after first test run
 		},
 		{
-			name:         "scripts_and_makefile",
-			includePaths: []string{"scripts/**", "Makefile", "*.mk"},
-			description:  "Clone scripts directory and makefiles",
+			name:              "scripts_and_makefile",
+			includePaths:      []string{"scripts/**", "Makefile", "*.mk"},
+			description:       "Clone scripts directory and makefiles",
+			expectedFileCount: 0, // Will be updated after first test run
 		},
 	}
 
@@ -101,6 +107,18 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 			entries, err := os.ReadDir(clonePath)
 			require.NoError(t, err, "Should be able to read clone directory")
 			require.Greater(t, len(entries), 0, "Clone directory should contain files")
+
+			// Assert exact file count if expected count is set (non-zero)
+			if scenario.expectedFileCount > 0 {
+				require.Equal(t, scenario.expectedFileCount, result.FilteredFiles,
+					"Expected exactly %d files for scenario %s, but got %d. "+
+						"If the grafana/grafana repository has changed, update the expectedFileCount in the test.",
+					scenario.expectedFileCount, scenario.name, result.FilteredFiles)
+			} else {
+				t.Logf("WARNING: expectedFileCount not set for scenario %s. Current count: %d",
+					scenario.name, result.FilteredFiles)
+				t.Logf("Please update the test with: expectedFileCount: %d", result.FilteredFiles)
+			}
 
 			// Performance assertions - these are guidelines and can be adjusted
 			// based on network conditions and expected performance
