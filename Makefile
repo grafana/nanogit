@@ -63,7 +63,7 @@ test-coverage:
 test-coverage-html:
 	go tool cover -html=coverage.txt
 
-# Performance Testing 
+# Performance Testing
 # For performance tests, use the dedicated Makefile in perf/
 # Example: cd perf && make test-perf-all
 .PHONY: test-perf
@@ -71,3 +71,10 @@ test-perf:
 	@echo "Performance tests have been moved to perf/Makefile"
 	@echo "Run: cd perf && make test-perf-all"
 	@echo "Or see: cd perf && make help"
+
+# Clone Performance Testing
+# Separate from other perf tests - tests real-world clone performance
+.PHONY: test-clone-perf
+test-clone-perf:
+	@echo "Running clone performance tests..."
+	cd perf && make test-clone-perf
