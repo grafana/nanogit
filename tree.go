@@ -659,17 +659,17 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 				childTree, exists := allTreeObjects.GetByType(entryHash, protocol.ObjectTypeTree)
 				if !exists {
 					logger.Debug("Child tree not found in collection, attempting individual fetch",
-						"hash", entry.Hash,
+						"hash", entryHash.String(),
 						"path", entryPath)
 
 					// Fallback: try to fetch the missing tree object individually
 					fetchedTree, err := c.fetchMissingTreeObject(ctx, entryHash)
 					if err != nil {
 						logger.Error("Failed to fetch missing tree object",
-							"hash", entry.Hash,
+							"hash", entryHash.String(),
 							"path", entryPath,
 							"error", err)
-						return fmt.Errorf("tree object %s not found in collection and individual fetch failed: %w", entry.Hash, err)
+						return fmt.Errorf("tree object %s not found in collection and individual fetch failed: %w", entryHash.String(), err)
 					}
 
 					// Add the fetched tree to the collection for future lookups
@@ -677,7 +677,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 					childTree = fetchedTree
 
 					logger.Debug("Successfully fetched missing tree object",
-						"hash", entry.Hash,
+						"hash", entryHash.String(),
 						"path", entryPath)
 				}
 				// Recursively traverse the child tree
