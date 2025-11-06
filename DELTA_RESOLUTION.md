@@ -170,8 +170,6 @@ Delta resolution operates entirely in-memory, requiring space for:
 - Delta objects awaiting resolution
 - Resolved objects after delta application
 
-For typical fetches with moderate deltification, memory usage remains reasonable for cloud environments.
-
 ### CPU Cost
 
 Delta application is CPU-intensive as it involves:
@@ -179,15 +177,9 @@ Delta application is CPU-intensive as it involves:
 - Minimal overhead for insert operations
 - Object parsing for trees and commits after resolution
 
-The network bandwidth savings from deltas typically outweigh the CPU cost.
-
 ### Network Efficiency
 
-Deltas significantly reduce network transfer size:
-- Without deltas: 100% of object data
-- With deltas: 30-50% of object data (typical savings)
-
-This makes delta support essential for acceptable fetch/clone performance.
+Deltas reduce network transfer size by transmitting only differences rather than complete objects. This makes delta support essential for acceptable fetch/clone performance, particularly for repositories with large files or extensive history.
 
 ## Comparison with Other Implementations
 
@@ -209,30 +201,6 @@ Resolves deltas while writing packfile to disk. Uses .git/objects as base object
 2. **No thin-pack**: Self-contained packfiles only
 3. **Storage-agnostic**: Pluggable storage backend
 4. **Cloud-focused**: Optimized for serverless/container environments
-
-## Testing Strategy
-
-nanogit includes comprehensive testing for delta resolution:
-
-### Unit Tests
-
-Cover delta application logic including:
-- Basic copy and insert operations
-- Mixed operation sequences
-- Error conditions (size mismatch, bounds checking)
-- Binary data handling
-
-### Integration Tests
-
-Verify end-to-end delta handling with real Git servers:
-- Deltified blobs from modified files
-- Deltified tree objects
-- Deltified commit objects
-- Delta chains (deltas of deltas)
-- Complex repository structures
-- Edge cases (empty files, large files)
-
-Test repositories are created with explicit deltification using `git repack` to ensure deltas are present.
 
 ## References
 
