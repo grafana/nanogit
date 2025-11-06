@@ -264,102 +264,16 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) error {
 	logger := log.FromContext(ctx)
 
-	// Track which deltas have been resolved
 	remaining := make([]*protocol.PackfileObject, len(deltas))
 	copy(remaining, deltas)
 
-	maxIterations := len(deltas) + 1 // Prevent infinite loops
-	iteration := 0
-
-	for len(remaining) > 0 && iteration < maxIterations {
-		iteration++
-		var stillPending []*protocol.PackfileObject
-		resolvedCount := 0
-
-		for _, delta := range remaining {
-			if delta.Delta == nil {
-				logger.Debug("Skipping object without delta", "type", delta.Type)
-				continue
-			}
-
-			parentHash := delta.Delta.Parent
-			baseObj, exists := objects[parentHash]
-
-			if !exists {
-				// Base object not found yet - might be in storage or not available
-				if storage != nil {
-					// Try to get from storage
-					baseHash, err := hash.FromHex(parentHash)
-					if err != nil {
-						logger.Debug("Invalid parent hash in delta", "parent", parentHash, "error", err)
-						stillPending = append(stillPending, delta)
-						continue
-					}
-
-					baseObj, exists = storage.Get(baseHash)
-					if !exists {
-						logger.Debug("Base object not found in storage", "parent", parentHash)
-						stillPending = append(stillPending, delta)
-						continue
-					}
-				} else {
-					// Base not available - will try again next iteration
-					logger.Debug("Base object not yet available", "parent", parentHash)
-					stillPending = append(stillPending, delta)
-					continue
-				}
-			}
-
-			// Apply the delta to the base object
-			resolvedData, err := protocol.ApplyDelta(baseObj.Data, delta.Delta)
-			if err != nil {
-				return fmt.Errorf("failed to apply delta with parent %s: %w", parentHash, err)
-			}
-
-			// Calculate the hash of the resolved object
-			// We need to determine the actual object type (the delta's type should be the target type)
-			// But the delta object has ObjectTypeRefDelta as its type, so we need to infer the real type
-			// from the base object or parse the resolved data
-			resolvedHash, resolvedType, err := c.inferResolvedObjectType(ctx, resolvedData, baseObj)
-			if err != nil {
-				return fmt.Errorf("failed to infer resolved object type: %w", err)
-			}
-
-			// Create the resolved object
-			resolvedObj := &protocol.PackfileObject{
-				Type: resolvedType,
-				Data: resolvedData,
-				Hash: resolvedHash,
-			}
-
-			// Parse tree and commit objects so their fields are populated
-			// This is necessary because code accessing these objects expects the parsed fields
-			if err := c.parseResolvedObject(ctx, resolvedObj); err != nil {
-				logger.Debug("Warning: failed to parse resolved object", "hash", resolvedHash.String(), "type", resolvedType, "error", err)
-				// Continue anyway - the raw data is still valid
-			}
-
-			// Add to objects map
-			objects[resolvedHash.String()] = resolvedObj
-			if storage != nil {
-				storage.Add(resolvedObj)
-			}
-
-			resolvedCount++
-			logger.Debug("Resolved delta", "hash", resolvedHash.String(), "parent", parentHash, "type", resolvedType)
-		}
-
+	maxIterations := len(deltas) + 1
+	for iteration := 1; len(remaining) > 0 && iteration <= maxIterations; iteration++ {
+		resolvedCount, stillPending := c.resolveDeltaIteration(ctx, remaining, objects, storage)
 		remaining = stillPending
 
-		// If we didn't resolve any deltas in this iteration, we're stuck
 		if resolvedCount == 0 && len(remaining) > 0 {
-			missingBases := make([]string, 0, len(remaining))
-			for _, delta := range remaining {
-				if delta.Delta != nil {
-					missingBases = append(missingBases, delta.Delta.Parent)
-				}
-			}
-			return fmt.Errorf("unable to resolve %d deltas: missing base objects %v", len(remaining), missingBases)
+			return c.createMissingBasesError(remaining)
 		}
 
 		logger.Debug("Delta resolution iteration complete", "iteration", iteration, "resolved", resolvedCount, "remaining", len(remaining))
@@ -369,8 +283,112 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 		return fmt.Errorf("failed to resolve all deltas after %d iterations: %d deltas remaining", maxIterations, len(remaining))
 	}
 
-	logger.Debug("All deltas resolved successfully", "totalDeltas", len(deltas), "iterations", iteration)
+	logger.Debug("All deltas resolved successfully", "totalDeltas", len(deltas))
 	return nil
+}
+
+// resolveDeltaIteration processes one iteration of delta resolution
+func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject) {
+	logger := log.FromContext(ctx)
+	var stillPending []*protocol.PackfileObject
+	resolvedCount := 0
+
+	for _, delta := range deltas {
+		if delta.Delta == nil {
+			logger.Debug("Skipping object without delta", "type", delta.Type)
+			continue
+		}
+
+		baseObj, found := c.findBaseObject(ctx, delta.Delta.Parent, objects, storage)
+		if !found {
+			stillPending = append(stillPending, delta)
+			continue
+		}
+
+		if err := c.resolveSingleDelta(ctx, delta, baseObj, objects, storage); err != nil {
+			logger.Debug("Failed to resolve delta", "parent", delta.Delta.Parent, "error", err)
+			stillPending = append(stillPending, delta)
+			continue
+		}
+
+		resolvedCount++
+	}
+
+	return resolvedCount, stillPending
+}
+
+// findBaseObject finds the base object for a delta, checking both objects map and storage
+func (c *rawClient) findBaseObject(ctx context.Context, parentHash string, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (*protocol.PackfileObject, bool) {
+	logger := log.FromContext(ctx)
+
+	// First check in-memory objects
+	if baseObj, exists := objects[parentHash]; exists {
+		return baseObj, true
+	}
+
+	// Then check storage if available
+	if storage != nil {
+		baseHash, err := hash.FromHex(parentHash)
+		if err != nil {
+			logger.Debug("Invalid parent hash in delta", "parent", parentHash, "error", err)
+			return nil, false
+		}
+
+		if baseObj, exists := storage.Get(baseHash); exists {
+			return baseObj, true
+		}
+	}
+
+	logger.Debug("Base object not found", "parent", parentHash)
+	return nil, false
+}
+
+// resolveSingleDelta resolves a single delta object and adds it to the objects map
+func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.PackfileObject, baseObj *protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) error {
+	logger := log.FromContext(ctx)
+
+	// Apply the delta to the base object
+	resolvedData, err := protocol.ApplyDelta(baseObj.Data, delta.Delta)
+	if err != nil {
+		return fmt.Errorf("failed to apply delta: %w", err)
+	}
+
+	// Calculate the hash and type of resolved object
+	resolvedHash, resolvedType, err := c.inferResolvedObjectType(ctx, resolvedData, baseObj)
+	if err != nil {
+		return fmt.Errorf("failed to infer object type: %w", err)
+	}
+
+	// Create and parse the resolved object
+	resolvedObj := &protocol.PackfileObject{
+		Type: resolvedType,
+		Data: resolvedData,
+		Hash: resolvedHash,
+	}
+
+	if err := c.parseResolvedObject(ctx, resolvedObj); err != nil {
+		logger.Debug("Warning: failed to parse resolved object", "hash", resolvedHash.String(), "error", err)
+	}
+
+	// Add to objects map and storage
+	objects[resolvedHash.String()] = resolvedObj
+	if storage != nil {
+		storage.Add(resolvedObj)
+	}
+
+	logger.Debug("Resolved delta", "hash", resolvedHash.String(), "parent", delta.Delta.Parent, "type", resolvedType)
+	return nil
+}
+
+// createMissingBasesError creates an error for unresolvable deltas
+func (c *rawClient) createMissingBasesError(remaining []*protocol.PackfileObject) error {
+	missingBases := make([]string, 0, len(remaining))
+	for _, delta := range remaining {
+		if delta.Delta != nil {
+			missingBases = append(missingBases, delta.Delta.Parent)
+		}
+	}
+	return fmt.Errorf("unable to resolve %d deltas: missing base objects %v", len(remaining), missingBases)
 }
 
 // inferResolvedObjectType infers the object type of a resolved delta object
