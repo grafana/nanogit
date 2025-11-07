@@ -188,6 +188,15 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 			return false
 		}
 
+		// Handle **/ prefix patterns (e.g., "**/*.log" matches any .log file at any depth)
+		if strings.HasPrefix(excludePattern, "**/") {
+			suffix := strings.TrimPrefix(excludePattern, "**/")
+			// Check if suffix matches the full path or any tail after splitting by /
+			if matchesWithDoubleStar(path, suffix) {
+				return false
+			}
+		}
+
 		// Also check if the path starts with the exclude pattern (for directory exclusions)
 		if strings.HasSuffix(excludePattern, "/**") {
 			prefix := strings.TrimSuffix(excludePattern, "/**")
@@ -206,6 +215,15 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 	for _, includePattern := range includePaths {
 		if matched, err := filepath.Match(includePattern, path); err == nil && matched {
 			return true
+		}
+
+		// Handle **/ prefix patterns (e.g., "**/*.go" matches any .go file at any depth)
+		if strings.HasPrefix(includePattern, "**/") {
+			suffix := strings.TrimPrefix(includePattern, "**/")
+			// Check if suffix matches the full path or any tail after splitting by /
+			if matchesWithDoubleStar(path, suffix) {
+				return true
+			}
 		}
 
 		// Also check if the path starts with the include pattern (for directory inclusions)
@@ -269,4 +287,28 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 		"file_count", len(tree.Entries))
 
 	return nil
+}
+
+// matchesWithDoubleStar checks if a pattern matches a path at any depth.
+// For pattern "*.log" and path "src/logs/debug.log", it checks:
+// - "src/logs/debug.log" against "*.log" (no match)
+// - "logs/debug.log" against "*.log" (no match)
+// - "debug.log" against "*.log" (match!)
+func matchesWithDoubleStar(path, pattern string) bool {
+	// First try matching the full path
+	if matched, err := filepath.Match(pattern, path); err == nil && matched {
+		return true
+	}
+
+	// Then try matching each tail of the path (split by /)
+	for i := 0; i < len(path); i++ {
+		if path[i] == '/' {
+			tail := path[i+1:]
+			if matched, err := filepath.Match(pattern, tail); err == nil && matched {
+				return true
+			}
+		}
+	}
+
+	return false
 }
