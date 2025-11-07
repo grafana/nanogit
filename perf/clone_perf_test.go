@@ -90,6 +90,7 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 				Path:         clonePath,
 				Hash:         commitHash,
 				IncludePaths: scenario.includePaths,
+				BatchSize:    100, // Use a reasonable batch size for performance
 			})
 
 			duration := time.Since(startTime)
@@ -186,8 +187,9 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 	startTime := time.Now()
 
 	result, err := client.Clone(ctx, nanogit.CloneOptions{
-		Path: clonePath,
-		Hash: commitHash,
+		Path:      clonePath,
+		Hash:      commitHash,
+		BatchSize: 100, // Use batch size of 100 for performance
 		// No include/exclude paths - clone everything
 	})
 
