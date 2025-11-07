@@ -318,8 +318,13 @@ func matchesMiddleDoubleStarPattern(path, pattern string) bool {
 		return false
 	}
 
-	// Remove prefix from path
-	remainder := strings.TrimPrefix(path, prefix+"/")
+	// Remove prefix from path, handle path == prefix explicitly
+	var remainder string
+	if path == prefix {
+		remainder = ""
+	} else {
+		remainder = strings.TrimPrefix(path, prefix+"/")
+	}
 
 	// If suffix is dir/** (e.g., "src/**"), we need to find dir at any depth in remainder
 	if strings.HasSuffix(suffix, "/**") && !strings.Contains(strings.TrimSuffix(suffix, "/**"), "/") {
@@ -329,7 +334,7 @@ func matchesMiddleDoubleStarPattern(path, pattern string) bool {
 
 	// If suffix contains more /**/, we need to match it at any possible starting point in remainder
 	if strings.Contains(suffix, "/**/") || strings.HasSuffix(suffix, "/**") {
-		return matchesSuffixAtAnyDepthRecursive(remainder, suffix)
+		return matchesSuffixAtAnyDepthRecursive(remainder, suffix, 0)
 	}
 
 	// Otherwise check if remainder matches suffix at any depth
@@ -348,18 +353,26 @@ func matchesPrefixDoubleStarPattern(path, pattern string) bool {
 }
 
 // matchesSuffixAtAnyDepthRecursive tries to match suffix at any depth in the path recursively.
-func matchesSuffixAtAnyDepthRecursive(path, suffix string) bool {
+// The depth parameter prevents infinite recursion by limiting how deep we can recurse.
+func matchesSuffixAtAnyDepthRecursive(path, suffix string, depth int) bool {
+	// Prevent infinite recursion - limit to 50 levels (more than any reasonable directory depth)
+	const maxDepth = 50
+	if depth >= maxDepth {
+		return false
+	}
+
 	// Try to match suffix starting from path
 	if matchesPatternWithDoubleStar(path, suffix) {
 		return true
 	}
+
 	// Also try matching suffix at any depth in path
-	for i := 0; i < len(path); i++ {
-		if path[i] == '/' {
-			tail := path[i+1:]
-			if matchesPatternWithDoubleStar(tail, suffix) {
-				return true
-			}
+	// Use strings.Split for better performance instead of byte-by-byte iteration
+	segments := strings.Split(path, "/")
+	for i := 1; i < len(segments); i++ {
+		tail := strings.Join(segments[i:], "/")
+		if matchesPatternWithDoubleStar(tail, suffix) {
+			return true
 		}
 	}
 	return false
@@ -387,10 +400,11 @@ func matchesDirAtAnyDepth(path, dirname string) bool {
 }
 
 // matchesSuffixAtAnyDepth checks if a suffix pattern matches a path at any depth.
-// For pattern "*.log" and path "src/logs/debug.log", it checks:
-// - "src/logs/debug.log" against "*.log" (no match)
-// - "logs/debug.log" against "*.log" (no match)
-// - "debug.log" against "*.log" (match!)
+// The pattern parameter should be the suffix after a '**/' prefix has been stripped (e.g., '*.log' from '**/*.log').
+// For pattern '*.log' (from '**/*.log') and path 'src/logs/debug.log', it checks:
+// - 'src/logs/debug.log' against '*.log' (no match)
+// - 'logs/debug.log' against '*.log' (no match)
+// - 'debug.log' against '*.log' (match!)
 func matchesSuffixAtAnyDepth(path, pattern string) bool {
 	// First try matching the full path
 	if matched, err := filepath.Match(pattern, path); err == nil && matched {
@@ -398,12 +412,12 @@ func matchesSuffixAtAnyDepth(path, pattern string) bool {
 	}
 
 	// Then try matching each tail of the path (split by /)
-	for i := 0; i < len(path); i++ {
-		if path[i] == '/' {
-			tail := path[i+1:]
-			if matched, err := filepath.Match(pattern, tail); err == nil && matched {
-				return true
-			}
+	// Use strings.Split for better performance instead of byte-by-byte iteration
+	segments := strings.Split(path, "/")
+	for i := 1; i < len(segments); i++ {
+		tail := strings.Join(segments[i:], "/")
+		if matched, err := filepath.Match(pattern, tail); err == nil && matched {
+			return true
 		}
 	}
 
