@@ -46,7 +46,7 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 			name:              "docs_sources",
 			includePaths:      []string{"docs/sources/**/*.md"},
 			description:       "Clone only markdown files in docs/sources",
-			expectedFileCount: 69,
+			expectedFileCount: 630,
 		},
 		{
 			name:              "go_files_root",
