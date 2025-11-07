@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,9 +25,11 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 	// Repository configuration
 	repoURL := "https://github.com/grafana/grafana.git"
 
+	// Pin to a specific commit for consistent, reproducible test results
+	pinnedCommit := "13b6f53abc1f7846da102852c71ef19e320bfc18"
+
 	// Test scenarios with different subpaths
-	// Expected file counts are for commit fd14d4a5ed3ad8dfd5948a9f2d7b9074e15ea655
-	// These may need updating as the grafana/grafana repository evolves
+	// Expected file counts are for the pinned commit above
 	scenarios := []struct {
 		name              string
 		includePaths      []string
@@ -72,20 +75,20 @@ func TestCloneGrafanaGrafana(t *testing.T) {
 			client, err := nanogit.NewHTTPClient(repoURL)
 			require.NoError(t, err, "Failed to create nanogit client")
 
-			// Get main branch reference
-			ref, err := client.GetRef(ctx, "refs/heads/main")
-			require.NoError(t, err, "Failed to get main branch reference")
+			// Parse the pinned commit hash
+			commitHash, err := hash.FromHex(pinnedCommit)
+			require.NoError(t, err, "Failed to parse pinned commit hash")
 
 			t.Logf("Cloning grafana/grafana with scenario: %s", scenario.description)
 			t.Logf("Include paths: %v", scenario.includePaths)
-			t.Logf("Target commit: %s", ref.Hash.String()[:8])
+			t.Logf("Pinned commit: %s", commitHash.String()[:8])
 
 			// Measure clone time
 			startTime := time.Now()
 
 			result, err := client.Clone(ctx, nanogit.CloneOptions{
 				Path:         clonePath,
-				Hash:         ref.Hash,
+				Hash:         commitHash,
 				IncludePaths: scenario.includePaths,
 			})
 
@@ -157,6 +160,9 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 	// Repository configuration
 	repoURL := "https://github.com/grafana/grafana.git"
 
+	// Pin to a specific commit for consistent, reproducible test results
+	pinnedCommit := "13b6f53abc1f7846da102852c71ef19e320bfc18"
+
 	// Create temporary directory for clone
 	tempDir, err := os.MkdirTemp("", "nanogit_clone_perf_full_")
 	require.NoError(t, err, "Failed to create temp directory")
@@ -168,12 +174,12 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 	client, err := nanogit.NewHTTPClient(repoURL)
 	require.NoError(t, err, "Failed to create nanogit client")
 
-	// Get main branch reference
-	ref, err := client.GetRef(ctx, "refs/heads/main")
-	require.NoError(t, err, "Failed to get main branch reference")
+	// Parse the pinned commit hash
+	commitHash, err := hash.FromHex(pinnedCommit)
+	require.NoError(t, err, "Failed to parse pinned commit hash")
 
 	t.Logf("Cloning full grafana/grafana repository")
-	t.Logf("Target commit: %s", ref.Hash.String()[:8])
+	t.Logf("Pinned commit: %s", commitHash.String()[:8])
 	t.Logf("Clone path: %s", clonePath)
 
 	// Measure clone time
@@ -181,7 +187,7 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 
 	result, err := client.Clone(ctx, nanogit.CloneOptions{
 		Path: clonePath,
-		Hash: ref.Hash,
+		Hash: commitHash,
 		// No include/exclude paths - clone everything
 	})
 
