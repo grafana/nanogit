@@ -551,3 +551,498 @@ func TestShouldIncludePath_ComplexPatterns(t *testing.T) {
 		})
 	}
 }
+
+// TestShouldIncludePath_LongPaths tests filtering with deeply nested paths
+func TestShouldIncludePath_LongPaths(t *testing.T) {
+	client := &httpClient{}
+
+	tests := []struct {
+		name         string
+		path         string
+		includePaths []string
+		excludePaths []string
+		want         bool
+	}{
+		{
+			name:         "deeply nested go file - include **/*.go",
+			path:         "pkg/services/api/v1/handlers/auth/middleware/jwt/validator/token.go",
+			includePaths: []string{"**/*.go"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "deeply nested test file - exclude test",
+			path:         "pkg/services/api/v1/handlers/auth/middleware/jwt/validator/token_test.go",
+			includePaths: []string{"**/*.go"},
+			excludePaths: []string{"**/*_test.go"},
+			want:         false,
+		},
+		{
+			name:         "deeply nested in excluded directory",
+			path:         "src/node_modules/react/dist/cjs/react.development.js",
+			includePaths: []string{"src/**"},
+			excludePaths: []string{"**/node_modules/**"},
+			want:         false,
+		},
+		{
+			name:         "deeply nested mock file",
+			path:         "internal/pkg/services/storage/backends/s3/mocks/mock_client.go",
+			includePaths: []string{"**/*.go"},
+			excludePaths: []string{"**/mocks/**", "**/*_test.go"},
+			want:         false,
+		},
+		{
+			name:         "very long path with multiple segments",
+			path:         "services/backend/infrastructure/kubernetes/controllers/deployment/reconciler/handlers/update/strategy.go",
+			includePaths: []string{"services/backend/**"},
+			excludePaths: []string{"**/test/**", "**/testdata/**"},
+			want:         true,
+		},
+		{
+			name:         "long path matching directory at depth",
+			path:         "projects/frontend/app/components/shared/buttons/icon/test/fixtures/data.json",
+			includePaths: []string{"projects/**"},
+			excludePaths: []string{"**/test/**"},
+			want:         false,
+		},
+		{
+			name:         "long path with multiple wildcards in pattern",
+			path:         "src/main/java/com/example/app/services/impl/UserServiceImpl.java",
+			includePaths: []string{"**/*.java"},
+			excludePaths: []string{"**/test/**", "**/target/**"},
+			want:         true,
+		},
+		{
+			name:         "proto files in deeply nested vendor",
+			path:         "vendor/github.com/grpc/grpc-go/internal/proto/grpc_lookup_v1/rls.proto",
+			includePaths: []string{"**/*.proto"},
+			excludePaths: []string{"vendor/**"},
+			want:         false,
+		},
+		{
+			name:         "config file in deeply nested path",
+			path:         "deployments/production/us-east-1/services/api/config/app.yaml",
+			includePaths: []string{"deployments/production/**/*.yaml"},
+			excludePaths: []string{"**/test/**", "**/temp/**"},
+			want:         true,
+		},
+		{
+			name:         "exclude multiple nested dirs",
+			path:         "build/output/temp/cache/artifacts/debug/symbols.db",
+			includePaths: []string{"build/**"},
+			excludePaths: []string{"**/temp/**", "**/cache/**", "**/debug/**"},
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := client.shouldIncludePath(tt.path, tt.includePaths, tt.excludePaths)
+			require.Equal(t, tt.want, got, "shouldIncludePath(%q, %v, %v) = %v, want %v",
+				tt.path, tt.includePaths, tt.excludePaths, got, tt.want)
+		})
+	}
+}
+
+// TestShouldIncludePath_ComplexCombinations tests complex include/exclude pattern combinations
+func TestShouldIncludePath_ComplexCombinations(t *testing.T) {
+	client := &httpClient{}
+
+	tests := []struct {
+		name         string
+		path         string
+		includePaths []string
+		excludePaths []string
+		want         bool
+	}{
+		{
+			name:         "multiple includes with multiple excludes - match first include",
+			path:         "src/components/Button.tsx",
+			includePaths: []string{"src/**", "lib/**", "packages/**"},
+			excludePaths: []string{"**/*.test.tsx", "**/*.spec.tsx", "**/node_modules/**"},
+			want:         true,
+		},
+		{
+			name:         "multiple includes with multiple excludes - match exclude",
+			path:         "src/components/Button.test.tsx",
+			includePaths: []string{"src/**", "lib/**", "packages/**"},
+			excludePaths: []string{"**/*.test.tsx", "**/*.spec.tsx", "**/node_modules/**"},
+			want:         false,
+		},
+		{
+			name:         "include specific extensions, exclude specific dirs",
+			path:         "pkg/api/models/user.go",
+			includePaths: []string{"**/*.go", "**/*.proto", "**/*.sql"},
+			excludePaths: []string{"**/vendor/**", "**/mocks/**", "**/*_test.go"},
+			want:         true,
+		},
+		{
+			name:         "include specific extensions, exclude specific dirs - vendor match",
+			path:         "vendor/google.golang.org/grpc/server.go",
+			includePaths: []string{"**/*.go", "**/*.proto", "**/*.sql"},
+			excludePaths: []string{"**/vendor/**", "**/mocks/**", "**/*_test.go"},
+			want:         false,
+		},
+		{
+			name:         "overlapping patterns - include dir, exclude subdir",
+			path:         "docs/api/reference.md",
+			includePaths: []string{"docs/**"},
+			excludePaths: []string{"**/drafts/**", "**/internal/**"},
+			want:         true,
+		},
+		{
+			name:         "overlapping patterns - exclude subdir wins",
+			path:         "docs/internal/notes.md",
+			includePaths: []string{"docs/**"},
+			excludePaths: []string{"**/drafts/**", "**/internal/**"},
+			want:         false,
+		},
+		{
+			name:         "multiple file extensions",
+			path:         "config/production/database.yaml",
+			includePaths: []string{"**/*.yaml", "**/*.yml", "**/*.json", "**/*.toml"},
+			excludePaths: []string{"**/test/**", "**/examples/**"},
+			want:         true,
+		},
+		{
+			name:         "complex go project - source file",
+			path:         "internal/handlers/http/v1/users/create.go",
+			includePaths: []string{"internal/**/*.go", "pkg/**/*.go", "cmd/**/*.go"},
+			excludePaths: []string{"**/*_test.go", "**/testdata/**", "**/vendor/**", "**/.git/**"},
+			want:         true,
+		},
+		{
+			name:         "complex go project - test file excluded",
+			path:         "internal/handlers/http/v1/users/create_test.go",
+			includePaths: []string{"internal/**/*.go", "pkg/**/*.go", "cmd/**/*.go"},
+			excludePaths: []string{"**/*_test.go", "**/testdata/**", "**/vendor/**", "**/.git/**"},
+			want:         false,
+		},
+		{
+			name:         "include multiple source dirs, exclude build artifacts",
+			path:         "services/auth/src/main/java/Service.java",
+			includePaths: []string{"services/**/src/**", "libraries/**/src/**"},
+			excludePaths: []string{"**/target/**", "**/build/**", "**/.gradle/**"},
+			want:         true,
+		},
+		{
+			name:         "monorepo - include packages, exclude tooling",
+			path:         "packages/core/src/index.ts",
+			includePaths: []string{"packages/**/*.ts", "packages/**/*.tsx"},
+			excludePaths: []string{"**/*.test.ts", "**/*.spec.ts", "**/dist/**", "**/node_modules/**"},
+			want:         true,
+		},
+		{
+			name:         "monorepo - exclude dist",
+			path:         "packages/core/dist/index.js",
+			includePaths: []string{"packages/**/*.ts", "packages/**/*.tsx", "packages/**/*.js"},
+			excludePaths: []string{"**/*.test.ts", "**/*.spec.ts", "**/dist/**", "**/node_modules/**"},
+			want:         false,
+		},
+		{
+			name:         "include docs, exclude specific formats",
+			path:         "documentation/guides/getting-started.md",
+			includePaths: []string{"documentation/**", "docs/**"},
+			excludePaths: []string{"**/*.draft.md", "**/*.wip.md", "**/archive/**"},
+			want:         true,
+		},
+		{
+			name:         "include docs, exclude draft",
+			path:         "documentation/guides/new-feature.draft.md",
+			includePaths: []string{"documentation/**", "docs/**"},
+			excludePaths: []string{"**/*.draft.md", "**/*.wip.md", "**/archive/**"},
+			want:         false,
+		},
+		{
+			name:         "infrastructure as code - include configs, exclude secrets",
+			path:         "terraform/modules/vpc/main.tf",
+			includePaths: []string{"**/*.tf", "**/*.tfvars"},
+			excludePaths: []string{"**/*.tfstate", "**/*.backup", "**/*secret*", "**/.terraform/**"},
+			want:         true,
+		},
+		{
+			name:         "infrastructure as code - exclude secrets",
+			path:         "terraform/modules/vpc/secrets.tfvars",
+			includePaths: []string{"**/*.tf", "**/*.tfvars"},
+			excludePaths: []string{"**/*.tfstate", "**/*.backup", "**/*secret*", "**/.terraform/**"},
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := client.shouldIncludePath(tt.path, tt.includePaths, tt.excludePaths)
+			require.Equal(t, tt.want, got, "shouldIncludePath(%q, %v, %v) = %v, want %v",
+				tt.path, tt.includePaths, tt.excludePaths, got, tt.want)
+		})
+	}
+}
+
+// TestShouldIncludePath_EdgeCases tests edge cases and special scenarios
+func TestShouldIncludePath_EdgeCases(t *testing.T) {
+	client := &httpClient{}
+
+	tests := []struct {
+		name         string
+		path         string
+		includePaths []string
+		excludePaths []string
+		want         bool
+	}{
+		{
+			name:         "path with dots in directory name",
+			path:         "src/v1.0.0/api/handler.go",
+			includePaths: []string{"src/**/*.go"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "path with dashes and underscores",
+			path:         "my-app/src/user_service/api-handler.go",
+			includePaths: []string{"my-app/**"},
+			excludePaths: []string{"**/test/**"},
+			want:         true,
+		},
+		{
+			name:         "hidden directory",
+			path:         ".github/workflows/ci.yml",
+			includePaths: []string{".github/**"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "exclude hidden directories",
+			path:         "src/.cache/data.json",
+			includePaths: []string{"src/**"},
+			excludePaths: []string{"**/.cache/**", "**/.tmp/**"},
+			want:         false,
+		},
+		{
+			name:         "multiple dots in filename",
+			path:         "config/app.development.local.json",
+			includePaths: []string{"**/*.json"},
+			excludePaths: []string{"**/*.local.*"},
+			want:         false,
+		},
+		{
+			name:         "uppercase file extension",
+			path:         "docs/README.MD",
+			includePaths: []string{"**/*.MD", "**/*.md"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "file with no extension",
+			path:         "scripts/build",
+			includePaths: []string{"scripts/**"},
+			excludePaths: []string{"**/*.log", "**/*.tmp"},
+			want:         true,
+		},
+		{
+			name:         "root level hidden file",
+			path:         ".gitignore",
+			includePaths: []string{".*"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "pattern matching directory name in middle",
+			path:         "app/cache/data/users.json",
+			includePaths: []string{"app/**"},
+			excludePaths: []string{"**/cache/**"},
+			want:         false,
+		},
+		{
+			name:         "similar directory names",
+			path:         "app/test-utils/helper.go",
+			includePaths: []string{"app/**"},
+			excludePaths: []string{"**/test/**"},
+			want:         true,
+		},
+		{
+			name:         "exact directory name match needed",
+			path:         "app/testing/helper.go",
+			includePaths: []string{"app/**"},
+			excludePaths: []string{"**/test/**"},
+			want:         true,
+		},
+		{
+			name:         "pattern with directory that contains pattern chars",
+			path:         "app/[bracket]/file.go",
+			includePaths: []string{"app/**"},
+			excludePaths: []string{"**/tmp/**"},
+			want:         true,
+		},
+		{
+			name:         "multiple consecutive slashes handled",
+			path:         "src/app/main.go",
+			includePaths: []string{"src/**"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "single character directory",
+			path:         "a/b/c/d.txt",
+			includePaths: []string{"a/**"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "pattern matching across multiple directory levels",
+			path:         "level1/level2/level3/level4/level5/file.go",
+			includePaths: []string{"level1/**/level5/**"},
+			excludePaths: nil,
+			want:         true,
+		},
+		{
+			name:         "wildcard at beginning and end",
+			path:         "src/services/user/handler.go",
+			includePaths: []string{"**/services/**"},
+			excludePaths: nil,
+			want:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := client.shouldIncludePath(tt.path, tt.includePaths, tt.excludePaths)
+			require.Equal(t, tt.want, got, "shouldIncludePath(%q, %v, %v) = %v, want %v",
+				tt.path, tt.includePaths, tt.excludePaths, got, tt.want)
+		})
+	}
+}
+
+// TestShouldIncludePath_RealWorldScenarios tests realistic repository filtering scenarios
+func TestShouldIncludePath_RealWorldScenarios(t *testing.T) {
+	client := &httpClient{}
+
+	tests := []struct {
+		name         string
+		description  string
+		path         string
+		includePaths []string
+		excludePaths []string
+		want         bool
+	}{
+		{
+			name:         "kubernetes operator - include go code, exclude generated",
+			description:  "K8s operator project with code generation",
+			path:         "controllers/pod_controller.go",
+			includePaths: []string{"**/*.go", "go.mod", "go.sum", "Makefile"},
+			excludePaths: []string{"**/zz_generated.*", "**/vendor/**", "**/*_test.go"},
+			want:         true,
+		},
+		{
+			name:         "kubernetes operator - exclude generated",
+			description:  "K8s operator project with code generation",
+			path:         "api/v1/zz_generated.deepcopy.go",
+			includePaths: []string{"**/*.go", "go.mod", "go.sum", "Makefile"},
+			excludePaths: []string{"**/zz_generated.*", "**/vendor/**", "**/*_test.go"},
+			want:         false,
+		},
+		{
+			name:         "full stack app - include frontend source",
+			description:  "Full stack app, clone only React frontend",
+			path:         "frontend/src/components/Dashboard/UserTable.tsx",
+			includePaths: []string{"frontend/src/**/*.tsx", "frontend/src/**/*.ts", "frontend/src/**/*.css"},
+			excludePaths: []string{"**/node_modules/**", "**/dist/**", "**/*.test.tsx"},
+			want:         true,
+		},
+		{
+			name:         "full stack app - exclude tests",
+			description:  "Full stack app, clone only React frontend",
+			path:         "frontend/src/components/Dashboard/UserTable.test.tsx",
+			includePaths: []string{"frontend/src/**/*.tsx", "frontend/src/**/*.ts", "frontend/src/**/*.css"},
+			excludePaths: []string{"**/node_modules/**", "**/dist/**", "**/*.test.tsx"},
+			want:         false,
+		},
+		{
+			name:         "microservices monorepo - include specific service",
+			description:  "Monorepo with multiple services",
+			path:         "services/payment-api/internal/handlers/webhook.go",
+			includePaths: []string{"services/payment-api/**", "pkg/shared/**"},
+			excludePaths: []string{"**/*_test.go", "**/vendor/**", "**/testdata/**"},
+			want:         true,
+		},
+		{
+			name:         "microservices monorepo - exclude other services",
+			description:  "Monorepo with multiple services",
+			path:         "services/user-api/internal/handlers/auth.go",
+			includePaths: []string{"services/payment-api/**", "pkg/shared/**"},
+			excludePaths: []string{"**/*_test.go", "**/vendor/**", "**/testdata/**"},
+			want:         false,
+		},
+		{
+			name:         "microservices monorepo - include shared pkg",
+			description:  "Monorepo with multiple services",
+			path:         "pkg/shared/logger/logger.go",
+			includePaths: []string{"services/payment-api/**", "pkg/shared/**"},
+			excludePaths: []string{"**/*_test.go", "**/vendor/**", "**/testdata/**"},
+			want:         true,
+		},
+		{
+			name:         "docs site - include only content",
+			description:  "Documentation site, clone only markdown content",
+			path:         "content/docs/guides/authentication.md",
+			includePaths: []string{"content/**/*.md", "content/**/*.mdx"},
+			excludePaths: []string{"**/node_modules/**", "**/public/**", "**/.next/**"},
+			want:         true,
+		},
+		{
+			name:         "docs site - exclude build output",
+			description:  "Documentation site, clone only markdown content",
+			path:         "public/docs/guides/authentication.html",
+			includePaths: []string{"content/**/*.md", "content/**/*.mdx"},
+			excludePaths: []string{"**/node_modules/**", "**/public/**", "**/.next/**"},
+			want:         false,
+		},
+		{
+			name:         "CI/CD repo - include workflows and scripts",
+			description:  "Repository with CI/CD configurations",
+			path:         ".github/workflows/deploy-production.yml",
+			includePaths: []string{".github/**", "scripts/**", "Makefile"},
+			excludePaths: []string{"**/*.log", "**/cache/**"},
+			want:         true,
+		},
+		{
+			name:         "python ML project - include notebooks and source",
+			description:  "Machine learning project with notebooks",
+			path:         "notebooks/experiments/model-training-v2.ipynb",
+			includePaths: []string{"**/*.py", "**/*.ipynb", "requirements.txt"},
+			excludePaths: []string{"**/__pycache__/**", "**/*.pyc", "**/venv/**", "**/.pytest_cache/**"},
+			want:         true,
+		},
+		{
+			name:         "python ML project - exclude cache",
+			description:  "Machine learning project with notebooks",
+			path:         "src/__pycache__/model.cpython-39.pyc",
+			includePaths: []string{"**/*.py", "**/*.ipynb", "requirements.txt"},
+			excludePaths: []string{"**/__pycache__/**", "**/*.pyc", "**/venv/**", "**/.pytest_cache/**"},
+			want:         false,
+		},
+		{
+			name:         "mobile app - include iOS source only",
+			description:  "Mobile app with iOS and Android",
+			path:         "ios/MyApp/ViewControllers/HomeViewController.swift",
+			includePaths: []string{"ios/**/*.swift", "ios/**/*.storyboard", "ios/**/*.xcodeproj/**"},
+			excludePaths: []string{"**/Pods/**", "**/DerivedData/**", "**/build/**"},
+			want:         true,
+		},
+		{
+			name:         "mobile app - exclude pods",
+			description:  "Mobile app with iOS and Android",
+			path:         "ios/Pods/Alamofire/Source/Request.swift",
+			includePaths: []string{"ios/**/*.swift", "ios/**/*.storyboard", "ios/**/*.xcodeproj/**"},
+			excludePaths: []string{"**/Pods/**", "**/DerivedData/**", "**/build/**"},
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := client.shouldIncludePath(tt.path, tt.includePaths, tt.excludePaths)
+			require.Equal(t, tt.want, got, "[%s] shouldIncludePath(%q, %v, %v) = %v, want %v",
+				tt.description, tt.path, tt.includePaths, tt.excludePaths, got, tt.want)
+		})
+	}
+}
