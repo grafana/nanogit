@@ -183,18 +183,8 @@ func (c *httpClient) filterTree(tree *FlatTree, includePaths, excludePaths []str
 // ExcludePaths takes precedence over IncludePaths.
 func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths []string) bool {
 	// First check exclude patterns - they take precedence
-	for _, excludePattern := range excludePaths {
-		if matched, err := filepath.Match(excludePattern, path); err == nil && matched {
-			return false
-		}
-
-		// Also check if the path starts with the exclude pattern (for directory exclusions)
-		if strings.HasSuffix(excludePattern, "/**") {
-			prefix := strings.TrimSuffix(excludePattern, "/**")
-			if strings.HasPrefix(path, prefix+"/") || path == prefix {
-				return false
-			}
-		}
+	if matchesAnyPattern(path, excludePaths) {
+		return false
 	}
 
 	// If no include patterns specified, include everything not excluded
@@ -203,21 +193,29 @@ func (c *httpClient) shouldIncludePath(path string, includePaths, excludePaths [
 	}
 
 	// Check include patterns
-	for _, includePattern := range includePaths {
-		if matched, err := filepath.Match(includePattern, path); err == nil && matched {
+	return matchesAnyPattern(path, includePaths)
+}
+
+// matchesAnyPattern checks if a path matches any of the given patterns.
+func matchesAnyPattern(path string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if matchesSinglePattern(path, pattern) {
 			return true
 		}
+	}
+	return false
+}
 
-		// Also check if the path starts with the include pattern (for directory inclusions)
-		if strings.HasSuffix(includePattern, "/**") {
-			prefix := strings.TrimSuffix(includePattern, "/**")
-			if strings.HasPrefix(path, prefix+"/") || path == prefix {
-				return true
-			}
-		}
+// matchesSinglePattern checks if a path matches a single pattern.
+func matchesSinglePattern(path, pattern string) bool {
+	// Check if pattern contains **/ anywhere - needs special handling
+	if strings.Contains(pattern, "/**/") || strings.HasPrefix(pattern, "**/") || strings.HasSuffix(pattern, "/**") {
+		return matchesPatternWithDoubleStar(path, pattern)
 	}
 
-	return false
+	// Standard filepath.Match for simple patterns
+	matched, err := filepath.Match(pattern, path)
+	return err == nil && matched
 }
 
 // writeFilesToDisk writes all files from the filtered tree to the specified directory path.
@@ -269,4 +267,159 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 		"file_count", len(tree.Entries))
 
 	return nil
+}
+
+// matchesPatternWithDoubleStar checks if a pattern with **/ matches a path.
+// Handles patterns like:
+// - "**/*.go" - matches *.go at any depth
+// - "src/**" - matches anything under src/
+// - "src/**/*.go" - matches *.go at any depth under src/
+// - "**/test/**" - matches test directory at any depth
+// - "level1/**/level5/**" - complex multi-segment patterns
+func matchesPatternWithDoubleStar(path, pattern string) bool {
+	// Case 1: Pattern contains /**/ in the middle (e.g., "src/**/*.go", "services/**/src/**")
+	// Check this FIRST before checking suffix/prefix, as "a/**/b/**" contains both /**/ and ends with /**
+	if strings.Contains(pattern, "/**/") {
+		return matchesMiddleDoubleStarPattern(path, pattern)
+	}
+
+	// Case 2: Special case "**/dirname/**" - matches dirname directory at any depth
+	if strings.HasPrefix(pattern, "**/") && strings.HasSuffix(pattern, "/**") {
+		dirname := strings.TrimSuffix(strings.TrimPrefix(pattern, "**/"), "/**")
+		return matchesDirAtAnyDepth(path, dirname)
+	}
+
+	// Case 3: Pattern starts with **/ (e.g., "**/*.go")
+	if strings.HasPrefix(pattern, "**/") {
+		return matchesPrefixDoubleStarPattern(path, pattern)
+	}
+
+	// Case 4: Pattern ends with /** (e.g., "src/**")
+	if strings.HasSuffix(pattern, "/**") {
+		prefix := strings.TrimSuffix(pattern, "/**")
+		return strings.HasPrefix(path, prefix+"/") || path == prefix
+	}
+
+	return false
+}
+
+// matchesMiddleDoubleStarPattern handles patterns with /**/ in the middle.
+func matchesMiddleDoubleStarPattern(path, pattern string) bool {
+	// Split pattern into prefix and suffix around the first /**/
+	parts := strings.SplitN(pattern, "/**/", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	prefix := parts[0]
+	suffix := parts[1]
+
+	// Path must start with prefix
+	if !strings.HasPrefix(path, prefix+"/") && path != prefix {
+		return false
+	}
+
+	// Remove prefix from path, handle path == prefix explicitly
+	var remainder string
+	if path == prefix {
+		remainder = ""
+	} else {
+		remainder = strings.TrimPrefix(path, prefix+"/")
+	}
+
+	// If suffix is dir/** (e.g., "src/**"), we need to find dir at any depth in remainder
+	if strings.HasSuffix(suffix, "/**") && !strings.Contains(strings.TrimSuffix(suffix, "/**"), "/") {
+		dirname := strings.TrimSuffix(suffix, "/**")
+		return matchesDirAtAnyDepth(remainder, dirname)
+	}
+
+	// If suffix contains more /**/, we need to match it at any possible starting point in remainder
+	if strings.Contains(suffix, "/**/") || strings.HasSuffix(suffix, "/**") {
+		return matchesSuffixAtAnyDepthRecursive(remainder, suffix, 0)
+	}
+
+	// Otherwise check if remainder matches suffix at any depth
+	return matchesSuffixAtAnyDepth(remainder, suffix)
+}
+
+// matchesPrefixDoubleStarPattern handles patterns that start with **/.
+func matchesPrefixDoubleStarPattern(path, pattern string) bool {
+	suffix := strings.TrimPrefix(pattern, "**/")
+	// If suffix also ends with /**, handle specially
+	if strings.HasSuffix(suffix, "/**") {
+		dirname := strings.TrimSuffix(suffix, "/**")
+		return matchesDirAtAnyDepth(path, dirname)
+	}
+	return matchesSuffixAtAnyDepth(path, suffix)
+}
+
+// matchesSuffixAtAnyDepthRecursive tries to match suffix at any depth in the path recursively.
+// The depth parameter prevents infinite recursion by limiting how deep we can recurse.
+func matchesSuffixAtAnyDepthRecursive(path, suffix string, depth int) bool {
+	// Prevent infinite recursion - limit to 50 levels (more than any reasonable directory depth)
+	const maxDepth = 50
+	if depth >= maxDepth {
+		return false
+	}
+
+	// Try to match suffix starting from path
+	if matchesPatternWithDoubleStar(path, suffix) {
+		return true
+	}
+
+	// Also try matching suffix at any depth in path
+	// Use strings.Split for better performance instead of byte-by-byte iteration
+	segments := strings.Split(path, "/")
+	for i := 1; i < len(segments); i++ {
+		tail := strings.Join(segments[i:], "/")
+		if matchesPatternWithDoubleStar(tail, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesDirAtAnyDepth checks if a directory name appears anywhere in the path.
+func matchesDirAtAnyDepth(path, dirname string) bool {
+	// Check if path is exactly the dirname
+	if path == dirname {
+		return true
+	}
+	// Check if path starts with dirname/
+	if strings.HasPrefix(path, dirname+"/") {
+		return true
+	}
+	// Check if path contains /dirname/
+	if strings.Contains(path, "/"+dirname+"/") {
+		return true
+	}
+	// Check if path ends with /dirname
+	if strings.HasSuffix(path, "/"+dirname) {
+		return true
+	}
+	return false
+}
+
+// matchesSuffixAtAnyDepth checks if a suffix pattern matches a path at any depth.
+// The pattern parameter should be the suffix after a '**/' prefix has been stripped (e.g., '*.log' from '**/*.log').
+// For pattern '*.log' (from '**/*.log') and path 'src/logs/debug.log', it checks:
+// - 'src/logs/debug.log' against '*.log' (no match)
+// - 'logs/debug.log' against '*.log' (no match)
+// - 'debug.log' against '*.log' (match!)
+func matchesSuffixAtAnyDepth(path, pattern string) bool {
+	// First try matching the full path
+	if matched, err := filepath.Match(pattern, path); err == nil && matched {
+		return true
+	}
+
+	// Then try matching each tail of the path (split by /)
+	// Use strings.Split for better performance instead of byte-by-byte iteration
+	segments := strings.Split(path, "/")
+	for i := 1; i < len(segments); i++ {
+		tail := strings.Join(segments[i:], "/")
+		if matched, err := filepath.Match(pattern, tail); err == nil && matched {
+			return true
+		}
+	}
+
+	return false
 }
