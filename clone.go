@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -36,6 +37,14 @@ type CloneOptions struct {
 	// Supports glob patterns (e.g., "node_modules/**", "*.tmp", "test/**").
 	// ExcludePaths takes precedence over IncludePaths.
 	ExcludePaths []string
+
+	// BatchSize specifies how many blobs to fetch in a single request.
+	// A value of 0 or 1 will fetch blobs individually (backward compatible behavior).
+	// Values > 1 enable batch fetching, which can significantly improve performance
+	// for repositories with many files by reducing the number of network requests.
+	// If a blob is not returned in a batch request, the client will automatically
+	// fall back to fetching it individually.
+	BatchSize int
 }
 
 // CloneResult contains the results of a clone operation.
@@ -135,7 +144,7 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	}
 
 	// Write files to filesystem
-	err = c.writeFilesToDisk(ctx, opts.Path, filteredTree)
+	err = c.writeFilesToDisk(ctx, opts.Path, filteredTree, opts.BatchSize)
 	if err != nil {
 		return nil, fmt.Errorf("write files to disk: %w", err)
 	}
@@ -220,51 +229,179 @@ func matchesSinglePattern(path, pattern string) bool {
 
 // writeFilesToDisk writes all files from the filtered tree to the specified directory path.
 // It creates the necessary directory structure and downloads blob content for each file.
-func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree *FlatTree) error {
+// If batchSize > 1, it fetches multiple blobs in batches to improve performance.
+func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree *FlatTree, batchSize int) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Writing files to disk",
 		"base_path", basePath,
-		"file_count", len(tree.Entries))
+		"file_count", len(tree.Entries),
+		"batch_size", batchSize)
 
 	// Create the base directory if it doesn't exist
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return fmt.Errorf("create base directory %s: %w", basePath, err)
 	}
 
-	// Process each file in the tree
+	// Collect all blob entries
+	var blobEntries []FlatTreeEntry
 	for _, entry := range tree.Entries {
-		// Skip tree entries (directories are created automatically when needed)
-		if entry.Type != protocol.ObjectTypeBlob {
-			continue
+		if entry.Type == protocol.ObjectTypeBlob {
+			blobEntries = append(blobEntries, entry)
 		}
+	}
 
-		filePath := filepath.Join(basePath, entry.Path)
+	// Fetch and write blobs based on batch size
+	if batchSize <= 1 {
+		// Backward compatible: fetch individually
+		return c.writeFilesIndividually(ctx, basePath, blobEntries, logger)
+	}
 
-		// Create parent directories if needed
-		parentDir := filepath.Dir(filePath)
-		if err := os.MkdirAll(parentDir, 0755); err != nil {
-			return fmt.Errorf("create parent directory for %s: %w", entry.Path, err)
+	// Batch fetching enabled
+	return c.writeFilesInBatches(ctx, basePath, blobEntries, batchSize, logger)
+}
+
+// writeFilesIndividually fetches and writes each blob individually (backward compatible behavior)
+func (c *httpClient) writeFilesIndividually(ctx context.Context, basePath string, entries []FlatTreeEntry, logger log.Logger) error {
+	for _, entry := range entries {
+		if err := c.writeFile(ctx, basePath, entry, logger); err != nil {
+			return err
 		}
+	}
+	return nil
+}
 
-		// Get the blob content
-		blob, err := c.GetBlob(ctx, entry.Hash)
+// writeFile fetches a single blob and writes it to disk
+func (c *httpClient) writeFile(ctx context.Context, basePath string, entry FlatTreeEntry, logger log.Logger) error {
+	filePath := filepath.Join(basePath, entry.Path)
+
+	// Create parent directories if needed
+	parentDir := filepath.Dir(filePath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("create parent directory for %s: %w", entry.Path, err)
+	}
+
+	// Get the blob content
+	blob, err := c.GetBlob(ctx, entry.Hash)
+	if err != nil {
+		return fmt.Errorf("get blob content for %s: %w", entry.Path, err)
+	}
+
+	// Write the file content
+	if err := os.WriteFile(filePath, blob.Content, 0644); err != nil {
+		return fmt.Errorf("write file %s: %w", entry.Path, err)
+	}
+
+	logger.Debug("File written",
+		"path", entry.Path,
+		"size", len(blob.Content))
+
+	return nil
+}
+
+// writeFilesInBatches fetches and writes blobs in batches with fallback to individual fetching
+func (c *httpClient) writeFilesInBatches(ctx context.Context, basePath string, entries []FlatTreeEntry, batchSize int, logger log.Logger) error {
+	totalFiles := len(entries)
+	logger.Debug("Starting batch blob fetching",
+		"total_files", totalFiles,
+		"batch_size", batchSize)
+
+	// Process entries in batches
+	for i := 0; i < len(entries); i += batchSize {
+		end := i + batchSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+		batch := entries[i:end]
+
+		logger.Debug("Processing batch",
+			"batch_start", i,
+			"batch_end", end,
+			"batch_size", len(batch))
+
+		// Attempt to fetch batch
+		blobs, err := c.fetchBlobBatch(ctx, batch)
 		if err != nil {
-			return fmt.Errorf("get blob content for %s: %w", entry.Path, err)
+			return fmt.Errorf("fetch blob batch: %w", err)
 		}
 
-		// Write the file content
-		if err := os.WriteFile(filePath, blob.Content, 0644); err != nil {
-			return fmt.Errorf("write file %s: %w", entry.Path, err)
+		// Write fetched blobs and track missing ones
+		var missingEntries []FlatTreeEntry
+		for _, entry := range batch {
+			blob, found := blobs[entry.Hash.String()]
+			if !found {
+				// Blob not in batch response, will fetch individually later
+				missingEntries = append(missingEntries, entry)
+				logger.Debug("Blob missing from batch, will retry individually",
+					"path", entry.Path,
+					"hash", entry.Hash.String())
+				continue
+			}
+
+			// Write the fetched blob to disk
+			if err := c.writeBlobToFile(ctx, basePath, entry, blob.Data, logger); err != nil {
+				return err
+			}
 		}
 
-		logger.Debug("File written",
-			"path", entry.Path,
-			"size", len(blob.Content))
+		// Fallback: fetch missing blobs individually
+		if len(missingEntries) > 0 {
+			logger.Debug("Fetching missing blobs individually",
+				"count", len(missingEntries))
+			for _, entry := range missingEntries {
+				if err := c.writeFile(ctx, basePath, entry, logger); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	logger.Debug("All files written to disk",
 		"base_path", basePath,
-		"file_count", len(tree.Entries))
+		"file_count", totalFiles)
+
+	return nil
+}
+
+// fetchBlobBatch fetches multiple blobs in a single request
+func (c *httpClient) fetchBlobBatch(ctx context.Context, entries []FlatTreeEntry) (map[string]*protocol.PackfileObject, error) {
+	// Collect hashes to fetch
+	hashes := make([]hash.Hash, len(entries))
+	for i, entry := range entries {
+		hashes[i] = entry.Hash
+	}
+
+	// Fetch all hashes in a single request using the protocol Fetch
+	objects, err := c.Fetch(ctx, client.FetchOptions{
+		NoProgress:     true,
+		Want:           hashes,
+		Done:           true,
+		NoExtraObjects: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetch %d blobs: %w", len(hashes), err)
+	}
+
+	return objects, nil
+}
+
+// writeBlobToFile writes blob data to a file on disk
+func (c *httpClient) writeBlobToFile(ctx context.Context, basePath string, entry FlatTreeEntry, data []byte, logger log.Logger) error {
+	filePath := filepath.Join(basePath, entry.Path)
+
+	// Create parent directories if needed
+	parentDir := filepath.Dir(filePath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("create parent directory for %s: %w", entry.Path, err)
+	}
+
+	// Write the file content
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return fmt.Errorf("write file %s: %w", entry.Path, err)
+	}
+
+	logger.Debug("File written",
+		"path", entry.Path,
+		"size", len(data))
 
 	return nil
 }

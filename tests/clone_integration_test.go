@@ -175,6 +175,197 @@ var _ = Describe("Clone operations", func() {
 		})
 	})
 
+	Context("Batch blob fetching", func() {
+		var commitHash hash.Hash
+
+		BeforeEach(func() {
+			By("Creating a repository with multiple files for batch testing")
+			// Create 15 files to test batching behavior
+			for i := 1; i <= 15; i++ {
+				local.CreateFile(filepath.Join("files", "file"+string(rune('0'+i/10))+string(rune('0'+i%10))+".txt"),
+					"Content of file "+string(rune('0'+i/10))+string(rune('0'+i%10)))
+			}
+
+			By("Committing and pushing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add 15 test files")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should work with batch size 0 (backward compatible - individual fetching)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:      tempDir,
+				Hash:      commitHash,
+				BatchSize: 0, // Should fetch individually
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(Equal(17)) // 15 new files + 2 files from initial setup
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 15; i++ {
+				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
+				content, err := os.ReadFile(filepath.Join(tempDir, "files", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := "Content of file " + string(rune('0'+i/10)) + string(rune('0'+i%10))
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with batch size 1 (backward compatible - individual fetching)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:      tempDir,
+				Hash:      commitHash,
+				BatchSize: 1, // Should fetch individually
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(Equal(17)) // 15 new files + 2 files from initial setup
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 15; i++ {
+				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
+				content, err := os.ReadFile(filepath.Join(tempDir, "files", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := "Content of file " + string(rune('0'+i/10)) + string(rune('0'+i%10))
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with batch size 5 (multiple batches)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:      tempDir,
+				Hash:      commitHash,
+				BatchSize: 5, // Should fetch in batches of 5
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(Equal(17)) // 15 new files + 2 files from initial setup
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 15; i++ {
+				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
+				content, err := os.ReadFile(filepath.Join(tempDir, "files", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := "Content of file " + string(rune('0'+i/10)) + string(rune('0'+i%10))
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with batch size 10 (fewer batches)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:      tempDir,
+				Hash:      commitHash,
+				BatchSize: 10, // Should fetch in batches of 10
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(Equal(17)) // 15 new files + 2 files from initial setup
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 15; i++ {
+				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
+				content, err := os.ReadFile(filepath.Join(tempDir, "files", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := "Content of file " + string(rune('0'+i/10)) + string(rune('0'+i%10))
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with batch size larger than file count (single batch)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:      tempDir,
+				Hash:      commitHash,
+				BatchSize: 100, // Larger than total files, should fetch in one batch
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(Equal(17)) // 15 new files + 2 files from initial setup
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 15; i++ {
+				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
+				content, err := os.ReadFile(filepath.Join(tempDir, "files", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := "Content of file " + string(rune('0'+i/10)) + string(rune('0'+i%10))
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with batch fetching and path filtering combined", func() {
+			By("Creating files in different directories")
+			local.CreateFile("include/file1.txt", "included 1")
+			local.CreateFile("include/file2.txt", "included 2")
+			local.CreateFile("exclude/file3.txt", "excluded 3")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add files in different dirs")
+			local.Git("push", "origin", "main", "--force")
+
+			newCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:         tempDir,
+				Hash:         newCommitHash,
+				BatchSize:    5,
+				IncludePaths: []string{"include/**"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+
+			By("Verifying only filtered files were cloned")
+			_, err = os.Stat(filepath.Join(tempDir, "include", "file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(tempDir, "include", "file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(tempDir, "exclude"))
+			Expect(err).To(HaveOccurred()) // Should not exist
+		})
+
+		It("should handle large repositories with many files efficiently", func() {
+			By("Creating a large repository with 50 files")
+			for i := 1; i <= 50; i++ {
+				dir := "dir" + string(rune('0'+i/10))
+				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
+				local.CreateFile(filepath.Join(dir, filename), "Content "+string(rune('0'+i)))
+			}
+
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add 50 files")
+			local.Git("push", "origin", "main", "--force")
+
+			largeCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:      tempDir,
+				Hash:      largeCommitHash,
+				BatchSize: 10, // Fetch in batches of 10
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			// Total files includes the 50 new files + previous files
+			Expect(result.FilteredFiles).To(BeNumerically(">=", 50))
+
+			By("Verifying a sample of files")
+			content, err := os.ReadFile(filepath.Join(tempDir, "dir0", "file01.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("Content 1"))
+		})
+	})
+
 	Context("Error handling", func() {
 		It("should require a commit hash", func() {
 			tempDir := GinkgoT().TempDir()
