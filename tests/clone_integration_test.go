@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -363,6 +364,151 @@ var _ = Describe("Clone operations", func() {
 			content, err := os.ReadFile(filepath.Join(tempDir, "dir0", "file01.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(content)).To(Equal("Content 1"))
+		})
+	})
+
+	Context("Concurrent blob fetching", func() {
+		var commitHash hash.Hash
+
+		BeforeEach(func() {
+			By("Creating a repository with multiple files for concurrency testing")
+			// Create 20 files to test concurrent fetching
+			for i := 1; i <= 20; i++ {
+				local.CreateFile(filepath.Join("concurrent", "file"+fmt.Sprintf("%02d", i)+".txt"),
+					"Content of file "+fmt.Sprintf("%02d", i))
+			}
+
+			By("Committing and pushing the files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add 20 test files for concurrency")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should work with concurrency 1 (sequential, backward compatible)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:        tempDir,
+				Hash:        commitHash,
+				Concurrency: 1, // Sequential fetching
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(BeNumerically(">=", 20))
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 20; i++ {
+				filename := fmt.Sprintf("file%02d.txt", i)
+				content, err := os.ReadFile(filepath.Join(tempDir, "concurrent", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := fmt.Sprintf("Content of file %02d", i)
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with concurrency 4 (concurrent individual fetching)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:        tempDir,
+				Hash:        commitHash,
+				BatchSize:   1,  // Individual fetching
+				Concurrency: 4,  // Fetch 4 blobs concurrently
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(BeNumerically(">=", 20))
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 20; i++ {
+				filename := fmt.Sprintf("file%02d.txt", i)
+				content, err := os.ReadFile(filepath.Join(tempDir, "concurrent", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := fmt.Sprintf("Content of file %02d", i)
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with batch size 5 and concurrency 3 (concurrent batch fetching)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:        tempDir,
+				Hash:        commitHash,
+				BatchSize:   5,  // Fetch 5 blobs per batch
+				Concurrency: 3,  // Process 3 batches concurrently
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(BeNumerically(">=", 20))
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 20; i++ {
+				filename := fmt.Sprintf("file%02d.txt", i)
+				content, err := os.ReadFile(filepath.Join(tempDir, "concurrent", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := fmt.Sprintf("Content of file %02d", i)
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with high concurrency (10 workers)", func() {
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:        tempDir,
+				Hash:        commitHash,
+				BatchSize:   5,   // Batch size 5
+				Concurrency: 10,  // High concurrency
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.FilteredFiles).To(BeNumerically(">=", 20))
+
+			By("Verifying all files were written correctly")
+			for i := 1; i <= 20; i++ {
+				filename := fmt.Sprintf("file%02d.txt", i)
+				content, err := os.ReadFile(filepath.Join(tempDir, "concurrent", filename))
+				Expect(err).NotTo(HaveOccurred())
+				expectedContent := fmt.Sprintf("Content of file %02d", i)
+				Expect(string(content)).To(Equal(expectedContent))
+			}
+		})
+
+		It("should work with concurrency and path filtering combined", func() {
+			By("Creating files in different directories")
+			local.CreateFile("include/file1.txt", "included 1")
+			local.CreateFile("include/file2.txt", "included 2")
+			local.CreateFile("include/file3.txt", "included 3")
+			local.CreateFile("exclude/file4.txt", "excluded 4")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add more files")
+			local.Git("push", "origin", "main", "--force")
+
+			newCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+
+			tempDir := GinkgoT().TempDir()
+			result, err := client.Clone(ctx, nanogit.CloneOptions{
+				Path:         tempDir,
+				Hash:         newCommitHash,
+				BatchSize:    10,
+				Concurrency:  3,
+				IncludePaths: []string{"include/**"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+
+			By("Verifying only filtered files were cloned")
+			_, err = os.Stat(filepath.Join(tempDir, "include", "file1.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(tempDir, "include", "file2.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(tempDir, "include", "file3.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(filepath.Join(tempDir, "exclude"))
+			Expect(err).To(HaveOccurred()) // Should not exist
 		})
 	})
 
