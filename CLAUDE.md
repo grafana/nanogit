@@ -92,7 +92,7 @@ cd perf && make profile-compare    # Compare current vs baseline performance
 ## Development Notes
 
 ### Dependencies
-- **Go 1.24+** required
+- **Go 1.25.0+** required
 - Minimal external dependencies, heavy use of standard library
 - Key test frameworks: Ginkgo/Gomega, testify, counterfeiter
 
