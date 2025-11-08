@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
+	"golang.org/x/sync/errgroup"
 )
 
 // CloneOptions provides configuration options for repository cloning operations.
@@ -45,6 +47,15 @@ type CloneOptions struct {
 	// If a blob is not returned in a batch request, the client will automatically
 	// fall back to fetching it individually.
 	BatchSize int
+
+	// Concurrency specifies how many blob fetches to perform in parallel.
+	// A value of 0 or 1 will fetch sequentially (backward compatible behavior).
+	// Values > 1 enable concurrent fetching, which can significantly improve performance
+	// by utilizing network bandwidth more effectively.
+	// Works with both batch fetching (fetches multiple batches concurrently) and
+	// individual fetching (fetches multiple blobs concurrently).
+	// Recommended value: 4-10 depending on network conditions and server capacity.
+	Concurrency int
 }
 
 // CloneResult contains the results of a clone operation.
@@ -144,7 +155,7 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	}
 
 	// Write files to filesystem
-	err = c.writeFilesToDisk(ctx, opts.Path, filteredTree, opts.BatchSize)
+	err = c.writeFilesToDisk(ctx, opts.Path, filteredTree, opts.BatchSize, opts.Concurrency)
 	if err != nil {
 		return nil, fmt.Errorf("write files to disk: %w", err)
 	}
@@ -230,12 +241,14 @@ func matchesSinglePattern(path, pattern string) bool {
 // writeFilesToDisk writes all files from the filtered tree to the specified directory path.
 // It creates the necessary directory structure and downloads blob content for each file.
 // If batchSize > 1, it fetches multiple blobs in batches to improve performance.
-func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree *FlatTree, batchSize int) error {
+// If concurrency > 1, it fetches blobs concurrently to improve performance.
+func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree *FlatTree, batchSize, concurrency int) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Writing files to disk",
 		"base_path", basePath,
 		"file_count", len(tree.Entries),
-		"batch_size", batchSize)
+		"batch_size", batchSize,
+		"concurrency", concurrency)
 
 	// Create the base directory if it doesn't exist
 	if err := os.MkdirAll(basePath, 0755); err != nil {
@@ -250,24 +263,74 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 		}
 	}
 
+	// Normalize concurrency (0 or 1 means sequential)
+	if concurrency <= 1 {
+		concurrency = 1
+	}
+
 	// Fetch and write blobs based on batch size
 	if batchSize <= 1 {
-		// Backward compatible: fetch individually
-		return c.writeFilesIndividually(ctx, basePath, blobEntries, logger)
+		// Fetch individually (with optional concurrency)
+		return c.writeFilesIndividually(ctx, basePath, blobEntries, concurrency, logger)
 	}
 
-	// Batch fetching enabled
-	return c.writeFilesInBatches(ctx, basePath, blobEntries, batchSize, logger)
+	// Batch fetching enabled (with optional concurrency)
+	return c.writeFilesInBatches(ctx, basePath, blobEntries, batchSize, concurrency, logger)
 }
 
-// writeFilesIndividually fetches and writes each blob individually (backward compatible behavior)
-func (c *httpClient) writeFilesIndividually(ctx context.Context, basePath string, entries []FlatTreeEntry, logger log.Logger) error {
-	for _, entry := range entries {
-		if err := c.writeFile(ctx, basePath, entry, logger); err != nil {
-			return err
+// writeFilesIndividually fetches and writes each blob individually
+// with optional concurrency for improved performance
+func (c *httpClient) writeFilesIndividually(ctx context.Context, basePath string, entries []FlatTreeEntry, concurrency int, logger log.Logger) error {
+	if concurrency <= 1 {
+		// Sequential fetching (backward compatible)
+		for _, entry := range entries {
+			if err := c.writeFile(ctx, basePath, entry, logger); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
-	return nil
+
+	// Concurrent fetching using errgroup
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(concurrency)
+
+	// Use mutex to safely log from multiple goroutines
+	var logMutex sync.Mutex
+
+	for _, entry := range entries {
+		entry := entry // capture loop variable
+		g.Go(func() error {
+			// Create parent directories first (with synchronization)
+			filePath := filepath.Join(basePath, entry.Path)
+			parentDir := filepath.Dir(filePath)
+			if err := os.MkdirAll(parentDir, 0755); err != nil {
+				return fmt.Errorf("create parent directory for %s: %w", entry.Path, err)
+			}
+
+			// Fetch blob
+			blob, err := c.GetBlob(ctx, entry.Hash)
+			if err != nil {
+				return fmt.Errorf("get blob content for %s: %w", entry.Path, err)
+			}
+
+			// Write file
+			if err := os.WriteFile(filePath, blob.Content, 0644); err != nil {
+				return fmt.Errorf("write file %s: %w", entry.Path, err)
+			}
+
+			// Safe logging
+			logMutex.Lock()
+			logger.Debug("File written",
+				"path", entry.Path,
+				"size", len(blob.Content))
+			logMutex.Unlock()
+
+			return nil
+		})
+	}
+
+	return g.Wait()
 }
 
 // writeFile fetches a single blob and writes it to disk
@@ -299,65 +362,109 @@ func (c *httpClient) writeFile(ctx context.Context, basePath string, entry FlatT
 }
 
 // writeFilesInBatches fetches and writes blobs in batches with fallback to individual fetching
-func (c *httpClient) writeFilesInBatches(ctx context.Context, basePath string, entries []FlatTreeEntry, batchSize int, logger log.Logger) error {
+// with optional concurrency for improved performance
+func (c *httpClient) writeFilesInBatches(ctx context.Context, basePath string, entries []FlatTreeEntry, batchSize, concurrency int, logger log.Logger) error {
 	totalFiles := len(entries)
 	logger.Debug("Starting batch blob fetching",
 		"total_files", totalFiles,
-		"batch_size", batchSize)
+		"batch_size", batchSize,
+		"concurrency", concurrency)
 
-	// Process entries in batches
+	// Split entries into batches
+	var batches [][]FlatTreeEntry
 	for i := 0; i < len(entries); i += batchSize {
 		end := i + batchSize
 		if end > len(entries) {
 			end = len(entries)
 		}
-		batch := entries[i:end]
+		batches = append(batches, entries[i:end])
+	}
 
+	if concurrency <= 1 {
+		// Sequential batch processing (backward compatible)
+		return c.processBlobBatchesSequentially(ctx, basePath, batches, logger)
+	}
+
+	// Concurrent batch processing
+	return c.processBlobBatchesConcurrently(ctx, basePath, batches, concurrency, logger)
+}
+
+// processBlobBatchesSequentially processes blob batches one at a time (backward compatible)
+func (c *httpClient) processBlobBatchesSequentially(ctx context.Context, basePath string, batches [][]FlatTreeEntry, logger log.Logger) error {
+	for i, batch := range batches {
 		logger.Debug("Processing batch",
-			"batch_start", i,
-			"batch_end", end,
+			"batch_number", i+1,
 			"batch_size", len(batch))
 
-		// Attempt to fetch batch
-		blobs, err := c.fetchBlobBatch(ctx, batch)
-		if err != nil {
-			return fmt.Errorf("fetch blob batch: %w", err)
+		if err := c.processSingleBlobBatch(ctx, basePath, batch, logger); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// processBlobBatchesConcurrently processes multiple blob batches concurrently
+func (c *httpClient) processBlobBatchesConcurrently(ctx context.Context, basePath string, batches [][]FlatTreeEntry, concurrency int, logger log.Logger) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(concurrency)
+
+	// Use mutex for safe logging
+	var logMutex sync.Mutex
+
+	for batchIdx, batch := range batches {
+		batchIdx := batchIdx
+		batch := batch
+		g.Go(func() error {
+			logMutex.Lock()
+			logger.Debug("Processing batch concurrently",
+				"batch_number", batchIdx+1,
+				"batch_size", len(batch))
+			logMutex.Unlock()
+
+			return c.processSingleBlobBatch(ctx, basePath, batch, logger)
+		})
+	}
+
+	return g.Wait()
+}
+
+// processSingleBlobBatch fetches and writes a single batch of blobs
+func (c *httpClient) processSingleBlobBatch(ctx context.Context, basePath string, batch []FlatTreeEntry, logger log.Logger) error {
+	// Attempt to fetch batch
+	blobs, err := c.fetchBlobBatch(ctx, batch)
+	if err != nil {
+		return fmt.Errorf("fetch blob batch: %w", err)
+	}
+
+	// Write fetched blobs and track missing ones
+	var missingEntries []FlatTreeEntry
+	for _, entry := range batch {
+		blob, found := blobs[entry.Hash.String()]
+		if !found {
+			// Blob not in batch response, will fetch individually later
+			missingEntries = append(missingEntries, entry)
+			logger.Debug("Blob missing from batch, will retry individually",
+				"path", entry.Path,
+				"hash", entry.Hash.String())
+			continue
 		}
 
-		// Write fetched blobs and track missing ones
-		var missingEntries []FlatTreeEntry
-		for _, entry := range batch {
-			blob, found := blobs[entry.Hash.String()]
-			if !found {
-				// Blob not in batch response, will fetch individually later
-				missingEntries = append(missingEntries, entry)
-				logger.Debug("Blob missing from batch, will retry individually",
-					"path", entry.Path,
-					"hash", entry.Hash.String())
-				continue
-			}
-
-			// Write the fetched blob to disk
-			if err := c.writeBlobToFile(ctx, basePath, entry, blob.Data, logger); err != nil {
-				return err
-			}
-		}
-
-		// Fallback: fetch missing blobs individually
-		if len(missingEntries) > 0 {
-			logger.Debug("Fetching missing blobs individually",
-				"count", len(missingEntries))
-			for _, entry := range missingEntries {
-				if err := c.writeFile(ctx, basePath, entry, logger); err != nil {
-					return err
-				}
-			}
+		// Write the fetched blob to disk
+		if err := c.writeBlobToFile(ctx, basePath, entry, blob.Data, logger); err != nil {
+			return err
 		}
 	}
 
-	logger.Debug("All files written to disk",
-		"base_path", basePath,
-		"file_count", totalFiles)
+	// Fallback: fetch missing blobs individually
+	if len(missingEntries) > 0 {
+		logger.Debug("Fetching missing blobs individually",
+			"count", len(missingEntries))
+		for _, entry := range missingEntries {
+			if err := c.writeFile(ctx, basePath, entry, logger); err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }

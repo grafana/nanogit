@@ -187,9 +187,10 @@ func TestCloneGrafanaGrafanaFullRepository(t *testing.T) {
 	startTime := time.Now()
 
 	result, err := client.Clone(ctx, nanogit.CloneOptions{
-		Path:      clonePath,
-		Hash:      commitHash,
-		BatchSize: 100, // Use batch size of 100 for performance
+		Path:        clonePath,
+		Hash:        commitHash,
+		BatchSize:   100, // Use batch size of 100 for performance
+		Concurrency: 10,  // Use concurrency of 4 for better throughput
 		// No include/exclude paths - clone everything
 	})
 
