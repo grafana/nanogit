@@ -1,6 +1,6 @@
 module github.com/grafana/nanogit/perf
 
-go 1.25.0
+go 1.24.4
 
 require (
 	github.com/go-git/go-billy/v5 v5.6.0
