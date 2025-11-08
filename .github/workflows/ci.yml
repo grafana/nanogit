@@ -83,7 +83,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Sync vendor directory
-        run: go mod vendor
+        run: go work vendor
       - name: Run unit tests
         env:
           CGO_ENABLED: 1
@@ -120,7 +120,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Sync vendor directory
-        run: go mod vendor
+        run: go work vendor
       - name: Run tests with coverage
         env:
           CGO_ENABLED: 1
@@ -153,7 +153,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Sync vendor directory
-        run: go mod vendor
+        run: go work vendor
       - name: Run integration tests
         env:
           CGO_ENABLED: 1
@@ -192,7 +192,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Sync vendor directory
-        run: go mod vendor
+        run: go work vendor
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
@@ -239,7 +239,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Sync vendor directory
-        run: go mod vendor
+        run: go work vendor
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
@@ -285,7 +285,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Sync vendor directory
-        run: go mod vendor
+        run: go work vendor
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
