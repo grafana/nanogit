@@ -68,6 +68,9 @@ plugins:
   - search
   - git-revision-date-localized:
       enable_creation_date: true
+      exclude:
+        - changelog.md              # Copied file, no git history
+        - CONTRIBUTING_TO_DOCS.md   # Not in nav, for contributors only
 
 extra:
   social:
