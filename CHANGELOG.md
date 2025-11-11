@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://github.com/grafana/nanogit/compare/v0.1.0...v0.1.1) (2025-11-11)
+
+
+### Bug Fixes
+
+* enable CI checks on CHANGELOG PRs ([#113](https://github.com/grafana/nanogit/issues/113)) ([41a1797](https://github.com/grafana/nanogit/commit/41a17974ba1c7cce4c5bee52bc69800257334a3d))
+
+
+### Documentation
+
+* Update CHANGELOG for initial release preparation ([#114](https://github.com/grafana/nanogit/issues/114)) ([6dd7a24](https://github.com/grafana/nanogit/commit/6dd7a24c9b88deca40f296ea91d160b5783ad2fe))
+
 ## [0.1.0](https://github.com/grafana/nanogit/compare/v0.0.0...v0.1.0) (2025-11-11)
 
 
