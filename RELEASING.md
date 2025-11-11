@@ -77,8 +77,8 @@ Without this setting, CHANGELOG PRs will be created but won't auto-merge.
 
 The release workflow requires:
 - `contents: write` - To create tags, branches, and push commits
-- `issues: read` - To read issue information
-- `pull-requests: read` - To read PR information
+- `issues: write` - To interact with issues (if needed by semantic-release)
+- `pull-requests: write` - To create PRs and enable auto-merge
 
 ## For Maintainers
 
@@ -146,7 +146,7 @@ A release won't be created if:
 3. **Check branch protection**: Ensure branch protection allows auto-merge
 4. **Manual merge**: If needed, manually merge the CHANGELOG PR
 
-**Note**: The CHANGELOG PR uses `[skip ci]` in its commit message to prevent triggering another release cycle.
+**Note**: The CHANGELOG PR uses `[skip ci]` in its commit message to prevent triggering another release cycle. However, `[skip ci]` may not reliably skip all workflow types in GitHub Actions. Even if the workflow runs for the CHANGELOG PR, it is safe because `chore:` commits do not trigger releases per the semantic-release configuration, and no new tag will be created.
 
 ## Manual Release (Emergency)
 
