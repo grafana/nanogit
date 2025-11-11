@@ -10,19 +10,21 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# Restrict workflow-level permissions to read-only by default
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
   # Wait for CI to complete before releasing
   wait-for-ci:
     name: Wait for CI
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Wait for CI checks
-        uses: lewagon/wait-on-check-action@v1.3.4
+        uses: lewagon/wait-on-check-action@595dabb27c9aa728f4615967b80f01ad76fa18c8 # v1.3.4
         with:
           ref: ${{ github.sha }}
           check-regexp: '.*'
@@ -36,6 +38,10 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     needs: wait-for-ci
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,11 +71,14 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Verify release configuration
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           echo "Checking for .releaserc.json..."
           cat .releaserc.json
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.ref_name }}"
+          echo "Repository: ${REPO}"
+          echo "Branch: ${BRANCH}"
 
       - name: Get last release
         id: last_release
