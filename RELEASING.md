@@ -27,10 +27,14 @@ When a PR is merged to `main`:
 1. **CI Checks Run**: All tests, linting, and security checks must pass
 2. **Semantic Release Activates**: The release workflow analyzes commits since the last release
 3. **Version Determined**: Based on commit message types
-4. **Changelog Updated**: CHANGELOG.md is automatically generated and committed
-5. **Tag Created**: Git tag is created with the new version (e.g., `v0.1.0`)
-6. **GitHub Release**: Release is published with generated release notes
-7. **pkg.go.dev Updated**: Go module proxy automatically indexes the new version
+4. **Tag Created**: Git tag is created with the new version (e.g., `v0.1.0`)
+5. **GitHub Release**: Release is published with auto-generated release notes
+6. **CHANGELOG PR Created**: Workflow creates a new branch with updated CHANGELOG.md
+7. **Auto-Merge Enabled**: PR is set to auto-merge once CI passes
+8. **CHANGELOG PR Merges**: After CI passes, PR merges automatically
+9. **pkg.go.dev Updated**: Go module proxy automatically indexes the new version
+
+**Note**: The CHANGELOG update happens via an automated PR (not direct push) to respect branch protection rules. This PR will auto-merge if CI passes and auto-merge is enabled in repository settings.
 
 ### Multiple Commits in a PR
 
@@ -52,18 +56,29 @@ fix: bug 1        → Patch
 
 ## Release Configuration
 
+### Repository Setup (One-Time)
+
+For the automated CHANGELOG PR workflow to work, you must enable auto-merge in your repository:
+
+1. Go to **Settings** → **General**
+2. Scroll to **Pull Requests** section
+3. Check ✅ **Allow auto-merge**
+4. Save changes
+
+Without this setting, CHANGELOG PRs will be created but won't auto-merge.
+
 ### Files
 
 - **`.releaserc.json`**: Semantic-release configuration
 - **`.github/workflows/release.yml`**: Release automation workflow
-- **`CHANGELOG.md`**: Auto-generated changelog (do not edit manually)
+- **`CHANGELOG.md`**: Auto-generated changelog (updated via automated PRs)
 
 ### Workflow Permissions
 
 The release workflow requires:
-- `contents: write` - To create tags and update CHANGELOG.md
-- `issues: write` - To comment on issues (optional)
-- `pull-requests: write` - To comment on PRs (optional)
+- `contents: write` - To create tags, branches, and push commits
+- `issues: write` - To interact with issues (if needed by semantic-release)
+- `pull-requests: write` - To create PRs and enable auto-merge
 
 ## For Maintainers
 
@@ -86,8 +101,9 @@ After merging to `main`:
 1. CI completes (~5-10 minutes)
 2. Release workflow runs (~2-3 minutes)
 3. New release appears in [Releases](https://github.com/grafana/nanogit/releases)
-4. CHANGELOG.md is updated automatically
-5. pkg.go.dev indexes the new version (5-15 minutes)
+4. CHANGELOG PR is created automatically (e.g., `chore/changelog-v0.1.0`)
+5. CHANGELOG PR auto-merges after CI passes (~5-10 minutes)
+6. pkg.go.dev indexes the new version (5-15 minutes)
 
 ### When No Release Occurs
 
@@ -119,6 +135,18 @@ A release won't be created if:
    - CI checks failed
    - Network issues with npm packages
    - GitHub token permissions
+
+#### CHANGELOG PR Not Auto-Merging
+
+**Problem**: CHANGELOG PR is created but doesn't auto-merge
+
+**Solutions**:
+1. **Check auto-merge is enabled**: Settings → General → Pull Requests → "Allow auto-merge"
+2. **Verify CI passed**: Check that all CI checks completed successfully on the CHANGELOG PR
+3. **Check branch protection**: Ensure branch protection allows auto-merge
+4. **Manual merge**: If needed, manually merge the CHANGELOG PR
+
+**Note**: The CHANGELOG PR uses `[skip ci]` in its commit message to prevent triggering another release cycle. However, `[skip ci]` may not reliably skip all workflow types in GitHub Actions. Even if the workflow runs for the CHANGELOG PR, it is safe because `chore:` commits do not trigger releases per the semantic-release configuration, and no new tag will be created.
 
 ## Manual Release (Emergency)
 
