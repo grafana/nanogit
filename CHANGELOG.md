@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.0 (2025-11-11)
+
+
+### Features
+
+* add automated release pipeline with semantic versioning ([#106](https://github.com/grafana/nanogit/issues/106)) ([3c7f85a](https://github.com/grafana/nanogit/commit/3c7f85a9ace595ff8211f99b04a3700ffdc4f6f8))
+* implement CHANGELOG updates via auto-merge PRs ([#108](https://github.com/grafana/nanogit/issues/108)) ([45c6be7](https://github.com/grafana/nanogit/commit/45c6be75f43f6ac4b650492a227434ff43f26dc6))
+
+
+### Bug Fixes
+
+* resolve YAML syntax error in release workflow ([#109](https://github.com/grafana/nanogit/issues/109)) ([4669671](https://github.com/grafana/nanogit/commit/46696718e4efd42f9096bbc7c63c5a47f6a971c7))
+* use correct commit SHA for wait-on-check-action ([#107](https://github.com/grafana/nanogit/issues/107)) ([7f97690](https://github.com/grafana/nanogit/commit/7f976905a288d1c16a5990ad6da7ba6eaeb86539))
+
 ## [Unreleased]
 
 Initial release preparation. The changelog will be automatically updated by our release automation starting with v0.1.0.
