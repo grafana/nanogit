@@ -125,7 +125,7 @@ jobs:
 
           # Commit CHANGELOG
           git add CHANGELOG.md
-          git commit -m "chore: update CHANGELOG for ${NEW_VERSION} [skip ci]"
+          git commit -m "chore: update CHANGELOG for ${NEW_VERSION}"
 
           # Push branch
           git push origin "${BRANCH_NAME}"

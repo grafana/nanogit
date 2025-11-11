@@ -146,7 +146,7 @@ A release won't be created if:
 3. **Check branch protection**: Ensure branch protection allows auto-merge
 4. **Manual merge**: If needed, manually merge the CHANGELOG PR
 
-**Note**: The CHANGELOG PR uses `[skip ci]` in its commit message to prevent triggering another release cycle. However, `[skip ci]` may not reliably skip all workflow types in GitHub Actions. Even if the workflow runs for the CHANGELOG PR, it is safe because `chore:` commits do not trigger releases per the semantic-release configuration, and no new tag will be created.
+**Note**: The CHANGELOG PR runs full CI checks (including zizmor and other security scans). This is safe because `chore:` commits do not trigger releases per the semantic-release configuration, so no new release cycle is created. All branch protection requirements will be satisfied before auto-merge.
 
 ## Manual Release (Emergency)
 
