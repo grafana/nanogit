@@ -6,18 +6,18 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'mkdocs.yml'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/docs.yml'
       - '*.md'
-      - 'requirements.txt'
       - 'scripts/prepare-docs.sh'
   pull_request:
     paths:
       - 'docs/**'
-      - 'mkdocs.yml'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/docs.yml'
       - '*.md'
-      - 'requirements.txt'
       - 'scripts/prepare-docs.sh'
   workflow_dispatch:
 
@@ -38,28 +38,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for git-revision-date-localized plugin
+          fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.x'
-          cache: 'pip'
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Install MkDocs and dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: npm ci
 
       - name: Prepare documentation files
         run: ./scripts/prepare-docs.sh
 
       - name: Build documentation
-        run: mkdocs build --strict
+        run: npm run docs:build
 
       - name: Upload artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs/.vitepress/dist
 
   deploy:
     name: Deploy to GitHub Pages

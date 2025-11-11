@@ -9,9 +9,9 @@ yarn.lock
 reports
 perf.test
 
-# MkDocs
-site/
-.venv/
+# VitePress
+docs/.vitepress/dist
+docs/.vitepress/cache
 
 # Documentation files copied during build (source of truth is in root)
 docs/changelog.md
