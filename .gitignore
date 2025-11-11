@@ -8,3 +8,10 @@ node_modules
 yarn.lock
 reports
 perf.test
+
+# MkDocs
+site/
+.venv/
+
+# Documentation files copied during build (source of truth is in root)
+docs/changelog.md

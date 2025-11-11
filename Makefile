@@ -78,3 +78,34 @@ test-perf:
 test-clone-perf:
 	@echo "Running clone performance tests..."
 	cd perf && make test-clone-perf
+
+# Documentation
+.PHONY: docs-install
+docs-install:
+	@echo "Installing documentation dependencies..."
+	@if [ -n "$$VIRTUAL_ENV" ]; then \
+		pip install -r requirements.txt; \
+	else \
+		echo "Note: Installing to user directory (Python 3.13+ externally-managed environment)"; \
+		pip3 install --user --break-system-packages -r requirements.txt 2>/dev/null || \
+		pip3 install --user -r requirements.txt 2>/dev/null || \
+		pip install -r requirements.txt; \
+	fi
+
+.PHONY: docs-prepare
+docs-prepare:
+	@echo "Preparing documentation files..."
+	./scripts/prepare-docs.sh
+
+.PHONY: docs-serve
+docs-serve: docs-prepare
+	@echo "Serving documentation at http://localhost:8000"
+	@command -v mkdocs >/dev/null 2>&1 && mkdocs serve || python3 -m mkdocs serve
+
+.PHONY: docs-build
+docs-build: docs-prepare
+	@echo "Building documentation..."
+	@command -v mkdocs >/dev/null 2>&1 && mkdocs build --strict || python3 -m mkdocs build --strict
+
+.PHONY: docs
+docs: docs-serve

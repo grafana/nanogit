@@ -6,6 +6,8 @@
 [![GoDoc](https://godoc.org/github.com/grafana/nanogit?status.svg)](https://godoc.org/github.com/grafana/nanogit)
 [![codecov](https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg)](https://codecov.io/gh/grafana/nanogit)
 
+📚 **[Read the full documentation at grafana.github.io/nanogit](https://grafana.github.io/nanogit)**
+
 ## Overview
 
 nanogit is a lightweight, cloud-native Git implementation designed for applications that need efficient Git operations over HTTPS without the complexity and resource overhead of traditional Git implementations.
@@ -65,7 +67,7 @@ This are some of the performance differences between nanogit and go-git in some 
 | CompareCommits (XL repo)                  | 60x faster  | 96x less     |
 | GetFlatTree (XL repo)                     | 258x faster | 160x less    |
 
-For detailed performance metrics, see the [latest performance report](perf/LAST_REPORT.md) and [performance analysis](PERFORMANCE.md).
+For detailed performance metrics, see the [latest performance report](perf/LAST_REPORT.md) and [performance analysis](docs/architecture/performance.md).
 
 ## Getting Started
 
@@ -209,7 +211,7 @@ writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithMemoryStorage())
 writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithDiskStorage())
 ```
 
-For detailed information about writing modes, performance characteristics, and use cases, see [Storage Architecture Documentation](STORAGE_ARCHITECTURE.md).
+For detailed information about writing modes, performance characteristics, and use cases, see [Storage Architecture Documentation](docs/architecture/storage.md).
 
 ## Storage Architecture
 
@@ -253,6 +255,15 @@ This project is licensed under the [Apache License 2.0](LICENSE.md) - see the LI
 ## Project Status
 
 This project is currently in active development. While it's open source, it's important to note that it was initially created as part of a hackathon. We're working to make it production-ready, but please use it with appropriate caution.
+
+## Documentation
+
+Comprehensive documentation is available at **[grafana.github.io/nanogit](https://grafana.github.io/nanogit)**:
+
+- **[Getting Started](https://grafana.github.io/nanogit/getting-started/installation/)** - Installation and quick start guide
+- **[Architecture](https://grafana.github.io/nanogit/architecture/overview/)** - Design principles, storage backend, performance
+- **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API documentation
+- **[Changelog](https://grafana.github.io/nanogit/changelog/)** - Version history and release notes
 
 ## Resources
 
