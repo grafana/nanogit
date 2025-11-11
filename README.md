@@ -85,7 +85,7 @@ go get github.com/grafana/nanogit@latest
 Or install a specific version:
 
 ```bash
-go get github.com/grafana/nanogit@v0.1.0
+go get github.com/grafana/nanogit@v0.x.x # Replace v0.x.x with the latest released version
 ```
 
 See all available versions on the [releases page](https://github.com/grafana/nanogit/releases).
