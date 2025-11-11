@@ -24,7 +24,7 @@ jobs:
       contents: read
     steps:
       - name: Wait for CI checks
-        uses: lewagon/wait-on-check-action@595dabb27c9aa728f4615967b80f01ad76fa18c8 # v1.3.4
+        uses: lewagon/wait-on-check-action@ccfb013c15c8afb7bf2b7c028fb74dc5a068cccc # v1.3.4
         with:
           ref: ${{ github.sha }}
           check-regexp: '.*'
