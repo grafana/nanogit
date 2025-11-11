@@ -6,9 +6,17 @@ export default defineConfig({
   description: "Lightweight, HTTPS-only Git implementation for cloud-native environments",
   base: '/nanogit/',
 
+  head: [
+    ['link', { rel: 'icon', type: 'image/png', href: '/nanogit/logo.png' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'nanogit' }],
+    ['meta', { property: 'og:description', content: 'Lightweight, HTTPS-only Git implementation for cloud-native environments' }],
+    ['meta', { property: 'og:image', content: 'https://grafana.github.io/nanogit/logo.png' }],
+  ],
+
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
-    logo: '/logo.svg',
+    logo: '/logo.png',
 
     nav: [
       { text: 'Home', link: '/' },
