@@ -166,12 +166,15 @@ result, err := client.Clone(ctx, nanogit.CloneOptions{
 ```
 
 **BatchSize** - Controls how many blobs to fetch in a single network request:
+
 - **Value 0 or 1**: Fetches blobs individually (backward compatible, default behavior)
 - **Values > 1**: Enables batch fetching, reducing network round trips by 50-70%
 - Automatically falls back to individual fetching if a blob is missing from a batch response
 - Recommended for repositories with many files to minimize network overhead
+- Recommended value: 20-100 depending on average blob size and network conditions
 
 **Concurrency** - Controls parallel blob fetching:
+
 - **Value 0 or 1**: Sequential fetching (backward compatible, default behavior)
 - **Values > 1**: Enables concurrent fetching using worker pools
 - Works with both batch fetching (fetches multiple batches in parallel) and individual fetching
