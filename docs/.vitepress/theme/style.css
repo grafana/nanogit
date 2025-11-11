@@ -1,0 +1,19 @@
+/**
+ * Customize default theme styling by overriding CSS variables:
+ * https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css
+ */
+
+/**
+ * Make the logo bigger in the navbar
+ */
+.VPNavBarTitle .VPImage.logo {
+  width: 300px !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Adjust navbar title spacing to accommodate larger logo */
+.VPNavBarTitle {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
