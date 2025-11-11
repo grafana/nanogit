@@ -24,10 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * document v0.x.x initial version strategy ([#111](https://github.com/grafana/nanogit/issues/111)) ([6e88621](https://github.com/grafana/nanogit/commit/6e886217dc058330715bae3972b49b5c46712d85))
 
-## [Unreleased]
-
-Initial release preparation. The changelog will be automatically updated by our release automation starting with v0.1.0.
-
 ### Notable Features
 
 - HTTPS-only Git operations with Smart HTTP Protocol v2
