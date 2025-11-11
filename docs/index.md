@@ -54,7 +54,7 @@ While [go-git](https://github.com/go-git/go-git) is a mature Git implementation,
 
 Choose nanogit for lightweight cloud services requiring stateless operations and minimal resources. Use go-git when you need full Git functionality, local operations, or advanced features.
 
-This are some of the performance differences between nanogit and go-git in some of the measured scenarios:
+These are some of the performance differences between nanogit and go-git in some of the measured scenarios:
 
 | Scenario                                  | Speed       | Memory Usage |
 | ----------------------------------------- | ----------- | ------------ |

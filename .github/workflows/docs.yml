@@ -9,12 +9,16 @@ on:
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
       - '*.md'
+      - 'requirements.txt'
+      - 'scripts/prepare-docs.sh'
   pull_request:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
       - '*.md'
+      - 'requirements.txt'
+      - 'scripts/prepare-docs.sh'
   workflow_dispatch:
 
 permissions:
@@ -43,9 +47,7 @@ jobs:
           cache: 'pip'
 
       - name: Install MkDocs and dependencies
-        run: |
-          pip install mkdocs-material
-          pip install mkdocs-git-revision-date-localized-plugin
+        run: pip install -r requirements.txt
 
       - name: Prepare documentation files
         run: ./scripts/prepare-docs.sh
