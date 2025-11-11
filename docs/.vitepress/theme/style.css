@@ -4,16 +4,15 @@
  */
 
 /**
- * Make the logo bigger in the navbar
+ * Set logo size in the navbar
  */
 .VPNavBarTitle .VPImage.logo {
-  width: 300px !important;
-  height: auto !important;
-  max-height: none !important;
+  width: 40px !important;
+  height: 40px !important;
 }
 
-/* Adjust navbar title spacing to accommodate larger logo */
+/* Adjust navbar title spacing */
 .VPNavBarTitle {
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
 }
