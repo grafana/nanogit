@@ -545,9 +545,80 @@ Remember, the goal is to make the development experience better for everyone. Yo
 
 ### Documentation
 
-* Update documentation for any new features or changes.
-* Follow the existing documentation style.
-* Include examples where appropriate.
+The nanogit documentation site is built with [MkDocs](https://www.mkdocs.org) and published at [grafana.github.io/nanogit](https://grafana.github.io/nanogit).
+
+#### Documentation Structure
+
+```
+docs/
+├── index.md                    # Home page
+├── getting-started/
+│   ├── installation.md         # Installation instructions
+│   └── quick-start.md          # Quick start guide
+├── architecture/
+│   ├── overview.md             # Architecture overview
+│   ├── storage.md              # Storage backend architecture
+│   ├── delta-resolution.md     # Delta resolution implementation
+│   └── performance.md          # Performance characteristics
+└── changelog.md                # Version history (auto-copied from CHANGELOG.md)
+```
+
+**Note**: Only `changelog.md` is copied from the root `CHANGELOG.md` during the build process. All other documentation files live directly in the `docs/` directory. API documentation is on [GoDoc](https://pkg.go.dev/github.com/grafana/nanogit), not duplicated in the site.
+
+#### Building Documentation Locally
+
+**Prerequisites:**
+- Python 3.x
+- pip
+
+**Installation:**
+
+```bash
+# Recommended: Use a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# Or use make target (handles Python 3.13+ externally-managed environments)
+make docs-install
+```
+
+**Build and Serve:**
+
+```bash
+# Serve with live reload (recommended for development)
+make docs
+
+# Or use individual targets:
+make docs-prepare    # Copy CHANGELOG.md to docs/
+make docs-serve      # Serve at http://localhost:8000
+make docs-build      # Build static site
+
+# Or manually (if mkdocs not in PATH):
+python3 -m mkdocs serve
+```
+
+The documentation will be available at `http://localhost:8000`.
+
+#### Contributing to Documentation
+
+1. **Edit existing pages**: Modify the Markdown files in the appropriate directory
+2. **Add new pages**: Create new Markdown files and update the `nav` section in `mkdocs.yml`
+3. **Test locally**: Run `make docs` to preview your changes
+4. **Submit PR**: Follow the standard contribution process
+
+**Documentation Guidelines:**
+- Update documentation for any new features or changes
+- Use clear, concise language
+- Include code examples where appropriate
+- Use proper Markdown formatting
+- Add links to related documentation
+- Keep navigation structure simple and intuitive
+- Test locally with `make docs-build` before submitting PR
+
+#### Deployment
+
+Documentation is automatically built and deployed to GitHub Pages when changes are pushed to the `main` branch via the `.github/workflows/docs.yml` workflow.
 
 ## Getting Help
 
