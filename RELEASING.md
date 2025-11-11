@@ -202,6 +202,7 @@ gh release create v0.1.1 --generate-notes
 - Breaking changes allowed in minor versions (v0.1.0 → v0.2.0)
 - API stability not guaranteed
 - User feedback period
+- **Initial version**: Started at v0.1.0 (baseline tag v0.0.0 established)
 
 ### Post-1.0 (Production Ready)
 
