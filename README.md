@@ -1,5 +1,6 @@
 # nanogit
 
+[![GitHub Release](https://img.shields.io/github/v/release/grafana/nanogit)](https://github.com/grafana/nanogit/releases)
 [![License](https://img.shields.io/github/license/grafana/nanogit)](LICENSE.md)
 [![Go Report Card](https://goreportcard.com/badge/github.com/grafana/nanogit)](https://goreportcard.com/report/github.com/grafana/nanogit)
 [![GoDoc](https://godoc.org/github.com/grafana/nanogit?status.svg)](https://godoc.org/github.com/grafana/nanogit)
@@ -75,9 +76,19 @@ For detailed performance metrics, see the [latest performance report](perf/LAST_
 
 ### Installation
 
+Install the latest version:
+
 ```bash
-go get github.com/grafana/nanogit
+go get github.com/grafana/nanogit@latest
 ```
+
+Or install a specific version:
+
+```bash
+go get github.com/grafana/nanogit@v0.1.0
+```
+
+See all available versions on the [releases page](https://github.com/grafana/nanogit/releases).
 
 ### Usage
 

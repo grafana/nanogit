@@ -1,0 +1,203 @@
+# Release Process
+
+This document describes the automated release process for nanogit.
+
+## Overview
+
+nanogit uses an automated release pipeline powered by [semantic-release](https://semantic-release.gitbook.io/) and GitHub Actions. Releases are triggered automatically when changes are merged to the `main` branch, with version bumps determined by [Conventional Commit](https://www.conventionalcommits.org/) messages.
+
+## How It Works
+
+### Automatic Versioning
+
+The release system analyzes commit messages to determine the version bump:
+
+| Commit Type | Version Bump | Example |
+|-------------|--------------|---------|
+| `fix:` | Patch | v0.1.0 → v0.1.1 |
+| `feat:` | Minor | v0.1.0 → v0.2.0 |
+| `feat!:` or `BREAKING CHANGE:` | Major | v0.1.0 → v1.0.0 |
+| `perf:` | Patch | v0.1.0 → v0.1.1 |
+| `docs:`, `chore:`, `ci:`, etc. | No release | - |
+
+### Release Workflow
+
+When a PR is merged to `main`:
+
+1. **CI Checks Run**: All tests, linting, and security checks must pass
+2. **Semantic Release Activates**: The release workflow analyzes commits since the last release
+3. **Version Determined**: Based on commit message types
+4. **Changelog Updated**: CHANGELOG.md is automatically generated and committed
+5. **Tag Created**: Git tag is created with the new version (e.g., `v0.1.0`)
+6. **GitHub Release**: Release is published with generated release notes
+7. **pkg.go.dev Updated**: Go module proxy automatically indexes the new version
+
+### Multiple Commits in a PR
+
+When a PR contains multiple commits, the **highest version bump wins**:
+
+```
+fix: bug 1        → Patch
+feat: feature 1   → Minor  (wins)
+fix: bug 2        → Patch
+→ Result: Minor release
+```
+
+```
+feat: feature 1   → Minor
+feat!: breaking   → Major  (wins)
+fix: bug 1        → Patch
+→ Result: Major release
+```
+
+## Release Configuration
+
+### Files
+
+- **`.releaserc.json`**: Semantic-release configuration
+- **`.github/workflows/release.yml`**: Release automation workflow
+- **`CHANGELOG.md`**: Auto-generated changelog (do not edit manually)
+
+### Workflow Permissions
+
+The release workflow requires:
+- `contents: write` - To create tags and update CHANGELOG.md
+- `issues: write` - To comment on issues (optional)
+- `pull-requests: write` - To comment on PRs (optional)
+
+## For Maintainers
+
+### Merging PRs
+
+When reviewing and merging PRs:
+
+1. **Check Commit Messages**: Ensure they follow conventional commit format
+2. **Verify Type**: Confirm the commit type matches the actual change
+   - `feat:` for new features
+   - `fix:` for bug fixes
+   - Breaking changes properly marked with `!` or `BREAKING CHANGE:`
+3. **Squash and Merge**: Use squash merge to create a clean commit history
+4. **Edit Commit Message**: GitHub allows editing the squashed commit message before merging
+
+### Expected Behavior
+
+After merging to `main`:
+
+1. CI completes (~5-10 minutes)
+2. Release workflow runs (~2-3 minutes)
+3. New release appears in [Releases](https://github.com/grafana/nanogit/releases)
+4. CHANGELOG.md is updated automatically
+5. pkg.go.dev indexes the new version (5-15 minutes)
+
+### When No Release Occurs
+
+A release won't be created if:
+- All commits are non-release types (`docs:`, `chore:`, `ci:`, etc.)
+- Commit message contains `[skip ci]` or `[skip release]`
+- Commits don't follow conventional commit format
+- Release workflow fails (CI must pass first)
+
+### Troubleshooting
+
+#### Release Didn't Trigger
+
+1. Check the [Actions tab](https://github.com/grafana/nanogit/actions/workflows/release.yml)
+2. Verify commit messages follow conventional commits
+3. Check if CI jobs passed
+4. Look for `[skip ci]` in commit messages
+
+#### Wrong Version Bump
+
+1. Review the merged commit messages
+2. Verify commit types match the changes
+3. Check for `!` or `BREAKING CHANGE:` in commits
+
+#### Release Failed
+
+1. Check workflow logs in Actions tab
+2. Common issues:
+   - CI checks failed
+   - Network issues with npm packages
+   - GitHub token permissions
+
+## Manual Release (Emergency)
+
+In rare cases where automatic release fails, you can trigger a manual release:
+
+### Option 1: Fix and Re-trigger
+
+1. Fix the issue (e.g., correct commit message)
+2. Create a new commit to `main`
+3. Workflow will run again
+
+### Option 2: Manual Tag (Not Recommended)
+
+Only use this as a last resort:
+
+```bash
+# Determine next version
+git fetch --tags
+git describe --tags --abbrev=0  # Shows last tag
+
+# Create and push tag
+git tag v0.1.1
+git push origin v0.1.1
+
+# Manually create GitHub release
+gh release create v0.1.1 --generate-notes
+```
+
+**Note**: Manual tags bypass CHANGELOG generation. Prefer fixing the automated process.
+
+## Best Practices
+
+### For Contributors
+
+1. **Write Clear Commit Messages**: Follow conventional commit format
+2. **One Logical Change Per Commit**: Makes version bumps predictable
+3. **Document Breaking Changes**: Always include `BREAKING CHANGE:` in footer
+4. **Test Before Merging**: Ensure CI passes
+
+### For Maintainers
+
+1. **Review Commit History**: Check that version bump will be appropriate
+2. **Edit Squash Commits**: Clean up commit messages when squashing
+3. **Coordinate Major Releases**: Discuss breaking changes with the team
+4. **Monitor Releases**: Check that releases complete successfully
+5. **Update Documentation**: Ensure docs reflect new versions
+
+## Versioning Strategy
+
+### Pre-1.0 (Current Phase)
+
+- **v0.x.x**: Pre-production releases
+- Breaking changes allowed in minor versions (v0.1.0 → v0.2.0)
+- API stability not guaranteed
+- User feedback period
+
+### Post-1.0 (Production Ready)
+
+- **v1.x.x**: Production-stable releases
+- Breaking changes require major bump (v1.0.0 → v2.0.0)
+- API stability guaranteed within major version
+- Deprecation warnings before breaking changes
+
+## Resources
+
+- [Semantic Versioning](https://semver.org/)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+- [semantic-release Documentation](https://semantic-release.gitbook.io/)
+- [Keep a Changelog](https://keepachangelog.com/)
+
+## Questions?
+
+If you have questions about the release process:
+1. Check this document
+2. Review the [CONTRIBUTING.md](CONTRIBUTING.md)
+3. Open an issue for clarification
+4. Contact the maintainers
+
+---
+
+**Last Updated**: 2025-11-11
+**Maintained By**: Grafana Labs

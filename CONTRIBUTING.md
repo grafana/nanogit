@@ -45,7 +45,78 @@ If you have a suggestion for a new feature or enhancement, please include as muc
 3. If you've changed APIs, update the documentation
 4. Ensure the test suite passes
 5. Make sure your code lints
-6. Issue that pull request!
+6. Follow our commit message convention (see below)
+7. Issue that pull request!
+
+### Commit Message Convention
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) to automate versioning and changelog generation. Each commit message must follow this format:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Type** (required) - Must be one of:
+* `feat:` - A new feature (triggers **MINOR** version bump, e.g., v0.1.0 → v0.2.0)
+* `fix:` - A bug fix (triggers **PATCH** version bump, e.g., v0.1.0 → v0.1.1)
+* `perf:` - Performance improvement (triggers **PATCH** version bump)
+* `docs:` - Documentation only changes (no release)
+* `style:` - Code style changes, formatting (no release)
+* `refactor:` - Code refactoring without feature changes (no release)
+* `test:` - Adding or updating tests (no release)
+* `chore:` - Maintenance tasks, dependencies (no release)
+* `ci:` - CI/CD changes (no release)
+* `build:` - Build system changes (no release)
+
+**Scope** (optional) - The area of the codebase affected (e.g., `client`, `writer`, `storage`, `protocol`)
+
+**Breaking Changes** - Add `!` after type or include `BREAKING CHANGE:` in footer to trigger **MAJOR** version bump (e.g., v0.1.0 → v1.0.0)
+
+**Examples:**
+
+```bash
+# Patch release (v0.1.0 → v0.1.1)
+fix: resolve authentication timeout issue
+
+fix(protocol): handle empty packfile responses correctly
+
+# Minor release (v0.1.0 → v0.2.0)
+feat: add support for shallow clones
+
+feat(storage): implement Redis storage backend
+
+# Major release (v0.1.0 → v1.0.0)
+feat!: redesign Client interface for better performance
+
+feat(api): remove deprecated methods
+
+BREAKING CHANGE: Client.GetRef() now returns pointer instead of value
+
+# No release
+docs: update README with new examples
+
+chore: update dependencies
+
+test: add integration tests for authentication
+```
+
+**Important Notes:**
+* Each merged PR automatically triggers a release based on commit messages
+* Multiple commits in a PR: the highest version bump wins (major > minor > patch)
+* Non-release commits (docs, chore, etc.) won't trigger a release
+* Make sure your commit type accurately reflects the change
+* Breaking changes should be clearly documented in the commit body
+
+**Tools:**
+* Use `git commit` with the format above
+* PR titles don't need to follow this format (only commit messages matter)
+* Our CI will automatically create releases and update the CHANGELOG
+
+For more details, see [Conventional Commits specification](https://www.conventionalcommits.org/).
 
 ### Development Process
 
