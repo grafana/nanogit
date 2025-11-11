@@ -83,14 +83,8 @@ test-clone-perf:
 .PHONY: docs-install
 docs-install:
 	@echo "Installing documentation dependencies..."
-	@if [ -n "$$VIRTUAL_ENV" ]; then \
-		pip install -r requirements.txt; \
-	else \
-		echo "Note: Installing to user directory (Python 3.13+ externally-managed environment)"; \
-		pip3 install --user --break-system-packages -r requirements.txt 2>/dev/null || \
-		pip3 install --user -r requirements.txt 2>/dev/null || \
-		pip install -r requirements.txt; \
-	fi
+	@command -v npm >/dev/null 2>&1 || (echo "Error: npm is required but not installed" && exit 1)
+	npm install
 
 .PHONY: docs-prepare
 docs-prepare:
@@ -99,13 +93,18 @@ docs-prepare:
 
 .PHONY: docs-serve
 docs-serve: docs-prepare
-	@echo "Serving documentation at http://localhost:8000"
-	@command -v mkdocs >/dev/null 2>&1 && mkdocs serve || python3 -m mkdocs serve
+	@echo "Serving documentation at http://localhost:5173"
+	npm run docs:dev
 
 .PHONY: docs-build
 docs-build: docs-prepare
 	@echo "Building documentation..."
-	@command -v mkdocs >/dev/null 2>&1 && mkdocs build --strict || python3 -m mkdocs build --strict
+	npm run docs:build
+
+.PHONY: docs-preview
+docs-preview: docs-build
+	@echo "Previewing built documentation..."
+	npm run docs:preview
 
 .PHONY: docs
 docs: docs-serve

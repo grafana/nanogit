@@ -1,10 +1,12 @@
 # nanogit
 
-[![GitHub Release](https://img.shields.io/github/v/release/grafana/nanogit)](https://github.com/grafana/nanogit/releases)
-[![License](https://img.shields.io/github/license/grafana/nanogit)](https://github.com/grafana/nanogit/blob/main/LICENSE.md)
-[![Go Report Card](https://goreportcard.com/badge/github.com/grafana/nanogit)](https://goreportcard.com/report/github.com/grafana/nanogit)
-[![GoDoc](https://godoc.org/github.com/grafana/nanogit?status.svg)](https://godoc.org/github.com/grafana/nanogit)
-[![codecov](https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg)](https://codecov.io/gh/grafana/nanogit)
+<p style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+  <a href="https://github.com/grafana/nanogit/releases"><img src="https://img.shields.io/github/v/release/grafana/nanogit" alt="GitHub Release"></a>
+  <a href="https://github.com/grafana/nanogit/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/grafana/nanogit" alt="License"></a>
+  <a href="https://goreportcard.com/report/github.com/grafana/nanogit"><img src="https://goreportcard.com/badge/github.com/grafana/nanogit" alt="Go Report Card"></a>
+  <a href="https://godoc.org/github.com/grafana/nanogit"><img src="https://godoc.org/github.com/grafana/nanogit?status.svg" alt="GoDoc"></a>
+  <a href="https://codecov.io/gh/grafana/nanogit"><img src="https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg" alt="codecov"></a>
+</p>
 
 ## Overview
 

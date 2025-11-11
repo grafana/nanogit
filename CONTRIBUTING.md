@@ -545,12 +545,14 @@ Remember, the goal is to make the development experience better for everyone. Yo
 
 ### Documentation
 
-The nanogit documentation site is built with [MkDocs](https://www.mkdocs.org) and published at [grafana.github.io/nanogit](https://grafana.github.io/nanogit).
+The nanogit documentation site is built with [VitePress](https://vitepress.dev) and published at [grafana.github.io/nanogit](https://grafana.github.io/nanogit).
 
 #### Documentation Structure
 
 ```
 docs/
+├── .vitepress/
+│   └── config.mts              # VitePress configuration
 ├── index.md                    # Home page
 ├── getting-started/
 │   ├── installation.md         # Installation instructions
@@ -568,18 +570,15 @@ docs/
 #### Building Documentation Locally
 
 **Prerequisites:**
-- Python 3.x
-- pip
+- Node.js 18+ and npm
 
 **Installation:**
 
 ```bash
-# Recommended: Use a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+# Install dependencies
+npm install
 
-# Or use make target (handles Python 3.13+ externally-managed environments)
+# Or use make target
 make docs-install
 ```
 
@@ -591,19 +590,22 @@ make docs
 
 # Or use individual targets:
 make docs-prepare    # Copy CHANGELOG.md to docs/
-make docs-serve      # Serve at http://localhost:8000
+make docs-serve      # Serve at http://localhost:5173
 make docs-build      # Build static site
+make docs-preview    # Preview built site
 
-# Or manually (if mkdocs not in PATH):
-python3 -m mkdocs serve
+# Or use npm scripts directly:
+npm run docs:dev     # Development server
+npm run docs:build   # Build for production
+npm run docs:preview # Preview production build
 ```
 
-The documentation will be available at `http://localhost:8000`.
+The documentation will be available at `http://localhost:5173/nanogit/`.
 
 #### Contributing to Documentation
 
 1. **Edit existing pages**: Modify the Markdown files in the appropriate directory
-2. **Add new pages**: Create new Markdown files and update the `nav` section in `mkdocs.yml`
+2. **Add new pages**: Create new Markdown files and update the sidebar config in `docs/.vitepress/config.mts`
 3. **Test locally**: Run `make docs` to preview your changes
 4. **Submit PR**: Follow the standard contribution process
 
