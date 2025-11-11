@@ -1,5 +1,5 @@
 <div style="text-align: center; margin-bottom: 2rem;">
-  <img src="/nanogit/banner.png" alt="nanogit - Git reimagined for the cloud – in Go" style="max-width: 100%; height: auto;">
+  <img src="/banner.png" alt="nanogit - Git reimagined for the cloud – in Go" style="max-width: 100%; height: auto;">
 </div>
 
 <p style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: center; margin-bottom: 2rem;">
