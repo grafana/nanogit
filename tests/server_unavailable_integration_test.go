@@ -8,7 +8,6 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
-	"github.com/grafana/nanogit/protocol/hash"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
