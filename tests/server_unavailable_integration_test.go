@@ -19,7 +19,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 500")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Internal Server Error"))
+				_, _ = w.Write([]byte("Internal Server Error"))
 			}))
 			defer server.Close()
 
@@ -42,7 +42,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 502")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadGateway)
-				w.Write([]byte("Bad Gateway"))
+				_, _ = w.Write([]byte("Bad Gateway"))
 			}))
 			defer server.Close()
 
@@ -64,7 +64,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 503")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusServiceUnavailable)
-				w.Write([]byte("Service Unavailable"))
+				_, _ = w.Write([]byte("Service Unavailable"))
 			}))
 			defer server.Close()
 
@@ -86,7 +86,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 504")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusGatewayTimeout)
-				w.Write([]byte("Gateway Timeout"))
+				_, _ = w.Write([]byte("Gateway Timeout"))
 			}))
 			defer server.Close()
 
@@ -108,7 +108,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 404")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte("Not Found"))
+				_, _ = w.Write([]byte("Not Found"))
 			}))
 			defer server.Close()
 
@@ -129,11 +129,11 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.Contains(r.URL.Path, "git-upload-pack") {
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("Internal Server Error"))
+					_, _ = w.Write([]byte("Internal Server Error"))
 					return
 				}
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("000eversion 2\n0000"))
+				_, _ = w.Write([]byte("000eversion 2\n0000"))
 			}))
 			defer server.Close()
 
@@ -158,7 +158,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 500")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Internal Server Error"))
+				_, _ = w.Write([]byte("Internal Server Error"))
 			}))
 			defer server.Close()
 
@@ -183,7 +183,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 			By("Creating a mock server that returns 503")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusServiceUnavailable)
-				w.Write([]byte("Service Unavailable"))
+				_, _ = w.Write([]byte("Service Unavailable"))
 			}))
 			defer server.Close()
 
@@ -209,11 +209,11 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 				attemptCount++
 				if attemptCount == 1 {
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("Internal Server Error"))
+					_, _ = w.Write([]byte("Internal Server Error"))
 					return
 				}
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("000eversion 2\n0000"))
+				_, _ = w.Write([]byte("000eversion 2\n0000"))
 			}))
 			defer server.Close()
 
