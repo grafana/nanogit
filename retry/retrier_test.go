@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +19,13 @@ func TestNoopRetrier(t *testing.T) {
 		ctx := context.Background()
 		require.False(t, retrier.ShouldRetry(ctx, errors.New("test error"), 1))
 		require.False(t, retrier.ShouldRetry(ctx, nil, 1))
-		require.False(t, retrier.ShouldRetry(ctx, protocol.NewServerUnavailableError(500, errors.New("server error")), 1))
+		// Network errors should not be retried by NoopRetrier
+		err := &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
+		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 	})
 
 	t.Run("Wait is a no-op", func(t *testing.T) {
@@ -39,9 +44,13 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 
 	retrier := NewExponentialBackoffRetrier()
 
-	t.Run("retries on server unavailable errors", func(t *testing.T) {
+	t.Run("retries on network errors", func(t *testing.T) {
 		ctx := context.Background()
-		err := protocol.NewServerUnavailableError(500, errors.New("server error"))
+		err := &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
 		require.True(t, retrier.ShouldRetry(ctx, err, 1))
 		require.True(t, retrier.ShouldRetry(ctx, err, 2))
 	})
@@ -97,7 +106,11 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 	t.Run("stops retrying after max attempts", func(t *testing.T) {
 		ctx := context.Background()
 		retrier := NewExponentialBackoffRetrier().WithMaxAttempts(3)
-		err := protocol.NewServerUnavailableError(500, errors.New("server error"))
+		err := &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
 		require.True(t, retrier.ShouldRetry(ctx, err, 1))
 		require.True(t, retrier.ShouldRetry(ctx, err, 2))
 		require.True(t, retrier.ShouldRetry(ctx, err, 3))

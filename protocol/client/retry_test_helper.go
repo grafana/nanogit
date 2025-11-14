@@ -3,14 +3,11 @@ package client
 import (
 	"context"
 	"errors"
-
-	"github.com/grafana/nanogit/protocol"
+	"time"
 )
 
-// fakeRetrier is a simple mock implementation of retry.Retrier for testing
-// This is used instead of the generated mock from mocks package to avoid import cycles
-// (mocks package imports protocol/client, creating a cycle)
-type fakeRetrier struct {
+// testRetrier is a simple retrier implementation for testing
+type testRetrier struct {
 	maxAttempts      int
 	shouldRetryFunc  func(ctx context.Context, err error, attempt int) bool
 	waitFunc         func(ctx context.Context, attempt int) error
@@ -18,40 +15,52 @@ type fakeRetrier struct {
 	waitCalls        int
 }
 
-func newFakeRetrier(maxAttempts int) *fakeRetrier {
-	return &fakeRetrier{
+func newTestRetrier(maxAttempts int) *testRetrier {
+	return &testRetrier{
 		maxAttempts: maxAttempts,
 		shouldRetryFunc: func(ctx context.Context, err error, attempt int) bool {
-			return errors.Is(err, protocol.ErrServerUnavailable)
+			// Default: retry on network errors and ServerUnavailableError
+			var netErr interface {
+				Error() string
+				Timeout() bool
+				Temporary() bool
+			}
+			if errors.As(err, &netErr) {
+				return true
+			}
+			return errors.Is(err, ErrServerUnavailable)
 		},
 	}
 }
 
-func (f *fakeRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
-	f.shouldRetryCalls++
-	if f.shouldRetryFunc != nil {
-		return f.shouldRetryFunc(ctx, err, attempt)
+func (t *testRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+	t.shouldRetryCalls++
+	if t.shouldRetryFunc != nil {
+		return t.shouldRetryFunc(ctx, err, attempt)
 	}
 	return false
 }
 
-func (f *fakeRetrier) Wait(ctx context.Context, attempt int) error {
-	f.waitCalls++
-	if f.waitFunc != nil {
-		return f.waitFunc(ctx, attempt)
+func (t *testRetrier) Wait(ctx context.Context, attempt int) error {
+	t.waitCalls++
+	if t.waitFunc != nil {
+		return t.waitFunc(ctx, attempt)
 	}
+	// Default: fast wait for testing
+	time.Sleep(10 * time.Millisecond)
 	return nil
 }
 
-func (f *fakeRetrier) MaxAttempts() int {
-	return f.maxAttempts
+func (t *testRetrier) MaxAttempts() int {
+	return t.maxAttempts
 }
 
-func (f *fakeRetrier) ShouldRetryCallCount() int {
-	return f.shouldRetryCalls
+func (t *testRetrier) ShouldRetryCallCount() int {
+	return t.shouldRetryCalls
 }
 
-func (f *fakeRetrier) WaitCallCount() int {
-	return f.waitCalls
+func (t *testRetrier) WaitCallCount() int {
+	return t.waitCalls
 }
+
 

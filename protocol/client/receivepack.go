@@ -31,6 +31,12 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
 	req.Header.Add("Accept", "application/x-git-receive-pack-result")
 
+	// Wrap retrier with HTTP-specific retry logic if a retrier is present
+	httpRetrier := c.getHTTPRetrier(ctx)
+	if httpRetrier != nil {
+		ctx = retry.ToContext(ctx, httpRetrier)
+	}
+
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
 	res, err := retry.Do(ctx, func() (*http.Response, error) {
@@ -52,7 +58,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 		_ = res.Body.Close()
 		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 		if res.StatusCode >= 500 {
-			return protocol.NewServerUnavailableError(res.StatusCode, underlying)
+			return NewServerUnavailableError(res.StatusCode, underlying)
 		}
 		return underlying
 	}

@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/nanogit/protocol"
+	"net"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,7 +55,11 @@ func TestDo_RetryOnRetryableError(t *testing.T) {
 	result, err := Do(ctx, func() (string, error) {
 		attempts++
 		if attempts < 3 {
-			return "", protocol.NewServerUnavailableError(500, errors.New("server error"))
+			return "", &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: errors.New("connection refused"),
+			}
 		}
 		return "success", nil
 	})
@@ -77,7 +82,11 @@ func TestDo_MaxAttemptsReached(t *testing.T) {
 	attempts := 0
 	result, err := Do(ctx, func() (string, error) {
 		attempts++
-		return "", protocol.NewServerUnavailableError(500, errors.New("server error"))
+		return "", &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
 	})
 
 	require.Error(t, err)
@@ -121,7 +130,11 @@ func TestDo_ContextCancellation(t *testing.T) {
 
 	result, err := Do(ctx, func() (string, error) {
 		attempts++
-		return "", protocol.NewServerUnavailableError(500, errors.New("server error"))
+		return "", &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
 	})
 
 	require.Error(t, err)
@@ -148,7 +161,11 @@ func TestDo_ContextCancellationDuringWait(t *testing.T) {
 				time.Sleep(50 * time.Millisecond)
 				cancel()
 			}()
-			return "", protocol.NewServerUnavailableError(500, errors.New("server error"))
+			return "", &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: errors.New("connection refused"),
+			}
 		}
 		return "success", nil
 	})
@@ -202,7 +219,11 @@ func TestDoVoid_Retry(t *testing.T) {
 	err := DoVoid(ctx, func() error {
 		attempts++
 		if attempts < 3 {
-			return protocol.NewServerUnavailableError(500, errors.New("server error"))
+			return &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: errors.New("connection refused"),
+			}
 		}
 		return nil
 	})
@@ -220,7 +241,11 @@ func TestDo_ErrorWrapping(t *testing.T) {
 		WithInitialDelay(10 * time.Millisecond)
 	ctx = ToContext(ctx, retrier)
 
-	originalErr := protocol.NewServerUnavailableError(500, errors.New("server error"))
+	originalErr := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: errors.New("connection refused"),
+	}
 	result, err := Do(ctx, func() (string, error) {
 		return "", originalErr
 	})
@@ -244,7 +269,11 @@ func TestDo_ZeroMaxAttempts(t *testing.T) {
 	attempts := 0
 	result, err := Do(ctx, func() (string, error) {
 		attempts++
-		return "", protocol.NewServerUnavailableError(500, errors.New("server error"))
+		return "", &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
 	})
 
 	require.Error(t, err)
@@ -265,7 +294,11 @@ func TestDo_NegativeMaxAttempts(t *testing.T) {
 	attempts := 0
 	result, err := Do(ctx, func() (string, error) {
 		attempts++
-		return "", protocol.NewServerUnavailableError(500, errors.New("server error"))
+		return "", &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
 	})
 
 	require.Error(t, err)

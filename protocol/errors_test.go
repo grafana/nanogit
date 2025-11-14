@@ -137,7 +137,7 @@ func TestServerUnavailableError(t *testing.T) {
 	t.Run("Unwrap returns underlying error", func(t *testing.T) {
 		t.Parallel()
 		underlying := errors.New("got status code 500: 500 Internal Server Error")
-		err := NewServerUnavailableError(500, underlying)
+		err := client.NewServerUnavailableError(500, underlying)
 
 		unwrapped := errors.Unwrap(err)
 		require.Equal(t, underlying, unwrapped, "Unwrap should return the underlying error")
@@ -146,9 +146,9 @@ func TestServerUnavailableError(t *testing.T) {
 	t.Run("Is enables errors.Is compatibility", func(t *testing.T) {
 		t.Parallel()
 		underlying := errors.New("got status code 500: 500 Internal Server Error")
-		err := NewServerUnavailableError(500, underlying)
+		err := client.NewServerUnavailableError(500, underlying)
 
-		require.True(t, errors.Is(err, ErrServerUnavailable), "errors.Is should find ErrServerUnavailable")
+		require.True(t, errors.Is(err, client.ErrServerUnavailable), "errors.Is should find ErrServerUnavailable")
 		require.False(t, errors.Is(err, errors.New("different error")), "errors.Is should not match different errors")
 	})
 
@@ -173,7 +173,7 @@ func TestServerUnavailableError(t *testing.T) {
 	t.Run("Error message includes status code and underlying error", func(t *testing.T) {
 		t.Parallel()
 		underlying := errors.New("got status code 500: 500 Internal Server Error")
-		err := NewServerUnavailableError(500, underlying)
+		err := client.NewServerUnavailableError(500, underlying)
 
 		msg := err.Error()
 		require.Contains(t, msg, "server unavailable")

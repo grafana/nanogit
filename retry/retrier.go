@@ -22,8 +22,6 @@ import (
 	"math"
 	"math/rand"
 	"time"
-
-	"github.com/grafana/nanogit/protocol"
 )
 
 // Retrier defines the interface for retry behavior.
@@ -105,11 +103,10 @@ func NewExponentialBackoffRetrier() *ExponentialBackoffRetrier {
 // ShouldRetry determines if an error should be retried.
 // Returns true for:
 //   - Network errors (connection refused, timeouts, etc.)
-//   - 5xx server errors (ServerUnavailableError)
 //   - Temporary errors
 //
 // Returns false for:
-//   - 4xx client errors
+//   - HTTP status code errors (4xx, 5xx) - these should be handled by HTTP-specific retriers
 //   - Context cancellation errors
 //   - Errors that should not be retried
 func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -129,11 +126,6 @@ func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, 
 		return false
 	}
 
-	// Retry on server unavailable errors (5xx)
-	if errors.Is(err, protocol.ErrServerUnavailable) {
-		return true
-	}
-
 	// Check for network errors
 	var netErr interface {
 		Error() string
@@ -149,7 +141,7 @@ func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, 
 		return true
 	}
 
-	// Don't retry on other errors (4xx, etc.)
+	// Don't retry on other errors (4xx, HTTP status codes, etc.)
 	return false
 }
 

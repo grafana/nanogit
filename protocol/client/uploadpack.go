@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/grafana/nanogit/log"
-	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 )
 
@@ -32,6 +31,12 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
+	// Wrap retrier with HTTP-specific retry logic if a retrier is present
+	httpRetrier := c.getHTTPRetrier(ctx)
+	if httpRetrier != nil {
+		ctx = retry.ToContext(ctx, httpRetrier)
+	}
+
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
 	res, err := retry.Do(ctx, func() (*http.Response, error) {
@@ -50,7 +55,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 
 		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 		if res.StatusCode >= 500 {
-			return nil, protocol.NewServerUnavailableError(res.StatusCode, underlying)
+			return nil, NewServerUnavailableError(res.StatusCode, underlying)
 		}
 		return nil, underlying
 	}

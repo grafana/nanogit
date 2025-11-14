@@ -7,7 +7,6 @@ import (
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
-	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 )
 
@@ -50,6 +49,12 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
+	// Wrap retrier with HTTP-specific retry logic if a retrier is present
+	httpRetrier := c.getHTTPRetrier(ctx)
+	if httpRetrier != nil {
+		ctx = retry.ToContext(ctx, httpRetrier)
+	}
+
 	res, err := retry.Do(ctx, func() (*http.Response, error) {
 		res, retryErr := c.client.Do(req)
 		if retryErr != nil {
@@ -61,7 +66,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 			// Close the body before retrying
 			_ = res.Body.Close()
 			underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-			return nil, protocol.NewServerUnavailableError(res.StatusCode, underlying)
+			return nil, NewServerUnavailableError(res.StatusCode, underlying)
 		}
 
 		return res, nil
@@ -79,7 +84,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 		if res.StatusCode >= 500 {
-			return protocol.NewServerUnavailableError(res.StatusCode, underlying)
+			return NewServerUnavailableError(res.StatusCode, underlying)
 		}
 		return underlying
 	}

@@ -53,8 +53,8 @@ var (
 
 	// ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
-	// It is re-exported from the protocol package to avoid import cycles.
-	ErrServerUnavailable = protocol.ErrServerUnavailable
+	// It is re-exported from the protocol/client package to avoid import cycles.
+	ErrServerUnavailable = client.ErrServerUnavailable
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
@@ -239,9 +239,9 @@ func NewAuthorError(field, reason string) *AuthorError {
 }
 
 // ServerUnavailableError provides structured information about a Git server that is unavailable.
-// It is re-exported from the protocol package to avoid import cycles.
-type ServerUnavailableError = protocol.ServerUnavailableError
+// It is re-exported from the protocol/client package to avoid import cycles.
+type ServerUnavailableError = client.ServerUnavailableError
 
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified status code and underlying error.
-// It is re-exported from the protocol package to avoid import cycles.
-var NewServerUnavailableError = protocol.NewServerUnavailableError
+// It is re-exported from the protocol/client package to avoid import cycles.
+var NewServerUnavailableError = client.NewServerUnavailableError

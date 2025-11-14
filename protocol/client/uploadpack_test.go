@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
-	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
 )
@@ -159,8 +158,8 @@ func TestUploadPack(t *testing.T) {
 				require.Nil(t, responseReader)
 				// Verify ServerUnavailableError for 5xx status codes
 				if tt.statusCode >= 500 && tt.statusCode < 600 {
-					require.True(t, errors.Is(err, protocol.ErrServerUnavailable), "error should be ErrServerUnavailable")
-					var serverErr *protocol.ServerUnavailableError
+					require.True(t, errors.Is(err, ErrServerUnavailable), "error should be ErrServerUnavailable")
+					var serverErr *ServerUnavailableError
 					require.ErrorAs(t, err, &serverErr, "error should be ServerUnavailableError type")
 					require.Equal(t, tt.statusCode, serverErr.StatusCode, "status code should match")
 					require.NotNil(t, serverErr.Underlying, "underlying error should not be nil")
@@ -201,13 +200,9 @@ func TestUploadPack_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newFakeRetrier(3)
+		retrier := newTestRetrier(3)
 		retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
-		}
-		retrier.waitFunc = func(ctx context.Context, attempt int) error {
-			time.Sleep(10 * time.Millisecond)
-			return nil
 		}
 
 		ctx := retry.ToContext(context.Background(), retrier)
@@ -230,7 +225,7 @@ func TestUploadPack_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newFakeRetrier(3)
+		retrier := newTestRetrier(3)
 		ctx := retry.ToContext(context.Background(), retrier)
 		client, err := NewRawClient(server.URL + "/repo")
 		require.NoError(t, err)
