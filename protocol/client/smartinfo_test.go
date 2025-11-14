@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -162,4 +163,146 @@ func TestSmartInfo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSmartInfo_Retry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retries on 5xx errors", func(t *testing.T) {
+		attemptCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attemptCount++
+			if attemptCount < 3 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("000eversion 2\n0000"))
+		}))
+		defer server.Close()
+
+		retrier := newTrackingRetrier(3)
+		retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
+			return errors.Is(err, protocol.ErrServerUnavailable)
+		}
+		retrier.waitFunc = func(ctx context.Context, attempt int) error {
+			// Fast wait for testing
+			time.Sleep(10 * time.Millisecond)
+			return nil
+		}
+
+		ctx := retry.ToContext(context.Background(), retrier)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = client.SmartInfo(ctx, "git-upload-pack")
+		require.NoError(t, err)
+		require.Equal(t, 3, attemptCount)
+
+		// Verify retrier was called
+		shouldRetryCalls := retrier.getShouldRetryCalls()
+		require.GreaterOrEqual(t, len(shouldRetryCalls), 2, "ShouldRetry should be called at least twice")
+		require.GreaterOrEqual(t, len(retrier.getWaitCalls()), 2, "Wait should be called at least twice")
+	})
+
+	t.Run("does not retry on 4xx errors", func(t *testing.T) {
+		attemptCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attemptCount++
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+
+		retrier := newTrackingRetrier(3)
+		ctx := retry.ToContext(context.Background(), retrier)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = client.SmartInfo(ctx, "git-upload-pack")
+		require.Error(t, err)
+		require.Equal(t, 1, attemptCount, "Should not retry on 4xx errors")
+
+		// Verify retrier was not called for 4xx errors
+		// 4xx errors are checked outside the retry wrapper, so ShouldRetry is never invoked
+		shouldRetryCalls := retrier.getShouldRetryCalls()
+		require.Equal(t, 0, len(shouldRetryCalls), "ShouldRetry should not be called for 4xx errors")
+		waitCalls := retrier.getWaitCalls()
+		require.Equal(t, 0, len(waitCalls), "Wait should not be called for 4xx errors")
+	})
+
+	t.Run("retries on network errors", func(t *testing.T) {
+		attemptCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attemptCount++
+			if attemptCount < 2 {
+				// Simulate network error by closing connection
+				hj, ok := w.(http.Hijacker)
+				if !ok {
+					return
+				}
+				conn, _, _ := hj.Hijack()
+				conn.Close()
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("000eversion 2\n0000"))
+		}))
+		defer server.Close()
+
+		retrier := newTrackingRetrier(3)
+		retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
+			// Retry on any error for this test
+			return err != nil
+		}
+		retrier.waitFunc = func(ctx context.Context, attempt int) error {
+			time.Sleep(10 * time.Millisecond)
+			return nil
+		}
+
+		ctx := retry.ToContext(context.Background(), retrier)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		// This might fail, but we're testing that retries are attempted
+		_ = client.SmartInfo(ctx, "git-upload-pack")
+
+		// Verify retrier was called
+		shouldRetryCalls := retrier.getShouldRetryCalls()
+		require.GreaterOrEqual(t, len(shouldRetryCalls), 1, "ShouldRetry should be called")
+	})
+
+	t.Run("works without retrier", func(t *testing.T) {
+		attemptCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attemptCount++
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("000eversion 2\n0000"))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		// No retrier in context - should work but not retry
+		err = client.SmartInfo(context.Background(), "git-upload-pack")
+		require.NoError(t, err)
+		require.Equal(t, 1, attemptCount, "should make single attempt without retrier")
+	})
+
+	t.Run("does not retry on 5xx without retrier", func(t *testing.T) {
+		attemptCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attemptCount++
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		// No retrier in context - should fail immediately
+		err = client.SmartInfo(context.Background(), "git-upload-pack")
+		require.Error(t, err)
+		require.Equal(t, 1, attemptCount, "should not retry without retrier")
+	})
 }
