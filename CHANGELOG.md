@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/grafana/nanogit/compare/v0.1.1...v0.2.0) (2025-11-14)
+
+
+### Features
+
+* add ServerUnavailableError for HTTP 5xx status codes ([#120](https://github.com/grafana/nanogit/issues/120)) ([659c7b9](https://github.com/grafana/nanogit/commit/659c7b9e1935ddf3681d6d0d1e5bd3c036201f3d)), closes [grafana/git-ui-sync-project#634](https://github.com/grafana/git-ui-sync-project/issues/634)
+
+
+### Performance Improvements
+
+* optimize banner image size for faster loading ([#119](https://github.com/grafana/nanogit/issues/119)) ([d643ee8](https://github.com/grafana/nanogit/commit/d643ee880f07248b218a3c970e4ff90360568527))
+
+
+### Documentation
+
+* Add GitHub Pages documentation site with MkDocs ([#116](https://github.com/grafana/nanogit/issues/116)) ([d8268a3](https://github.com/grafana/nanogit/commit/d8268a3cf4f1f3320aab482a6da378331da354c2))
+* add logo and banner images for branding ([#118](https://github.com/grafana/nanogit/issues/118)) ([0e7275c](https://github.com/grafana/nanogit/commit/0e7275c2b91efb29ceaca4e72ae92b17c4519577))
+* migrate from MkDocs to VitePress for modern UI ([#117](https://github.com/grafana/nanogit/issues/117)) ([ebe3af6](https://github.com/grafana/nanogit/commit/ebe3af6abf3f036ca9ab792f36281a88861aa65a))
+
 ## [0.1.1](https://github.com/grafana/nanogit/compare/v0.1.0...v0.1.1) (2025-11-11)
 
 
