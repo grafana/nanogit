@@ -104,7 +104,7 @@ func TestExponentialBackoffRetrier_Wait(t *testing.T) {
 			WithInitialDelay(10 * time.Millisecond).
 			WithMaxDelay(100 * time.Millisecond).
 			WithMultiplier(2.0).
-			WithJitter(false)
+			WithoutJitter()
 
 		ctx := context.Background()
 
@@ -128,7 +128,7 @@ func TestExponentialBackoffRetrier_Wait(t *testing.T) {
 			WithInitialDelay(100 * time.Millisecond).
 			WithMaxDelay(200 * time.Millisecond).
 			WithMultiplier(10.0).
-			WithJitter(false)
+			WithoutJitter()
 
 		ctx := context.Background()
 
@@ -212,10 +212,10 @@ func TestExponentialBackoffRetrier_Configuration(t *testing.T) {
 	})
 
 	t.Run("with jitter", func(t *testing.T) {
-		retrier := NewExponentialBackoffRetrier().WithJitter(false)
+		retrier := NewExponentialBackoffRetrier().WithoutJitter()
 		require.False(t, retrier.Jitter)
 
-		retrier = retrier.WithJitter(true)
+		retrier = retrier.WithJitter()
 		require.True(t, retrier.Jitter)
 	})
 }

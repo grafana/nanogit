@@ -230,7 +230,7 @@ retrier := retry.NewExponentialBackoffRetrier().
     WithMaxAttempts(5).                    // Retry up to 5 times
     WithInitialDelay(200 * time.Millisecond). // Start with 200ms delay
     WithMaxDelay(10 * time.Second).        // Cap at 10 seconds
-    WithJitter(true)                       // Add random jitter
+    WithJitter()                           // Add random jitter
 
 ctx = retry.ToContext(ctx, retrier)
 ```

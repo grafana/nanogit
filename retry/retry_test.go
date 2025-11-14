@@ -47,7 +47,7 @@ func TestDo_RetryOnRetryableError(t *testing.T) {
 	retrier := NewExponentialBackoffRetrier().
 		WithMaxAttempts(3).
 		WithInitialDelay(10 * time.Millisecond).
-		WithJitter(false)
+		WithoutJitter()
 	ctx = ToContext(ctx, retrier)
 
 	attempts := 0
@@ -71,7 +71,7 @@ func TestDo_MaxAttemptsReached(t *testing.T) {
 	retrier := NewExponentialBackoffRetrier().
 		WithMaxAttempts(3).
 		WithInitialDelay(10 * time.Millisecond).
-		WithJitter(false)
+		WithoutJitter()
 	ctx = ToContext(ctx, retrier)
 
 	attempts := 0
@@ -195,7 +195,7 @@ func TestDoVoid_Retry(t *testing.T) {
 	retrier := NewExponentialBackoffRetrier().
 		WithMaxAttempts(3).
 		WithInitialDelay(10 * time.Millisecond).
-		WithJitter(false)
+		WithoutJitter()
 	ctx = ToContext(ctx, retrier)
 
 	attempts := 0

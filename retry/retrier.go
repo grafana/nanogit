@@ -215,9 +215,15 @@ func (r *ExponentialBackoffRetrier) WithMultiplier(multiplier float64) *Exponent
 	return r
 }
 
-// WithJitter enables or disables jitter.
-func (r *ExponentialBackoffRetrier) WithJitter(enabled bool) *ExponentialBackoffRetrier {
-	r.Jitter = enabled
+// WithJitter enables jitter to prevent thundering herd problems.
+func (r *ExponentialBackoffRetrier) WithJitter() *ExponentialBackoffRetrier {
+	r.Jitter = true
+	return r
+}
+
+// WithoutJitter disables jitter.
+func (r *ExponentialBackoffRetrier) WithoutJitter() *ExponentialBackoffRetrier {
+	r.Jitter = false
 	return r
 }
 

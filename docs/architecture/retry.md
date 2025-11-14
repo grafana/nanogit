@@ -90,7 +90,17 @@ retrier := retry.NewExponentialBackoffRetrier().
     WithInitialDelay(200 * time.Millisecond). // Start with 200ms delay
     WithMaxDelay(10 * time.Second).        // Cap at 10 seconds
     WithMultiplier(2.5).                   // Multiply by 2.5 each retry
-    WithJitter(true)                       // Enable jitter
+    WithJitter()                           // Enable jitter (default)
+
+ctx = retry.ToContext(ctx, retrier)
+```
+
+**Disable Jitter:**
+```go
+retrier := retry.NewExponentialBackoffRetrier().
+    WithMaxAttempts(3).
+    WithInitialDelay(100 * time.Millisecond).
+    WithoutJitter()                        // Disable jitter
 
 ctx = retry.ToContext(ctx, retrier)
 ```
@@ -103,7 +113,7 @@ retrier := retry.NewExponentialBackoffRetrier().
     WithInitialDelay(100 * time.Millisecond).
     WithMaxDelay(30 * time.Second).
     WithMultiplier(2.0).
-    WithJitter(true)
+    WithJitter()
 
 ctx = retry.ToContext(ctx, retrier)
 ```
