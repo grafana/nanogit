@@ -85,6 +85,7 @@ Learn about nanogit's design and internals:
 
 - **[Architecture Overview](architecture/overview.md)** - Core design principles and components
 - **[Storage Backend](architecture/storage.md)** - Pluggable storage and writing modes
+- **[Retry Mechanism](architecture/retry.md)** - Pluggable retry mechanism for robust operations
 - **[Delta Resolution](architecture/delta-resolution.md)** - Git delta handling implementation
 - **[Performance](architecture/performance.md)** - Performance characteristics and benchmarks
 
