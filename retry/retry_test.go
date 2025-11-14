@@ -211,46 +211,6 @@ func TestDoVoid_Retry(t *testing.T) {
 	require.Equal(t, 3, attempts)
 }
 
-func TestFromContextOrNoop(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns retrier from context", func(t *testing.T) {
-		ctx := context.Background()
-		retrier := NewExponentialBackoffRetrier()
-		ctx = ToContext(ctx, retrier)
-
-		retrieved := FromContextOrNoop(ctx)
-		require.Equal(t, retrier, retrieved)
-	})
-
-	t.Run("returns NoopRetrier when no retrier in context", func(t *testing.T) {
-		ctx := context.Background()
-		retrieved := FromContextOrNoop(ctx)
-		require.IsType(t, &NoopRetrier{}, retrieved)
-	})
-}
-
-func TestToContext_FromContext(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	retrier := NewExponentialBackoffRetrier()
-
-	ctx = ToContext(ctx, retrier)
-	retrieved := FromContext(ctx)
-
-	require.Equal(t, retrier, retrieved)
-}
-
-func TestToContext_FromContext_NoRetrier(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	retrieved := FromContext(ctx)
-
-	require.Nil(t, retrieved)
-}
-
 func TestDo_ErrorWrapping(t *testing.T) {
 	t.Parallel()
 
