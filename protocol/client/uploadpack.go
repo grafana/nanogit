@@ -34,13 +34,10 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
-	var res *http.Response
-	err = retry.DoVoid(ctx, func() error {
-		var retryErr error
-		res, retryErr = c.client.Do(req)
+	res, err := retry.Do(ctx, func() (*http.Response, error) {
+		return c.client.Do(req)
 		// Only retry network errors - 5xx responses cannot be retried for POST
 		// requests because the request body has been consumed.
-		return retryErr
 	})
 	if err != nil {
 		return nil, err

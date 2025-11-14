@@ -50,12 +50,10 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
-	var res *http.Response
-	err = retry.DoVoid(ctx, func() error {
-		var retryErr error
-		res, retryErr = c.client.Do(req)
+	res, err := retry.Do(ctx, func() (*http.Response, error) {
+		res, retryErr := c.client.Do(req)
 		if retryErr != nil {
-			return retryErr
+			return nil, retryErr
 		}
 
 		// Check status code - 5xx errors should be retried
@@ -63,10 +61,10 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 			// Close the body before retrying
 			_ = res.Body.Close()
 			underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-			return protocol.NewServerUnavailableError(res.StatusCode, underlying)
+			return nil, protocol.NewServerUnavailableError(res.StatusCode, underlying)
 		}
 
-		return nil
+		return res, nil
 	})
 	if err != nil {
 		return err
