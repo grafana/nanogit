@@ -11,7 +11,6 @@ import (
 
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
-	"github.com/grafana/nanogit/retry"
 )
 
 // RawClient is a client that can be used to make raw Git protocol requests.
@@ -134,14 +133,4 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 	} else if c.tokenAuth != nil {
 		req.Header.Set("Authorization", *c.tokenAuth)
 	}
-}
-
-// getHTTPRetrier wraps a retrier from context with HTTP-specific retry logic.
-// Returns nil if no retrier is present in the context.
-func (c *rawClient) getHTTPRetrier(ctx context.Context) retry.Retrier {
-	baseRetrier := retry.FromContext(ctx)
-	if baseRetrier == nil {
-		return nil
-	}
-	return NewHTTPRetrier(baseRetrier)
 }

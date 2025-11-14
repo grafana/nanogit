@@ -31,12 +31,6 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
-	// Wrap retrier with HTTP-specific retry logic if a retrier is present
-	httpRetrier := c.getHTTPRetrier(ctx)
-	if httpRetrier != nil {
-		ctx = retry.ToContext(ctx, httpRetrier)
-	}
-
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
 	res, err := retry.Do(ctx, func() (*http.Response, error) {

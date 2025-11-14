@@ -49,12 +49,6 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
-	// Wrap retrier with HTTP-specific retry logic if a retrier is present
-	httpRetrier := c.getHTTPRetrier(ctx)
-	if httpRetrier != nil {
-		ctx = retry.ToContext(ctx, httpRetrier)
-	}
-
 	res, err := retry.Do(ctx, func() (*http.Response, error) {
 		res, retryErr := c.client.Do(req)
 		if retryErr != nil {
