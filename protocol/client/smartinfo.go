@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
 )
 
 // SmartInfo retrieves reference and capability information from the remote Git repository
@@ -59,7 +60,11 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		if res.StatusCode >= 500 {
+			return protocol.NewServerUnavailableError(res.StatusCode, underlying)
+		}
+		return underlying
 	}
 
 	logger.Debug("SmartInfo response",

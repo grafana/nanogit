@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +45,31 @@ func TestUploadPack(t *testing.T) {
 			name:           "server error",
 			statusCode:     http.StatusInternalServerError,
 			responseBody:   "server error",
-			expectedError:  "got status code 500: 500 Internal Server Error",
+			expectedError:  "server unavailable",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:           "bad gateway",
+			statusCode:     http.StatusBadGateway,
+			responseBody:   "bad gateway",
+			expectedError:  "server unavailable",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:           "service unavailable",
+			statusCode:     http.StatusServiceUnavailable,
+			responseBody:   "service unavailable",
+			expectedError:  "server unavailable",
+			expectedResult: "",
+			setupClient:    nil,
+		},
+		{
+			name:           "gateway timeout",
+			statusCode:     http.StatusGatewayTimeout,
+			responseBody:   "gateway timeout",
+			expectedError:  "server unavailable",
 			expectedResult: "",
 			setupClient:    nil,
 		},
@@ -130,6 +156,14 @@ func TestUploadPack(t *testing.T) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
 				require.Nil(t, responseReader)
+				// Verify ServerUnavailableError for 5xx status codes
+				if tt.statusCode >= 500 && tt.statusCode < 600 {
+					require.True(t, errors.Is(err, protocol.ErrServerUnavailable), "error should be ErrServerUnavailable")
+					var serverErr *protocol.ServerUnavailableError
+					require.ErrorAs(t, err, &serverErr, "error should be ServerUnavailableError type")
+					require.Equal(t, tt.statusCode, serverErr.StatusCode, "status code should match")
+					require.NotNil(t, serverErr.Underlying, "underlying error should not be nil")
+				}
 			} else {
 				require.NoError(t, err)
 				defer func() {
