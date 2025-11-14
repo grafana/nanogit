@@ -201,7 +201,7 @@ func TestUploadPack_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newTrackingRetrier(3)
+		retrier := newFakeRetrier(3)
 		retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
@@ -219,8 +219,7 @@ func TestUploadPack_Retry(t *testing.T) {
 		_, _ = client.UploadPack(ctx, strings.NewReader("test data"))
 
 		// Verify retrier was called
-		shouldRetryCalls := retrier.getShouldRetryCalls()
-		require.GreaterOrEqual(t, len(shouldRetryCalls), 1, "ShouldRetry should be called for network errors")
+		require.GreaterOrEqual(t, retrier.ShouldRetryCallCount(), 1, "ShouldRetry should be called for network errors")
 	})
 
 	t.Run("does not retry on 5xx errors", func(t *testing.T) {
@@ -231,7 +230,7 @@ func TestUploadPack_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newTrackingRetrier(3)
+		retrier := newFakeRetrier(3)
 		ctx := retry.ToContext(context.Background(), retrier)
 		client, err := NewRawClient(server.URL + "/repo")
 		require.NoError(t, err)
@@ -243,8 +242,7 @@ func TestUploadPack_Retry(t *testing.T) {
 		// Verify retrier Wait was not called (no retries for 5xx POST errors)
 		// The 5xx error happens after Do() succeeds, so retrier is not invoked
 		// This is expected behavior - POST requests can't retry 5xx because body is consumed
-		waitCalls := retrier.getWaitCalls()
-		require.Equal(t, 0, len(waitCalls), "Wait should not be called for 5xx POST errors")
+		require.Equal(t, 0, retrier.WaitCallCount(), "Wait should not be called for 5xx POST errors")
 	})
 
 	t.Run("works without retrier", func(t *testing.T) {

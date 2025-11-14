@@ -3,93 +3,55 @@ package client
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/grafana/nanogit/protocol"
 )
 
-// trackingRetrier tracks calls to ShouldRetry and Wait for testing
-type trackingRetrier struct {
-	shouldRetryCalls []shouldRetryCall
-	waitCalls        []waitCall
+// fakeRetrier is a simple mock implementation of retry.Retrier for testing
+// This is used instead of the generated mock from mocks package to avoid import cycles
+// (mocks package imports protocol/client, creating a cycle)
+type fakeRetrier struct {
 	maxAttempts      int
 	shouldRetryFunc  func(ctx context.Context, err error, attempt int) bool
 	waitFunc         func(ctx context.Context, attempt int) error
-	mu               sync.Mutex
+	shouldRetryCalls int
+	waitCalls        int
 }
 
-type shouldRetryCall struct {
-	ctx     context.Context
-	err     error
-	attempt int
-	result  bool
-}
-
-type waitCall struct {
-	ctx     context.Context
-	attempt int
-	err     error
-}
-
-func newTrackingRetrier(maxAttempts int) *trackingRetrier {
-	return &trackingRetrier{
+func newFakeRetrier(maxAttempts int) *fakeRetrier {
+	return &fakeRetrier{
 		maxAttempts: maxAttempts,
-		shouldRetryCalls: make([]shouldRetryCall, 0),
-		waitCalls:        make([]waitCall, 0),
+		shouldRetryFunc: func(ctx context.Context, err error, attempt int) bool {
+			return errors.Is(err, protocol.ErrServerUnavailable)
+		},
 	}
 }
 
-func (r *trackingRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	var result bool
-	if r.shouldRetryFunc != nil {
-		result = r.shouldRetryFunc(ctx, err, attempt)
-	} else {
-		// Default: retry on server unavailable errors
-		result = errors.Is(err, protocol.ErrServerUnavailable)
+func (f *fakeRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+	f.shouldRetryCalls++
+	if f.shouldRetryFunc != nil {
+		return f.shouldRetryFunc(ctx, err, attempt)
 	}
-
-	r.shouldRetryCalls = append(r.shouldRetryCalls, shouldRetryCall{
-		ctx:     ctx,
-		err:     err,
-		attempt: attempt,
-		result:  result,
-	})
-	return result
+	return false
 }
 
-func (r *trackingRetrier) Wait(ctx context.Context, attempt int) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	var err error
-	if r.waitFunc != nil {
-		err = r.waitFunc(ctx, attempt)
+func (f *fakeRetrier) Wait(ctx context.Context, attempt int) error {
+	f.waitCalls++
+	if f.waitFunc != nil {
+		return f.waitFunc(ctx, attempt)
 	}
-
-	r.waitCalls = append(r.waitCalls, waitCall{
-		ctx:     ctx,
-		attempt: attempt,
-		err:     err,
-	})
-	return err
+	return nil
 }
 
-func (r *trackingRetrier) MaxAttempts() int {
-	return r.maxAttempts
+func (f *fakeRetrier) MaxAttempts() int {
+	return f.maxAttempts
 }
 
-func (r *trackingRetrier) getShouldRetryCalls() []shouldRetryCall {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]shouldRetryCall{}, r.shouldRetryCalls...)
+func (f *fakeRetrier) ShouldRetryCallCount() int {
+	return f.shouldRetryCalls
 }
 
-func (r *trackingRetrier) getWaitCalls() []waitCall {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]waitCall{}, r.waitCalls...)
+func (f *fakeRetrier) WaitCallCount() int {
+	return f.waitCalls
 }
 

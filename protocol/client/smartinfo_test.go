@@ -181,7 +181,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newTrackingRetrier(3)
+		retrier := newFakeRetrier(3)
 		retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return errors.Is(err, protocol.ErrServerUnavailable)
 		}
@@ -200,9 +200,8 @@ func TestSmartInfo_Retry(t *testing.T) {
 		require.Equal(t, 3, attemptCount)
 
 		// Verify retrier was called
-		shouldRetryCalls := retrier.getShouldRetryCalls()
-		require.GreaterOrEqual(t, len(shouldRetryCalls), 2, "ShouldRetry should be called at least twice")
-		require.GreaterOrEqual(t, len(retrier.getWaitCalls()), 2, "Wait should be called at least twice")
+		require.GreaterOrEqual(t, retrier.ShouldRetryCallCount(), 2, "ShouldRetry should be called at least twice")
+		require.GreaterOrEqual(t, retrier.WaitCallCount(), 2, "Wait should be called at least twice")
 	})
 
 	t.Run("does not retry on 4xx errors", func(t *testing.T) {
@@ -213,7 +212,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newTrackingRetrier(3)
+		retrier := newFakeRetrier(3)
 		ctx := retry.ToContext(context.Background(), retrier)
 		client, err := NewRawClient(server.URL + "/repo")
 		require.NoError(t, err)
@@ -224,10 +223,8 @@ func TestSmartInfo_Retry(t *testing.T) {
 
 		// Verify retrier was not called for 4xx errors
 		// 4xx errors are checked outside the retry wrapper, so ShouldRetry is never invoked
-		shouldRetryCalls := retrier.getShouldRetryCalls()
-		require.Equal(t, 0, len(shouldRetryCalls), "ShouldRetry should not be called for 4xx errors")
-		waitCalls := retrier.getWaitCalls()
-		require.Equal(t, 0, len(waitCalls), "Wait should not be called for 4xx errors")
+		require.Equal(t, 0, retrier.ShouldRetryCallCount(), "ShouldRetry should not be called for 4xx errors")
+		require.Equal(t, 0, retrier.WaitCallCount(), "Wait should not be called for 4xx errors")
 	})
 
 	t.Run("retries on network errors", func(t *testing.T) {
@@ -249,7 +246,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		retrier := newTrackingRetrier(3)
+		retrier := newFakeRetrier(3)
 		retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			// Retry on any error for this test
 			return err != nil
@@ -267,8 +264,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 		_ = client.SmartInfo(ctx, "git-upload-pack")
 
 		// Verify retrier was called
-		shouldRetryCalls := retrier.getShouldRetryCalls()
-		require.GreaterOrEqual(t, len(shouldRetryCalls), 1, "ShouldRetry should be called")
+		require.GreaterOrEqual(t, retrier.ShouldRetryCallCount(), 1, "ShouldRetry should be called")
 	})
 
 	t.Run("works without retrier", func(t *testing.T) {
