@@ -202,9 +202,55 @@ writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithDiskStorage())
 
 Learn more about [Storage Architecture](../architecture/storage.md) and [Performance](../architecture/performance.md).
 
+## Retry Mechanism
+
+nanogit includes a pluggable retry mechanism, making operations more robust against transient network errors and server issues.
+
+### Basic Retry Usage
+
+```go
+import "github.com/grafana/nanogit/retry"
+
+ctx := context.Background()
+
+// Enable retries with default exponential backoff
+retrier := retry.NewExponentialBackoffRetrier()
+ctx = retry.ToContext(ctx, retrier)
+
+// All HTTP operations will now use retry logic
+client, err := nanogit.NewHTTPClient(repo)
+ref, err := client.GetRef(ctx, "main")
+```
+
+### Custom Retry Configuration
+
+```go
+// Configure retry behavior for production
+retrier := retry.NewExponentialBackoffRetrier().
+    WithMaxAttempts(5).                    // Retry up to 5 times
+    WithInitialDelay(200 * time.Millisecond). // Start with 200ms delay
+    WithMaxDelay(10 * time.Second).        // Cap at 10 seconds
+    WithJitter(true)                       // Add random jitter
+
+ctx = retry.ToContext(ctx, retrier)
+```
+
+**What gets retried:**
+- Network errors (connection refused, timeouts)
+- 5xx server errors (for GET requests)
+- Temporary errors
+
+**What does NOT get retried:**
+- 4xx client errors (bad requests, auth failures)
+- Context cancellation
+- POST request 5xx errors (request body limitation)
+
+Learn more about the [Retry Mechanism](../architecture/retry.md).
+
 ## Next Steps
 
 - **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API reference with all methods
 - **[Storage Architecture](../architecture/storage.md)** - Pluggable storage and writing modes
+- **[Retry Mechanism](../architecture/retry.md)** - Pluggable retry mechanism for robust operations
 - **[Performance](../architecture/performance.md)** - Performance characteristics and benchmarks
 - **[Architecture Overview](../architecture/overview.md)** - Core design principles

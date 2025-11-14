@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/retry"
 )
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
@@ -30,10 +31,20 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
 	req.Header.Add("Accept", "application/x-git-receive-pack-result")
 
-	res, err := c.client.Do(req)
+	// For POST requests, we can only retry on network errors, not 5xx responses,
+	// because the request body is consumed and cannot be re-read.
+	var res *http.Response
+	err = retry.DoVoid(ctx, func() error {
+		var retryErr error
+		res, retryErr = c.client.Do(req)
+		// Only retry network errors - 5xx responses cannot be retried for POST
+		// requests because the request body has been consumed.
+		return retryErr
+	})
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
 			err = fmt.Errorf("error closing response body: %w", closeErr)

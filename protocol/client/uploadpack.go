@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/retry"
 )
 
 // UploadPack sends a POST request to the git-upload-pack endpoint.
@@ -31,10 +32,20 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
-	res, err := c.client.Do(req)
+	// For POST requests, we can only retry on network errors, not 5xx responses,
+	// because the request body is consumed and cannot be re-read.
+	var res *http.Response
+	err = retry.DoVoid(ctx, func() error {
+		var retryErr error
+		res, retryErr = c.client.Do(req)
+		// Only retry network errors - 5xx responses cannot be retried for POST
+		// requests because the request body has been consumed.
+		return retryErr
+	})
 	if err != nil {
 		return nil, err
 	}
+
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		if closeErr := res.Body.Close(); closeErr != nil {
 			logger.Error("error closing response body", "error", closeErr)
