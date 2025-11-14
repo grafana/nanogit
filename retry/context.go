@@ -7,7 +7,7 @@ import "context"
 // retrierKey is the key for the retrier in the context.
 type retrierKey struct{}
 
-// ToContext sets the retrier for the client from the context.
+// ToContext adds the retrier to the context.
 func ToContext(ctx context.Context, retrier Retrier) context.Context {
 	return context.WithValue(ctx, retrierKey{}, retrier)
 }
