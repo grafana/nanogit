@@ -42,7 +42,7 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		lastErr = err
 
 		// Check if we should retry
-		if !retrier.ShouldRetry(err, attempt) {
+		if !retrier.ShouldRetry(ctx, err, attempt) {
 			logger.Debug("Error not retryable, stopping",
 				"attempt", attempt,
 				"max_attempts", maxAttempts,

@@ -264,7 +264,7 @@ type MyRetrier struct {
     // Your custom fields
 }
 
-func (r *MyRetrier) ShouldRetry(err error, attempt int) bool {
+func (r *MyRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
     // Your retry logic
     return true
 }

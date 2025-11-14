@@ -32,9 +32,10 @@ import (
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o ../mocks/retrier.go . Retrier
 type Retrier interface {
 	// ShouldRetry determines if an error should be retried.
+	// ctx is the context for the operation (may be used for context-aware decisions).
 	// attempt is the current attempt number (1-indexed).
 	// Returns true if the error should be retried, false otherwise.
-	ShouldRetry(err error, attempt int) bool
+	ShouldRetry(ctx context.Context, err error, attempt int) bool
 
 	// Wait waits before the next retry attempt.
 	// attempt is the current attempt number (1-indexed).
@@ -51,7 +52,7 @@ type Retrier interface {
 type NoopRetrier struct{}
 
 // ShouldRetry always returns false for NoopRetrier.
-func (r *NoopRetrier) ShouldRetry(err error, attempt int) bool {
+func (r *NoopRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
 	return false
 }
 
@@ -111,7 +112,7 @@ func NewExponentialBackoffRetrier() *ExponentialBackoffRetrier {
 //   - 4xx client errors
 //   - Context cancellation errors
 //   - Errors that should not be retried
-func (r *ExponentialBackoffRetrier) ShouldRetry(err error, attempt int) bool {
+func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
 	if err == nil {
 		return false
 	}

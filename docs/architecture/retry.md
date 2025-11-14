@@ -125,8 +125,9 @@ You can implement custom retry logic by implementing the `Retrier` interface:
 ```go
 type Retrier interface {
     // ShouldRetry determines if an error should be retried.
+    // ctx is the context for the operation (may be used for context-aware decisions).
     // attempt is the current attempt number (1-indexed).
-    ShouldRetry(err error, attempt int) bool
+    ShouldRetry(ctx context.Context, err error, attempt int) bool
 
     // Wait waits before the next retry attempt.
     // attempt is the current attempt number (1-indexed).
@@ -146,7 +147,7 @@ type FixedDelayRetrier struct {
     Delay            time.Duration
 }
 
-func (r *FixedDelayRetrier) ShouldRetry(err error, attempt int) bool {
+func (r *FixedDelayRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
     if attempt > r.MaxAttemptsValue {
         return false
     }
@@ -192,7 +193,7 @@ type CircuitBreakerRetrier struct {
     cooldownPeriod   time.Duration
 }
 
-func (r *CircuitBreakerRetrier) ShouldRetry(err error, attempt int) bool {
+func (r *CircuitBreakerRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
     if attempt > r.MaxAttemptsValue {
         return false
     }
