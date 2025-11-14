@@ -281,7 +281,7 @@ POST requests can only retry on network errors that occur **before** a response 
 
 **Why POST requests can't retry 5xx errors:**
 
-POST request bodies are consumed during the HTTP request. Once a response is received (even a 5xx error), the request body has been consumed and cannot be re-read for retries. This is a fundamental limitation of HTTP POST requests with streaming bodies.
+When an HTTP POST request is made with an `io.Reader` body, the HTTP client reads from the reader to send the request body. Once `client.Do(req)` completes (even if it returns a 5xx error), the `io.Reader` has been consumed and cannot be re-read. To retry, we would need to recreate the request with a fresh body, but the original `io.Reader` is already consumed and most `io.Reader` implementations (like `io.Pipe`) cannot be reset. This limitation applies to streaming request bodies, which is how `UploadPack` and `ReceivePack` operate.
 
 ## Integration Points
 

@@ -243,7 +243,7 @@ ctx = retry.ToContext(ctx, retrier)
 **What does NOT get retried:**
 - 4xx client errors (bad requests, auth failures)
 - Context cancellation
-- POST request 5xx errors (request body limitation)
+- POST request 5xx errors (request body `io.Reader` is consumed and cannot be re-read)
 
 Learn more about the [Retry Mechanism](../architecture/retry.md).
 

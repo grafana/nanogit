@@ -292,7 +292,7 @@ The retry mechanism automatically retries on:
 The retry mechanism does **not** retry on:
 - **4xx client errors**: Bad requests, authentication failures, etc.
 - **Context cancellation**: When the context is cancelled or deadline exceeded
-- **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body is consumed
+- **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body (`io.Reader`) is consumed when the request is sent and cannot be re-read
 
 #### Retry Behavior by Request Type
 
