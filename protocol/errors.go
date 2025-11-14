@@ -44,9 +44,14 @@ func (e *ServerUnavailableError) Error() string {
 	return fmt.Sprintf("server unavailable (status code %d)", e.StatusCode)
 }
 
-// Unwrap enables errors.Is() compatibility with ErrServerUnavailable and preserves the underlying error.
+// Unwrap returns the underlying error, preserving the error chain.
 func (e *ServerUnavailableError) Unwrap() error {
-	return ErrServerUnavailable
+	return e.Underlying
+}
+
+// Is enables errors.Is() compatibility with ErrServerUnavailable.
+func (e *ServerUnavailableError) Is(target error) bool {
+	return target == ErrServerUnavailable
 }
 
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified status code and underlying error.
