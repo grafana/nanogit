@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
 )
 
 // UploadPack sends a POST request to the git-upload-pack endpoint.
@@ -39,7 +40,11 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 			logger.Error("error closing response body", "error", closeErr)
 		}
 
-		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		if res.StatusCode >= 500 {
+			return nil, protocol.NewServerUnavailableError(res.StatusCode, underlying)
+		}
+		return nil, underlying
 	}
 
 	logger.Debug("Upload-pack response",

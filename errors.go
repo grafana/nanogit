@@ -50,6 +50,11 @@ var (
 	// ErrInvalidAuthor is returned when author information is invalid.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrInvalidAuthor = errors.New("invalid author information")
+
+	// ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	// It is re-exported from the protocol package to avoid import cycles.
+	ErrServerUnavailable = protocol.ErrServerUnavailable
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
@@ -232,3 +237,11 @@ func NewAuthorError(field, reason string) *AuthorError {
 		Reason: reason,
 	}
 }
+
+// ServerUnavailableError provides structured information about a Git server that is unavailable.
+// It is re-exported from the protocol package to avoid import cycles.
+type ServerUnavailableError = protocol.ServerUnavailableError
+
+// NewServerUnavailableError creates a new ServerUnavailableError with the specified status code and underlying error.
+// It is re-exported from the protocol package to avoid import cycles.
+var NewServerUnavailableError = protocol.NewServerUnavailableError

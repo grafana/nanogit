@@ -117,7 +117,7 @@ func TestIsAuthorized(t *testing.T) {
 			statusCode:    http.StatusInternalServerError,
 			responseBody:  "server error",
 			expectedAuth:  false,
-			expectedError: "get repository info: got status code 500: 500 Internal Server Error",
+			expectedError: "server unavailable",
 			setupAuth: func(c *rawClient) {
 				c.basicAuth = &struct{ Username, Password string }{"user", "pass"}
 			},
@@ -154,7 +154,7 @@ func TestIsAuthorized(t *testing.T) {
 			authorized, err := client.IsAuthorized(context.Background())
 			if tt.expectedError != "" {
 				require.Error(t, err)
-				require.Equal(t, tt.expectedError, err.Error())
+				require.Contains(t, err.Error(), tt.expectedError)
 				return
 			}
 			require.NoError(t, err)

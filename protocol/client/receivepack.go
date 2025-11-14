@@ -42,7 +42,11 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		_ = res.Body.Close()
-		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		if res.StatusCode >= 500 {
+			return protocol.NewServerUnavailableError(res.StatusCode, underlying)
+		}
+		return underlying
 	}
 
 	logger.Debug("Receive-pack response",
