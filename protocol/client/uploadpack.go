@@ -13,7 +13,8 @@ import (
 // This endpoint is used to fetch objects and refs from the remote repository.
 // The data parameter is streamed to the server, and the response is returned as a ReadCloser.
 // The caller is responsible for closing the returned ReadCloser.
-// Retries only on network errors before a response is received.
+// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) status codes.
+// Note: For POST requests, retries on 5xx are limited because the request body is consumed and cannot be re-read.
 func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io.ReadCloser, err error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
@@ -30,8 +31,8 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
-	// For POST requests, we can only retry on network errors, not 5xx responses,
-	// because the request body is consumed and cannot be re-read.
+	// For POST requests, retries on 5xx are limited because the request body is consumed and cannot be re-read.
+	// However, 429 (Too Many Requests) can be retried even for POST requests.
 	res, err := c.do(ctx, req)
 
 	if err != nil {

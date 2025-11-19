@@ -14,7 +14,8 @@ import (
 // This endpoint is used to send objects to the remote repository.
 // The data parameter is streamed to the server, and the response is parsed internally.
 // Returns an error if the HTTP request fails or if Git protocol errors are detected.
-// Retries only on network errors before a response is received.
+// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) status codes.
+// Note: For POST requests, retries on 5xx are limited because the request body is consumed and cannot be re-read.
 func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
@@ -31,8 +32,8 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
 	req.Header.Add("Accept", "application/x-git-receive-pack-result")
 
-	// For POST requests, we can only retry on network errors, not 5xx responses,
-	// because the request body is consumed and cannot be re-read.
+	// For POST requests, retries on 5xx are limited because the request body is consumed and cannot be re-read.
+	// However, 429 (Too Many Requests) can be retried even for POST requests.
 	res, err := c.do(ctx, req)
 	if err != nil {
 		return err

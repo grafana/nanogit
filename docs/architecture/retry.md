@@ -240,48 +240,53 @@ func (r *CircuitBreakerRetrier) MaxAttempts() int {
 The retry mechanism automatically retries on:
 
 - **Network errors**: Connection refused, timeouts, temporary network failures
-- **5xx server errors**: Server unavailable errors (for GET requests only)
+- **5xx server errors**: Server unavailable errors (for GET and DELETE requests only)
+- **429 Too Many Requests**: Rate limiting errors (can be retried for all request types)
 - **Temporary errors**: Any error marked as temporary by the error type
 
 ### What Does NOT Get Retried
 
 The retry mechanism does **not** retry on:
 
-- **4xx client errors**: Bad requests (400), authentication failures (401), not found (404), etc.
+- **4xx client errors**: Bad requests (400), authentication failures (401), not found (404), etc. (except 429)
 - **Context cancellation**: When the context is cancelled or deadline exceeded
-- **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body is consumed
+- **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body is consumed (429 can be retried)
 
 ### Retry Behavior by Request Type
 
 #### GET Requests (SmartInfo)
 
-GET requests can retry on both network errors and 5xx status codes:
+GET requests can retry on network errors, 5xx status codes, and 429 (Too Many Requests):
 
 ```go
 // Retries on:
 // - Network errors (connection refused, timeouts)
 // - 5xx server errors (500, 502, 503, 504)
+// - 429 Too Many Requests (rate limiting)
 // Does NOT retry on:
-// - 4xx client errors
+// - Other 4xx client errors
 // - Context cancellation
 ```
 
 #### POST Requests (UploadPack, ReceivePack)
 
-POST requests can only retry on network errors that occur **before** a response is received:
+POST requests can retry on network errors and 429 (Too Many Requests), but not on 5xx errors:
 
 ```go
 // Retries on:
 // - Network errors before response (connection refused, timeouts)
+// - 429 Too Many Requests (rate limiting - can be retried even for POST)
 // Does NOT retry on:
 // - 5xx server errors (request body is consumed)
-// - 4xx client errors
+// - Other 4xx client errors
 // - Context cancellation
 ```
 
 **Why POST requests can't retry 5xx errors:**
 
 When an HTTP POST request is made with an `io.Reader` body, the HTTP client reads from the reader to send the request body. Once `client.Do(req)` completes (even if it returns a 5xx error), the `io.Reader` has been consumed and cannot be re-read. To retry, we would need to recreate the request with a fresh body, but the original `io.Reader` is already consumed and most `io.Reader` implementations (like `io.Pipe`) cannot be reset. This limitation applies to streaming request bodies, which is how `UploadPack` and `ReceivePack` operate.
+
+**Note:** 429 (Too Many Requests) can be retried even for POST requests because rate limiting is a temporary condition that doesn't consume the request body. The server typically hasn't processed the request when returning 429, so the body can be re-sent on retry.
 
 ## Integration Points
 

@@ -53,7 +53,11 @@ func NewServerUnavailableError(operation string, statusCode int, underlying erro
 	}
 }
 
-// CheckServerUnavailable checks if an HTTP response indicates server unavailability (5xx or 429).
+// CheckServerUnavailable checks if an HTTP response indicates server unavailability.
+// It checks for:
+//   - Server errors (5xx status codes)
+//   - Too Many Requests (429 status code)
+//
 // If the response is server unavailable, it closes the response body and returns a ServerUnavailableError.
 // The HTTP method is extracted from the response's request.
 // Otherwise, it returns nil.

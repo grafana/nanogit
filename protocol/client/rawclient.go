@@ -137,7 +137,12 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 }
 
 // do executes an HTTP request with retry logic and server unavailable checks.
-// It wraps the request in retry.Do and automatically checks for server unavailability (5xx or 429).
+// It wraps the request in retry.Do and automatically checks for server unavailability.
+// Retries are performed on:
+//   - Network errors (timeouts, connection failures, etc.)
+//   - Server errors (5xx status codes)
+//   - Too Many Requests (429 status code)
+//
 // The response body is automatically closed if the server is unavailable.
 func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {
 	return retry.Do(ctx, func() (*http.Response, error) {
