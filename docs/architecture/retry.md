@@ -152,7 +152,7 @@ func (r *FixedDelayRetrier) ShouldRetry(ctx context.Context, err error, attempt 
         return false
     }
     // Retry on network errors and 5xx status codes
-    if errors.Is(err, protocol.ErrServerUnavailable) {
+    if errors.Is(err, nanogit.ErrServerUnavailable) {
         return true
     }
     // Check for network errors...
