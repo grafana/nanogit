@@ -281,4 +281,3 @@ func TestDo_NegativeMaxAttempts(t *testing.T) {
 	require.Equal(t, "", result)
 	require.LessOrEqual(t, attempts, 3) // Should use default of 3
 }
-
