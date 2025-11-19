@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 )
 
@@ -151,6 +151,8 @@ func (r *ExponentialBackoffRetrier) Wait(ctx context.Context, attempt int) error
 	}
 
 	// Add jitter if enabled (random value between 0 and delay)
+	// Using math/rand/v2 for better performance. Predictability is acceptable here
+	// as jitter is only used to prevent thundering herd problems, not for security.
 	if r.Jitter {
 		jitter := rand.Float64() * delay
 		delay = delay*0.5 + jitter*0.5 // Add 50% jitter
