@@ -34,10 +34,19 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
 	res, err := retry.Do(ctx, func() (*http.Response, error) {
-		return c.client.Do(req)
-		// Only retry network errors - 5xx responses cannot be retried for POST
-		// requests because the request body has been consumed.
+		res, err := c.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
+			_ = res.Body.Close()
+			return res, NewServerUnavailableError(http.MethodPost, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+		}
+
+		return res, nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -47,11 +56,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 			logger.Error("error closing response body", "error", closeErr)
 		}
 
-		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-		if res.StatusCode >= 500 {
-			return nil, NewServerUnavailableError(res.StatusCode, underlying)
-		}
-		return nil, underlying
+		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
 	logger.Debug("Upload-pack response",

@@ -40,19 +40,19 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 			return nil, err
 		}
 
-		if res.StatusCode < 200 || res.StatusCode >= 300 {
+		if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
 			_ = res.Body.Close()
-			underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-			if res.StatusCode >= 500 {
-				return nil, NewServerUnavailableError(res.StatusCode, underlying)
-			}
-			return nil, underlying
+			return nil, NewServerUnavailableError(http.MethodPost, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
 		}
 
 		return res, nil
 	})
 	if err != nil {
 		return err
+	}
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
 	defer func() {

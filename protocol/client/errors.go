@@ -11,13 +11,23 @@ var ErrServerUnavailable = errors.New("server unavailable")
 
 // ServerUnavailableError provides structured information about a Git server that is unavailable.
 type ServerUnavailableError struct {
+	// StatusCode is the HTTP status code (5xx)
 	StatusCode int
+	// Operation is the HTTP method that failed (e.g., "GET", "POST", "PUT")
+	Operation string
+	// Underlying is the underlying error
 	Underlying error
 }
 
 func (e *ServerUnavailableError) Error() string {
 	if e.Underlying != nil {
+		if e.Operation != "" {
+			return fmt.Sprintf("server unavailable (operation %s, status code %d): %v", e.Operation, e.StatusCode, e.Underlying)
+		}
 		return fmt.Sprintf("server unavailable (status code %d): %v", e.StatusCode, e.Underlying)
+	}
+	if e.Operation != "" {
+		return fmt.Sprintf("server unavailable (operation %s, status code %d)", e.Operation, e.StatusCode)
 	}
 	return fmt.Sprintf("server unavailable (status code %d)", e.StatusCode)
 }
@@ -32,14 +42,12 @@ func (e *ServerUnavailableError) Is(target error) bool {
 	return target == ErrServerUnavailable
 }
 
-// NewServerUnavailableError creates a new ServerUnavailableError with the specified status code and underlying error.
-func NewServerUnavailableError(statusCode int, underlying error) *ServerUnavailableError {
+// NewServerUnavailableError creates a new ServerUnavailableError with the specified operation, status code, and underlying error.
+// Operation can be empty if the HTTP method is unknown.
+func NewServerUnavailableError(operation string, statusCode int, underlying error) *ServerUnavailableError {
 	return &ServerUnavailableError{
+		Operation:  operation,
 		StatusCode: statusCode,
 		Underlying: underlying,
 	}
 }
-
-
-
-
