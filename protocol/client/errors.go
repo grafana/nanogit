@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 // ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
@@ -50,4 +51,20 @@ func NewServerUnavailableError(operation string, statusCode int, underlying erro
 		StatusCode: statusCode,
 		Underlying: underlying,
 	}
+}
+
+// CheckServerUnavailable checks if an HTTP response indicates server unavailability (5xx or 429).
+// If the response is server unavailable, it closes the response body and returns a ServerUnavailableError.
+// The HTTP method is extracted from the response's request.
+// Otherwise, it returns nil.
+func CheckServerUnavailable(res *http.Response) error {
+	if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
+		operation := ""
+		if res.Request != nil {
+			operation = res.Request.Method
+		}
+		_ = res.Body.Close()
+		return NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+	}
+	return nil
 }

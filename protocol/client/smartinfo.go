@@ -56,9 +56,8 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 		}
 
 		// Retry 5xx responses for GET requests
-		if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
-			_ = res.Body.Close()
-			return res, NewServerUnavailableError(http.MethodGet, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+		if err := CheckServerUnavailable(res); err != nil {
+			return res, err
 		}
 
 		return res, nil
