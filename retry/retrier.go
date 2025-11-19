@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -88,6 +89,11 @@ type ExponentialBackoffRetrier struct {
 	// Jitter enables random jitter to prevent thundering herd.
 	// Default is true.
 	Jitter bool
+
+	// rng is a random number generator for jitter calculation.
+	// Protected by rngMu for concurrent access.
+	rng   *rand.Rand
+	rngMu sync.Mutex
 }
 
 // NewExponentialBackoffRetrier creates a new ExponentialBackoffRetrier with default values.
@@ -98,6 +104,7 @@ func NewExponentialBackoffRetrier() *ExponentialBackoffRetrier {
 		MaxDelay:         5 * time.Second,
 		Multiplier:       2.0,
 		Jitter:           true,
+		rng:              rand.New(rand.NewPCG(0, 0)), // Concurrency-safe per-instance generator
 	}
 }
 
@@ -145,10 +152,13 @@ func (r *ExponentialBackoffRetrier) Wait(ctx context.Context, attempt int) error
 	}
 
 	// Add jitter if enabled (random value between 0 and delay)
-	// Using math/rand/v2 for better performance. Predictability is acceptable here
-	// as jitter is only used to prevent thundering herd problems, not for security.
+	// Using a per-instance random number generator protected by mutex for concurrency safety.
+	// Predictability is acceptable here as jitter is only used to prevent
+	// thundering herd problems, not for security.
 	if r.Jitter {
-		jitter := rand.Float64() * delay
+		r.rngMu.Lock()
+		jitter := r.rng.Float64() * delay
+		r.rngMu.Unlock()
 		delay = delay*0.5 + jitter*0.5 // Add 50% jitter
 	}
 
