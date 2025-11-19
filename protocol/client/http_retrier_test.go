@@ -219,3 +219,30 @@ func TestHTTPRetrier_Integration(t *testing.T) {
 	require.Equal(t, 3, retrier.MaxAttempts())
 }
 
+func TestUnwrapHTTPRetrier(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unwraps httpRetrier to underlying retrier", func(t *testing.T) {
+		t.Parallel()
+		wrapped := newTestRetrier(5)
+		httpRetrier := NewHTTPRetrier(wrapped)
+
+		unwrapped := UnwrapHTTPRetrier(httpRetrier)
+		require.Equal(t, wrapped, unwrapped, "should return the underlying retrier")
+	})
+
+	t.Run("returns retrier as-is if not httpRetrier", func(t *testing.T) {
+		t.Parallel()
+		regularRetrier := newTestRetrier(3)
+
+		unwrapped := UnwrapHTTPRetrier(regularRetrier)
+		require.Equal(t, regularRetrier, unwrapped, "should return the retrier as-is")
+	})
+
+	t.Run("handles nil retrier", func(t *testing.T) {
+		t.Parallel()
+		unwrapped := UnwrapHTTPRetrier(nil)
+		require.Nil(t, unwrapped, "should return nil for nil retrier")
+	})
+}
+

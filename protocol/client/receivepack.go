@@ -33,7 +33,13 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
-	res, err := retry.Do(ctx, func() (*http.Response, error) {
+	// Unwrap httpRetrier if present to get the underlying retrier that only retries on network errors.
+	postCtx := ctx
+	if retrier := retry.FromContext(ctx); retrier != nil {
+		networkOnlyRetrier := UnwrapHTTPRetrier(retrier)
+		postCtx = retry.ToContext(ctx, networkOnlyRetrier)
+	}
+	res, err := retry.Do(postCtx, func() (*http.Response, error) {
 		return c.client.Do(req)
 		// Only retry network errors - 5xx responses cannot be retried for POST
 		// requests because the request body has been consumed.

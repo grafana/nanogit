@@ -46,4 +46,14 @@ func (r *httpRetrier) MaxAttempts() int {
 	return r.retrier.MaxAttempts()
 }
 
+// UnwrapHTTPRetrier unwraps an httpRetrier to get the underlying retrier.
+// If the retrier is not an httpRetrier, it returns the retrier as-is.
+// This is useful for POST requests that should only retry on network errors,
+// not on 5xx server errors.
+func UnwrapHTTPRetrier(retrier retry.Retrier) retry.Retrier {
+	if hr, ok := retrier.(*httpRetrier); ok {
+		return hr.retrier
+	}
+	return retrier
+}
 
