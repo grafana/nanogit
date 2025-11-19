@@ -32,11 +32,14 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		return fn()
 	}
 
+	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		result, err := fn()
 		if err == nil {
 			return result, nil
 		}
+
+		lastErr = err
 
 		// Check if we should retry
 		if !retrier.ShouldRetry(ctx, err, attempt) {
@@ -47,31 +50,27 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 			return zero, err
 		}
 
-		// Check if this was the last attempt
-		if attempt >= maxAttempts {
-			logger.Debug("Max retry attempts reached",
+		// Wait before retrying (only if not the last attempt)
+		if attempt < maxAttempts {
+			// Log retry attempt
+			logger.Debug("Retrying after error",
 				"attempt", attempt,
 				"max_attempts", maxAttempts,
 				"error", err.Error())
-			return zero, fmt.Errorf("max retry attempts (%d) reached: %w", maxAttempts, err)
-		}
 
-		// Log retry attempt
-		logger.Debug("Retrying after error",
-			"attempt", attempt,
-			"max_attempts", maxAttempts,
-			"error", err.Error())
-
-		// Wait before retrying
-		if waitErr := retrier.Wait(ctx, attempt); waitErr != nil {
-			// Context was cancelled during wait
-			return zero, fmt.Errorf("context cancelled during retry wait: %w", waitErr)
+			// Wait before retrying
+			if waitErr := retrier.Wait(ctx, attempt); waitErr != nil {
+				// Context was cancelled during wait
+				return zero, fmt.Errorf("context cancelled during retry wait: %w", waitErr)
+			}
 		}
 	}
 
-	// This line is unreachable: the loop always returns early when attempt >= maxAttempts.
-	// It's here to satisfy Go's requirement that all code paths return a value.
-	panic("unreachable: retry loop should always return before exiting")
+	// All attempts exhausted
+	logger.Debug("Max retry attempts reached",
+		"max_attempts", maxAttempts,
+		"error", lastErr.Error())
+	return zero, fmt.Errorf("max retry attempts (%d) reached: %w", maxAttempts, lastErr)
 }
 
 // DoVoid executes a function with retry logic that returns only an error.

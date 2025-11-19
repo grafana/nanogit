@@ -144,10 +144,34 @@ func TestDo_ContextCancellation(t *testing.T) {
 func TestDo_ContextCancellationDuringWait(t *testing.T) {
 	t.Parallel()
 
-	// This test doesn't apply anymore since network errors aren't retried
-	// Testing context cancellation during wait would require a retryable error
-	// which ExponentialBackoffRetrier no longer provides by default
-	t.Skip("Network errors are no longer retried, so this test scenario doesn't apply")
+	ctx, cancel := context.WithCancel(context.Background())
+	retrier := NewExponentialBackoffRetrier().
+		WithMaxAttempts(3).
+		WithInitialDelay(100 * time.Millisecond).
+		WithoutJitter()
+	ctx = ToContext(ctx, retrier)
+
+	attempts := 0
+	// Cancel context in a goroutine after a short delay to interrupt the wait
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	result, err := Do(ctx, func() (string, error) {
+		attempts++
+		// Return a retryable error to trigger a retry and wait
+		return "", &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: &timeoutError{}, // Network timeout errors are retried
+		}
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "context cancelled during retry wait")
+	require.Equal(t, "", result)
+	require.Equal(t, 1, attempts) // Should stop after first attempt when context is cancelled during wait
 }
 
 func TestDoVoid_Success(t *testing.T) {
