@@ -7,7 +7,6 @@ import (
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
-	"github.com/grafana/nanogit/retry"
 )
 
 // SmartInfo retrieves reference and capability information from the remote Git repository
@@ -49,19 +48,8 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
-	res, err := retry.Do(ctx, func() (*http.Response, error) {
-		res, err := c.client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		// Retry 5xx responses for GET requests
-		if err := CheckServerUnavailable(res); err != nil {
-			return res, err
-		}
-
-		return res, nil
-	})
+	// Retry 5xx responses for GET requests
+	res, err := c.do(ctx, req)
 
 	if err != nil {
 		return err

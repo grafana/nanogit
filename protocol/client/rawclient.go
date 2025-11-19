@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/retry"
 )
 
 // RawClient is a client that can be used to make raw Git protocol requests.
@@ -133,4 +134,24 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 	} else if c.tokenAuth != nil {
 		req.Header.Set("Authorization", *c.tokenAuth)
 	}
+}
+
+// do executes an HTTP request with retry logic and server unavailable checks.
+// It wraps the request in retry.Do and automatically checks for server unavailability (5xx or 429).
+// The response body is automatically closed if the server is unavailable.
+func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	return retry.Do(ctx, func() (*http.Response, error) {
+		res, err := c.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := CheckServerUnavailable(res); err != nil {
+			// Return the response along with the error so callers can inspect it if needed
+			// The response body is already closed by CheckServerUnavailable
+			return res, err
+		}
+
+		return res, nil
+	})
 }

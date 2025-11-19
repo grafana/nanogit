@@ -8,7 +8,6 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
-	"github.com/grafana/nanogit/retry"
 )
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
@@ -34,18 +33,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
-	res, err := retry.Do(ctx, func() (*http.Response, error) {
-		res, err := c.client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := CheckServerUnavailable(res); err != nil {
-			return nil, err
-		}
-
-		return res, nil
-	})
+	res, err := c.do(ctx, req)
 	if err != nil {
 		return err
 	}
