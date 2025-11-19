@@ -19,16 +19,13 @@ func newTestRetrier(maxAttempts int) *testRetrier {
 	return &testRetrier{
 		maxAttempts: maxAttempts,
 		shouldRetryFunc: func(ctx context.Context, err error, attempt int) bool {
-			// Default: retry on network errors and ServerUnavailableError
+			// Default: retry only on network errors (matches real retrier behavior)
 			var netErr interface {
 				Error() string
 				Timeout() bool
 				Temporary() bool
 			}
-			if errors.As(err, &netErr) {
-				return true
-			}
-			return errors.Is(err, ErrServerUnavailable)
+			return errors.As(err, &netErr)
 		},
 	}
 }

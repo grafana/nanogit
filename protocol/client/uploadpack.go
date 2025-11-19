@@ -14,8 +14,8 @@ import (
 // This endpoint is used to fetch objects and refs from the remote repository.
 // The data parameter is streamed to the server, and the response is returned as a ReadCloser.
 // The caller is responsible for closing the returned ReadCloser.
+// Retries only on network errors before a response is received.
 func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io.ReadCloser, err error) {
-
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-upload-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
 	u := c.base.JoinPath("git-upload-pack").String()

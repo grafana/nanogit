@@ -14,6 +14,7 @@ func ToContext(ctx context.Context, retrier Retrier) context.Context {
 
 // FromContext gets the retrier from the context.
 // Always returns a retrier - if none is set, returns a NoopRetrier.
+// This ensures callers can always use the retrier without nil checks.
 func FromContext(ctx context.Context) Retrier {
 	retrier, ok := ctx.Value(retrierKey{}).(Retrier)
 	if !ok {

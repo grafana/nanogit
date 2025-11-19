@@ -15,6 +15,7 @@ import (
 // This endpoint is used to send objects to the remote repository.
 // The data parameter is streamed to the server, and the response is parsed internally.
 // Returns an error if the HTTP request fails or if Git protocol errors are detected.
+// Retries only on network errors before a response is received.
 func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error) {
 	// NOTE: This path is defined in the protocol-v2 spec as required under $GIT_URL/git-receive-pack.
 	// See: https://git-scm.com/docs/protocol-v2#_http_transport
@@ -34,9 +35,21 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	// For POST requests, we can only retry on network errors, not 5xx responses,
 	// because the request body is consumed and cannot be re-read.
 	res, err := retry.Do(ctx, func() (*http.Response, error) {
-		return c.client.Do(req)
-		// Only retry network errors - 5xx responses cannot be retried for POST
-		// requests because the request body has been consumed.
+		res, err := c.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			_ = res.Body.Close()
+			underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+			if res.StatusCode >= 500 {
+				return nil, NewServerUnavailableError(res.StatusCode, underlying)
+			}
+			return nil, underlying
+		}
+
+		return res, nil
 	})
 	if err != nil {
 		return err
@@ -47,15 +60,6 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 			err = fmt.Errorf("error closing response body: %w", closeErr)
 		}
 	}()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		_ = res.Body.Close()
-		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-		if res.StatusCode >= 500 {
-			return NewServerUnavailableError(res.StatusCode, underlying)
-		}
-		return underlying
-	}
 
 	logger.Debug("Receive-pack response",
 		"status", res.StatusCode,
