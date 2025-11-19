@@ -236,7 +236,7 @@ ctx = retry.ToContext(ctx, retrier)
 ```
 
 **What gets retried:**
-- Network errors (connection refused, timeouts)
+- Network timeout errors
 - 5xx server errors (for GET requests)
 - Temporary errors
 
