@@ -239,7 +239,8 @@ func (r *CircuitBreakerRetrier) MaxAttempts() int {
 
 The retry mechanism automatically retries on:
 
-- **Network errors**: Connection refused, timeouts, temporary network failures
+- **Network timeout errors**: Only network errors where `Timeout() == true` (e.g., timeouts, some temporary network failures) are retried by default.
+  > **Note:** "Connection refused" errors are not retried by the default implementation unless they are also timeout errors.
 - **5xx server errors**: Server unavailable errors (for GET and DELETE requests only)
 - **429 Too Many Requests**: Rate limiting errors (can be retried for all request types)
 - **Temporary errors**: Any error marked as temporary by the error type
