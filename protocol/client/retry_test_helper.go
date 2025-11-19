@@ -69,5 +69,3 @@ func (t *testRetrier) WaitCallCount() int {
 	defer t.mu.Unlock()
 	return t.waitCalls
 }
-
-
