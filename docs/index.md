@@ -4,6 +4,7 @@
 
 <p style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: center; margin-bottom: 2rem;">
   <a href="https://github.com/grafana/nanogit/releases"><img src="https://img.shields.io/github/v/release/grafana/nanogit" alt="GitHub Release"></a>
+  <a href="https://github.com/grafana/nanogit/stargazers"><img src="https://img.shields.io/github/stars/grafana/nanogit?style=social" alt="GitHub Stars"></a>
   <a href="https://github.com/grafana/nanogit/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/grafana/nanogit" alt="License"></a>
   <a href="https://goreportcard.com/report/github.com/grafana/nanogit"><img src="https://goreportcard.com/badge/github.com/grafana/nanogit" alt="Go Report Card"></a>
   <a href="https://godoc.org/github.com/grafana/nanogit"><img src="https://godoc.org/github.com/grafana/nanogit?status.svg" alt="GoDoc"></a>
