@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 )
 
@@ -13,6 +14,7 @@ type testRetrier struct {
 	waitFunc         func(ctx context.Context, attempt int) error
 	shouldRetryCalls int
 	waitCalls        int
+	mu               sync.Mutex
 }
 
 func newTestRetrier(maxAttempts int) *testRetrier {
@@ -31,7 +33,9 @@ func newTestRetrier(maxAttempts int) *testRetrier {
 }
 
 func (t *testRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+	t.mu.Lock()
 	t.shouldRetryCalls++
+	t.mu.Unlock()
 	if t.shouldRetryFunc != nil {
 		return t.shouldRetryFunc(ctx, err, attempt)
 	}
@@ -39,7 +43,9 @@ func (t *testRetrier) ShouldRetry(ctx context.Context, err error, attempt int) b
 }
 
 func (t *testRetrier) Wait(ctx context.Context, attempt int) error {
+	t.mu.Lock()
 	t.waitCalls++
+	t.mu.Unlock()
 	if t.waitFunc != nil {
 		return t.waitFunc(ctx, attempt)
 	}
@@ -53,10 +59,14 @@ func (t *testRetrier) MaxAttempts() int {
 }
 
 func (t *testRetrier) ShouldRetryCallCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.shouldRetryCalls
 }
 
 func (t *testRetrier) WaitCallCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.waitCalls
 }
 

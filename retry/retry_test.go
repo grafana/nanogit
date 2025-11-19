@@ -3,10 +3,9 @@ package retry
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
-
-	"net"
 
 	"github.com/stretchr/testify/require"
 )

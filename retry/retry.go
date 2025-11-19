@@ -32,14 +32,11 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		return fn()
 	}
 
-	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		result, err := fn()
 		if err == nil {
 			return result, nil
 		}
-
-		lastErr = err
 
 		// Check if we should retry
 		if !retrier.ShouldRetry(ctx, err, attempt) {
@@ -72,7 +69,9 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 		}
 	}
 
-	return zero, fmt.Errorf("max retry attempts (%d) reached: %w", maxAttempts, lastErr)
+	// This line is unreachable: the loop always returns early when attempt >= maxAttempts.
+	// It's here to satisfy Go's requirement that all code paths return a value.
+	panic("unreachable: retry loop should always return before exiting")
 }
 
 // DoVoid executes a function with retry logic that returns only an error.
