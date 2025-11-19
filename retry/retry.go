@@ -28,8 +28,8 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 	logger := log.FromContext(ctx)
 
 	maxAttempts := retrier.MaxAttempts()
-	if maxAttempts <= 0 {
-		maxAttempts = 1 // Safety: prevent infinite loops
+	if maxAttempts <= 1 {
+		return fn()
 	}
 
 	var lastErr error
@@ -83,4 +83,3 @@ func DoVoid(ctx context.Context, fn func() error) error {
 	})
 	return err
 }
-
