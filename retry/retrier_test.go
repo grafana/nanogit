@@ -103,7 +103,7 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 	})
 
-	t.Run("stops retrying after max attempts", func(t *testing.T) {
+	t.Run("ShouldRetry does not check max attempts", func(t *testing.T) {
 		ctx := context.Background()
 		retrier := NewExponentialBackoffRetrier().WithMaxAttempts(3)
 		err := &net.OpError{
@@ -111,10 +111,15 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 			Net: "tcp",
 			Err: errors.New("connection refused"),
 		}
+		// ShouldRetry should return true for all attempts - max attempts are handled by retry.Do
 		require.True(t, retrier.ShouldRetry(ctx, err, 1))
 		require.True(t, retrier.ShouldRetry(ctx, err, 2))
 		require.True(t, retrier.ShouldRetry(ctx, err, 3))
-		require.False(t, retrier.ShouldRetry(ctx, err, 4))
+		require.True(t, retrier.ShouldRetry(ctx, err, 4))
+		require.True(t, retrier.ShouldRetry(ctx, err, 100))
+		
+		// MaxAttempts should still return the correct value
+		require.Equal(t, 3, retrier.MaxAttempts())
 	})
 }
 

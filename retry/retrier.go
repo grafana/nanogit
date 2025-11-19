@@ -93,10 +93,10 @@ type ExponentialBackoffRetrier struct {
 func NewExponentialBackoffRetrier() *ExponentialBackoffRetrier {
 	return &ExponentialBackoffRetrier{
 		MaxAttemptsValue: 3,
-		InitialDelay:      100 * time.Millisecond,
-		MaxDelay:          5 * time.Second,
-		Multiplier:        2.0,
-		Jitter:            true,
+		InitialDelay:     100 * time.Millisecond,
+		MaxDelay:         5 * time.Second,
+		Multiplier:       2.0,
+		Jitter:           true,
 	}
 }
 
@@ -109,15 +109,10 @@ func NewExponentialBackoffRetrier() *ExponentialBackoffRetrier {
 //   - HTTP status code errors (4xx, 5xx) - these should be handled by HTTP-specific retriers
 //   - Context cancellation errors
 //   - Errors that should not be retried
+//
+// Max attempts are handled by retry.Do, not by this method.
 func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
 	if err == nil {
-		return false
-	}
-
-	// Don't retry if we've exceeded max attempts
-	// With maxAttempts=3, we allow attempts 1, 2, and 3, so retry if attempt <= maxAttempts
-	maxAttempts := r.MaxAttempts()
-	if maxAttempts > 0 && attempt > maxAttempts {
 		return false
 	}
 
@@ -219,4 +214,3 @@ func (r *ExponentialBackoffRetrier) WithoutJitter() *ExponentialBackoffRetrier {
 	r.Jitter = false
 	return r
 }
-

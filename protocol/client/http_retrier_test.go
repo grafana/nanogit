@@ -29,10 +29,12 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		}
 
 		// Should delegate to base retrier for timeout network errors
+		// ShouldRetry should return true for all attempts - max attempts are handled by retry.Do
 		require.True(t, tempRetrier.ShouldRetry(ctx, err, 1))
 		require.True(t, tempRetrier.ShouldRetry(ctx, err, 2))
 		require.True(t, tempRetrier.ShouldRetry(ctx, err, 3))
-		require.False(t, tempRetrier.ShouldRetry(ctx, err, 4))
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 4))
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 100))
 	})
 
 	t.Run("retries on network timeout errors", func(t *testing.T) {
@@ -457,7 +459,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 		require.False(t, tempRetrier.ShouldRetry(ctx, err, 1))
 	})
 
-	t.Run("respects base retrier's max attempts", func(t *testing.T) {
+	t.Run("ShouldRetry does not check max attempts", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(2)
 		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
 
@@ -468,9 +470,14 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 			Err: &timeoutError{},
 		}
 
+		// ShouldRetry should return true for all attempts - max attempts are handled by retry.Do
 		require.True(t, tempRetrier.ShouldRetry(ctx, err, 1))
 		require.True(t, tempRetrier.ShouldRetry(ctx, err, 2))
-		require.False(t, tempRetrier.ShouldRetry(ctx, err, 3))
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 3))
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 100))
+
+		// MaxAttempts should still return the correct value
+		require.Equal(t, 2, tempRetrier.MaxAttempts())
 	})
 }
 
