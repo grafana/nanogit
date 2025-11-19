@@ -285,7 +285,7 @@ ctx = retry.ToContext(ctx, &MyRetrier{})
 #### What Gets Retried
 
 The retry mechanism automatically retries on:
-- **Network errors**: Connection refused, timeouts, temporary network failures
+- **Network timeout errors**
 - **5xx server errors**: Server unavailable errors (for GET requests only)
 - **Temporary errors**: Any error marked as temporary
 
