@@ -49,10 +49,28 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
-	res, err := retry.Do(ctx, func() (*http.Response, error) {
-		res, retryErr := c.client.Do(req)
-		if retryErr != nil {
-			return nil, retryErr
+	retrier := retry.FromContextOrNoop(ctx)
+	maxAttempts := retrier.MaxAttempts()
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+
+	var res *http.Response
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		res, err = c.client.Do(req)
+		if err != nil {
+			// Retry on network errors
+			if retrier.ShouldRetry(ctx, err, attempt) && attempt < maxAttempts {
+				logger.Debug("Network error on SmartInfo, retrying",
+					"attempt", attempt,
+					"max_attempts", maxAttempts,
+					"error", err)
+				if waitErr := retrier.Wait(ctx, attempt); waitErr != nil {
+					return fmt.Errorf("context cancelled during retry wait: %w", waitErr)
+				}
+				continue
+			}
+			return err
 		}
 
 		// Check status code - 5xx errors should be retried
@@ -60,13 +78,28 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 			// Close the body before retrying
 			_ = res.Body.Close()
 			underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-			return nil, NewServerUnavailableError(res.StatusCode, underlying)
+			serverErr := NewServerUnavailableError(res.StatusCode, underlying)
+			
+			// Retry on 5xx errors (GET requests can be retried since there's no request body)
+			if attempt < maxAttempts {
+				logger.Debug("5xx error on SmartInfo, retrying",
+					"attempt", attempt,
+					"max_attempts", maxAttempts,
+					"status_code", res.StatusCode)
+				if waitErr := retrier.Wait(ctx, attempt); waitErr != nil {
+					return fmt.Errorf("context cancelled during retry wait: %w", waitErr)
+				}
+				continue
+			}
+			return serverErr
 		}
 
-		return res, nil
-	})
-	if err != nil {
-		return err
+		// Success or non-retryable error
+		break
+	}
+
+	if res == nil {
+		return fmt.Errorf("no response received after %d attempts", maxAttempts)
 	}
 
 	defer func() {

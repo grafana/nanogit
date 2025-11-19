@@ -193,9 +193,10 @@ func TestSmartInfo_Retry(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 3, attemptCount)
 
-		// Verify retrier was called
-		require.GreaterOrEqual(t, retrier.ShouldRetryCallCount(), 2, "ShouldRetry should be called at least twice")
-		require.GreaterOrEqual(t, retrier.WaitCallCount(), 2, "Wait should be called at least twice")
+		// Verify retrier Wait was called (5xx retries are handled manually, so ShouldRetry is not called for 5xx)
+		require.GreaterOrEqual(t, retrier.WaitCallCount(), 2, "Wait should be called at least twice for 5xx retries")
+		// ShouldRetry is not called for 5xx errors since we handle them manually
+		require.Equal(t, 0, retrier.ShouldRetryCallCount(), "ShouldRetry should not be called for 5xx errors (handled manually)")
 	})
 
 	t.Run("does not retry on 4xx errors", func(t *testing.T) {
