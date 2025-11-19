@@ -82,6 +82,142 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		require.True(t, httpRetrier.ShouldRetry(ctx, urlErr, 1))
 	})
 
+	t.Run("does not retry on url.Error with nil Err", func(t *testing.T) {
+		baseRetrier := retry.NewExponentialBackoffRetrier()
+		httpRetrier := NewHTTPRetrier(baseRetrier)
+
+		ctx := context.Background()
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: nil,
+		}
+
+		require.False(t, httpRetrier.ShouldRetry(ctx, urlErr, 1))
+	})
+
+	t.Run("does not retry on url.Error with non-net.Error Err", func(t *testing.T) {
+		baseRetrier := retry.NewExponentialBackoffRetrier()
+		httpRetrier := NewHTTPRetrier(baseRetrier)
+
+		ctx := context.Background()
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: errors.New("not a network error"),
+		}
+
+		require.False(t, httpRetrier.ShouldRetry(ctx, urlErr, 1))
+	})
+
+	t.Run("does not retry on url.Error with net.Error that is not a timeout", func(t *testing.T) {
+		baseRetrier := retry.NewExponentialBackoffRetrier()
+		httpRetrier := NewHTTPRetrier(baseRetrier)
+
+		ctx := context.Background()
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: errors.New("connection refused"),
+			},
+		}
+
+		require.False(t, httpRetrier.ShouldRetry(ctx, urlErr, 1))
+	})
+
+	t.Run("isTemporaryNetworkError returns false for url.Error with net.Error that is not a timeout", func(t *testing.T) {
+		httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: errors.New("connection refused"),
+			},
+		}
+
+		// net.OpError implements net.Error, but Timeout() returns false
+		require.False(t, httpRetrier.isTemporaryNetworkError(urlErr))
+	})
+}
+
+func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
+	t.Parallel()
+
+	httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+
+	t.Run("returns true for net.Error with Timeout", func(t *testing.T) {
+		err := &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: &timeoutError{},
+		}
+		require.True(t, httpRetrier.isTemporaryNetworkError(err))
+	})
+
+	t.Run("returns false for net.Error without Timeout", func(t *testing.T) {
+		err := &net.OpError{
+			Op:  "dial",
+			Net: "tcp",
+			Err: errors.New("connection refused"),
+		}
+		require.False(t, httpRetrier.isTemporaryNetworkError(err))
+	})
+
+	t.Run("returns true for url.Error wrapping net.Error with Timeout", func(t *testing.T) {
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: &timeoutError{},
+			},
+		}
+		require.True(t, httpRetrier.isTemporaryNetworkError(urlErr))
+	})
+
+	t.Run("returns false for url.Error wrapping net.Error without Timeout", func(t *testing.T) {
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: &net.OpError{
+				Op:  "dial",
+				Net: "tcp",
+				Err: errors.New("connection refused"),
+			},
+		}
+		require.False(t, httpRetrier.isTemporaryNetworkError(urlErr))
+	})
+
+	t.Run("returns false for url.Error with nil Err", func(t *testing.T) {
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: nil,
+		}
+		require.False(t, httpRetrier.isTemporaryNetworkError(urlErr))
+	})
+
+	t.Run("returns false for url.Error with non-net.Error Err", func(t *testing.T) {
+		urlErr := &url.Error{
+			Op:  http.MethodGet,
+			URL: "https://example.com/repo.git/info/refs",
+			Err: errors.New("not a network error"),
+		}
+		require.False(t, httpRetrier.isTemporaryNetworkError(urlErr))
+	})
+
+	t.Run("returns false for non-network error", func(t *testing.T) {
+		err := errors.New("not a network error")
+		require.False(t, httpRetrier.isTemporaryNetworkError(err))
+	})
+
 	t.Run("does not retry on network errors without Timeout", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
 		httpRetrier := NewHTTPRetrier(baseRetrier)
@@ -273,6 +409,30 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		require.False(t, httpRetrier.ShouldRetry(ctx, err, 1))
 	})
 
+	t.Run("does not retry on server unavailable error with context cancellation", func(t *testing.T) {
+		baseRetrier := retry.NewExponentialBackoffRetrier()
+		httpRetrier := NewHTTPRetrier(baseRetrier)
+
+		ctx := context.Background()
+		// Wrap context.Canceled in ServerUnavailableError
+		err := NewServerUnavailableError(http.MethodGet, http.StatusInternalServerError, context.Canceled)
+
+		// Should not retry even if it's a server unavailable error with GET
+		require.False(t, httpRetrier.ShouldRetry(ctx, err, 1))
+	})
+
+	t.Run("does not retry on server unavailable error with context deadline exceeded", func(t *testing.T) {
+		baseRetrier := retry.NewExponentialBackoffRetrier()
+		httpRetrier := NewHTTPRetrier(baseRetrier)
+
+		ctx := context.Background()
+		// Wrap context.DeadlineExceeded in ServerUnavailableError
+		err := NewServerUnavailableError(http.MethodGet, http.StatusInternalServerError, context.DeadlineExceeded)
+
+		// Should not retry even if it's a server unavailable error with GET
+		require.False(t, httpRetrier.ShouldRetry(ctx, err, 1))
+	})
+
 	t.Run("respects base retrier's max attempts", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(2)
 		httpRetrier := NewHTTPRetrier(baseRetrier)
@@ -406,6 +566,22 @@ func TestHTTPRetrier_extractOperation(t *testing.T) {
 		operation := httpRetrier.extractOperation(err)
 		require.Empty(t, operation)
 	})
+
+	t.Run("returns empty string for ServerUnavailableError without operation", func(t *testing.T) {
+		err := NewServerUnavailableError("", http.StatusInternalServerError, errors.New("error"))
+		operation := httpRetrier.extractOperation(err)
+		require.Empty(t, operation)
+	})
+
+	t.Run("returns empty string for url.Error without Op", func(t *testing.T) {
+		urlErr := &url.Error{
+			Op:  "",
+			URL: "https://example.com/repo.git/git-upload-pack",
+			Err: errors.New("connection refused"),
+		}
+		operation := httpRetrier.extractOperation(urlErr)
+		require.Empty(t, operation)
+	})
 }
 
 func TestHTTPRetrier_extractStatusCode(t *testing.T) {
@@ -491,4 +667,3 @@ type temporaryError struct{}
 func (e *temporaryError) Error() string   { return "temporary" }
 func (e *temporaryError) Timeout() bool   { return false }
 func (e *temporaryError) Temporary() bool { return true }
-

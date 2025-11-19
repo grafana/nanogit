@@ -58,84 +58,47 @@ func (r *HTTPRetrier) ShouldRetry(ctx context.Context, err error, attempt int) b
 		return false
 	}
 
-	// Check for network errors - only retry if Timeout() or Temporary()
 	if r.isTemporaryNetworkError(err) {
-		// Delegate to wrapped retrier for temporary network errors
 		return r.wrapped.ShouldRetry(ctx, err, attempt)
 	}
 
-	// Check for server unavailable errors
-	if errors.Is(err, ErrServerUnavailable) {
-		// Don't retry on context cancellation
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return false
-		}
-
-		// Extract operation and status code from error
-		operation := r.extractOperation(err)
-		statusCode := r.extractStatusCode(err)
-
-		// Check if operation and status code indicate retryability
-		if !r.isRetryableOperation(operation, statusCode) {
-			return false
-		}
-
-		return true
+	if !errors.Is(err, ErrServerUnavailable) {
+		return false
 	}
 
-	// Don't retry on other errors (4xx client errors, etc.)
-	return false
+	// Don't retry on context cancellation
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	return r.isRetryableOperation(r.extractOperation(err), r.extractStatusCode(err))
 }
 
 // isTemporaryNetworkError checks if an error is a temporary network error that should be retried.
 // It checks for net.Error with Timeout(), including errors wrapped in url.Error.
-// Temporary() is deprecated and most temporary errors are timeouts, so we only check Timeout().
 func (r *HTTPRetrier) isTemporaryNetworkError(err error) bool {
-	// Check for net.Error directly
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		// Retry on timeouts (most temporary errors are timeouts)
-		if netErr.Timeout() {
-			return true
-		}
+		return netErr.Timeout()
 	}
-
-	// Check for url.Error and unwrap to check underlying net.Error
-	// Most errors from http.Client are wrapped in *url.Error
+	// Check if wrapped in url.Error
 	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		if urlErr.Err != nil {
-			var underlyingNetErr net.Error
-			if errors.As(urlErr.Err, &underlyingNetErr) {
-				// Retry on timeouts (most temporary errors are timeouts)
-				if underlyingNetErr.Timeout() {
-					return true
-				}
-			}
-		}
+	if errors.As(err, &urlErr) && urlErr.Err != nil && errors.As(urlErr.Err, &netErr) {
+		return netErr.Timeout()
 	}
-
 	return false
 }
 
 // extractOperation extracts the HTTP method from the error chain.
-// It checks ServerUnavailableError first, then tries to extract from url.Error.
 func (r *HTTPRetrier) extractOperation(err error) string {
-	// Check for ServerUnavailableError with operation
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) && serverErr.Operation != "" {
 		return serverErr.Operation
 	}
-
-	// Try to extract from url.Error
-	// url.Error.Op contains the HTTP method (GET, POST, etc.)
 	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		if urlErr.Op != "" {
-			return urlErr.Op
-		}
+	if errors.As(err, &urlErr) && urlErr.Op != "" {
+		return urlErr.Op
 	}
-
 	return ""
 }
 
@@ -149,22 +112,15 @@ func (r *HTTPRetrier) extractStatusCode(err error) int {
 }
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
-// POST operations cannot be retried on 5xx because request body is consumed.
-// GET and DELETE operations can be retried on 5xx (they are idempotent).
-// HTTP 429 (Too Many Requests) can be retried for all operations.
-// Network errors (statusCode == 0) are always retryable.
 func (r *HTTPRetrier) isRetryableOperation(operation string, statusCode int) bool {
 	// Network errors (no status code) are always retryable
 	if statusCode == 0 {
 		return true
 	}
-
 	// HTTP 429 (Too Many Requests) can be retried for all operations
-	// Rate limiting is temporary and doesn't consume request body
 	if statusCode == http.StatusTooManyRequests {
 		return true
 	}
-
 	// Check for specific 5xx status codes
 	switch statusCode {
 	case http.StatusInternalServerError,
@@ -172,20 +128,9 @@ func (r *HTTPRetrier) isRetryableOperation(operation string, statusCode int) boo
 		http.StatusServiceUnavailable,
 		http.StatusGatewayTimeout:
 		// POST operations cannot be retried on 5xx because request body is consumed
-		if operation == http.MethodPost {
-			return false
-		}
-
 		// GET and DELETE operations can be retried on 5xx (they are idempotent)
-		if operation == http.MethodGet || operation == http.MethodDelete {
-			return true
-		}
-
-		// For unknown operations, be conservative and don't retry on 5xx
-		// (they might be POST operations)
-		return false
+		return operation == http.MethodGet || operation == http.MethodDelete
 	default:
-		// Don't retry on other status codes
 		return false
 	}
 }
