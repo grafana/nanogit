@@ -233,6 +233,48 @@ func TestExponentialBackoffRetrier_Configuration(t *testing.T) {
 		retrier = retrier.WithJitter()
 		require.True(t, retrier.Jitter)
 	})
+
+	t.Run("ignores zero initial delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier()
+		originalDelay := retrier.InitialDelay
+		retrier.WithInitialDelay(0)
+		require.Equal(t, originalDelay, retrier.InitialDelay)
+	})
+
+	t.Run("ignores negative initial delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier()
+		originalDelay := retrier.InitialDelay
+		retrier.WithInitialDelay(-1 * time.Millisecond)
+		require.Equal(t, originalDelay, retrier.InitialDelay)
+	})
+
+	t.Run("ignores zero max delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier()
+		originalMaxDelay := retrier.MaxDelay
+		retrier.WithMaxDelay(0)
+		require.Equal(t, originalMaxDelay, retrier.MaxDelay)
+	})
+
+	t.Run("ignores negative max delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier()
+		originalMaxDelay := retrier.MaxDelay
+		retrier.WithMaxDelay(-1 * time.Second)
+		require.Equal(t, originalMaxDelay, retrier.MaxDelay)
+	})
+
+	t.Run("ignores zero multiplier", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier()
+		originalMultiplier := retrier.Multiplier
+		retrier.WithMultiplier(0)
+		require.Equal(t, originalMultiplier, retrier.Multiplier)
+	})
+
+	t.Run("ignores negative multiplier", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier()
+		originalMultiplier := retrier.Multiplier
+		retrier.WithMultiplier(-1.0)
+		require.Equal(t, originalMultiplier, retrier.Multiplier)
+	})
 }
 
 // Helper types for testing

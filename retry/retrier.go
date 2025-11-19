@@ -192,20 +192,29 @@ func (r *ExponentialBackoffRetrier) WithMaxAttempts(attempts int) *ExponentialBa
 }
 
 // WithInitialDelay sets the initial delay before the first retry.
+// If delay is <= 0, the value is ignored and the current delay remains unchanged.
 func (r *ExponentialBackoffRetrier) WithInitialDelay(delay time.Duration) *ExponentialBackoffRetrier {
-	r.InitialDelay = delay
+	if delay > 0 {
+		r.InitialDelay = delay
+	}
 	return r
 }
 
 // WithMaxDelay sets the maximum delay between retries.
+// If delay is <= 0, the value is ignored and the current max delay remains unchanged.
 func (r *ExponentialBackoffRetrier) WithMaxDelay(delay time.Duration) *ExponentialBackoffRetrier {
-	r.MaxDelay = delay
+	if delay > 0 {
+		r.MaxDelay = delay
+	}
 	return r
 }
 
 // WithMultiplier sets the exponential backoff multiplier.
+// If multiplier is <= 0, the value is ignored and the current multiplier remains unchanged.
 func (r *ExponentialBackoffRetrier) WithMultiplier(multiplier float64) *ExponentialBackoffRetrier {
-	r.Multiplier = multiplier
+	if multiplier > 0 {
+		r.Multiplier = multiplier
+	}
 	return r
 }
 
