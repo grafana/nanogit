@@ -32,8 +32,6 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
-	// Note: POST requests do not retry on 5xx errors because the request body is consumed and cannot be re-read.
-	// However, 429 (Too Many Requests) can be retried even for POST requests.
 	res, err := c.do(ctx, req)
 
 	if err != nil {

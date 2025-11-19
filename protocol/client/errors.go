@@ -58,16 +58,15 @@ func NewServerUnavailableError(operation string, statusCode int, underlying erro
 //   - Server errors (5xx status codes)
 //   - Too Many Requests (429 status code)
 //
-// If the response is server unavailable, it closes the response body and returns a ServerUnavailableError.
+// If the response is server unavailable, it returns a ServerUnavailableError.
 // The HTTP method is extracted from the response's request.
-// Otherwise, it returns nil.
+// The caller is responsible for closing the response body.
 func CheckServerUnavailable(res *http.Response) error {
 	if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
 		operation := ""
 		if res.Request != nil {
 			operation = res.Request.Method
 		}
-		_ = res.Body.Close()
 		return NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
 	}
 	return nil

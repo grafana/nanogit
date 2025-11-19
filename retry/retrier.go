@@ -39,7 +39,8 @@ type Retrier interface {
 
 	// Wait waits before the next retry attempt.
 	// attempt is the current attempt number (1-indexed).
-	// Returns an error if the context was cancelled during the wait.
+	// Returns an error if the context was cancelled or its deadline was exceeded during the wait.
+	// Specifically, may return context.Canceled or context.DeadlineExceeded.
 	Wait(ctx context.Context, attempt int) error
 
 	// MaxAttempts returns the maximum number of attempts (including the initial attempt).

@@ -146,10 +146,12 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 // The response body is automatically closed if the server is unavailable.
 // The context is automatically wrapped with an HTTP retrier that wraps any existing retrier.
 func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {
-	// Always wrap the context with a temporary error retrier that wraps the existing retrier (or NoopRetrier if none)
+	// Wrap the context with a temporary error retrier unless retries are disabled
 	baseRetrier := retry.FromContext(ctx)
-	tempRetrier := newTemporaryErrorRetrier(baseRetrier)
-	ctx = retry.ToContext(ctx, tempRetrier)
+	if _, ok := baseRetrier.(*retry.NoopRetrier); !ok {
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		ctx = retry.ToContext(ctx, tempRetrier)
+	}
 
 	return retry.Do(ctx, func() (*http.Response, error) {
 		res, err := c.client.Do(req)
@@ -158,6 +160,7 @@ func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, 
 		}
 
 		if err := CheckServerUnavailable(res); err != nil {
+			_ = res.Body.Close()
 			return nil, err
 		}
 

@@ -52,12 +52,13 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 		if r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode) {
 			return true
 		}
-		// Server unavailable but not retryable, delegate to wrapped retrier
+		// Server unavailable but not retryable, delegate to wrapped retrier.
+		// The retrier is retrieved from the context. If no retrier is found, a NoopRetrier is used (no retries will be performed).
 		return r.wrapped.ShouldRetry(ctx, err, attempt)
 	}
 
-	// Not a server unavailable error, delegate to wrapped retrier
-	// (handles network errors, context cancellation, etc.)
+	// Not a server unavailable error, delegate to wrapped retrier (handles network errors, context cancellation, etc.).
+	// The retrier is retrieved from the context. If no retrier is found, a NoopRetrier is used (no retries will be performed).
 	return r.wrapped.ShouldRetry(ctx, err, attempt)
 }
 

@@ -286,7 +286,7 @@ POST requests can retry on network errors and 429 (Too Many Requests), but not o
 
 When an HTTP POST request is made with an `io.Reader` body, the HTTP client reads from the reader to send the request body. Once `client.Do(req)` completes (even if it returns a 5xx error), the `io.Reader` has been consumed and cannot be re-read. To retry, we would need to recreate the request with a fresh body, but the original `io.Reader` is already consumed and most `io.Reader` implementations (like `io.Pipe`) cannot be reset. This limitation applies to streaming request bodies, which is how `UploadPack` and `ReceivePack` operate.
 
-**Note:** 429 (Too Many Requests) can be retried even for POST requests because rate limiting is a temporary condition that doesn't consume the request body. The server typically hasn't processed the request when returning 429, so the body can be re-sent on retry.
+**Note:** 429 (Too Many Requests) can be retried even for POST requests because rate limiting is typically enforced before the server consumes the request body. In most cases, the server responds with 429 before reading or processing the body, so the body remains unconsumed and can be safely re-sent on retry. This is not due to any special handling of the request body, but rather the timing of the rate limiting response.
 
 ## Integration Points
 

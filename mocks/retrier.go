@@ -134,6 +134,7 @@ func (fake *FakeRetrier) ShouldRetryCalls(stub func(context.Context, error, int)
 	fake.ShouldRetryStub = stub
 }
 
+//lint:ignore ST1008 Test helper returns args in same order as interface method signature
 func (fake *FakeRetrier) ShouldRetryArgsForCall(i int) (context.Context, error, int) {
 	fake.shouldRetryMutex.RLock()
 	defer fake.shouldRetryMutex.RUnlock()
