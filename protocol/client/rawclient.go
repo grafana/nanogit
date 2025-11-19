@@ -5,13 +5,59 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 )
+
+const (
+	maxRetries     = 3
+	initialBackoff = 100 * time.Millisecond
+	maxBackoff     = 2 * time.Second
+)
+
+// isNetworkError determines if an error is a network error that should be retried.
+// Network errors are errors that occur before a response is received, such as:
+// - Connection errors (connection refused, connection reset, etc.)
+// - Timeout errors (i/o timeout)
+// - DNS errors
+// - Temporary network errors
+// Note: Context cancellation and deadline exceeded are NOT considered network errors.
+func isNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for context cancellation/deadline - these should not be retried
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	// Check for net.Error interface (includes timeout and temporary errors)
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+
+	// Check for DNS errors
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.Temporary() || dnsErr.Timeout()
+	}
+
+	// Check for connection errors (connection refused, connection reset, etc.)
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	return false
+}
 
 // RawClient is a client that can be used to make raw Git protocol requests.
 // It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
