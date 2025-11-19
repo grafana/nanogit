@@ -10,32 +10,26 @@ import (
 	"github.com/grafana/nanogit/retry"
 )
 
-// HTTPRetrier wraps another retrier and only retries on HTTP-specific errors:
+// httpRetrier wraps another retrier and only retries on HTTP-specific errors:
 // - Network errors (net.Error)
 // - Server unavailable errors (ErrServerUnavailable)
 //
 // All other errors are not retried. This allows HTTP-specific retry logic
 // to be layered on top of a base retrier (e.g., ExponentialBackoffRetrier).
 //
-// Example usage:
-//
-//	baseRetrier := retry.NewExponentialBackoffRetrier().
-//	    WithMaxAttempts(3).
-//	    WithInitialDelay(100 * time.Millisecond)
-//	httpRetrier := NewHTTPRetrier(baseRetrier)
-//	ctx = retry.ToContext(ctx, httpRetrier)
-type HTTPRetrier struct {
+// This is an internal type used automatically by the rawClient.do method.
+type httpRetrier struct {
 	// wrapped is the underlying retrier that provides the retry logic
 	// (backoff timing, max attempts, etc.)
 	wrapped retry.Retrier
 }
 
-// NewHTTPRetrier creates a new HTTPRetrier that wraps the given retrier.
-func NewHTTPRetrier(wrapped retry.Retrier) *HTTPRetrier {
+// newHTTPRetrier creates a new httpRetrier that wraps the given retrier.
+func newHTTPRetrier(wrapped retry.Retrier) *httpRetrier {
 	if wrapped == nil {
 		wrapped = &retry.NoopRetrier{}
 	}
-	return &HTTPRetrier{
+	return &httpRetrier{
 		wrapped: wrapped,
 	}
 }
@@ -53,7 +47,7 @@ func NewHTTPRetrier(wrapped retry.Retrier) *HTTPRetrier {
 //
 // Max attempts are handled by retry.Do, not by this method.
 // All other errors are not retried.
-func (r *HTTPRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+func (r *httpRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
 	if err == nil {
 		return false
 	}
@@ -76,7 +70,7 @@ func (r *HTTPRetrier) ShouldRetry(ctx context.Context, err error, attempt int) b
 
 // isTemporaryNetworkError checks if an error is a temporary network error that should be retried.
 // It checks for net.Error with Timeout(), including errors wrapped in url.Error.
-func (r *HTTPRetrier) isTemporaryNetworkError(err error) bool {
+func (r *httpRetrier) isTemporaryNetworkError(err error) bool {
 	var netErr net.Error
 	if errors.As(err, &netErr) {
 		return netErr.Timeout()
@@ -90,7 +84,7 @@ func (r *HTTPRetrier) isTemporaryNetworkError(err error) bool {
 }
 
 // extractOperation extracts the HTTP method from the error chain.
-func (r *HTTPRetrier) extractOperation(err error) string {
+func (r *httpRetrier) extractOperation(err error) string {
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) && serverErr.Operation != "" {
 		return serverErr.Operation
@@ -103,7 +97,7 @@ func (r *HTTPRetrier) extractOperation(err error) string {
 }
 
 // extractStatusCode extracts the status code from the error chain.
-func (r *HTTPRetrier) extractStatusCode(err error) int {
+func (r *httpRetrier) extractStatusCode(err error) int {
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) {
 		return serverErr.StatusCode
@@ -112,7 +106,7 @@ func (r *HTTPRetrier) extractStatusCode(err error) int {
 }
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
-func (r *HTTPRetrier) isRetryableOperation(operation string, statusCode int) bool {
+func (r *httpRetrier) isRetryableOperation(operation string, statusCode int) bool {
 	// Network errors (no status code) are always retryable
 	if statusCode == 0 {
 		return true
@@ -136,11 +130,11 @@ func (r *HTTPRetrier) isRetryableOperation(operation string, statusCode int) boo
 }
 
 // Wait waits before the next retry attempt by delegating to the wrapped retrier.
-func (r *HTTPRetrier) Wait(ctx context.Context, attempt int) error {
+func (r *httpRetrier) Wait(ctx context.Context, attempt int) error {
 	return r.wrapped.Wait(ctx, attempt)
 }
 
 // MaxAttempts returns the maximum number of attempts by delegating to the wrapped retrier.
-func (r *HTTPRetrier) MaxAttempts() int {
+func (r *httpRetrier) MaxAttempts() int {
 	return r.wrapped.MaxAttempts()
 }

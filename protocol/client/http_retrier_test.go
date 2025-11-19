@@ -19,7 +19,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("retries on network errors with timeout error", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(3)
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := &net.OpError{
@@ -37,7 +37,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("retries on network timeout errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := &net.OpError{
@@ -51,7 +51,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("retries on timeout network errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := &net.OpError{
@@ -65,7 +65,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("retries on network errors wrapped in url.Error", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		urlErr := &url.Error{
@@ -84,7 +84,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on url.Error with nil Err", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		urlErr := &url.Error{
@@ -98,7 +98,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on url.Error with non-net.Error Err", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		urlErr := &url.Error{
@@ -112,7 +112,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on url.Error with net.Error that is not a timeout", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		urlErr := &url.Error{
@@ -129,7 +129,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 	})
 
 	t.Run("isTemporaryNetworkError returns false for url.Error with net.Error that is not a timeout", func(t *testing.T) {
-		httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+		httpRetrier := newHTTPRetrier(retry.NewExponentialBackoffRetrier())
 
 		urlErr := &url.Error{
 			Op:  http.MethodGet,
@@ -149,7 +149,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 	t.Parallel()
 
-	httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+	httpRetrier := newHTTPRetrier(retry.NewExponentialBackoffRetrier())
 
 	t.Run("returns true for net.Error with Timeout", func(t *testing.T) {
 		err := &net.OpError{
@@ -220,7 +220,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on network errors without Timeout", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		// net.OpError with a plain error that doesn't implement Timeout()
@@ -236,7 +236,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on network errors with only Temporary (deprecated)", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		// temporaryError has Temporary() = true but Timeout() = false
@@ -252,7 +252,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("retries on server unavailable errors with GET operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -267,7 +267,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("retries on server unavailable errors with DELETE operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodDelete, http.StatusInternalServerError, errors.New("internal server error"))
@@ -279,7 +279,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors with POST operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -290,7 +290,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors with POST operation and 500 status", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, errors.New("internal server error"))
@@ -301,7 +301,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors without operation (conservative)", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError("", http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -312,7 +312,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("retries on server unavailable errors with network error (statusCode == 0)", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		// Network error wrapped in ServerUnavailableError (statusCode 0 means network error)
@@ -324,7 +324,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("retries on wrapped server unavailable errors with GET operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		underlying := errors.New("underlying error")
@@ -336,7 +336,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("retries on 429 Too Many Requests for GET operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusTooManyRequests, errors.New("too many requests"))
@@ -347,7 +347,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("retries on 429 Too Many Requests for POST operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusTooManyRequests, errors.New("too many requests"))
@@ -358,7 +358,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on other 4xx status codes", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusNotFound, errors.New("not found"))
@@ -369,7 +369,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on 4xx client errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := fmt.Errorf("got status code %d: Not Found", http.StatusNotFound)
@@ -379,7 +379,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on nil errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		require.False(t, httpRetrier.ShouldRetry(ctx, nil, 1))
@@ -387,7 +387,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on context cancellation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := context.Canceled
@@ -399,7 +399,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on context deadline exceeded", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := context.DeadlineExceeded
@@ -411,7 +411,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on server unavailable error with context cancellation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		// Wrap context.Canceled in ServerUnavailableError
@@ -423,7 +423,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("does not retry on server unavailable error with context deadline exceeded", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		// Wrap context.DeadlineExceeded in ServerUnavailableError
@@ -435,7 +435,7 @@ func TestHTTPRetrier_isTemporaryNetworkError(t *testing.T) {
 
 	t.Run("respects base retrier's max attempts", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(2)
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 		err := &net.OpError{
@@ -457,7 +457,7 @@ func TestHTTPRetrier_Wait(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().
 			WithInitialDelay(10 * time.Millisecond).
 			WithoutJitter()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx := context.Background()
 
@@ -473,7 +473,7 @@ func TestHTTPRetrier_Wait(t *testing.T) {
 	t.Run("respects context cancellation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().
 			WithInitialDelay(1 * time.Second)
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -489,20 +489,20 @@ func TestHTTPRetrier_MaxAttempts(t *testing.T) {
 
 	t.Run("delegates max attempts to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(5)
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		require.Equal(t, 5, httpRetrier.MaxAttempts())
 	})
 
 	t.Run("uses default when wrapped retrier has default", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		require.Equal(t, 3, httpRetrier.MaxAttempts())
 	})
 
 	t.Run("handles nil wrapped retrier", func(t *testing.T) {
-		httpRetrier := NewHTTPRetrier(nil)
+		httpRetrier := newHTTPRetrier(nil)
 
 		// Should use NoopRetrier which returns 1
 		require.Equal(t, 1, httpRetrier.MaxAttempts())
@@ -514,14 +514,14 @@ func TestNewHTTPRetrier(t *testing.T) {
 
 	t.Run("creates retrier with wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		httpRetrier := NewHTTPRetrier(baseRetrier)
+		httpRetrier := newHTTPRetrier(baseRetrier)
 
 		require.NotNil(t, httpRetrier)
 		require.Equal(t, baseRetrier, httpRetrier.wrapped)
 	})
 
 	t.Run("handles nil wrapped retrier", func(t *testing.T) {
-		httpRetrier := NewHTTPRetrier(nil)
+		httpRetrier := newHTTPRetrier(nil)
 
 		require.NotNil(t, httpRetrier)
 		require.NotNil(t, httpRetrier.wrapped)
@@ -533,7 +533,7 @@ func TestNewHTTPRetrier(t *testing.T) {
 func TestHTTPRetrier_extractOperation(t *testing.T) {
 	t.Parallel()
 
-	httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+	httpRetrier := newHTTPRetrier(retry.NewExponentialBackoffRetrier())
 
 	t.Run("extracts HTTP method from ServerUnavailableError", func(t *testing.T) {
 		err := NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, errors.New("error"))
@@ -587,7 +587,7 @@ func TestHTTPRetrier_extractOperation(t *testing.T) {
 func TestHTTPRetrier_extractStatusCode(t *testing.T) {
 	t.Parallel()
 
-	httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+	httpRetrier := newHTTPRetrier(retry.NewExponentialBackoffRetrier())
 
 	t.Run("extracts status code from ServerUnavailableError", func(t *testing.T) {
 		err := NewServerUnavailableError("", http.StatusServiceUnavailable, errors.New("error"))
@@ -605,7 +605,7 @@ func TestHTTPRetrier_extractStatusCode(t *testing.T) {
 func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 	t.Parallel()
 
-	httpRetrier := NewHTTPRetrier(retry.NewExponentialBackoffRetrier())
+	httpRetrier := newHTTPRetrier(retry.NewExponentialBackoffRetrier())
 
 	t.Run("retries network errors (statusCode == 0)", func(t *testing.T) {
 		require.True(t, httpRetrier.isRetryableOperation(http.MethodPost, 0))
