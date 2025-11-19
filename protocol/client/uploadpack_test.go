@@ -191,7 +191,7 @@ func TestUploadPack_Retry(t *testing.T) {
 				hj, ok := w.(http.Hijacker)
 				if ok {
 					conn, _, _ := hj.Hijack()
-					conn.Close()
+					_ = conn.Close()
 				}
 				return
 			}

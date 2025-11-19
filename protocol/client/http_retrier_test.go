@@ -354,17 +354,3 @@ func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation("", http.StatusInternalServerError))
 	})
 }
-
-// Helper types for testing
-
-type timeoutError struct{}
-
-func (e *timeoutError) Error() string   { return "timeout" }
-func (e *timeoutError) Timeout() bool   { return true }
-func (e *timeoutError) Temporary() bool { return false }
-
-type temporaryError struct{}
-
-func (e *temporaryError) Error() string   { return "temporary" }
-func (e *temporaryError) Timeout() bool   { return false }
-func (e *temporaryError) Temporary() bool { return true }

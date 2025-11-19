@@ -235,7 +235,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 					return
 				}
 				conn, _, _ := hj.Hijack()
-				conn.Close()
+				_ = conn.Close()
 				return
 			}
 			w.WriteHeader(http.StatusOK)
