@@ -158,9 +158,7 @@ func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, 
 		}
 
 		if err := CheckServerUnavailable(res); err != nil {
-			// Return the response along with the error so callers can inspect it if needed
-			// The response body is already closed by CheckServerUnavailable
-			return res, err
+			return nil, err
 		}
 
 		return res, nil

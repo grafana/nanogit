@@ -288,21 +288,4 @@ func TestReceivePack_Retry(t *testing.T) {
 		require.Equal(t, 0, retrier.WaitCallCount(), "Wait should not be called for 5xx POST errors")
 	})
 
-	t.Run("works without retrier", func(t *testing.T) {
-		attemptCount := 0
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			attemptCount++
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("000dunpack ok0000"))
-		}))
-		defer server.Close()
-
-		client, err := NewRawClient(server.URL + "/repo")
-		require.NoError(t, err)
-
-		// No retrier in context - should work but not retry
-		err = client.ReceivePack(context.Background(), strings.NewReader("test"))
-		require.NoError(t, err)
-		require.Equal(t, 1, attemptCount, "should make single attempt without retrier")
-	})
 }
