@@ -10,67 +10,78 @@ import (
 	"github.com/grafana/nanogit/retry"
 )
 
-// httpRetrier wraps another retrier and only retries on HTTP-specific errors:
-// - Network errors (net.Error)
-// - Server unavailable errors (ErrServerUnavailable)
+// temporaryErrorRetrier wraps another retrier and only retries on temporary errors:
+// - Network errors with Timeout() (net.Error)
+// - Server unavailable errors (ErrServerUnavailable) that are retryable based on HTTP method/status
 //
-// All other errors are not retried. This allows HTTP-specific retry logic
-// to be layered on top of a base retrier (e.g., ExponentialBackoffRetrier).
+// If the error is not temporary, it won't retry at all. Otherwise, it delegates to the base retrier.
+// This allows temporary error filtering to be layered on top of a base retrier (e.g., ExponentialBackoffRetrier).
 //
 // This is an internal type used automatically by the rawClient.do method.
-type httpRetrier struct {
+type temporaryErrorRetrier struct {
 	// wrapped is the underlying retrier that provides the retry logic
 	// (backoff timing, max attempts, etc.)
 	wrapped retry.Retrier
 }
 
-// newHTTPRetrier creates a new httpRetrier that wraps the given retrier.
-func newHTTPRetrier(wrapped retry.Retrier) *httpRetrier {
+// newTemporaryErrorRetrier creates a new temporaryErrorRetrier that wraps the given retrier.
+func newTemporaryErrorRetrier(wrapped retry.Retrier) *temporaryErrorRetrier {
 	if wrapped == nil {
 		wrapped = &retry.NoopRetrier{}
 	}
-	return &httpRetrier{
+	return &temporaryErrorRetrier{
 		wrapped: wrapped,
 	}
 }
 
 // ShouldRetry determines if an error should be retried.
-// Returns true only if:
-//   - The error is a net.Error with Timeout() (network errors, timeouts, etc.)
-//   - The error is a server unavailable error (ErrServerUnavailable) with retryable operation/status code
+// Returns false if the error is not temporary. Otherwise, delegates to the wrapped retrier.
 //
-// For network errors, checks Timeout() before delegating to the wrapped retrier.
-// For server unavailable errors, checks HTTP method and status code:
+// An error is considered temporary if:
+//   - It is a net.Error with Timeout() (network errors, timeouts, etc.)
+//   - It is a server unavailable error (ErrServerUnavailable) with retryable operation/status code:
 //   - POST operations are not retried on 5xx because request body is consumed
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
 //   - HTTP 429 (Too Many Requests) can be retried for all operations
 //
 // Max attempts are handled by retry.Do, not by this method.
-// All other errors are not retried.
-func (r *httpRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
 	if err == nil {
 		return false
 	}
 
-	if r.isTemporaryNetworkError(err) {
-		return r.wrapped.ShouldRetry(ctx, err, attempt)
-	}
-
-	if !errors.Is(err, ErrServerUnavailable) {
+	// Check if error is temporary
+	if !r.isTemporaryError(err) {
 		return false
 	}
 
+	// Error is temporary, delegate to wrapped retrier
+	return r.wrapped.ShouldRetry(ctx, err, attempt)
+}
+
+// isTemporaryError checks if an error is temporary and should be considered for retry.
+func (r *temporaryErrorRetrier) isTemporaryError(err error) bool {
 	// Don't retry on context cancellation
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
 
-	return r.isRetryableOperation(r.extractOperation(err), r.extractStatusCode(err))
+	// Check for temporary network errors
+	if r.isTemporaryNetworkError(err) {
+		return true
+	}
+
+	// Check for server unavailable errors that are retryable
+	if errors.Is(err, ErrServerUnavailable) {
+		return r.isRetryableOperation(r.extractOperation(err), r.extractStatusCode(err))
+	}
+
+	return false
 }
 
 // isTemporaryNetworkError checks if an error is a temporary network error that should be retried.
 // It checks for net.Error with Timeout(), including errors wrapped in url.Error.
-func (r *httpRetrier) isTemporaryNetworkError(err error) bool {
+func (r *temporaryErrorRetrier) isTemporaryNetworkError(err error) bool {
 	var netErr net.Error
 	if errors.As(err, &netErr) {
 		return netErr.Timeout()
@@ -84,7 +95,7 @@ func (r *httpRetrier) isTemporaryNetworkError(err error) bool {
 }
 
 // extractOperation extracts the HTTP method from the error chain.
-func (r *httpRetrier) extractOperation(err error) string {
+func (r *temporaryErrorRetrier) extractOperation(err error) string {
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) && serverErr.Operation != "" {
 		return serverErr.Operation
@@ -97,7 +108,7 @@ func (r *httpRetrier) extractOperation(err error) string {
 }
 
 // extractStatusCode extracts the status code from the error chain.
-func (r *httpRetrier) extractStatusCode(err error) int {
+func (r *temporaryErrorRetrier) extractStatusCode(err error) int {
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) {
 		return serverErr.StatusCode
@@ -106,7 +117,7 @@ func (r *httpRetrier) extractStatusCode(err error) int {
 }
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
-func (r *httpRetrier) isRetryableOperation(operation string, statusCode int) bool {
+func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCode int) bool {
 	// Network errors (no status code) are always retryable
 	if statusCode == 0 {
 		return true
@@ -130,11 +141,11 @@ func (r *httpRetrier) isRetryableOperation(operation string, statusCode int) boo
 }
 
 // Wait waits before the next retry attempt by delegating to the wrapped retrier.
-func (r *httpRetrier) Wait(ctx context.Context, attempt int) error {
+func (r *temporaryErrorRetrier) Wait(ctx context.Context, attempt int) error {
 	return r.wrapped.Wait(ctx, attempt)
 }
 
 // MaxAttempts returns the maximum number of attempts by delegating to the wrapped retrier.
-func (r *httpRetrier) MaxAttempts() int {
+func (r *temporaryErrorRetrier) MaxAttempts() int {
 	return r.wrapped.MaxAttempts()
 }
