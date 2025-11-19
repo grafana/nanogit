@@ -24,7 +24,7 @@ import (
 //   - The last error if all retry attempts are exhausted
 func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 	var zero T
-	retrier := FromContextOrNoop(ctx)
+	retrier := FromContext(ctx)
 	logger := log.FromContext(ctx)
 
 	maxAttempts := retrier.MaxAttempts()

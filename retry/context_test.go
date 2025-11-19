@@ -20,11 +20,11 @@ func TestContextHelpers(t *testing.T) {
 		require.Equal(t, retrier, retrieved)
 	})
 
-	t.Run("FromContext returns nil when no retrier", func(t *testing.T) {
+	t.Run("FromContext returns NoopRetrier when no retrier", func(t *testing.T) {
 		ctx := context.Background()
 		retrieved := FromContext(ctx)
 
-		require.Nil(t, retrieved)
+		require.IsType(t, &NoopRetrier{}, retrieved)
 	})
 
 	t.Run("FromContextOrNoop returns retrier from context", func(t *testing.T) {

@@ -13,23 +13,20 @@ func ToContext(ctx context.Context, retrier Retrier) context.Context {
 }
 
 // FromContext gets the retrier from the context.
+// Always returns a retrier - if none is set, returns a NoopRetrier.
 func FromContext(ctx context.Context) Retrier {
 	retrier, ok := ctx.Value(retrierKey{}).(Retrier)
 	if !ok {
-		return nil
+		return &NoopRetrier{}
 	}
 
 	return retrier
 }
 
 // FromContextOrNoop returns the retrier from the context, or a NoopRetrier if none is set.
-// This ensures that retry logic always has a retrier to work with.
+// This is now equivalent to FromContext since FromContext always returns a retrier.
+// Kept for backward compatibility.
 func FromContextOrNoop(ctx context.Context) Retrier {
-	retrier := FromContext(ctx)
-	if retrier != nil {
-		return retrier
-	}
-
-	return &NoopRetrier{}
+	return FromContext(ctx)
 }
 

@@ -49,7 +49,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
-	retrier := retry.FromContextOrNoop(ctx)
+	retrier := retry.FromContext(ctx)
 	maxAttempts := retrier.MaxAttempts()
 	if maxAttempts <= 0 {
 		maxAttempts = 1
