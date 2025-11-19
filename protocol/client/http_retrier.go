@@ -72,8 +72,9 @@ func (r *temporaryErrorRetrier) isTemporaryError(err error) bool {
 	}
 
 	// Check for server unavailable errors that are retryable
-	if errors.Is(err, ErrServerUnavailable) {
-		return r.isRetryableOperation(r.extractOperation(err), r.extractStatusCode(err))
+	var serverErr *ServerUnavailableError
+	if errors.As(err, &serverErr) {
+		return r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode)
 	}
 
 	return false
@@ -92,28 +93,6 @@ func (r *temporaryErrorRetrier) isTemporaryNetworkError(err error) bool {
 		return netErr.Timeout()
 	}
 	return false
-}
-
-// extractOperation extracts the HTTP method from the error chain.
-func (r *temporaryErrorRetrier) extractOperation(err error) string {
-	var serverErr *ServerUnavailableError
-	if errors.As(err, &serverErr) && serverErr.Operation != "" {
-		return serverErr.Operation
-	}
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) && urlErr.Op != "" {
-		return urlErr.Op
-	}
-	return ""
-}
-
-// extractStatusCode extracts the status code from the error chain.
-func (r *temporaryErrorRetrier) extractStatusCode(err error) int {
-	var serverErr *ServerUnavailableError
-	if errors.As(err, &serverErr) {
-		return serverErr.StatusCode
-	}
-	return 0
 }
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
