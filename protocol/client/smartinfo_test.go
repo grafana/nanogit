@@ -193,11 +193,12 @@ func TestSmartInfo_Retry(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 3, attemptCount)
 
-		// Verify retrier Wait and ShouldRetry were called for 5xx retries
-		// Note: Temporary error retrier delegates to wrapped retrier for temporary errors (5xx GET is temporary)
+		// Verify retrier Wait was called for 5xx retries
+		// Note: Temporary errors (5xx GET) are retried directly without delegating ShouldRetry to wrapped retrier
+		// but Wait is still delegated to the wrapped retrier for backoff timing
 		require.GreaterOrEqual(t, retrier.WaitCallCount(), 2, "Wait should be called at least twice for 5xx retries")
-		// ShouldRetry IS called on wrapped retrier for temporary errors (5xx GET is temporary)
-		require.GreaterOrEqual(t, retrier.ShouldRetryCallCount(), 2, "ShouldRetry should be called on wrapped retrier for 5xx errors")
+		// Temporary errors return true directly, so ShouldRetry is not called on wrapped retrier
+		require.Equal(t, 0, retrier.ShouldRetryCallCount(), "ShouldRetry should not be called on wrapped retrier for temporary errors")
 	})
 
 	t.Run("does not retry on 4xx errors", func(t *testing.T) {

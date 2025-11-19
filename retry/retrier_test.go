@@ -19,13 +19,6 @@ func TestNoopRetrier(t *testing.T) {
 		ctx := context.Background()
 		require.False(t, retrier.ShouldRetry(ctx, errors.New("test error"), 1))
 		require.False(t, retrier.ShouldRetry(ctx, nil, 1))
-		// Network errors should not be retried by NoopRetrier
-		err := &net.OpError{
-			Op:  "dial",
-			Net: "tcp",
-			Err: errors.New("connection refused"),
-		}
-		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 	})
 
 	t.Run("Wait is a no-op", func(t *testing.T) {
@@ -44,15 +37,15 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 
 	retrier := NewExponentialBackoffRetrier()
 
-	t.Run("retries on network errors", func(t *testing.T) {
+	t.Run("does not retry on network errors without timeout", func(t *testing.T) {
 		ctx := context.Background()
 		err := &net.OpError{
 			Op:  "dial",
 			Net: "tcp",
 			Err: errors.New("connection refused"),
 		}
-		require.True(t, retrier.ShouldRetry(ctx, err, 1))
-		require.True(t, retrier.ShouldRetry(ctx, err, 2))
+		require.False(t, retrier.ShouldRetry(ctx, err, 1))
+		require.False(t, retrier.ShouldRetry(ctx, err, 2))
 	})
 
 	t.Run("retries on network timeout errors", func(t *testing.T) {
@@ -63,26 +56,27 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 			Err: &timeoutError{},
 		}
 		require.True(t, retrier.ShouldRetry(ctx, err, 1))
+		require.True(t, retrier.ShouldRetry(ctx, err, 2))
 	})
 
-	t.Run("retries on temporary network errors", func(t *testing.T) {
+	t.Run("does not retry on temporary network errors without timeout", func(t *testing.T) {
 		ctx := context.Background()
 		err := &net.OpError{
 			Op:  "read",
 			Net: "tcp",
 			Err: &temporaryError{},
 		}
-		require.True(t, retrier.ShouldRetry(ctx, err, 1))
+		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 	})
 
-	t.Run("retries on connection refused errors", func(t *testing.T) {
+	t.Run("does not retry on connection refused errors", func(t *testing.T) {
 		ctx := context.Background()
 		err := &net.OpError{
 			Op:  "dial",
 			Net: "tcp",
 			Err: errors.New("connection refused"),
 		}
-		require.True(t, retrier.ShouldRetry(ctx, err, 1))
+		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 	})
 
 	t.Run("does not retry on context cancellation", func(t *testing.T) {
@@ -103,20 +97,14 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 	})
 
-	t.Run("ShouldRetry does not check max attempts", func(t *testing.T) {
+	t.Run("does not retry on any errors", func(t *testing.T) {
 		ctx := context.Background()
 		retrier := NewExponentialBackoffRetrier().WithMaxAttempts(3)
-		err := &net.OpError{
-			Op:  "dial",
-			Net: "tcp",
-			Err: errors.New("connection refused"),
-		}
-		// ShouldRetry should return true for all attempts - max attempts are handled by retry.Do
-		require.True(t, retrier.ShouldRetry(ctx, err, 1))
-		require.True(t, retrier.ShouldRetry(ctx, err, 2))
-		require.True(t, retrier.ShouldRetry(ctx, err, 3))
-		require.True(t, retrier.ShouldRetry(ctx, err, 4))
-		require.True(t, retrier.ShouldRetry(ctx, err, 100))
+		err := errors.New("some error")
+		// ShouldRetry should return false for all errors
+		require.False(t, retrier.ShouldRetry(ctx, err, 1))
+		require.False(t, retrier.ShouldRetry(ctx, err, 2))
+		require.False(t, retrier.ShouldRetry(ctx, err, 3))
 		
 		// MaxAttempts should still return the correct value
 		require.Equal(t, 3, retrier.MaxAttempts())

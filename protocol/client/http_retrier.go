@@ -3,19 +3,16 @@ package client
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
-	"net/url"
 
 	"github.com/grafana/nanogit/retry"
 )
 
-// temporaryErrorRetrier wraps another retrier and only retries on temporary errors:
-// - Network errors with Timeout() (net.Error)
+// temporaryErrorRetrier wraps another retrier and handles server unavailable errors:
 // - Server unavailable errors (ErrServerUnavailable) that are retryable based on HTTP method/status
 //
-// If the error is not temporary, it won't retry at all. Otherwise, it delegates to the base retrier.
-// This allows temporary error filtering to be layered on top of a base retrier (e.g., ExponentialBackoffRetrier).
+// If the error is a retryable server unavailable error, it always retries. Otherwise, it delegates to the wrapped retrier.
+// Network errors and context cancellation are handled by the wrapped retrier (e.g., ExponentialBackoffRetrier).
 //
 // This is an internal type used automatically by the rawClient.do method.
 type temporaryErrorRetrier struct {
@@ -35,11 +32,10 @@ func newTemporaryErrorRetrier(wrapped retry.Retrier) *temporaryErrorRetrier {
 }
 
 // ShouldRetry determines if an error should be retried.
-// Returns false if the error is not temporary. Otherwise, delegates to the wrapped retrier.
+// If the error is a retryable server unavailable error, returns true (always retry).
+// Otherwise, delegates to the wrapped retrier (which handles network errors and context cancellation).
 //
-// An error is considered temporary if:
-//   - It is a net.Error with Timeout() (network errors, timeouts, etc.)
-//   - It is a server unavailable error (ErrServerUnavailable) with retryable operation/status code:
+// A server unavailable error is retryable if:
 //   - POST operations are not retried on 5xx because request body is consumed
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
 //   - HTTP 429 (Too Many Requests) can be retried for all operations
@@ -50,57 +46,23 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 		return false
 	}
 
-	// Check if error is temporary
-	if !r.isTemporaryError(err) {
-		return false
-	}
-
-	// Error is temporary, delegate to wrapped retrier
-	return r.wrapped.ShouldRetry(ctx, err, attempt)
-}
-
-// isTemporaryError checks if an error is temporary and should be considered for retry.
-func (r *temporaryErrorRetrier) isTemporaryError(err error) bool {
-	// Don't retry on context cancellation
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-
-	// Check for temporary network errors
-	if r.isTemporaryNetworkError(err) {
-		return true
-	}
-
 	// Check for server unavailable errors that are retryable
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) {
-		return r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode)
+		if r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode) {
+			return true
+		}
+		// Server unavailable but not retryable, delegate to wrapped retrier
+		return r.wrapped.ShouldRetry(ctx, err, attempt)
 	}
 
-	return false
-}
-
-// isTemporaryNetworkError checks if an error is a temporary network error that should be retried.
-// It checks for net.Error with Timeout(), including errors wrapped in url.Error.
-func (r *temporaryErrorRetrier) isTemporaryNetworkError(err error) bool {
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return netErr.Timeout()
-	}
-	// Check if wrapped in url.Error
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) && urlErr.Err != nil && errors.As(urlErr.Err, &netErr) {
-		return netErr.Timeout()
-	}
-	return false
+	// Not a server unavailable error, delegate to wrapped retrier
+	// (handles network errors, context cancellation, etc.)
+	return r.wrapped.ShouldRetry(ctx, err, attempt)
 }
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
 func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCode int) bool {
-	// Network errors (no status code) are always retryable
-	if statusCode == 0 {
-		return true
-	}
 	// HTTP 429 (Too Many Requests) can be retried for all operations
 	if statusCode == http.StatusTooManyRequests {
 		return true

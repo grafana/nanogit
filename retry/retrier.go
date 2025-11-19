@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"net"
 	"time"
 )
 
@@ -65,8 +66,8 @@ func (r *NoopRetrier) MaxAttempts() int {
 }
 
 // ExponentialBackoffRetrier implements exponential backoff retry logic.
-// It retries on network errors, timeouts, and 5xx status codes.
-// It does not retry on 4xx client errors or context cancellation.
+// It retries on temporary network errors (timeouts, connection failures, etc.).
+// It does not retry on context cancellation or other errors.
 type ExponentialBackoffRetrier struct {
 	// MaxAttempts is the maximum number of attempts (including the initial attempt).
 	// Default is 3.
@@ -101,14 +102,16 @@ func NewExponentialBackoffRetrier() *ExponentialBackoffRetrier {
 }
 
 // ShouldRetry determines if an error should be retried.
+// Returns true for temporary network errors (timeouts, connection failures, etc.).
+// Returns false for all other errors.
+//
 // Returns true for:
-//   - Network errors (connection refused, timeouts, etc.)
-//   - Temporary errors
+//   - Network errors with Timeout() (net.Error)
 //
 // Returns false for:
-//   - HTTP status code errors (4xx, 5xx) - these should be handled by HTTP-specific retriers
 //   - Context cancellation errors
-//   - Errors that should not be retried
+//   - Non-network errors
+//   - Network errors without Timeout()
 //
 // Max attempts are handled by retry.Do, not by this method.
 func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -121,22 +124,13 @@ func (r *ExponentialBackoffRetrier) ShouldRetry(ctx context.Context, err error, 
 		return false
 	}
 
-	// Check for network errors
-	var netErr interface {
-		Error() string
-		Timeout() bool
-		Temporary() bool
-	}
+	// Check for temporary network errors (timeouts)
+	var netErr net.Error
 	if errors.As(err, &netErr) {
-		// Retry on timeouts and temporary network errors
-		if netErr.Timeout() || netErr.Temporary() {
-			return true
-		}
-		// Retry on other network errors (connection refused, etc.)
-		return true
+		return netErr.Timeout()
 	}
 
-	// Don't retry on other errors (4xx, HTTP status codes, etc.)
+	// Don't retry on other errors
 	return false
 }
 
