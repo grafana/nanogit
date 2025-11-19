@@ -7,8 +7,7 @@ import (
 	"strings"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/protocol"
-
+	gitclient "github.com/grafana/nanogit/protocol/client"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -197,7 +196,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 
 			By("Verifying errors.Is works correctly")
 			Expect(errors.Is(err, nanogit.ErrServerUnavailable)).To(BeTrue())
-			Expect(errors.Is(err, protocol.ErrServerUnavailable)).To(BeTrue(), "should also work with protocol package error")
+			Expect(errors.Is(err, gitclient.ErrServerUnavailable)).To(BeTrue(), "should also work with protocol package error")
 		})
 	})
 
@@ -242,4 +241,3 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 		})
 	})
 })
-

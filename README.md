@@ -219,6 +219,88 @@ writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithDiskStorage())
 
 For detailed information about writing modes, performance characteristics, and use cases, see [Storage Architecture Documentation](docs/architecture/storage.md).
 
+### Retry Mechanism
+
+nanogit includes a pluggable retry mechanism, making operations more robust against transient network errors and server issues. The retry mechanism follows the same pattern as storage options, using context-based injection.
+
+#### Basic Usage
+
+By default, no retries are performed (backward compatible). To enable retries, inject a retrier into the context:
+
+```go
+import "github.com/grafana/nanogit/retry"
+
+// Create a retrier with default settings (3 attempts, exponential backoff)
+retrier := retry.NewExponentialBackoffRetrier()
+ctx = retry.ToContext(ctx, retrier)
+
+// All HTTP operations will now use retry logic
+client, err := nanogit.NewHTTPClient(repo, options...)
+ref, err := client.GetRef(ctx, "main")
+```
+
+#### Built-in Retrier
+
+The `ExponentialBackoffRetrier` provides configurable exponential backoff retry logic:
+
+```go
+// Customize retry behavior
+retrier := retry.NewExponentialBackoffRetrier().
+    WithMaxAttempts(5).                    // Retry up to 5 times
+    WithInitialDelay(200 * time.Millisecond). // Start with 200ms delay
+    WithMaxDelay(10 * time.Second).        // Cap at 10 seconds
+    WithMultiplier(2.0).                   // Double delay each retry
+    WithJitter()                          // Add random jitter
+
+ctx = retry.ToContext(ctx, retrier)
+```
+
+#### Custom Retrier
+
+You can implement your own retry logic by implementing the `Retrier` interface:
+
+```go
+type MyRetrier struct {
+    // Your custom fields
+}
+
+func (r *MyRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+    // Your retry logic
+    return true
+}
+
+func (r *MyRetrier) Wait(ctx context.Context, attempt int) error {
+    // Your backoff logic
+    return nil
+}
+
+func (r *MyRetrier) MaxAttempts() int {
+    return 3
+}
+
+// Use your custom retrier
+ctx = retry.ToContext(ctx, &MyRetrier{})
+```
+
+#### What Gets Retried
+
+The retry mechanism automatically retries on:
+- **Network timeout errors**
+- **5xx server errors**: Server unavailable errors (for GET requests only)
+- **Temporary errors**: Any error marked as temporary
+
+The retry mechanism does **not** retry on:
+- **4xx client errors**: Bad requests, authentication failures, etc.
+- **Context cancellation**: When the context is cancelled or deadline exceeded
+- **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body (`io.Reader`) is consumed when the request is sent and cannot be re-read
+
+#### Retry Behavior by Request Type
+
+- **GET requests** (SmartInfo): Retry on network errors and 5xx status codes
+- **POST requests** (UploadPack, ReceivePack): Retry only on network errors (before response is received)
+
+This limitation exists because POST request bodies are consumed during the HTTP request and cannot be re-read for retries.
+
 ## Storage Architecture
 
 nanogit features a flexible two-layer storage architecture that separates concerns and allows independent optimization:

@@ -7,7 +7,6 @@ import (
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
-	"github.com/grafana/nanogit/protocol"
 )
 
 // SmartInfo retrieves reference and capability information from the remote Git repository
@@ -49,10 +48,13 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 
 	c.addDefaultHeaders(req)
 
-	res, err := c.client.Do(req)
+	// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) for GET requests
+	res, err := c.do(ctx, req)
+
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
 			err = fmt.Errorf("error closing response body: %w", closeErr)
@@ -60,11 +62,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
-		if res.StatusCode >= 500 {
-			return protocol.NewServerUnavailableError(res.StatusCode, underlying)
-		}
-		return underlying
+		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
 	logger.Debug("SmartInfo response",

@@ -15,6 +15,13 @@ Features a flexible two-layer storage architecture:
 - **Writing modes**: Control temporary storage during packfile creation
 - **Object storage**: Handle long-term caching with pluggable backends
 
+### Retry Mechanism
+Pluggable retry mechanism for robust operations:
+- **Context-based injection**: Retriers configured via Go context
+- **Built-in exponential backoff**: Configurable retry with jitter
+- **Custom retriers**: Implement custom retry logic via interface
+- **Backward compatible**: Default behavior is no retries
+
 ### Minimal Surface Area
 Implements only essential Git operations, reducing attack surface and resource requirements compared to full Git implementations.
 
@@ -87,5 +94,6 @@ Push Confirmation
 ## Related Documentation
 
 - [Storage Architecture](storage.md) - Detailed storage backend design
+- [Retry Mechanism](retry.md) - Pluggable retry mechanism for robust operations
 - [Delta Resolution](delta-resolution.md) - Git delta handling implementation
 - [Performance](performance.md) - Performance characteristics and benchmarks
