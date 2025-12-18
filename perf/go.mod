@@ -6,7 +6,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.6.0
 	github.com/go-git/go-git/v5 v5.13.0
 	github.com/grafana/nanogit v0.0.0-00010101000000-000000000000
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.35.0
 )
 

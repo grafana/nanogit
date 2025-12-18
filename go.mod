@@ -7,7 +7,7 @@ require (
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.11.2
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.35.0
 	golang.org/x/sync v0.18.0
 )
