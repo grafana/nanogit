@@ -122,7 +122,7 @@ Want to learn how Git works? The following resources are useful:
 
 ## Security
 
-If you find a security vulnerability, please report it to <security@grafana.com>. For more information, see our [Security Policy](https://github.com/grafana/nanogit/blob/main/SECURITY.md).
+If you find a security vulnerability, please report it to us according to [our security policy](https://github.com/grafana/.github/blob/main/SECURITY.md).
 
 ## Support
 

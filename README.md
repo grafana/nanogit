@@ -285,11 +285,13 @@ ctx = retry.ToContext(ctx, &MyRetrier{})
 #### What Gets Retried
 
 The retry mechanism automatically retries on:
+
 - **Network timeout errors**
 - **5xx server errors**: Server unavailable errors (for GET requests only)
 - **Temporary errors**: Any error marked as temporary
 
 The retry mechanism does **not** retry on:
+
 - **4xx client errors**: Bad requests, authentication failures, etc.
 - **Context cancellation**: When the context is cancelled or deadline exceeded
 - **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body (`io.Reader`) is consumed when the request is sent and cannot be re-read
@@ -369,7 +371,7 @@ Want to learn how Git works? The following resources are useful:
 
 ## Security
 
-If you find a security vulnerability, please report it to <security@grafana.com>. For more information, see our [Security Policy](SECURITY.md).
+If you find a security vulnerability, please report it to us according to [our security policy](https://github.com/grafana/.github/blob/main/SECURITY.md).
 
 ## Support
 
