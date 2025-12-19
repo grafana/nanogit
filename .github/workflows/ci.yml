@@ -15,9 +15,9 @@ jobs:
     name: Generated Files
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Generate files
@@ -36,9 +36,9 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check formatting
@@ -55,9 +55,9 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Run linter
@@ -67,14 +67,14 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -94,24 +94,24 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -137,14 +137,14 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -165,25 +165,25 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             GH_REPO_USER=github:GH_REPO_USER
             GH_REPO_TOKEN=github:GH_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -212,25 +212,25 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
             GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -258,25 +258,25 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@9f37f656e063f0ad0b0bfc38d49894b57d363936 # get-vault-secrets/v1.2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
             BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -304,9 +304,9 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for vulnerabilities
@@ -318,7 +318,7 @@ jobs:
     name: Secrets Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0 # Required for scanning git history
       - name: Run TruffleHog
@@ -330,9 +330,9 @@ jobs:
     name: Dependencies
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for go.mod and go.sum consistency
@@ -352,9 +352,9 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for staticcheck issues
@@ -366,14 +366,14 @@ jobs:
     name: Clone Performance Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -392,14 +392,14 @@ jobs:
     name: Full Clone Performance Test (1 minute limit)
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:ef75fa8822a4c0fb53a390548b3dc1c39639339ec3373c58f5441117e1ff46ae
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
