@@ -3,7 +3,7 @@ module github.com/grafana/nanogit
 go 1.24.2
 
 require (
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.2
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.11.2
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
