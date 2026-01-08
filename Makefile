@@ -54,10 +54,18 @@ test-coverage:
 		--coverprofile=integration.cov \
 		./tests
 
+	@echo "Running CLI unit tests with coverage..."
+	cd cli && GOWORK=off go test -race -coverprofile=../cli-unit.cov -covermode=atomic ./internal/...
+
+	@echo "Running CLI integration tests with coverage..."
+	cd cli && GOWORK=off go test -race -coverprofile=../cli-integration.cov -covermode=atomic -run TestCLIIntegration .
+
 	@echo "Merging coverage profiles..."
 	@echo "mode: set" > coverage.txt
 	@tail -n +2 unit.cov >> coverage.txt || true
 	@tail -n +2 integration.cov >> coverage.txt || true
+	@tail -n +2 cli-unit.cov >> coverage.txt || true
+	@tail -n +2 cli-integration.cov >> coverage.txt || true
 	@echo "Combined coverage written to coverage.txt"
 
 test-coverage-html:
