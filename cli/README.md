@@ -37,18 +37,26 @@ nanogit ls-remote https://github.com/grafana/nanogit --tags
 ### ls-tree - List tree contents
 
 ```bash
-# List root directory
+# List root directory (short branch name)
 nanogit ls-tree https://github.com/grafana/nanogit main
+
+# List with commit hash
+nanogit ls-tree https://github.com/grafana/nanogit abc123def456...
 
 # Recursive listing with details
 nanogit ls-tree https://github.com/grafana/nanogit main --recursive --long
 ```
 
+**Note:** Commands accept branch names ("main"), tag names ("v1.0.0"), full refs ("refs/heads/main"), or commit hashes (40 hex characters).
+
 ### cat-file - Show file contents
 
 ```bash
-# Output file content
+# Output file content (short branch name)
 nanogit cat-file https://github.com/grafana/nanogit main README.md
+
+# Output with commit hash
+nanogit cat-file https://github.com/grafana/nanogit abc123def456... README.md
 
 # Show with type and size
 nanogit cat-file https://github.com/grafana/nanogit main README.md --show-type --show-size
@@ -57,11 +65,14 @@ nanogit cat-file https://github.com/grafana/nanogit main README.md --show-type -
 ### clone - Clone repository
 
 ```bash
-# Basic clone
+# Basic clone (defaults to main branch)
 nanogit clone https://github.com/grafana/nanogit /tmp/repo
 
-# Clone specific branch
+# Clone specific branch (short name)
 nanogit clone https://github.com/grafana/nanogit /tmp/repo --ref develop
+
+# Clone at specific commit
+nanogit clone https://github.com/grafana/nanogit /tmp/repo --ref abc123def456...
 
 # Clone with path filtering
 nanogit clone https://github.com/grafana/nanogit /tmp/repo \
