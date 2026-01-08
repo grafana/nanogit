@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/nanogit/cli/internal/auth"
 	"github.com/grafana/nanogit/cli/internal/client"
 	"github.com/grafana/nanogit/cli/internal/output"
+	"github.com/grafana/nanogit/cli/internal/refparse"
 	"github.com/spf13/cobra"
 )
 
@@ -17,13 +18,22 @@ var (
 )
 
 var lsTreeCmd = &cobra.Command{
-	Use:   "ls-tree <url> <ref> [path]",
+	Use:   "ls-tree <url> <ref|commit> [path]",
 	Short: "List contents of a tree object",
-	Long: `List contents of a tree object at the specified reference and optional path.
+	Long: `List contents of a tree object at the specified reference or commit hash.
+
+The ref argument can be:
+  - A branch name (e.g., "main") - will try refs/heads/main
+  - A tag name (e.g., "v1.0.0") - will try refs/tags/v1.0.0
+  - A full reference path (e.g., "refs/heads/main")
+  - A commit hash (40 hex characters)
 
 Examples:
-  # List root directory
+  # List root directory with short branch name
   nanogit ls-tree https://github.com/grafana/nanogit main
+
+  # List with commit hash
+  nanogit ls-tree https://github.com/grafana/nanogit abc123...
 
   # List specific directory
   nanogit ls-tree https://github.com/grafana/nanogit main src/
@@ -56,14 +66,14 @@ Examples:
 			return err
 		}
 
-		// Resolve ref to commit hash
-		ref, err := c.GetRef(ctx, refName)
+		// Resolve ref or commit hash
+		commitHash, err := refparse.ResolveRefOrHash(ctx, c, refName)
 		if err != nil {
-			return fmt.Errorf("resolving ref %s: %w", refName, err)
+			return fmt.Errorf("resolving ref or commit %s: %w", refName, err)
 		}
 
 		// Get commit to extract tree hash
-		commit, err := c.GetCommit(ctx, ref.Hash)
+		commit, err := c.GetCommit(ctx, commitHash)
 		if err != nil {
 			return fmt.Errorf("getting commit: %w", err)
 		}

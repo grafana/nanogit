@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/nanogit/cli/internal/auth"
 	"github.com/grafana/nanogit/cli/internal/client"
 	"github.com/grafana/nanogit/cli/internal/output"
+	"github.com/grafana/nanogit/cli/internal/refparse"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +26,21 @@ var cloneCmd = &cobra.Command{
 	Short: "Clone a repository to local filesystem",
 	Long: `Clone a repository to local filesystem.
 
+The --ref argument can be:
+  - A branch name (e.g., "main") - will try refs/heads/main
+  - A tag name (e.g., "v1.0.0") - will try refs/tags/v1.0.0
+  - A full reference path (e.g., "refs/heads/main")
+  - A commit hash (40 hex characters)
+
 Examples:
-  # Basic clone
+  # Basic clone with short branch name
   nanogit clone https://github.com/grafana/nanogit /tmp/repo
 
   # Clone specific branch
   nanogit clone https://github.com/grafana/nanogit /tmp/repo --ref develop
+
+  # Clone at specific commit
+  nanogit clone https://github.com/grafana/nanogit /tmp/repo --ref abc123...
 
   # Clone with path filtering
   nanogit clone https://github.com/grafana/nanogit /tmp/repo \
@@ -64,14 +74,14 @@ Examples:
 			fmt.Printf("Cloning %s...\n", url)
 		}
 
-		// Resolve ref to commit hash
-		ref, err := c.GetRef(ctx, cloneRef)
+		// Resolve ref or commit hash
+		commitHash, err := refparse.ResolveRefOrHash(ctx, c, cloneRef)
 		if err != nil {
-			return fmt.Errorf("resolving ref %s: %w", cloneRef, err)
+			return fmt.Errorf("resolving ref or commit %s: %w", cloneRef, err)
 		}
 
 		if getOutputFormat() != "json" {
-			fmt.Printf("✓ Resolved %s -> %s\n", cloneRef, ref.Hash.String()[:8]+"...")
+			fmt.Printf("✓ Resolved %s -> %s\n", cloneRef, commitHash.String()[:8]+"...")
 		}
 
 		// Parse include/exclude paths
@@ -93,7 +103,7 @@ Examples:
 		// Clone repository
 		result, err := c.Clone(ctx, nanogit.CloneOptions{
 			Path:         destination,
-			Hash:         ref.Hash,
+			Hash:         commitHash,
 			IncludePaths: includePaths,
 			ExcludePaths: excludePaths,
 			BatchSize:    cloneBatchSize,
