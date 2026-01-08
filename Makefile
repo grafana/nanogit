@@ -108,3 +108,33 @@ docs-preview: docs-build
 
 .PHONY: docs
 docs: docs-serve
+
+# CLI targets
+.PHONY: cli-build
+cli-build: ## Build the nanogit CLI
+	@echo "Building nanogit CLI..."
+	cd cli && GOWORK=off go build -o ../bin/nanogit .
+
+.PHONY: cli-install
+cli-install: ## Install the nanogit CLI
+	@echo "Installing nanogit CLI..."
+	cd cli && GOWORK=off go install .
+
+.PHONY: cli-test
+cli-test: ## Run CLI unit tests
+	@echo "Testing nanogit CLI..."
+	cd cli && GOWORK=off go test -race -v ./...
+
+.PHONY: cli-lint
+cli-lint: ## Lint CLI code
+	@echo "Linting CLI code..."
+	cd cli && golangci-lint run
+
+.PHONY: cli-fmt
+cli-fmt: ## Format CLI code
+	@echo "Formatting CLI code..."
+	cd cli && goimports -w .
+	cd cli && go fmt ./...
+
+.PHONY: cli
+cli: cli-build ## Alias for cli-build

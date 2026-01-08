@@ -9,6 +9,10 @@ yarn.lock
 reports
 perf.test
 
+# CLI build artifacts
+/bin/
+cli/nanogit
+
 # VitePress
 docs/.vitepress/dist
 docs/.vitepress/cache
