@@ -40,11 +40,11 @@ jobs:
     name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} ${{ matrix.GOARM || '' }}
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.24-alpine@sha256:0c9ca7fc5eee2d48b82f0733f57224137d439677b298d1e2b1e935fdb44b01f7
     steps:
       - name: Install Git
         run: apk add --no-cache git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Ensure builds
         env:
           GOOS: ${{ matrix.GOOS }}
