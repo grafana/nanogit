@@ -262,11 +262,43 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		return nil, nil, err
 	}
 
+	// Verify tree completeness and fetch missing trees
+	missing, err := c.verifyTreeCompleteness(ctx, rootTree, allObjects)
+	if err != nil {
+		return nil, nil, fmt.Errorf("verify tree completeness: %w", err)
+	}
+
+	if len(missing) > 0 {
+		logger.Warn("Found missing trees after batch fetch, completing collection",
+			"missing_count", len(missing))
+
+		metrics.missingTreesFound = len(missing)
+
+		err = c.completeMissingTrees(ctx, missing, allObjects, metrics)
+		if err != nil {
+			return nil, nil, fmt.Errorf("complete missing trees: %w", err)
+		}
+
+		// Verify again after completion to ensure success
+		stillMissing, err := c.verifyTreeCompleteness(ctx, rootTree, allObjects)
+		if err != nil {
+			return nil, nil, fmt.Errorf("verify after completion: %w", err)
+		}
+
+		if len(stillMissing) > 0 {
+			return nil, nil, fmt.Errorf("still missing %d tree objects after completion phase", len(stillMissing))
+		}
+
+		logger.Debug("All missing trees successfully fetched")
+	}
+
 	logger.Debug("Tree collection completed",
 		"commit_hash", commitHash.String(),
 		"total_requests", metrics.totalRequests,
 		"total_objects", metrics.totalObjectsFetched,
-		"total_batches", metrics.batchNumber)
+		"total_batches", metrics.batchNumber,
+		"missing_trees_found", metrics.missingTreesFound,
+		"completion_fetches", metrics.completionFetches)
 
 	return allObjects, rootTree, nil
 }
@@ -276,6 +308,8 @@ type fetchMetrics struct {
 	totalRequests       int
 	totalObjectsFetched int
 	batchNumber         int
+	missingTreesFound   int // Trees found missing during verification
+	completionFetches   int // Additional fetches during completion phase
 }
 
 // fetchInitialCommitObjects performs the initial fetch of commit objects
@@ -592,6 +626,118 @@ func (c *httpClient) findRootTree(ctx context.Context, commitHash hash.Hash, all
 	return treeObj, nil
 }
 
+// verifyTreeCompleteness recursively checks that all tree objects referenced
+// in the tree hierarchy are present in the collection.
+// Returns a list of missing tree hashes that need to be fetched.
+func (c *httpClient) verifyTreeCompleteness(
+	ctx context.Context,
+	rootTree *protocol.PackfileObject,
+	allObjects storage.PackfileStorage,
+) ([]hash.Hash, error) {
+	logger := log.FromContext(ctx)
+	missing := []hash.Hash{}
+	visited := make(map[string]bool)
+
+	var checkTree func(treeHash hash.Hash, depth int) error
+	checkTree = func(treeHash hash.Hash, depth int) error {
+		hashStr := treeHash.String()
+
+		// Avoid infinite loops from circular references (shouldn't happen)
+		if visited[hashStr] {
+			return nil
+		}
+		visited[hashStr] = true
+
+		// Check if tree exists in collection
+		tree, exists := allObjects.GetByType(treeHash, protocol.ObjectTypeTree)
+		if !exists {
+			logger.Debug("Missing tree object found during verification",
+				"hash", hashStr,
+				"depth", depth)
+			missing = append(missing, treeHash)
+			return nil // Continue checking other branches
+		}
+
+		// Recursively check all child trees
+		for _, entry := range tree.Tree {
+			if entry.FileMode&0o40000 != 0 { // Is directory
+				childHash, err := getCachedHash(entry.Hash)
+				if err != nil {
+					return fmt.Errorf("parse child hash %s: %w", entry.Hash, err)
+				}
+				if err := checkTree(childHash, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	if err := checkTree(rootTree.Hash, 0); err != nil {
+		return nil, fmt.Errorf("verify tree completeness: %w", err)
+	}
+
+	logger.Debug("Tree completeness verification completed",
+		"total_trees_checked", len(visited),
+		"missing_trees", len(missing))
+
+	return missing, nil
+}
+
+// completeMissingTrees fetches any trees that were missed by batch processing.
+// Uses larger batch sizes since we know exactly what we need.
+func (c *httpClient) completeMissingTrees(
+	ctx context.Context,
+	missing []hash.Hash,
+	allObjects storage.PackfileStorage,
+	metrics *fetchMetrics,
+) error {
+	if len(missing) == 0 {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Warn("Fetching missing trees to complete collection",
+		"missing_count", len(missing))
+
+	// Use larger batches since we know exactly what we need
+	const completionBatchSize = 50
+
+	for i := 0; i < len(missing); i += completionBatchSize {
+		end := i + completionBatchSize
+		if end > len(missing) {
+			end = len(missing)
+		}
+		batch := missing[i:end]
+
+		metrics.totalRequests++
+		metrics.completionFetches++
+
+		objects, err := c.Fetch(ctx, client.FetchOptions{
+			NoProgress:     true,
+			NoBlobFilter:   true,
+			Want:           batch,
+			Done:           true,
+			NoExtraObjects: false,
+		})
+		if err != nil {
+			return fmt.Errorf("fetch missing trees batch: %w", err)
+		}
+
+		// Objects automatically added to allObjects via storage context
+		metrics.totalObjectsFetched += len(objects)
+
+		logger.Debug("Fetched missing trees batch",
+			"batch_size", len(batch),
+			"objects_received", len(objects))
+	}
+
+	logger.Debug("Completion phase finished",
+		"trees_fetched", len(missing))
+
+	return nil
+}
+
 // flatten converts collected tree objects into a flat tree structure using depth-first traversal.
 func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
 	logger := log.FromContext(ctx)
@@ -708,8 +854,13 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 // fetchMissingTreeObject attempts to fetch a single missing tree object individually.
 // This is a fallback mechanism used when a tree object is not found in the batch-fetched collection.
 // It performs an individual fetch for the specific tree hash and validates the result.
+//
+// NOTE: With the verification fix in place, this fallback should NOT be triggered.
+// If you see this warning, it means the verification phase missed something.
 func (c *httpClient) fetchMissingTreeObject(ctx context.Context, treeHash hash.Hash) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
+	logger.Warn("Fallback fetch triggered - verification phase should have caught this",
+		"hash", treeHash.String())
 	logger.Debug("Fetching missing tree object individually", "hash", treeHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
