@@ -557,8 +557,10 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 			continue
 		}
 
-		treesProcessed++
-		processedTrees[obj.Hash.String()] = true
+		// Check all direct children BEFORE marking as processed
+		allChildrenPresent := true
+		missingChildren := []hash.Hash{}
+		missingChildrenHashes := []string{} // For debug logging
 
 		for _, entry := range obj.Tree {
 			// If it's a file, we can ignore it
@@ -571,19 +573,46 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 				return nil, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
 			}
 
-			// Skip if we already have this object
+			// Check if we already have this object
 			if _, exists := allObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
-				continue
+				continue // This child exists, check next one
 			}
+
+			// Child is missing
+			allChildrenPresent = false
 
 			// Skip if we've already requested this hash
 			if requestedHashes[entry.Hash] {
 				continue
 			}
 
-			pending = append(pending, entryHash)
+			// Queue this missing child
+			missingChildren = append(missingChildren, entryHash)
+			missingChildrenHashes = append(missingChildrenHashes, entry.Hash)
 			requestedHashes[entry.Hash] = true
 			newTreesFound++
+		}
+
+		// Debug log missing children
+		if len(missingChildren) > 0 {
+			logger.Debug("Tree has missing children, queuing for fetch",
+				"tree_hash", obj.Hash.String(),
+				"missing_count", len(missingChildren),
+				"missing_hashes", missingChildrenHashes)
+		}
+
+		// Add missing children to pending
+		pending = append(pending, missingChildren...)
+
+		// Only mark as processed if all children are accounted for
+		// (either exist OR successfully queued for fetching)
+		if allChildrenPresent || len(missingChildren) > 0 {
+			treesProcessed++
+			processedTrees[obj.Hash.String()] = true
+		} else {
+			// Don't mark as processed - we'll re-examine in next batch
+			logger.Debug("Tree not marked as processed - will re-examine",
+				"tree_hash", obj.Hash.String())
 		}
 	}
 
