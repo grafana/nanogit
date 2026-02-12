@@ -57,7 +57,9 @@ func (f *HumanFormatter) FormatBlobContent(path string, hash hash.Hash, content 
 
 // FormatCloneResult outputs clone results in human-readable format
 func (f *HumanFormatter) FormatCloneResult(result *nanogit.CloneResult) error {
-	f.success.Printf("✓ Cloned %d files to %s\n", result.FilteredFiles, result.Path)
+	if _, err := f.success.Printf("✓ Cloned %d files to %s\n", result.FilteredFiles, result.Path); err != nil {
+		return err
+	}
 	if result.FilteredFiles != result.TotalFiles {
 		fmt.Printf("  (filtered %d of %d total files)\n", result.FilteredFiles, result.TotalFiles)
 	}

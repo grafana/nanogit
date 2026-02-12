@@ -39,8 +39,6 @@ func TestGet(t *testing.T) {
 			formatter := Get(tt.format)
 			assert.NotNil(t, formatter)
 
-			// Verify it implements the Formatter interface
-			var _ Formatter = formatter
 
 			// Check the type
 			switch tt.expectedType {

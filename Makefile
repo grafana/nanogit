@@ -136,11 +136,13 @@ cli-test: ## Run CLI unit tests
 .PHONY: cli-lint
 cli-lint: ## Lint CLI code
 	@echo "Linting CLI code..."
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint not found. Install it from https://golangci-lint.run/usage/install/" && exit 1)
 	cd cli && golangci-lint run
 
 .PHONY: cli-fmt
 cli-fmt: ## Format CLI code
 	@echo "Formatting CLI code..."
+	@which goimports > /dev/null || (echo "Error: goimports not found. Install it with: go install golang.org/x/tools/cmd/goimports@latest" && exit 1)
 	cd cli && goimports -w .
 	cd cli && go fmt ./...
 

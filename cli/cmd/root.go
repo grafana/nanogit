@@ -47,7 +47,9 @@ func init() {
 	// Set up persistent pre-run to configure logging
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if debug {
-			os.Setenv("NANOGIT_LOG_LEVEL", "debug")
+			if err := os.Setenv("NANOGIT_LOG_LEVEL", "debug"); err != nil {
+				return fmt.Errorf("failed to set debug log level: %w", err)
+			}
 		}
 		return nil
 	}
@@ -59,14 +61,4 @@ func getOutputFormat() string {
 		return "json"
 	}
 	return "human"
-}
-
-// exitWithError prints an error and exits with code 1
-func exitWithError(err error) {
-	if jsonOut {
-		fmt.Fprintf(os.Stderr, `{"error": "%s"}`+"\n", err.Error())
-	} else {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-	}
-	os.Exit(1)
 }

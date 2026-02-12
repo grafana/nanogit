@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,16 +69,20 @@ func TestFromEnvironment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear all relevant env vars
-			os.Unsetenv("NANOGIT_TOKEN")
-			os.Unsetenv("GITHUB_TOKEN")
-			os.Unsetenv("GITLAB_TOKEN")
-			os.Unsetenv("NANOGIT_USERNAME")
-			os.Unsetenv("NANOGIT_PASSWORD")
+			_ = os.Unsetenv("NANOGIT_TOKEN")
+			_ = os.Unsetenv("GITHUB_TOKEN")
+			_ = os.Unsetenv("GITLAB_TOKEN")
+			_ = os.Unsetenv("NANOGIT_USERNAME")
+			_ = os.Unsetenv("NANOGIT_PASSWORD")
 
 			// Set test env vars
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
-				defer os.Unsetenv(k)
+				if err := os.Setenv(k, v); err != nil {
+					t.Fatalf("failed to set env var %s: %v", k, err)
+				}
+				defer func(key string) {
+					_ = os.Unsetenv(key)
+				}(k)
 			}
 
 			config := FromEnvironment()
@@ -228,7 +231,4 @@ func TestConfigToOptionsApplies(t *testing.T) {
 
 	opts := config.ToOptions()
 	require.Len(t, opts, 1, "expected one option")
-
-	// Verify the option is an options.Option
-	var _ options.Option = opts[0]
 }
