@@ -262,11 +262,43 @@ func (c *httpClient) fetchAllTreeObjects(ctx context.Context, commitHash hash.Ha
 		return nil, nil, err
 	}
 
+	// Verify tree completeness and fetch missing trees
+	missing, err := c.verifyTreeCompleteness(ctx, rootTree, allObjects)
+	if err != nil {
+		return nil, nil, fmt.Errorf("verify tree completeness: %w", err)
+	}
+
+	if len(missing) > 0 {
+		logger.Warn("Found missing trees after batch fetch, completing collection",
+			"missing_count", len(missing))
+
+		metrics.missingTreesFound = len(missing)
+
+		err = c.completeMissingTrees(ctx, missing, allObjects, metrics)
+		if err != nil {
+			return nil, nil, fmt.Errorf("complete missing trees: %w", err)
+		}
+
+		// Verify again after completion to ensure success
+		stillMissing, err := c.verifyTreeCompleteness(ctx, rootTree, allObjects)
+		if err != nil {
+			return nil, nil, fmt.Errorf("verify after completion: %w", err)
+		}
+
+		if len(stillMissing) > 0 {
+			return nil, nil, fmt.Errorf("still missing %d tree objects after completion phase", len(stillMissing))
+		}
+
+		logger.Debug("All missing trees successfully fetched")
+	}
+
 	logger.Debug("Tree collection completed",
 		"commit_hash", commitHash.String(),
 		"total_requests", metrics.totalRequests,
 		"total_objects", metrics.totalObjectsFetched,
-		"total_batches", metrics.batchNumber)
+		"total_batches", metrics.batchNumber,
+		"missing_trees_found", metrics.missingTreesFound,
+		"completion_fetches", metrics.completionFetches)
 
 	return allObjects, rootTree, nil
 }
@@ -276,6 +308,8 @@ type fetchMetrics struct {
 	totalRequests       int
 	totalObjectsFetched int
 	batchNumber         int
+	missingTreesFound   int // Trees found missing during verification
+	completionFetches   int // Additional fetches during completion phase
 }
 
 // fetchInitialCommitObjects performs the initial fetch of commit objects
@@ -423,17 +457,6 @@ func (c *httpClient) prepareBatch(pending *[]hash.Hash, retries *[]hash.Hash, ba
 func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash.Hash, retries *[]hash.Hash, retryCount map[string]int, requestedHashes, processedTrees map[string]bool, allObjects storage.PackfileStorage, pending *[]hash.Hash, metrics *fetchMetrics, maxRetries int) error {
 	logger := log.FromContext(ctx)
 
-	// Log the batch being requested
-	logger.Debug("Requesting batch of trees",
-		"batch_number", metrics.batchNumber,
-		"batch_size", len(currentBatch))
-	for i, h := range currentBatch {
-		logger.Debug("Batch request item",
-			"batch_number", metrics.batchNumber,
-			"item_index", i,
-			"hash", h.String())
-	}
-
 	metrics.totalRequests++
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:     true,
@@ -447,32 +470,6 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 	}
 
 	metrics.totalObjectsFetched += len(objects)
-
-	// Log what we received
-	logger.Debug("Batch response received",
-		"batch_number", metrics.batchNumber,
-		"received_count", len(objects))
-
-	var treeCount, blobCount, commitCount int
-	for hash, obj := range objects {
-		switch obj.Type {
-		case protocol.ObjectTypeTree:
-			treeCount++
-			logger.Debug("Received tree object",
-				"batch_number", metrics.batchNumber,
-				"hash", hash,
-				"entry_count", len(obj.Tree))
-		case protocol.ObjectTypeBlob:
-			blobCount++
-		case protocol.ObjectTypeCommit:
-			commitCount++
-		}
-	}
-	logger.Debug("Batch response summary",
-		"batch_number", metrics.batchNumber,
-		"tree_count", treeCount,
-		"blob_count", blobCount,
-		"commit_count", commitCount)
 
 	requestedReceived := c.countRequestedReceived(currentBatch, objects)
 	additionalReceived := len(objects) - requestedReceived
@@ -513,51 +510,27 @@ func (c *httpClient) countRequestedReceived(currentBatch []hash.Hash, objects ma
 func (c *httpClient) handleMissingObjects(currentBatch []hash.Hash, objects map[string]*protocol.PackfileObject, retries *[]hash.Hash, retryCount map[string]int, requestedHashes map[string]bool, maxRetries, totalRequests int) error {
 	logger := log.FromContext(context.Background())
 
-	var missingCount int
 	for _, requestedHash := range currentBatch {
 		if _, exists := objects[requestedHash.String()]; exists {
 			continue
 		}
 
-		missingCount++
 		hashStr := requestedHash.String()
 		retryCount[hashStr]++
-
-		logger.Debug("Object not returned in batch",
-			"hash", hashStr,
-			"retry_count", retryCount[hashStr],
-			"max_retries", maxRetries,
-			"total_requests", totalRequests)
 
 		if retryCount[hashStr] > maxRetries {
 			logger.Error("Object not returned after max retries",
 				"hash", hashStr,
 				"max_retries", maxRetries,
-				"total_requests", totalRequests,
-				"retry_count", retryCount[hashStr])
+				"total_requests", totalRequests)
 			return fmt.Errorf("object %s not returned after %d attempts: %w", hashStr, maxRetries, ErrObjectNotFound)
 		}
 
 		if !requestedHashes[hashStr] {
-			logger.Debug("Adding missing object to retry list",
-				"hash", hashStr,
-				"retry_count", retryCount[hashStr])
 			*retries = append(*retries, requestedHash)
 			requestedHashes[hashStr] = true
-		} else {
-			logger.Debug("Missing object already in requested hashes",
-				"hash", hashStr,
-				"retry_count", retryCount[hashStr])
 		}
 	}
-
-	if missingCount > 0 {
-		logger.Debug("Missing objects summary",
-			"missing_count", missingCount,
-			"total_requested", len(currentBatch),
-			"retry_queue_size", len(*retries))
-	}
-
 	return nil
 }
 
@@ -568,8 +541,6 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 	logger := log.FromContext(ctx)
 	var treesProcessed int
 	var newTreesFound int
-	var alreadyHaveCount int
-	var alreadyRequestedCount int
 
 	// Mark current pending hashes as requested
 	for _, h := range pending {
@@ -586,12 +557,10 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 			continue
 		}
 
-		treesProcessed++
-		processedTrees[obj.Hash.String()] = true
-
-		logger.Debug("Processing tree for child dependencies",
-			"tree_hash", obj.Hash.String(),
-			"entry_count", len(obj.Tree))
+		// Check all direct children BEFORE marking as processed
+		allChildrenPresent := true
+		missingChildren := []hash.Hash{}
+		missingChildrenHashes := []string{} // For debug logging
 
 		for _, entry := range obj.Tree {
 			// If it's a file, we can ignore it
@@ -604,42 +573,59 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 				return nil, fmt.Errorf("parsing child hash %s: %w", entry.Hash, err)
 			}
 
-			// Skip if we already have this object
+			// Check if we already have this object
 			if _, exists := allObjects.GetByType(entryHash, protocol.ObjectTypeTree); exists {
-				alreadyHaveCount++
-				logger.Debug("Child tree already in collection",
-					"parent_tree", obj.Hash.String(),
-					"child_tree", entryHash.String(),
-					"child_name", entry.FileName)
-				continue
+				continue // This child exists, check next one
 			}
+
+			// Child is missing
+			allChildrenPresent = false
 
 			// Skip if we've already requested this hash
 			if requestedHashes[entry.Hash] {
-				alreadyRequestedCount++
-				logger.Debug("Child tree already requested",
-					"parent_tree", obj.Hash.String(),
-					"child_tree", entryHash.String(),
-					"child_name", entry.FileName)
 				continue
 			}
 
-			logger.Debug("Adding child tree to pending list",
-				"parent_tree", obj.Hash.String(),
-				"child_tree", entryHash.String(),
-				"child_name", entry.FileName)
-			pending = append(pending, entryHash)
+			// Queue this missing child
+			missingChildren = append(missingChildren, entryHash)
+			missingChildrenHashes = append(missingChildrenHashes, entry.Hash)
 			requestedHashes[entry.Hash] = true
 			newTreesFound++
 		}
+
+		// Debug log missing children
+		if len(missingChildren) > 0 {
+			logger.Debug("Tree has missing children, queuing for fetch",
+				"tree_hash", obj.Hash.String(),
+				"missing_count", len(missingChildren),
+				"missing_hashes", missingChildrenHashes)
+		}
+
+		// Add missing children to pending
+		pending = append(pending, missingChildren...)
+
+		// Mark as processed only if:
+		// 1. All children exist in collection, OR
+		// 2. We successfully queued missing children for fetching
+		//
+		// Don't mark as processed if children are missing but already requested
+		// (they're pending in another batch - we'll re-examine this tree later)
+		if allChildrenPresent || len(missingChildren) > 0 {
+			treesProcessed++
+			processedTrees[obj.Hash.String()] = true
+		} else {
+			// Children are missing but already requested - will re-examine after they arrive
+			logger.Debug("Tree not marked as processed - waiting for pending children",
+				"tree_hash", obj.Hash.String())
+		}
 	}
 
-	logger.Debug("Tree dependency collection completed",
-		"trees_processed", treesProcessed,
-		"new_trees_found", newTreesFound,
-		"already_have_count", alreadyHaveCount,
-		"already_requested_count", alreadyRequestedCount,
-		"total_pending", len(pending))
+	if newTreesFound > 0 {
+		logger.Debug("discovered tree dependencies",
+			"trees_processed", treesProcessed,
+			"new_trees_found", newTreesFound,
+			"total_pending", len(pending))
+	}
 
 	return pending, nil
 }
@@ -671,6 +657,118 @@ func (c *httpClient) findRootTree(ctx context.Context, commitHash hash.Hash, all
 		"tree_available", treeObj != nil)
 
 	return treeObj, nil
+}
+
+// verifyTreeCompleteness recursively checks that all tree objects referenced
+// in the tree hierarchy are present in the collection.
+// Returns a list of missing tree hashes that need to be fetched.
+func (c *httpClient) verifyTreeCompleteness(
+	ctx context.Context,
+	rootTree *protocol.PackfileObject,
+	allObjects storage.PackfileStorage,
+) ([]hash.Hash, error) {
+	logger := log.FromContext(ctx)
+	missing := []hash.Hash{}
+	visited := make(map[string]bool)
+
+	var checkTree func(treeHash hash.Hash, depth int) error
+	checkTree = func(treeHash hash.Hash, depth int) error {
+		hashStr := treeHash.String()
+
+		// Avoid infinite loops from circular references (shouldn't happen)
+		if visited[hashStr] {
+			return nil
+		}
+		visited[hashStr] = true
+
+		// Check if tree exists in collection
+		tree, exists := allObjects.GetByType(treeHash, protocol.ObjectTypeTree)
+		if !exists {
+			logger.Debug("Missing tree object found during verification",
+				"hash", hashStr,
+				"depth", depth)
+			missing = append(missing, treeHash)
+			return nil // Continue checking other branches
+		}
+
+		// Recursively check all child trees
+		for _, entry := range tree.Tree {
+			if entry.FileMode&0o40000 != 0 { // Is directory
+				childHash, err := getCachedHash(entry.Hash)
+				if err != nil {
+					return fmt.Errorf("parse child hash %s: %w", entry.Hash, err)
+				}
+				if err := checkTree(childHash, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	if err := checkTree(rootTree.Hash, 0); err != nil {
+		return nil, fmt.Errorf("verify tree completeness: %w", err)
+	}
+
+	logger.Debug("Tree completeness verification completed",
+		"total_trees_checked", len(visited),
+		"missing_trees", len(missing))
+
+	return missing, nil
+}
+
+// completeMissingTrees fetches any trees that were missed by batch processing.
+// Uses larger batch sizes since we know exactly what we need.
+func (c *httpClient) completeMissingTrees(
+	ctx context.Context,
+	missing []hash.Hash,
+	allObjects storage.PackfileStorage,
+	metrics *fetchMetrics,
+) error {
+	if len(missing) == 0 {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Warn("Fetching missing trees to complete collection",
+		"missing_count", len(missing))
+
+	// Use larger batches since we know exactly what we need
+	const completionBatchSize = 50
+
+	for i := 0; i < len(missing); i += completionBatchSize {
+		end := i + completionBatchSize
+		if end > len(missing) {
+			end = len(missing)
+		}
+		batch := missing[i:end]
+
+		metrics.totalRequests++
+		metrics.completionFetches++
+
+		objects, err := c.Fetch(ctx, client.FetchOptions{
+			NoProgress:     true,
+			NoBlobFilter:   true,
+			Want:           batch,
+			Done:           true,
+			NoExtraObjects: false,
+		})
+		if err != nil {
+			return fmt.Errorf("fetch missing trees batch: %w", err)
+		}
+
+		// Objects automatically added to allObjects via storage context
+		metrics.totalObjectsFetched += len(objects)
+
+		logger.Debug("Fetched missing trees batch",
+			"batch_size", len(batch),
+			"objects_received", len(objects))
+	}
+
+	logger.Debug("Completion phase finished",
+		"trees_fetched", len(missing))
+
+	return nil
 }
 
 // flatten converts collected tree objects into a flat tree structure using depth-first traversal.
@@ -789,8 +887,13 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 // fetchMissingTreeObject attempts to fetch a single missing tree object individually.
 // This is a fallback mechanism used when a tree object is not found in the batch-fetched collection.
 // It performs an individual fetch for the specific tree hash and validates the result.
+//
+// NOTE: With the verification fix in place, this fallback should NOT be triggered.
+// If you see this warning, it means the verification phase missed something.
 func (c *httpClient) fetchMissingTreeObject(ctx context.Context, treeHash hash.Hash) (*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
+	logger.Warn("Fallback fetch triggered - verification phase should have caught this",
+		"hash", treeHash.String())
 	logger.Debug("Fetching missing tree object individually", "hash", treeHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
