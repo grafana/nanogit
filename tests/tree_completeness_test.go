@@ -58,7 +58,7 @@ func getTestConfig(t *testing.T) testConfig {
 }
 
 // createClientAndFetchTree creates a nanogit client and fetches the tree for the given commit
-func createClientAndFetchTree(t *testing.T, ctx context.Context, cfg testConfig) (*protocol.FlatTree, error) {
+func createClientAndFetchTree(t *testing.T, ctx context.Context, cfg testConfig) (*nanogit.FlatTree, error) {
 	t.Helper()
 
 	client, err := nanogit.NewHTTPClient(cfg.repoURL, options.WithBasicAuth(cfg.token, ""))
@@ -100,7 +100,7 @@ func logUnexpectedSuccess(t *testing.T) {
 }
 
 // countAndLogTreeStats counts tree/file entries and logs statistics
-func countAndLogTreeStats(t *testing.T, flatTree *protocol.FlatTree) {
+func countAndLogTreeStats(t *testing.T, flatTree *nanogit.FlatTree) {
 	t.Helper()
 
 	treeCount := 0
