@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/grafana/nanogit/compare/v0.3.0...v0.3.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-git/v5 to v5.16.5 [security] ([#143](https://github.com/grafana/nanogit/issues/143)) ([6ce6e56](https://github.com/grafana/nanogit/commit/6ce6e567bd5c08320b850ec0308cfe6bc94924c9))
+
+
+### Documentation
+
+* add GitHub stars badge to documentation homepage ([#124](https://github.com/grafana/nanogit/issues/124)) ([5eb2c5d](https://github.com/grafana/nanogit/commit/5eb2c5dc283b8d100901d56865017059a01969ae))
+* remove SECURITY.md ([#134](https://github.com/grafana/nanogit/issues/134)) ([66130f7](https://github.com/grafana/nanogit/commit/66130f71cf74d30fa73de8d4abe6fa587bce97b6))
+
 ## [0.3.0](https://github.com/grafana/nanogit/compare/v0.2.0...v0.3.0) (2025-11-19)
 
 
