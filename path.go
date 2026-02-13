@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// normalizePath normalizes a Git path by removing trailing/leading slashes,
+// normalizePath normalizes a Git path by removing leading/trailing slashes,
 // collapsing multiple slashes, and trimming whitespace.
 // It returns an error if the path contains invalid patterns like parent references.
 func normalizePath(p string) (string, error) {
@@ -27,7 +27,7 @@ func normalizePath(p string) (string, error) {
 		p = strings.TrimSuffix(p, "/")
 	}
 
-	// After trimming, check for empty result
+	// After trimming, check for empty result (was only slashes)
 	if p == "" {
 		return "", nil
 	}
@@ -62,7 +62,14 @@ func normalizePath(p string) (string, error) {
 
 // validateBlobPath validates and normalizes a path for blob operations.
 // Blob paths cannot be empty (empty path represents the root tree, not a blob).
+// Blob paths cannot end with trailing slashes (files are not directories).
 func validateBlobPath(p string) (string, error) {
+	// Check for trailing slash before normalization (files shouldn't look like directories)
+	trimmed := strings.TrimSpace(p)
+	if trimmed != "" && strings.HasSuffix(trimmed, "/") {
+		return "", NewInvalidPathError(p, "blob path cannot end with trailing slash (files are not directories)")
+	}
+
 	normalized, err := normalizePath(p)
 	if err != nil {
 		return "", err

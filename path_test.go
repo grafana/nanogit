@@ -154,9 +154,10 @@ func TestValidateBlobPath(t *testing.T) {
 			want:  "dir/subdir/file.txt",
 		},
 		{
-			name:  "trailing slash removed",
-			input: "file.txt/",
-			want:  "file.txt",
+			name:    "trailing slash rejected (file not directory)",
+			input:   "file.txt/",
+			wantErr: true,
+			errType: ErrInvalidPath,
 		},
 		{
 			name:  "multiple slashes normalized",

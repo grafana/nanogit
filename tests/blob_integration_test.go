@@ -116,13 +116,12 @@ var _ = Describe("Blobs", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
-		It("should normalize path ending with slash", func() {
-			testContent := []byte("test content")
-
-			By("Getting a file with a path ending in slash (should normalize)")
-			blob, err := client.GetBlobByPath(ctx, rootHash, "blob.txt/")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(blob.Content).To(Equal(testContent))
+		It("should reject path ending with slash", func() {
+			By("Getting a file with a path ending in slash (should fail)")
+			_, err := client.GetBlobByPath(ctx, rootHash, "blob.txt/")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("blob path cannot end with trailing slash"))
+			Expect(err.Error()).To(ContainSubstring("files are not directories"))
 		})
 
 	})
@@ -301,7 +300,7 @@ var _ = Describe("Blobs", func() {
 			Expect(contentStr).To(Or(ContainSubstring("xlarge"), ContainSubstring("Xlarge")))
 		})
 
-		It("should normalize trailing slashes in GetBlobByPath", func(ctx SpecContext) {
+		It("should reject trailing slashes in GetBlobByPath", func(ctx SpecContext) {
 			client, _, local, _ := QuickSetup()
 
 			local.CreateFile("file.txt", "test content")
@@ -312,10 +311,10 @@ var _ = Describe("Blobs", func() {
 			rootHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 
-			// Get blob with trailing slash - should normalize and succeed
-			blob, err := client.GetBlobByPath(ctx, rootHash, "file.txt/")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(blob.Content)).To(Equal("test content"))
+			// Get blob with trailing slash - should fail (files are not directories)
+			_, err = client.GetBlobByPath(ctx, rootHash, "file.txt/")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("blob path cannot end with trailing slash"))
 		})
 	})
 })

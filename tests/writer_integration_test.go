@@ -2657,26 +2657,18 @@ var _ = Describe("Writer Operations", func() {
 	})
 
 	Describe("Path Normalization", func() {
-		It("should normalize trailing slashes in blob paths", func(ctx SpecContext) {
+		It("should reject trailing slashes in blob paths", func(ctx SpecContext) {
 			client, _, local, _ := QuickSetup()
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 			defer writer.Cleanup(ctx)
 
-			// Delete blob with trailing slash - should normalize and succeed
+			// Delete blob with trailing slash - should fail (files are not directories)
 			_, err := writer.DeleteBlob(ctx, "test.txt/")
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = writer.Commit(ctx, "remove file", testAuthor, testCommitter)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = writer.Push(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			local.Git("pull", "origin", "main")
-			_, err = os.Stat(filepath.Join(local.Path, "test.txt"))
-			Expect(err).To(HaveOccurred()) // File should be deleted
-			Expect(os.IsNotExist(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("blob path cannot end with trailing slash"))
+			Expect(err.Error()).To(ContainSubstring("files are not directories"))
+			Expect(errors.Is(err, nanogit.ErrInvalidPath)).To(BeTrue())
 		})
 
 		It("should normalize multiple slashes in blob paths", func(ctx SpecContext) {
