@@ -17,7 +17,7 @@ import (
 // RawClient is a client that can be used to make raw Git protocol requests.
 // It is used to implement the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 //
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o ../../mocks/raw_client.go . RawClient
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../../internal/tools/fake_header.txt -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
 	IsAuthorized(ctx context.Context) (bool, error)
 	SmartInfo(ctx context.Context, service string) error
