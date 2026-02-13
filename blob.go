@@ -2,7 +2,6 @@ package nanogit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -114,25 +113,22 @@ type Blob struct {
 //	}
 //	fmt.Printf("File content: %s\n", string(blob.Content))
 func (c *httpClient) GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error) {
-	if path == "" {
-		return nil, ErrEmptyPath
-	}
-
-	if strings.HasSuffix(path, "/") {
-		return nil, errors.New("invalid path: ends with slash")
+	normalizedPath, err := validateBlobPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("get blob by path: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Get blob by path",
 		"root_hash", rootHash.String(),
-		"path", path)
+		"path", normalizedPath)
 
 	// Add in-memory storage as it's a complex operation with multiple calls
 	// and we may get more objects in the same request than expected in some responses
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
 	// Split the path into parts
-	parts := strings.Split(path, "/")
+	parts := strings.Split(normalizedPath, "/")
 	currentHash := rootHash
 
 	// Navigate through all but the last part (directories)

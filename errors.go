@@ -56,6 +56,10 @@ var (
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	// It is re-exported from the protocol/client package to avoid import cycles.
 	ErrServerUnavailable = client.ErrServerUnavailable
+
+	// ErrInvalidPath is returned when a path is invalid (e.g., contains parent references, invalid characters).
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrInvalidPath = errors.New("invalid path")
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
@@ -246,3 +250,26 @@ type ServerUnavailableError = client.ServerUnavailableError
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified status code and underlying error.
 // It is re-exported from the protocol/client package to avoid import cycles.
 var NewServerUnavailableError = client.NewServerUnavailableError
+
+// InvalidPathError provides structured information about an invalid path.
+type InvalidPathError struct {
+	Path   string
+	Reason string
+}
+
+func (e *InvalidPathError) Error() string {
+	return fmt.Sprintf("invalid path %q: %s", e.Path, e.Reason)
+}
+
+// Unwrap enables errors.Is() compatibility with ErrInvalidPath
+func (e *InvalidPathError) Unwrap() error {
+	return ErrInvalidPath
+}
+
+// NewInvalidPathError creates a new InvalidPathError with the specified path and reason.
+func NewInvalidPathError(path, reason string) *InvalidPathError {
+	return &InvalidPathError{
+		Path:   path,
+		Reason: reason,
+	}
+}

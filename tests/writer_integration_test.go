@@ -2655,4 +2655,112 @@ var _ = Describe("Writer Operations", func() {
 			Expect(fsckOutput).NotTo(ContainSubstring("not properly sorted"))
 		})
 	})
+
+	Describe("Path Normalization", func() {
+		It("should normalize trailing slashes in blob paths", func(ctx SpecContext) {
+			client, _, local, _ := QuickSetup()
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+			defer writer.Cleanup(ctx)
+
+			// Delete blob with trailing slash - should normalize and succeed
+			_, err := writer.DeleteBlob(ctx, "test.txt/")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "remove file", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			local.Git("pull", "origin", "main")
+			_, err = os.Stat(filepath.Join(local.Path, "test.txt"))
+			Expect(err).To(HaveOccurred()) // File should be deleted
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("should normalize multiple slashes in blob paths", func(ctx SpecContext) {
+			client, _, local, _ := QuickSetup()
+
+			// Create a nested file structure
+			local.CreateFile("dir/subdir/file.txt", "content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "add nested file")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+			defer writer.Cleanup(ctx)
+
+			// Update blob with multiple slashes - should normalize and succeed
+			_, err := writer.UpdateBlob(ctx, "dir//subdir///file.txt", []byte("updated"))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "update file", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			local.Git("pull", "origin", "main")
+			content, err := os.ReadFile(filepath.Join(local.Path, "dir/subdir/file.txt"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("updated"))
+		})
+
+		It("should provide clear error when DeleteTree is called on a blob", func(ctx SpecContext) {
+			client, _, local, _ := QuickSetup()
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+			defer writer.Cleanup(ctx)
+
+			// Try to delete a file (blob) as a tree - should fail with helpful error
+			_, err := writer.DeleteTree(ctx, "test.txt")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("path points to a file (blob), not a directory (tree)"))
+			Expect(err.Error()).To(ContainSubstring("use DeleteBlob instead"))
+			Expect(errors.Is(err, nanogit.ErrUnexpectedObjectType)).To(BeTrue())
+		})
+
+		It("should normalize trailing slashes in tree paths", func(ctx SpecContext) {
+			client, _, local, _ := QuickSetup()
+
+			// Create a directory with files
+			local.CreateFile("dir/file1.txt", "content1")
+			local.CreateFile("dir/file2.txt", "content2")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "add directory")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+			defer writer.Cleanup(ctx)
+
+			// Delete tree with trailing slash - should normalize and succeed
+			_, err := writer.DeleteTree(ctx, "dir/")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = writer.Commit(ctx, "remove directory", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = writer.Push(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			local.Git("pull", "origin", "main")
+			_, err = os.Stat(filepath.Join(local.Path, "dir"))
+			Expect(err).To(HaveOccurred()) // Directory should be deleted
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("should reject paths with parent references", func(ctx SpecContext) {
+			client, _, local, _ := QuickSetup()
+
+			writer, _ := createWriterFromHead(ctx, client, local)
+			defer writer.Cleanup(ctx)
+
+			// Try to create blob with parent reference - should fail
+			_, err := writer.CreateBlob(ctx, "../outside.txt", []byte("bad"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("path contains parent directory references"))
+			Expect(errors.Is(err, nanogit.ErrInvalidPath)).To(BeTrue())
+		})
+	})
 })

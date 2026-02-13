@@ -178,14 +178,15 @@ func (w *stagedWriter) BlobExists(ctx context.Context, path string) (bool, error
 		return false, err
 	}
 
-	if path == "" {
-		return false, ErrEmptyPath
+	normalizedPath, err := validateBlobPath(path)
+	if err != nil {
+		return false, fmt.Errorf("blob exists: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
-	logger.Debug("Check blob existence", "path", path)
+	logger.Debug("Check blob existence", "path", normalizedPath)
 
-	entry, exists := w.treeEntries[path]
+	entry, exists := w.treeEntries[normalizedPath]
 	if !exists {
 		return false, nil
 	}
@@ -217,37 +218,38 @@ func (w *stagedWriter) CreateBlob(ctx context.Context, path string, content []by
 		return hash.Zero, err
 	}
 
-	if path == "" {
-		return hash.Zero, ErrEmptyPath
+	normalizedPath, err := validateBlobPath(path)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("create blob: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Create blob",
-		"path", path,
+		"path", normalizedPath,
 		"content_size", len(content))
 
-	if obj, ok := w.treeEntries[path]; ok {
+	if obj, ok := w.treeEntries[normalizedPath]; ok {
 		return hash.Zero, NewObjectAlreadyExistsError(obj.Hash)
 	}
 
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
-		return hash.Zero, fmt.Errorf("create blob at %q: %w", path, err)
+		return hash.Zero, fmt.Errorf("create blob at %q: %w", normalizedPath, err)
 	}
 
-	w.treeEntries[path] = &FlatTreeEntry{
-		Path: path,
+	w.treeEntries[normalizedPath] = &FlatTreeEntry{
+		Path: normalizedPath,
 		Hash: blobHash,
 		Type: protocol.ObjectTypeBlob,
 		Mode: 0o100644,
 	}
 
-	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return hash.Zero, fmt.Errorf("update tree structure for %q: %w", path, err)
+	if err := w.addMissingOrStaleTreeEntries(ctx, normalizedPath, blobHash); err != nil {
+		return hash.Zero, fmt.Errorf("update tree structure for %q: %w", normalizedPath, err)
 	}
 
 	logger.Debug("Blob created",
-		"path", path,
+		"path", normalizedPath,
 		"blob_hash", blobHash.String())
 
 	return blobHash, nil
@@ -276,37 +278,38 @@ func (w *stagedWriter) UpdateBlob(ctx context.Context, path string, content []by
 		return hash.Zero, err
 	}
 
-	if path == "" {
-		return hash.Zero, ErrEmptyPath
+	normalizedPath, err := validateBlobPath(path)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("update blob: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Update blob",
-		"path", path,
+		"path", normalizedPath,
 		"content_size", len(content))
 
-	if w.treeEntries[path] == nil {
-		return hash.Zero, NewPathNotFoundError(path)
+	if w.treeEntries[normalizedPath] == nil {
+		return hash.Zero, NewPathNotFoundError(normalizedPath)
 	}
 
 	blobHash, err := w.writer.AddBlob(content)
 	if err != nil {
-		return hash.Zero, fmt.Errorf("create blob at %q: %w", path, err)
+		return hash.Zero, fmt.Errorf("create blob at %q: %w", normalizedPath, err)
 	}
 
-	w.treeEntries[path] = &FlatTreeEntry{
-		Path: path,
+	w.treeEntries[normalizedPath] = &FlatTreeEntry{
+		Path: normalizedPath,
 		Hash: blobHash,
 		Type: protocol.ObjectTypeBlob,
 		Mode: 0o100644,
 	}
 
-	if err := w.addMissingOrStaleTreeEntries(ctx, path, blobHash); err != nil {
-		return hash.Zero, fmt.Errorf("update tree structure for %q: %w", path, err)
+	if err := w.addMissingOrStaleTreeEntries(ctx, normalizedPath, blobHash); err != nil {
+		return hash.Zero, fmt.Errorf("update tree structure for %q: %w", normalizedPath, err)
 	}
 
 	logger.Debug("Blob updated",
-		"path", path,
+		"path", normalizedPath,
 		"blob_hash", blobHash.String())
 
 	return blobHash, nil
@@ -335,17 +338,18 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 		return hash.Zero, err
 	}
 
-	if path == "" {
-		return hash.Zero, ErrEmptyPath
+	normalizedPath, err := validateBlobPath(path)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("delete blob: %w", err)
 	}
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Delete blob",
-		"path", path)
+		"path", normalizedPath)
 
-	existing, ok := w.treeEntries[path]
+	existing, ok := w.treeEntries[normalizedPath]
 	if !ok {
-		return hash.Zero, NewPathNotFoundError(path)
+		return hash.Zero, NewPathNotFoundError(normalizedPath)
 	}
 
 	if existing.Type != protocol.ObjectTypeBlob {
@@ -353,14 +357,14 @@ func (w *stagedWriter) DeleteBlob(ctx context.Context, path string) (hash.Hash, 
 	}
 
 	blobHash := existing.Hash
-	delete(w.treeEntries, path)
+	delete(w.treeEntries, normalizedPath)
 
-	if err := w.removeBlobFromTree(ctx, path); err != nil {
-		return hash.Zero, fmt.Errorf("remove blob from tree at %q: %w", path, err)
+	if err := w.removeBlobFromTree(ctx, normalizedPath); err != nil {
+		return hash.Zero, fmt.Errorf("remove blob from tree at %q: %w", normalizedPath, err)
 	}
 
 	logger.Debug("Blob deleted",
-		"path", path,
+		"path", normalizedPath,
 		"blob_hash", blobHash.String())
 
 	return blobHash, nil
@@ -390,27 +394,29 @@ func (w *stagedWriter) MoveBlob(ctx context.Context, srcPath, destPath string) (
 		return hash.Zero, err
 	}
 
-	if srcPath == "" {
-		return hash.Zero, ErrEmptyPath
+	normalizedSrcPath, err := validateBlobPath(srcPath)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("move blob (source): %w", err)
 	}
 
-	if destPath == "" {
-		return hash.Zero, ErrEmptyPath
+	normalizedDestPath, err := validateBlobPath(destPath)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("move blob (destination): %w", err)
 	}
 
-	if srcPath == destPath {
-		return hash.Zero, fmt.Errorf("source and destination paths are the same: %q", srcPath)
+	if normalizedSrcPath == normalizedDestPath {
+		return hash.Zero, fmt.Errorf("source and destination paths are the same: %q", normalizedSrcPath)
 	}
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Move blob",
-		"src_path", srcPath,
-		"dest_path", destPath)
+		"src_path", normalizedSrcPath,
+		"dest_path", normalizedDestPath)
 
 	// Check that source exists and is a blob
-	srcEntry, ok := w.treeEntries[srcPath]
+	srcEntry, ok := w.treeEntries[normalizedSrcPath]
 	if !ok {
-		return hash.Zero, NewPathNotFoundError(srcPath)
+		return hash.Zero, NewPathNotFoundError(normalizedSrcPath)
 	}
 
 	if srcEntry.Type != protocol.ObjectTypeBlob {
@@ -418,7 +424,7 @@ func (w *stagedWriter) MoveBlob(ctx context.Context, srcPath, destPath string) (
 	}
 
 	// Check that destination doesn't already exist
-	if destEntry, exists := w.treeEntries[destPath]; exists {
+	if destEntry, exists := w.treeEntries[normalizedDestPath]; exists {
 		return hash.Zero, NewObjectAlreadyExistsError(destEntry.Hash)
 	}
 
@@ -427,29 +433,29 @@ func (w *stagedWriter) MoveBlob(ctx context.Context, srcPath, destPath string) (
 	blobHash := srcEntry.Hash
 
 	// Create the blob at the destination path
-	w.treeEntries[destPath] = &FlatTreeEntry{
-		Path: destPath,
+	w.treeEntries[normalizedDestPath] = &FlatTreeEntry{
+		Path: normalizedDestPath,
 		Hash: blobHash,
 		Type: protocol.ObjectTypeBlob,
 		Mode: srcEntry.Mode,
 	}
 
 	// Update tree structure for destination
-	if err := w.addMissingOrStaleTreeEntries(ctx, destPath, blobHash); err != nil {
-		return hash.Zero, fmt.Errorf("update tree structure for destination %q: %w", destPath, err)
+	if err := w.addMissingOrStaleTreeEntries(ctx, normalizedDestPath, blobHash); err != nil {
+		return hash.Zero, fmt.Errorf("update tree structure for destination %q: %w", normalizedDestPath, err)
 	}
 
 	// Remove the blob from the source path
-	delete(w.treeEntries, srcPath)
+	delete(w.treeEntries, normalizedSrcPath)
 
 	// Update tree structure for source removal
-	if err := w.removeBlobFromTree(ctx, srcPath); err != nil {
-		return hash.Zero, fmt.Errorf("remove blob from tree at source %q: %w", srcPath, err)
+	if err := w.removeBlobFromTree(ctx, normalizedSrcPath); err != nil {
+		return hash.Zero, fmt.Errorf("remove blob from tree at source %q: %w", normalizedSrcPath, err)
 	}
 
 	logger.Debug("Blob moved",
-		"src_path", srcPath,
-		"dest_path", destPath,
+		"src_path", normalizedSrcPath,
+		"dest_path", normalizedDestPath,
 		"blob_hash", blobHash.String())
 
 	return blobHash, nil
@@ -484,9 +490,14 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 		return nil, err
 	}
 
-	existing, ok := w.treeEntries[path]
+	normalizedPath, err := validateTreePath(path)
+	if err != nil {
+		return nil, fmt.Errorf("get tree: %w", err)
+	}
+
+	existing, ok := w.treeEntries[normalizedPath]
 	if !ok {
-		return nil, NewPathNotFoundError(path)
+		return nil, NewPathNotFoundError(normalizedPath)
 	}
 
 	if existing.Type != protocol.ObjectTypeTree {
@@ -494,12 +505,28 @@ func (w *stagedWriter) GetTree(ctx context.Context, path string) (*Tree, error) 
 	}
 
 	// Get all entries that are direct children of this path
-	pathPrefix := path + "/"
+	pathPrefix := normalizedPath
+	if normalizedPath != "" {
+		pathPrefix = normalizedPath + "/"
+	}
 	var entries []TreeEntry
 
 	for entryPath, entry := range w.treeEntries {
-		if entryPath == path {
+		if entryPath == normalizedPath {
 			continue // Skip the tree itself
+		}
+
+		// For root tree (empty path), check for direct children (no slashes)
+		if normalizedPath == "" {
+			if !strings.Contains(entryPath, "/") {
+				entries = append(entries, TreeEntry{
+					Name: entryPath,
+					Type: entry.Type,
+					Hash: entry.Hash,
+					Mode: entry.Mode,
+				})
+			}
+			continue
 		}
 
 		// Check if this is a direct child (no intermediate slashes)
@@ -547,8 +574,13 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 		return hash.Zero, err
 	}
 
+	normalizedPath, err := validateTreePath(path)
+	if err != nil {
+		return hash.Zero, fmt.Errorf("delete tree: %w", err)
+	}
+
 	logger := log.FromContext(ctx)
-	if path == "" || path == "." {
+	if normalizedPath == "" {
 		emptyHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, []byte{})
 		if err != nil {
 			return hash.Zero, fmt.Errorf("create empty tree: %w", err)
@@ -573,24 +605,29 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 		return emptyHash, nil
 	}
 
-	existing, ok := w.treeEntries[path]
+	existing, ok := w.treeEntries[normalizedPath]
 	if !ok {
-		return hash.Zero, NewPathNotFoundError(path)
+		return hash.Zero, NewPathNotFoundError(normalizedPath)
 	}
 
 	if existing.Type != protocol.ObjectTypeTree {
+		if existing.Type == protocol.ObjectTypeBlob {
+			return hash.Zero, fmt.Errorf(
+				"cannot delete tree at %q: path points to a file (blob), not a directory (tree) - use DeleteBlob instead: %w",
+				normalizedPath, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type))
+		}
 		return hash.Zero, NewUnexpectedObjectTypeError(existing.Hash, protocol.ObjectTypeTree, existing.Type)
 	}
 	treeHash := existing.Hash
 
-	logger.Debug("deleting tree", "path", path)
+	logger.Debug("deleting tree", "path", normalizedPath)
 
 	// Find and remove all entries that start with this path
-	pathPrefix := path + "/"
+	pathPrefix := normalizedPath + "/"
 	var entriesToDelete []string
 
 	for entryPath := range w.treeEntries {
-		if entryPath == path || strings.HasPrefix(entryPath, pathPrefix) {
+		if entryPath == normalizedPath || strings.HasPrefix(entryPath, pathPrefix) {
 			entriesToDelete = append(entriesToDelete, entryPath)
 		}
 	}
@@ -602,7 +639,7 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 	}
 
 	// Update the tree structure to remove the directory entry
-	if err := w.removeTreeFromTree(ctx, path); err != nil {
+	if err := w.removeTreeFromTree(ctx, normalizedPath); err != nil {
 		return hash.Zero, fmt.Errorf("remove tree from entire tree: %w", err)
 	}
 
@@ -633,36 +670,37 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 		return hash.Zero, err
 	}
 
-	if err := w.validateMoveTreePaths(srcPath, destPath); err != nil {
-		return hash.Zero, err
-	}
-
-	logger := log.FromContext(ctx)
-	logger.Debug("Move tree", "src_path", srcPath, "dest_path", destPath)
-
-	_, treeHash, err := w.validateMoveTreeSource(srcPath)
+	normalizedSrcPath, normalizedDestPath, err := w.validateMoveTreePaths(srcPath, destPath)
 	if err != nil {
 		return hash.Zero, err
 	}
 
-	if err := w.validateMoveTreeDestination(destPath); err != nil {
+	logger := log.FromContext(ctx)
+	logger.Debug("Move tree", "src_path", normalizedSrcPath, "dest_path", normalizedDestPath)
+
+	_, treeHash, err := w.validateMoveTreeSource(normalizedSrcPath)
+	if err != nil {
 		return hash.Zero, err
 	}
 
-	entriesToMove := w.findTreeEntriesToMove(srcPath)
+	if err := w.validateMoveTreeDestination(normalizedDestPath); err != nil {
+		return hash.Zero, err
+	}
+
+	entriesToMove := w.findTreeEntriesToMove(normalizedSrcPath)
 	logger.Debug("Found entries to move", "count", len(entriesToMove))
 
-	if err := w.moveTreeEntries(ctx, srcPath, destPath, entriesToMove); err != nil {
+	if err := w.moveTreeEntries(ctx, normalizedSrcPath, normalizedDestPath, entriesToMove); err != nil {
 		return hash.Zero, err
 	}
 
-	if err := w.updateTreeStructuresForMove(ctx, srcPath, destPath, treeHash); err != nil {
+	if err := w.updateTreeStructuresForMove(ctx, normalizedSrcPath, normalizedDestPath, treeHash); err != nil {
 		return hash.Zero, err
 	}
 
 	logger.Debug("Tree moved",
-		"src_path", srcPath,
-		"dest_path", destPath,
+		"src_path", normalizedSrcPath,
+		"dest_path", normalizedDestPath,
 		"tree_hash", treeHash.String(),
 		"entries_moved", len(entriesToMove))
 
@@ -670,17 +708,27 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 }
 
 // validateMoveTreePaths validates the source and destination paths for MoveTree
-func (w *stagedWriter) validateMoveTreePaths(srcPath, destPath string) error {
-	if srcPath == "" {
-		return ErrEmptyPath
+func (w *stagedWriter) validateMoveTreePaths(srcPath, destPath string) (string, string, error) {
+	normalizedSrcPath, err := validateTreePath(srcPath)
+	if err != nil {
+		return "", "", fmt.Errorf("move tree (source): %w", err)
 	}
-	if destPath == "" {
-		return ErrEmptyPath
+	if normalizedSrcPath == "" {
+		return "", "", fmt.Errorf("move tree (source): %w", ErrEmptyPath)
 	}
-	if srcPath == destPath {
-		return fmt.Errorf("source and destination paths are the same: %q", srcPath)
+
+	normalizedDestPath, err := validateTreePath(destPath)
+	if err != nil {
+		return "", "", fmt.Errorf("move tree (destination): %w", err)
 	}
-	return nil
+	if normalizedDestPath == "" {
+		return "", "", fmt.Errorf("move tree (destination): %w", ErrEmptyPath)
+	}
+
+	if normalizedSrcPath == normalizedDestPath {
+		return "", "", fmt.Errorf("source and destination paths are the same: %q", normalizedSrcPath)
+	}
+	return normalizedSrcPath, normalizedDestPath, nil
 }
 
 // validateMoveTreeSource validates the source path exists and is a tree

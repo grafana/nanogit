@@ -1087,19 +1087,24 @@ func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
 //	    fmt.Printf("%s\n", entry.Name)
 //	}
 func (c *httpClient) GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error) {
-	// If the path is "." or empty, return the root tree
-	if path == "" || path == "." {
+	normalizedPath, err := validateTreePath(path)
+	if err != nil {
+		return nil, fmt.Errorf("get tree by path: %w", err)
+	}
+
+	// If the path is empty, return the root tree
+	if normalizedPath == "" {
 		return c.GetTree(ctx, rootHash)
 	}
 
 	logger := log.FromContext(ctx)
 	logger.Debug("Get tree by path",
 		"root_hash", rootHash.String(),
-		"path", path)
+		"path", normalizedPath)
 
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
-	parts := strings.Split(path, "/")
+	parts := strings.Split(normalizedPath, "/")
 	currentHash := rootHash
 
 	for i, part := range parts {

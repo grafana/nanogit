@@ -116,11 +116,13 @@ var _ = Describe("Blobs", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(errors.Is(err, nanogit.ErrObjectNotFound)).To(BeTrue())
 		})
-		It("should fail when path ends with slash", func() {
-			By("Attempting to get a file with a path ending in slash")
-			_, err := client.GetBlobByPath(ctx, rootHash, "blob.txt/")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid path: ends with slash"))
+		It("should normalize path ending with slash", func() {
+			testContent := []byte("test content")
+
+			By("Getting a file with a path ending in slash (should normalize)")
+			blob, err := client.GetBlobByPath(ctx, rootHash, "blob.txt/")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blob.Content).To(Equal(testContent))
 		})
 
 	})
@@ -297,6 +299,23 @@ var _ = Describe("Blobs", func() {
 			Expect(contentStr).To(ContainSubstring("\"panels\""))
 			Expect(contentStr).To(ContainSubstring("\"templating\""))
 			Expect(contentStr).To(Or(ContainSubstring("xlarge"), ContainSubstring("Xlarge")))
+		})
+
+		It("should normalize trailing slashes in GetBlobByPath", func(ctx SpecContext) {
+			client, _, local, _ := QuickSetup()
+
+			local.CreateFile("file.txt", "test content")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "add file")
+			local.Git("push", "-u", "origin", "main", "--force")
+
+			rootHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get blob with trailing slash - should normalize and succeed
+			blob, err := client.GetBlobByPath(ctx, rootHash, "file.txt/")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(blob.Content)).To(Equal("test content"))
 		})
 	})
 })
