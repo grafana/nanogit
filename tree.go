@@ -616,7 +616,7 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 			logger.Debug("Tree not marked as processed - waiting for missing children",
 				"tree_hash", obj.Hash.String(),
 				"newly_queued", len(missingChildren),
-				"already_requested", allChildrenPresent == false && len(missingChildren) == 0)
+				"already_requested", !allChildrenPresent && len(missingChildren) == 0)
 		}
 	}
 
