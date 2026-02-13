@@ -15,7 +15,7 @@ jobs:
     name: Generated Files
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -36,7 +36,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -55,7 +55,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -67,7 +67,7 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -94,7 +94,7 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -137,7 +137,7 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -165,7 +165,7 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -212,7 +212,7 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -258,7 +258,7 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -304,7 +304,7 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -330,7 +330,7 @@ jobs:
     name: Dependencies
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -352,7 +352,7 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -366,7 +366,7 @@ jobs:
     name: Clone Performance Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
@@ -392,7 +392,7 @@ jobs:
     name: Full Clone Performance Test (1 minute limit)
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
