@@ -8,7 +8,7 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/staged_writer.go . StagedWriter
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header internal/tools/fake_header.txt -o mocks/staged_writer.go . StagedWriter
 
 // StagedWriter provides a transactional interface for writing changes to Git objects.
 // It allows staging multiple changes (file writes, updates, deletes) before committing them together.
@@ -65,7 +65,7 @@ type StagedWriter interface {
 // Client defines the interface for interacting with a Git repository.
 // It provides methods for repository operations, reference management,
 //
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o mocks/client.go . Client
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header internal/tools/fake_header.txt -o mocks/client.go . Client
 type Client interface {
 	// Repo operations
 	IsAuthorized(ctx context.Context) (bool, error)

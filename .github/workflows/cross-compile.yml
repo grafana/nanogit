@@ -40,7 +40,7 @@ jobs:
     name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} ${{ matrix.GOARM || '' }}
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24-alpine
+      image: golang:1.25-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
     steps:
       - name: Install Git
         run: apk add --no-cache git
