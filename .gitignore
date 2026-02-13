@@ -8,6 +8,8 @@ node_modules
 yarn.lock
 reports
 perf.test
+bin/
+go.work.sum
 
 # VitePress
 docs/.vitepress/dist

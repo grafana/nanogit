@@ -29,7 +29,7 @@ import (
 // Retrier defines the interface for retry behavior.
 // Implementations determine when to retry and how long to wait between attempts.
 //
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -o ../mocks/retrier.go . Retrier
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../internal/tools/fake_header.txt -o ../mocks/retrier.go . Retrier
 type Retrier interface {
 	// ShouldRetry determines if an error should be retried.
 	// ctx is the context for the operation (may be used for context-aware decisions).

@@ -1,0 +1,1 @@
+//lint:file-ignore ST1008 Generated mocks reflect original interface signatures
