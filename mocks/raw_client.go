@@ -480,18 +480,6 @@ func (fake *FakeRawClient) UploadPackReturnsOnCall(i int, result1 io.ReadCloser,
 func (fake *FakeRawClient) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.fetchMutex.RLock()
-	defer fake.fetchMutex.RUnlock()
-	fake.isAuthorizedMutex.RLock()
-	defer fake.isAuthorizedMutex.RUnlock()
-	fake.lsRefsMutex.RLock()
-	defer fake.lsRefsMutex.RUnlock()
-	fake.receivePackMutex.RLock()
-	defer fake.receivePackMutex.RUnlock()
-	fake.smartInfoMutex.RLock()
-	defer fake.smartInfoMutex.RUnlock()
-	fake.uploadPackMutex.RLock()
-	defer fake.uploadPackMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

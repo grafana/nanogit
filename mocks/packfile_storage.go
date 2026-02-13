@@ -373,18 +373,6 @@ func (fake *FakePackfileStorage) LenReturnsOnCall(i int, result1 int) {
 func (fake *FakePackfileStorage) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.addMutex.RLock()
-	defer fake.addMutex.RUnlock()
-	fake.deleteMutex.RLock()
-	defer fake.deleteMutex.RUnlock()
-	fake.getMutex.RLock()
-	defer fake.getMutex.RUnlock()
-	fake.getAllKeysMutex.RLock()
-	defer fake.getAllKeysMutex.RUnlock()
-	fake.getByTypeMutex.RLock()
-	defer fake.getByTypeMutex.RUnlock()
-	fake.lenMutex.RLock()
-	defer fake.lenMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

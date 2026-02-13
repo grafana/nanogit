@@ -894,28 +894,6 @@ func (fake *FakeStagedWriter) UpdateBlobReturnsOnCall(i int, result1 hash.Hash, 
 func (fake *FakeStagedWriter) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.blobExistsMutex.RLock()
-	defer fake.blobExistsMutex.RUnlock()
-	fake.cleanupMutex.RLock()
-	defer fake.cleanupMutex.RUnlock()
-	fake.commitMutex.RLock()
-	defer fake.commitMutex.RUnlock()
-	fake.createBlobMutex.RLock()
-	defer fake.createBlobMutex.RUnlock()
-	fake.deleteBlobMutex.RLock()
-	defer fake.deleteBlobMutex.RUnlock()
-	fake.deleteTreeMutex.RLock()
-	defer fake.deleteTreeMutex.RUnlock()
-	fake.getTreeMutex.RLock()
-	defer fake.getTreeMutex.RUnlock()
-	fake.moveBlobMutex.RLock()
-	defer fake.moveBlobMutex.RUnlock()
-	fake.moveTreeMutex.RLock()
-	defer fake.moveTreeMutex.RUnlock()
-	fake.pushMutex.RLock()
-	defer fake.pushMutex.RUnlock()
-	fake.updateBlobMutex.RLock()
-	defer fake.updateBlobMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

@@ -134,7 +134,6 @@ func (fake *FakeRetrier) ShouldRetryCalls(stub func(context.Context, error, int)
 	fake.ShouldRetryStub = stub
 }
 
-//lint:ignore ST1008 Test helper returns args in same order as interface method signature
 func (fake *FakeRetrier) ShouldRetryArgsForCall(i int) (context.Context, error, int) {
 	fake.shouldRetryMutex.RLock()
 	defer fake.shouldRetryMutex.RUnlock()
@@ -230,12 +229,6 @@ func (fake *FakeRetrier) WaitReturnsOnCall(i int, result1 error) {
 func (fake *FakeRetrier) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.maxAttemptsMutex.RLock()
-	defer fake.maxAttemptsMutex.RUnlock()
-	fake.shouldRetryMutex.RLock()
-	defer fake.shouldRetryMutex.RUnlock()
-	fake.waitMutex.RLock()
-	defer fake.waitMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value
