@@ -105,7 +105,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
@@ -127,7 +127,7 @@ jobs:
           GOFLAGS: -mod=vendor
         run: make test-coverage
       - name: Upload coverage
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
@@ -176,7 +176,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
@@ -223,7 +223,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
@@ -269,7 +269,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
@@ -322,7 +322,7 @@ jobs:
         with:
           fetch-depth: 0 # Required for scanning git history
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@90190deac64289cb10bb694894be8db9ead8790b
+        uses: trufflesecurity/trufflehog@6961f2bace57ab32b23b3ba40f8f420f6bc7e004
         with:
           extra_args: --results=verified,unknown
 
