@@ -604,19 +604,19 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 		// Add missing children to pending
 		pending = append(pending, missingChildren...)
 
-		// Mark as processed only if:
-		// 1. All children exist in collection, OR
-		// 2. We successfully queued missing children for fetching
-		//
-		// Don't mark as processed if children are missing but already requested
-		// (they're pending in another batch - we'll re-examine this tree later)
-		if allChildrenPresent || len(missingChildren) > 0 {
+		// Mark as processed ONLY if all children exist in the collection.
+		// If any children are missing (regardless of whether they're newly queued
+		// or already requested), leave the tree unprocessed so it can be re-examined
+		// in the next batch after those children arrive.
+		if allChildrenPresent {
 			treesProcessed++
 			processedTrees[obj.Hash.String()] = true
 		} else {
-			// Children are missing but already requested - will re-examine after they arrive
-			logger.Debug("Tree not marked as processed - waiting for pending children",
-				"tree_hash", obj.Hash.String())
+			// Children are missing - will re-examine after they arrive
+			logger.Debug("Tree not marked as processed - waiting for missing children",
+				"tree_hash", obj.Hash.String(),
+				"newly_queued", len(missingChildren),
+				"already_requested", allChildrenPresent == false && len(missingChildren) == 0)
 		}
 	}
 
