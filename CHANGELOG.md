@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4](https://github.com/grafana/nanogit/compare/v0.3.3...v0.3.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/grafana/nanogit to v0.3.0 ([#138](https://github.com/grafana/nanogit/issues/138)) ([a4bd85f](https://github.com/grafana/nanogit/commit/a4bd85fdeecdebc0e21f4d2fb725c67ee4718a09))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.28.1 ([#149](https://github.com/grafana/nanogit/issues/149)) ([ce05965](https://github.com/grafana/nanogit/commit/ce05965bcfc32abf91e1b18937cfc0bfc56792be))
+
 ## [0.3.3](https://github.com/grafana/nanogit/compare/v0.3.2...v0.3.3) (2026-02-13)
 
 
