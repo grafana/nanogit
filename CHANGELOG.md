@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5](https://github.com/grafana/nanogit/compare/v0.3.4...v0.3.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/stretchr/testify to v1.11.1 ([#156](https://github.com/grafana/nanogit/issues/156)) ([b70d055](https://github.com/grafana/nanogit/commit/b70d05568da35ff429801b183cb6813db97806e1))
+* handle submodule (gitlink) entries correctly in tree operations ([#165](https://github.com/grafana/nanogit/issues/165)) ([244d4d0](https://github.com/grafana/nanogit/commit/244d4d04b79a26b601f75c5100aab7b1991849f5))
+
 ## [0.3.4](https://github.com/grafana/nanogit/compare/v0.3.3...v0.3.4) (2026-02-13)
 
 
