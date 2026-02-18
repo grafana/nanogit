@@ -480,4 +480,156 @@ var _ = Describe("Trees", func() {
 			Expect(fileCount).To(BeNumerically(">=", 8), "Should have at least 8 files")
 		})
 	})
+
+	// Integration test for the submodule (gitlink mode 0o160000) bug fix.
+	// Submodule entries have mode 0o160000, which has the 0o40000 bit set.
+	// Before the fix, the bitmask check (FileMode&0o40000 != 0) would incorrectly
+	// classify submodule entries as trees, causing "not our ref" errors when
+	// nanogit tried to fetch the submodule commit hash as a tree object.
+	Context("GetFlatTree with submodule", func() {
+		var (
+			client     nanogit.Client
+			local      *LocalGitRepo
+			commitHash hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up main repository")
+			var remote *RemoteRepo
+			var user *User
+			client, remote, local, user = QuickSetup()
+
+			By("Creating a second repository to use as a submodule source")
+			subRemote := gitServer.CreateRepo("subrepo", user)
+
+			By("Setting up the submodule source repository with content")
+			subLocal := NewLocalGitRepo(logger)
+			subLocal.Git("config", "user.name", user.Username)
+			subLocal.Git("config", "user.email", user.Email)
+			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
+			subLocal.CreateFile("lib.txt", "library content")
+			subLocal.Git("add", ".")
+			subLocal.Git("commit", "-m", "Initial submodule commit")
+			subLocal.Git("branch", "-M", "main")
+			subLocal.Git("push", "origin", "main", "--force")
+
+			By("Adding files to the main repository")
+			local.CreateDirPath("src")
+			local.CreateFile("src/main.txt", "main content")
+			local.CreateFile("README.md", "readme")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add source files")
+
+			By("Adding the submodule to the main repository")
+			_ = remote // main remote is used by QuickInit
+			local.Git("submodule", "add", subRemote.AuthURL(), "external/lib")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add submodule")
+
+			By("Pushing the main repository")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
+
+			By("Getting the commit hash")
+			var err error
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should retrieve flat tree excluding submodule entry without errors", func() {
+			By("Fetching the flat tree for the commit with a submodule")
+			flatTree, err := client.GetFlatTree(ctx, commitHash)
+			Expect(err).NotTo(HaveOccurred(), "GetFlatTree should succeed on repos with submodules")
+			Expect(flatTree).NotTo(BeNil())
+
+			By("Verifying the submodule entry is NOT in the flat tree")
+			paths := make([]string, len(flatTree.Entries))
+			for i, e := range flatTree.Entries {
+				paths[i] = e.Path
+			}
+			Expect(paths).NotTo(ContainElement("external/lib"),
+				"submodule entry should be skipped in flat tree")
+
+			By("Verifying regular files and directories are still present")
+			Expect(paths).To(ContainElement("README.md"))
+			Expect(paths).To(ContainElement("src"))
+			Expect(paths).To(ContainElement("src/main.txt"))
+			Expect(paths).To(ContainElement(".gitmodules"))
+
+			By("Verifying no entries exist inside the submodule path")
+			for _, entry := range flatTree.Entries {
+				Expect(entry.Path).NotTo(HavePrefix("external/lib/"),
+					"flat tree should not contain entries inside the submodule")
+			}
+		})
+	})
+
+	Context("CompareCommits with submodule", func() {
+		var (
+			client            nanogit.Client
+			local             *LocalGitRepo
+			beforeSubmoduleHash hash.Hash
+			afterSubmoduleHash  hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up main repository")
+			var remote *RemoteRepo
+			var user *User
+			client, remote, local, user = QuickSetup()
+
+			By("Creating initial commit in main repo")
+			local.CreateFile("README.md", "readme")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			var err error
+			beforeSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating a second repository to use as a submodule source")
+			subRemote := gitServer.CreateRepo("subrepo-compare", user)
+			subLocal := NewLocalGitRepo(logger)
+			subLocal.Git("config", "user.name", user.Username)
+			subLocal.Git("config", "user.email", user.Email)
+			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
+			subLocal.CreateFile("lib.txt", "library content")
+			subLocal.Git("add", ".")
+			subLocal.Git("commit", "-m", "Initial submodule commit")
+			subLocal.Git("branch", "-M", "main")
+			subLocal.Git("push", "origin", "main", "--force")
+
+			By("Adding the submodule to the main repository")
+			_ = remote // main remote is used by QuickInit
+			local.Git("submodule", "add", subRemote.AuthURL(), "vendor/lib")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add submodule")
+			afterSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Pushing the main repository")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
+		})
+
+		It("should compare commits across submodule addition without errors", func() {
+			By("Comparing the commit before and after submodule addition")
+			changes, err := client.CompareCommits(ctx, beforeSubmoduleHash, afterSubmoduleHash)
+			Expect(err).NotTo(HaveOccurred(), "CompareCommits should succeed when submodule is added")
+			Expect(changes).NotTo(BeEmpty())
+
+			By("Verifying the submodule entry is NOT in the changes (skipped)")
+			for _, change := range changes {
+				Expect(change.Path).NotTo(Equal("vendor/lib"),
+					"submodule entry should be skipped from commit comparison")
+			}
+
+			By("Verifying .gitmodules is reported as an added file")
+			paths := make([]string, len(changes))
+			for i, c := range changes {
+				paths[i] = c.Path
+			}
+			Expect(paths).To(ContainElement(".gitmodules"),
+				".gitmodules should appear as a changed file when a submodule is added")
+		})
+	})
 })

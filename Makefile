@@ -9,7 +9,7 @@ fmt:
 
 .PHONY: lint
 
-lint-staticcheck: 
+lint-staticcheck:
 	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run

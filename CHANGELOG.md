@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5](https://github.com/grafana/nanogit/compare/v0.3.4...v0.3.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/stretchr/testify to v1.11.1 ([#156](https://github.com/grafana/nanogit/issues/156)) ([b70d055](https://github.com/grafana/nanogit/commit/b70d05568da35ff429801b183cb6813db97806e1))
+* handle submodule (gitlink) entries correctly in tree operations ([#165](https://github.com/grafana/nanogit/issues/165)) ([244d4d0](https://github.com/grafana/nanogit/commit/244d4d04b79a26b601f75c5100aab7b1991849f5))
+
+## [0.3.4](https://github.com/grafana/nanogit/compare/v0.3.3...v0.3.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/grafana/nanogit to v0.3.0 ([#138](https://github.com/grafana/nanogit/issues/138)) ([a4bd85f](https://github.com/grafana/nanogit/commit/a4bd85fdeecdebc0e21f4d2fb725c67ee4718a09))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.28.1 ([#149](https://github.com/grafana/nanogit/issues/149)) ([ce05965](https://github.com/grafana/nanogit/commit/ce05965bcfc32abf91e1b18937cfc0bfc56792be))
+
+## [0.3.3](https://github.com/grafana/nanogit/compare/v0.3.2...v0.3.3) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-billy/v5 to v5.7.0 ([#129](https://github.com/grafana/nanogit/issues/129)) ([d43778c](https://github.com/grafana/nanogit/commit/d43778c9d357f8682095021db7f3a53291fded20))
+* **deps:** update module github.com/onsi/gomega to v1.39.1 ([#150](https://github.com/grafana/nanogit/issues/150)) ([cf2665e](https://github.com/grafana/nanogit/commit/cf2665e104e9232b7a97f7a2e94524de3e90053a))
+
+## [0.3.2](https://github.com/grafana/nanogit/compare/v0.3.1...v0.3.2) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/klauspost/compress to v1.18.4 ([#130](https://github.com/grafana/nanogit/issues/130)) ([f27c451](https://github.com/grafana/nanogit/commit/f27c451e52637e7858dd5c9461bc266a6af3e40c))
+
+## [0.3.1](https://github.com/grafana/nanogit/compare/v0.3.0...v0.3.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-git/v5 to v5.16.5 [security] ([#143](https://github.com/grafana/nanogit/issues/143)) ([6ce6e56](https://github.com/grafana/nanogit/commit/6ce6e567bd5c08320b850ec0308cfe6bc94924c9))
+
+
+### Documentation
+
+* add GitHub stars badge to documentation homepage ([#124](https://github.com/grafana/nanogit/issues/124)) ([5eb2c5d](https://github.com/grafana/nanogit/commit/5eb2c5dc283b8d100901d56865017059a01969ae))
+* remove SECURITY.md ([#134](https://github.com/grafana/nanogit/issues/134)) ([66130f7](https://github.com/grafana/nanogit/commit/66130f71cf74d30fa73de8d4abe6fa587bce97b6))
+
 ## [0.3.0](https://github.com/grafana/nanogit/compare/v0.2.0...v0.3.0) (2025-11-19)
 
 
