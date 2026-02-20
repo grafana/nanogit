@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5](https://github.com/grafana/nanogit/compare/v0.3.4...v0.3.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/stretchr/testify to v1.11.1 ([#156](https://github.com/grafana/nanogit/issues/156)) ([b70d055](https://github.com/grafana/nanogit/commit/b70d05568da35ff429801b183cb6813db97806e1))
+* handle submodule (gitlink) entries correctly in tree operations ([#165](https://github.com/grafana/nanogit/issues/165)) ([244d4d0](https://github.com/grafana/nanogit/commit/244d4d04b79a26b601f75c5100aab7b1991849f5))
+
+## [0.3.4](https://github.com/grafana/nanogit/compare/v0.3.3...v0.3.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/grafana/nanogit to v0.3.0 ([#138](https://github.com/grafana/nanogit/issues/138)) ([a4bd85f](https://github.com/grafana/nanogit/commit/a4bd85fdeecdebc0e21f4d2fb725c67ee4718a09))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.28.1 ([#149](https://github.com/grafana/nanogit/issues/149)) ([ce05965](https://github.com/grafana/nanogit/commit/ce05965bcfc32abf91e1b18937cfc0bfc56792be))
+
 ## [0.3.3](https://github.com/grafana/nanogit/compare/v0.3.2...v0.3.3) (2026-02-13)
 
 
