@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7](https://github.com/grafana/nanogit/compare/v0.3.6...v0.3.7) (2026-02-20)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.40.0 ([#157](https://github.com/grafana/nanogit/issues/157)) ([e1155db](https://github.com/grafana/nanogit/commit/e1155dbef6a56154992c1b6e98bb26e23a4f354a))
+
 ## [0.3.6](https://github.com/grafana/nanogit/compare/v0.3.5...v0.3.6) (2026-02-20)
 
 
