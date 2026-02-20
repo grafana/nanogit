@@ -82,7 +82,7 @@ func estimateFlatTreeSize(rootTree *protocol.PackfileObject, allTreeObjects stor
 
 		// Add subdirectories to queue for sampling
 		for _, entry := range current.Tree {
-			if entry.FileMode&0o40000 != 0 { // Is directory
+			if entry.FileMode == 0o40000 { // Is directory (exact match excludes submodules 0o160000)
 				treeCount++
 				if sampleSize < 5 { // Only sample first few levels
 					if entryHash, err := hash.FromHex(entry.Hash); err == nil {
@@ -466,6 +466,15 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 		NoExtraObjects: false, // we want to fetch all objects in this batch
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "not our ref") {
+			// Extract the failing hash if possible for a more informative error.
+			// The batch may contain multiple hashes; the server rejects the entire
+			// request when any single hash is unknown.
+			if len(currentBatch) == 1 {
+				return NewObjectNotFoundError(currentBatch[0])
+			}
+			return fmt.Errorf("fetch tree batch (%d objects): %w", len(currentBatch), ErrObjectNotFound)
+		}
 		return fmt.Errorf("fetch tree batch: %w", err)
 	}
 
@@ -563,8 +572,14 @@ func (c *httpClient) collectMissingTreeHashes(ctx context.Context, objects map[s
 		missingChildrenHashes := []string{} // For debug logging
 
 		for _, entry := range obj.Tree {
-			// If it's a file, we can ignore it
-			if entry.FileMode&0o40000 == 0 {
+			// Skip non-tree entries: files, symlinks, and submodules (gitlinks).
+			// Submodules have mode 0o160000 which has the 0o40000 bit set,
+			// so a bitmask check would incorrectly match them as trees.
+			if entry.FileMode != 0o40000 {
+				if entry.FileMode == 0o160000 {
+					logger.Debug("Skipping submodule entry in tree collection",
+						"name", entry.FileName, "hash", entry.Hash)
+				}
 				continue
 			}
 
@@ -693,7 +708,7 @@ func (c *httpClient) verifyTreeCompleteness(
 
 		// Recursively check all child trees
 		for _, entry := range tree.Tree {
-			if entry.FileMode&0o40000 != 0 { // Is directory
+			if entry.FileMode == 0o40000 { // Is directory (exact match excludes submodules 0o160000)
 				childHash, err := getCachedHash(entry.Hash)
 				if err != nil {
 					return fmt.Errorf("parse child hash %s: %w", entry.Hash, err)
@@ -818,9 +833,18 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 				entryPath = entry.FileName
 			}
 
+			// Gitlink / submodule (mode 0o160000): points to a commit in another
+			// repository. Skip it entirely — callers of GetFlatTree expect only
+			// trees and blobs.
+			if entry.FileMode == 0o160000 {
+				logger.Debug("Skipping submodule entry in flat tree",
+					"name", entry.FileName, "path", entryPath, "hash", entry.Hash)
+				continue
+			}
+
 			// Determine the type based on the mode
 			entryType := protocol.ObjectTypeBlob
-			if entry.FileMode&0o40000 != 0 {
+			if entry.FileMode == 0o40000 {
 				entryType = protocol.ObjectTypeTree
 			}
 
@@ -964,7 +988,7 @@ func (c *httpClient) GetTree(ctx context.Context, treeHash hash.Hash) (*Tree, er
 		return nil, fmt.Errorf("get tree object %s: %w", treeHash.String(), err)
 	}
 
-	result, err := packfileObjectToTree(tree)
+	result, err := packfileObjectToTree(ctx, tree)
 	if err != nil {
 		return nil, fmt.Errorf("convert tree object %s: %w", treeHash.String(), err)
 	}
@@ -1024,32 +1048,39 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 }
 
 // packfileObjectToTree converts a packfile object to a tree object.
-// It returns the direct children of the tree.
-func packfileObjectToTree(obj *protocol.PackfileObject) (*Tree, error) {
+// It returns the direct children of the tree, excluding submodule entries.
+func packfileObjectToTree(ctx context.Context, obj *protocol.PackfileObject) (*Tree, error) {
+	logger := log.FromContext(ctx)
+
 	if obj.Type != protocol.ObjectTypeTree {
 		return nil, NewUnexpectedObjectTypeError(obj.Hash, protocol.ObjectTypeTree, obj.Type)
 	}
 
 	// Convert PackfileTreeEntry to TreeEntry (direct children only)
-	entries := make([]TreeEntry, len(obj.Tree))
-	for i, entry := range obj.Tree {
+	entries := make([]TreeEntry, 0, len(obj.Tree))
+	for _, entry := range obj.Tree {
+		if entry.FileMode == 0o160000 {
+			logger.Debug("Skipping submodule entry in tree",
+				"name", entry.FileName, "hash", entry.Hash)
+			continue
+		}
+
 		entryHash, err := hash.FromHex(entry.Hash)
 		if err != nil {
 			return nil, fmt.Errorf("parsing hash: %w", err)
 		}
 
-		// Determine the type based on the mode
 		entryType := protocol.ObjectTypeBlob
-		if entry.FileMode&0o40000 != 0 {
+		if entry.FileMode == 0o40000 {
 			entryType = protocol.ObjectTypeTree
 		}
 
-		entries[i] = TreeEntry{
+		entries = append(entries, TreeEntry{
 			Name: entry.FileName,
 			Mode: uint32(entry.FileMode),
 			Hash: entryHash,
 			Type: entryType,
-		}
+		})
 	}
 
 	return &Tree{

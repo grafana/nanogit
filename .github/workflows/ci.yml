@@ -74,7 +74,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -105,13 +105,13 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -127,7 +127,7 @@ jobs:
           GOFLAGS: -mod=vendor
         run: make test-coverage
       - name: Upload coverage
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
@@ -144,7 +144,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -176,14 +176,14 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             GH_REPO_USER=github:GH_REPO_USER
             GH_REPO_TOKEN=github:GH_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -223,14 +223,14 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
             GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -269,14 +269,14 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets/v1.2.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
             BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -322,7 +322,7 @@ jobs:
         with:
           fetch-depth: 0 # Required for scanning git history
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@90190deac64289cb10bb694894be8db9ead8790b
+        uses: trufflesecurity/trufflehog@952df702b3e52f069cd7e66bf04e6dd3d681ef97
         with:
           extra_args: --results=verified,unknown
 
@@ -373,7 +373,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -399,7 +399,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             ~/go/pkg/mod
