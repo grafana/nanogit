@@ -914,6 +914,16 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
 		_ = pipeReader.Close() // Best effort close since we're already handling an error
+
+		// Wait for WritePackfile goroutine to complete and clean up its resources
+		// (temp files, memory) before we reset the writer. We ignore any error from
+		// WritePackfile since ReceivePack already failed and that's the primary error.
+		<-writeErrChan
+
+		// Reset the writer since WritePackfile's finalizeWrite() already cleaned it up.
+		// This maintains the invariant that stagedWriter always has a usable PackfileWriter.
+		w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
+
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 
@@ -1236,7 +1246,8 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 	logger.Debug("Cleaning up staged writer")
 
 	// Clean up the packfile writer (removes temp files)
-	if err := w.writer.Cleanup(); err != nil {
+	// Tolerate already-cleaned-up state in case of unexpected cleanup ordering.
+	if err := w.writer.Cleanup(); err != nil && !errors.Is(err, protocol.ErrPackfileWriterCleanedUp) {
 		return fmt.Errorf("cleanup packfile writer: %w", err)
 	}
 
