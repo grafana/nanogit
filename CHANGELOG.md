@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8](https://github.com/grafana/nanogit/compare/v0.3.7...v0.3.8) (2026-02-25)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/grafana/nanogit to v0.3.7 ([#174](https://github.com/grafana/nanogit/issues/174)) ([bea0b7b](https://github.com/grafana/nanogit/commit/bea0b7b5977b8d33c737bea0a08339764d848b89))
+
 ## [0.3.7](https://github.com/grafana/nanogit/compare/v0.3.6...v0.3.7) (2026-02-20)
 
 
