@@ -938,15 +938,21 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	}
 
 	// Success! Clean up the writer (removes temp files, clears objects) and reset for next operation.
-	if cleanupErr := w.writer.Cleanup(); cleanupErr != nil {
-		return fmt.Errorf("cleanup after successful push: %w", cleanupErr)
-	}
+	// Always reset the writer and update the ref even if cleanup fails, to maintain consistency
+	// with the successful push that already happened on the server.
+	cleanupErr := w.writer.Cleanup()
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
 	w.ref.Hash = w.lastCommit.Hash
 
 	logger.Debug("Push completed",
 		"ref_name", w.ref.Name,
 		"new_hash", w.lastCommit.Hash.String())
+
+	if cleanupErr != nil {
+		// Cleanup failed, but the push succeeded and state is now consistent.
+		// Return the cleanup error for diagnostic purposes.
+		return fmt.Errorf("cleanup after successful push: %w", cleanupErr)
+	}
 
 	return nil
 }
