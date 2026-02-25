@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9](https://github.com/grafana/nanogit/compare/v0.3.8...v0.3.9) (2026-02-25)
+
+
+### Bug Fixes
+
+* clarify cleanup error comment in Push after successful push ([#177](https://github.com/grafana/nanogit/issues/177)) ([5a3c8d4](https://github.com/grafana/nanogit/commit/5a3c8d4b5d1c0dcc134d83f5fd35465eedafc1bd)), closes [#175](https://github.com/grafana/nanogit/issues/175)
+* Premature Clean up in Push ([#175](https://github.com/grafana/nanogit/issues/175)) ([ebb89f7](https://github.com/grafana/nanogit/commit/ebb89f7b1806e09ad60842f3fb5d2ce115b9ec90)), closes [/github.com/grafana/nanogit/pull/175#discussion_r2852762981](https://github.com/grafana//github.com/grafana/nanogit/pull/175/issues/discussion_r2852762981) [/github.com/grafana/nanogit/pull/175#discussion_r2853500369](https://github.com/grafana//github.com/grafana/nanogit/pull/175/issues/discussion_r2853500369)
+
 ## [0.3.8](https://github.com/grafana/nanogit/compare/v0.3.7...v0.3.8) (2026-02-25)
 
 
