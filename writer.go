@@ -914,22 +914,45 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	err := w.client.ReceivePack(ctx, pipeReader)
 	if err != nil {
 		_ = pipeReader.Close() // Best effort close since we're already handling an error
+
+		// Wait for WritePackfile goroutine to complete before returning.
+		// We ignore any error from WritePackfile since ReceivePack already failed.
+		<-writeErrChan
+
+		// Keep the writer intact (don't cleanup/reset) to enable retry.
+		// The caller can retry Push() with the same staged objects.
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 
-	// Check for any error from the WritePackfile goroutine
+	// Check for any error from the WritePackfile goroutine.
+	// IMPORTANT: At this point, ReceivePack has succeeded, which means the remote
+	// has accepted the push. In Git protocol semantics, this is the source of truth.
+	// Any error from WritePackfile is diagnostic only and must not change the outcome.
 	if writeErr := <-writeErrChan; writeErr != nil {
-		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, writeErr)
+		logger.Warn("WritePackfile reported error after successful ReceivePack",
+			"ref_name", w.ref.Name,
+			"error", writeErr)
+		// Continue with cleanup and ref update - the push succeeded from server's perspective
+	} else {
+		logger.Debug("Packfile streamed successfully")
 	}
 
-	logger.Debug("Packfile streamed successfully")
-
+	// Success! Clean up the writer (removes temp files, clears objects) and reset for next operation.
+	// Always reset the writer and update the ref even if cleanup fails, to maintain consistency
+	// with the successful push that already happened on the server.
+	cleanupErr := w.writer.Cleanup()
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
 	w.ref.Hash = w.lastCommit.Hash
 
 	logger.Debug("Push completed",
 		"ref_name", w.ref.Name,
 		"new_hash", w.lastCommit.Hash.String())
+
+	if cleanupErr != nil {
+		// Cleanup failed, but the push succeeded and state is now consistent.
+		// Return the cleanup error for diagnostic purposes.
+		return fmt.Errorf("cleanup after successful push: %w", cleanupErr)
+	}
 
 	return nil
 }
@@ -1235,7 +1258,7 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Cleaning up staged writer")
 
-	// Clean up the packfile writer (removes temp files)
+	// Clean up the packfile writer (removes temp files, clears objects)
 	if err := w.writer.Cleanup(); err != nil {
 		return fmt.Errorf("cleanup packfile writer: %w", err)
 	}

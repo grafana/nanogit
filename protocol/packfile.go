@@ -1050,7 +1050,9 @@ func (pw *PackfileWriter) WritePackfile(writer io.Writer, refName string, oldRef
 		return err
 	}
 
-	return pw.finalizeWrite()
+	// Don't cleanup here - let the caller decide when to reset.
+	// This allows retry on failure since objects remain staged.
+	return nil
 }
 
 // validateWriteState checks if the packfile writer is in a valid state for writing
@@ -1161,14 +1163,6 @@ func (pw *PackfileWriter) writeFromMemory(hashWriter io.Writer) error {
 		if err := pw.writeObjectToWriter(hashWriter, obj); err != nil {
 			return fmt.Errorf("writing memory object: %w", err)
 		}
-	}
-	return nil
-}
-
-// finalizeWrite performs cleanup after successful write
-func (pw *PackfileWriter) finalizeWrite() error {
-	if cleanupErr := pw.Cleanup(); cleanupErr != nil {
-		return fmt.Errorf("cleanup after successful write: %w", cleanupErr)
 	}
 	return nil
 }
