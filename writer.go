@@ -924,13 +924,18 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 
-	// Check for any error from the WritePackfile goroutine
+	// Check for any error from the WritePackfile goroutine.
+	// IMPORTANT: At this point, ReceivePack has succeeded, which means the remote
+	// has accepted the push. In Git protocol semantics, this is the source of truth.
+	// Any error from WritePackfile is diagnostic only and must not change the outcome.
 	if writeErr := <-writeErrChan; writeErr != nil {
-		// Keep the writer intact to enable retry
-		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, writeErr)
+		logger.Warn("WritePackfile reported error after successful ReceivePack",
+			"ref_name", w.ref.Name,
+			"error", writeErr)
+		// Continue with cleanup and ref update - the push succeeded from server's perspective
+	} else {
+		logger.Debug("Packfile streamed successfully")
 	}
-
-	logger.Debug("Packfile streamed successfully")
 
 	// Success! Clean up the writer (removes temp files, clears objects) and reset for next operation.
 	if cleanupErr := w.writer.Cleanup(); cleanupErr != nil {

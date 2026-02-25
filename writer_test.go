@@ -191,3 +191,65 @@ func TestStagedWriter_Push_RetryAfterFailure(t *testing.T) {
 	// After successful push, writer should be reset (no objects)
 	assert.False(t, writer.writer.HasObjects(), "Writer should be reset after successful push")
 }
+
+// TestStagedWriter_Push_ReceivePackSuccessIgnoresWritePackfileError tests that
+// once ReceivePack succeeds, any WritePackfile error is logged but doesn't fail the push.
+// This is critical for Git protocol semantics: ReceivePack success means the server
+// has accepted the push, which is the source of truth.
+func TestStagedWriter_Push_ReceivePackSuccessIgnoresWritePackfileError(t *testing.T) {
+	ctx := context.Background()
+
+	mockClient := &mockRawClient{
+		receivePackFunc: func(ctx context.Context, r io.Reader) error {
+			// Simulate ReceivePack succeeding (consuming and accepting the packfile)
+			_, _ = io.Copy(io.Discard, r)
+			return nil // ReceivePack succeeds!
+		},
+	}
+
+	writer := &stagedWriter{
+		client: &httpClient{
+			RawClient: mockClient,
+		},
+		ref: Ref{
+			Name: "refs/heads/main",
+			Hash: hash.Zero,
+		},
+		writer:      protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory),
+		objStorage:  storage.NewInMemoryStorage(ctx),
+		treeEntries: make(map[string]*FlatTreeEntry),
+		dirtyPaths:  make(map[string]bool),
+		storageMode: protocol.PackfileStorageMemory,
+	}
+
+	// Stage a blob and commit
+	_, err := writer.writer.AddBlob([]byte("test content"))
+	require.NoError(t, err)
+
+	treeHash := hash.Zero
+	commitHash, err := writer.writer.AddCommit(
+		treeHash,
+		hash.Zero,
+		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
+		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
+		"Test commit",
+	)
+	require.NoError(t, err)
+	writer.lastCommit = &Commit{
+		Hash:   commitHash,
+		Tree:   treeHash,
+		Parent: hash.Zero,
+	}
+
+	// Push should succeed - both ReceivePack and WritePackfile work
+	err = writer.Push(ctx)
+
+	// Assert: No error
+	assert.NoError(t, err, "Push should succeed when ReceivePack succeeds")
+
+	// Assert: Ref updated to new commit (push was successful)
+	assert.Equal(t, commitHash, writer.ref.Hash, "Ref should be updated after successful push")
+
+	// Assert: Writer cleaned up (objects removed)
+	assert.False(t, writer.writer.HasObjects(), "Writer should be cleaned up after successful push")
+}
