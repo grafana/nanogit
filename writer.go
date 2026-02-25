@@ -915,25 +915,27 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	if err != nil {
 		_ = pipeReader.Close() // Best effort close since we're already handling an error
 
-		// Wait for WritePackfile goroutine to complete and clean up its resources
-		// (temp files, memory) before we reset the writer. We ignore any error from
-		// WritePackfile since ReceivePack already failed and that's the primary error.
+		// Wait for WritePackfile goroutine to complete before returning.
+		// We ignore any error from WritePackfile since ReceivePack already failed.
 		<-writeErrChan
 
-		// Reset the writer since WritePackfile's finalizeWrite() already cleaned it up.
-		// This maintains the invariant that stagedWriter always has a usable PackfileWriter.
-		w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
-
+		// Keep the writer intact (don't cleanup/reset) to enable retry.
+		// The caller can retry Push() with the same staged objects.
 		return fmt.Errorf("send packfile to remote: %w", err)
 	}
 
 	// Check for any error from the WritePackfile goroutine
 	if writeErr := <-writeErrChan; writeErr != nil {
+		// Keep the writer intact to enable retry
 		return fmt.Errorf("write packfile for ref %q: %w", w.ref.Name, writeErr)
 	}
 
 	logger.Debug("Packfile streamed successfully")
 
+	// Success! Clean up the writer (removes temp files, clears objects) and reset for next operation.
+	if cleanupErr := w.writer.Cleanup(); cleanupErr != nil {
+		return fmt.Errorf("cleanup after successful push: %w", cleanupErr)
+	}
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
 	w.ref.Hash = w.lastCommit.Hash
 
@@ -1245,9 +1247,8 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	logger.Debug("Cleaning up staged writer")
 
-	// Clean up the packfile writer (removes temp files)
-	// Tolerate already-cleaned-up state in case of unexpected cleanup ordering.
-	if err := w.writer.Cleanup(); err != nil && !errors.Is(err, protocol.ErrPackfileWriterCleanedUp) {
+	// Clean up the packfile writer (removes temp files, clears objects)
+	if err := w.writer.Cleanup(); err != nil {
 		return fmt.Errorf("cleanup packfile writer: %w", err)
 	}
 

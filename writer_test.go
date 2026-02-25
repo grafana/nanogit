@@ -52,49 +52,9 @@ func (m *mockRawClient) UploadPack(ctx context.Context, data io.Reader) (io.Read
 	return nil, errors.New("not implemented")
 }
 
-// TestStagedWriter_Cleanup_ToleratesCleanedUpWriter tests that calling
-// Cleanup() on a stagedWriter with an already-cleaned-up PackfileWriter
-// does not return an error (defensive behavior).
-func TestStagedWriter_Cleanup_ToleratesCleanedUpWriter(t *testing.T) {
-	ctx := context.Background()
-
-	// Create a minimal stagedWriter
-	mockClient := &mockRawClient{}
-	writer := &stagedWriter{
-		client: &httpClient{
-			RawClient: mockClient,
-		},
-		ref: Ref{
-			Name: "refs/heads/main",
-			Hash: hash.Zero,
-		},
-		writer:      protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory),
-		objStorage:  storage.NewInMemoryStorage(ctx),
-		treeEntries: make(map[string]*FlatTreeEntry),
-		dirtyPaths:  make(map[string]bool),
-		storageMode: protocol.PackfileStorageMemory,
-	}
-
-	// Force the PackfileWriter into a cleaned-up state
-	err := writer.writer.Cleanup()
-	require.NoError(t, err)
-
-	// Now the PackfileWriter is cleaned up. Calling Cleanup again on the PackfileWriter
-	// would return ErrPackfileWriterCleanedUp, but our defensive code should tolerate it.
-
-	// Act: Call Cleanup on stagedWriter
-	err = writer.Cleanup(ctx)
-
-	// Assert: No error (tolerates already-cleaned-up state)
-	assert.NoError(t, err, "Cleanup should tolerate already-cleaned-up PackfileWriter")
-
-	// Assert: stagedWriter itself is now marked as cleaned up
-	assert.True(t, writer.isCleanedUp)
-}
-
-// TestStagedWriter_Cleanup_PropagatesOtherErrors tests that Cleanup()
-// still propagates errors other than ErrPackfileWriterCleanedUp.
-func TestStagedWriter_Cleanup_PropagatesOtherErrors(t *testing.T) {
+// TestStagedWriter_Cleanup_NormalBehavior tests that Cleanup()
+// properly cleans up resources and marks the writer as cleaned up.
+func TestStagedWriter_Cleanup_NormalBehavior(t *testing.T) {
 	ctx := context.Background()
 
 	mockClient := &mockRawClient{}
@@ -125,9 +85,9 @@ func TestStagedWriter_Cleanup_PropagatesOtherErrors(t *testing.T) {
 	assert.ErrorIs(t, err, ErrWriterCleanedUp)
 }
 
-// TestStagedWriter_Cleanup_IdempotentBehavior tests that Cleanup() behavior
-// is predictable when called multiple times.
-func TestStagedWriter_Cleanup_IdempotentBehavior(t *testing.T) {
+// TestStagedWriter_Cleanup_MultipleCallsPrevented tests that Cleanup()
+// cannot be called multiple times on the same writer.
+func TestStagedWriter_Cleanup_MultipleCallsPrevented(t *testing.T) {
 	ctx := context.Background()
 
 	mockClient := &mockRawClient{}
@@ -158,4 +118,76 @@ func TestStagedWriter_Cleanup_IdempotentBehavior(t *testing.T) {
 		err = writer.Cleanup(ctx)
 		assert.ErrorIs(t, err, ErrWriterCleanedUp, "Cleanup call %d should return ErrWriterCleanedUp", i+2)
 	}
+}
+
+// TestStagedWriter_Push_RetryAfterFailure tests that Push can be retried
+// after a failure, with the same staged objects still available.
+func TestStagedWriter_Push_RetryAfterFailure(t *testing.T) {
+	ctx := context.Background()
+
+	callCount := 0
+	mockClient := &mockRawClient{
+		receivePackFunc: func(ctx context.Context, r io.Reader) error {
+			callCount++
+			// First call fails, second succeeds
+			if callCount == 1 {
+				// Simulate network error
+				return errors.New("network timeout")
+			}
+			// Second call succeeds - consume the packfile
+			_, err := io.Copy(io.Discard, r)
+			return err
+		},
+	}
+
+	writer := &stagedWriter{
+		client: &httpClient{
+			RawClient: mockClient,
+		},
+		ref: Ref{
+			Name: "refs/heads/main",
+			Hash: hash.Zero,
+		},
+		writer:      protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory),
+		objStorage:  storage.NewInMemoryStorage(ctx),
+		treeEntries: make(map[string]*FlatTreeEntry),
+		dirtyPaths:  make(map[string]bool),
+		storageMode: protocol.PackfileStorageMemory,
+	}
+
+	// Stage a blob and commit
+	_, err := writer.writer.AddBlob([]byte("test content"))
+	require.NoError(t, err)
+
+	treeHash := hash.Zero // Use zero for simplicity in this test
+	commitHash, err := writer.writer.AddCommit(
+		treeHash,
+		hash.Zero, // no parent
+		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
+		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
+		"Test commit",
+	)
+	require.NoError(t, err)
+	writer.lastCommit = &Commit{
+		Hash:   commitHash,
+		Tree:   treeHash,
+		Parent: hash.Zero,
+	}
+
+	// First Push attempt - should fail with network error
+	err = writer.Push(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "network timeout")
+	assert.Equal(t, 1, callCount, "ReceivePack should have been called once")
+
+	// Verify the writer still has the objects (not cleaned up)
+	assert.True(t, writer.writer.HasObjects(), "Writer should still have objects after failed push")
+
+	// Second Push attempt - should succeed using the same staged objects
+	err = writer.Push(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 2, callCount, "ReceivePack should have been called twice (retry)")
+
+	// After successful push, writer should be reset (no objects)
+	assert.False(t, writer.writer.HasObjects(), "Writer should be reset after successful push")
 }
