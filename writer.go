@@ -949,8 +949,9 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 		"new_hash", w.lastCommit.Hash.String())
 
 	if cleanupErr != nil {
-		// Cleanup failed, but the push succeeded and state is now consistent.
-		// Return the cleanup error for diagnostic purposes.
+		// Note: Cleanup failed, but the push succeeded and state is now consistent
+		// with the server. We return this error for diagnostic/logging purposes only.
+		// The push operation itself was successful.
 		return fmt.Errorf("cleanup after successful push: %w", cleanupErr)
 	}
 
