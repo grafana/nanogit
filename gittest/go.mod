@@ -1,4 +1,4 @@
-module github.com/grafana/nanogit/testutil
+module github.com/grafana/nanogit/gittest
 
 go 1.24.2
 

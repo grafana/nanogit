@@ -3,7 +3,7 @@ module github.com/grafana/nanogit
 go 1.24.2
 
 require (
-	github.com/grafana/nanogit/testutil v0.1.0
+	github.com/grafana/nanogit/gittest v0.1.0
 	github.com/klauspost/compress v1.18.4
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.12.1
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -12,7 +12,7 @@ require (
 	golang.org/x/sync v0.19.0
 )
 
-replace github.com/grafana/nanogit/testutil => ./testutil
+replace github.com/grafana/nanogit/gittest => ./gittest
 
 require (
 	dario.cat/mergo v1.0.2 // indirect

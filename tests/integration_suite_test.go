@@ -8,7 +8,7 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/log"
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -16,8 +16,8 @@ import (
 
 // Shared test infrastructure
 var (
-	gitServer *testutil.Server
-	logger    testutil.Logger
+	gitServer *gittest.Server
+	logger    gittest.Logger
 	ctx       context.Context
 )
 
@@ -33,12 +33,12 @@ func TestIntegrationSuite(t *testing.T) {
 var _ = BeforeSuite(func() {
 	By("Setting up shared Git server for integration tests")
 
-	logger = testutil.NewWriterLogger(GinkgoWriter)
+	logger = gittest.NewWriterLogger(GinkgoWriter)
 	structuredLogger := newGinkgoStructuredLogger(logger)
 
 	var err error
-	gitServer, err = testutil.NewServer(context.Background(),
-		testutil.WithLogger(logger),
+	gitServer, err = gittest.NewServer(context.Background(),
+		gittest.WithLogger(logger),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -63,7 +63,7 @@ func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	repo, err := gitServer.CreateRepo(ctx, generateRepoName(), user)
 	Expect(err).NotTo(HaveOccurred())
 
-	localRepo, err := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(logger))
+	localRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(func() {
 		Expect(localRepo.Cleanup()).To(Succeed())
@@ -86,12 +86,12 @@ func generateRepoName() string {
 	return fmt.Sprintf("testrepo-%d", GinkgoRandomSeed())
 }
 
-// ginkgoStructuredLogger wraps testutil.Logger to provide structured logging methods
+// ginkgoStructuredLogger wraps gittest.Logger to provide structured logging methods
 type ginkgoStructuredLogger struct {
-	logger testutil.Logger
+	logger gittest.Logger
 }
 
-func newGinkgoStructuredLogger(logger testutil.Logger) *ginkgoStructuredLogger {
+func newGinkgoStructuredLogger(logger gittest.Logger) *ginkgoStructuredLogger {
 	return &ginkgoStructuredLogger{logger: logger}
 }
 

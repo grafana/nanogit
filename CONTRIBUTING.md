@@ -446,19 +446,19 @@ The `testutil` package provides comprehensive integration testing utilities for 
 
 ```bash
 # Install testutil
-go get github.com/grafana/nanogit/testutil@latest
+go get github.com/grafana/nanogit/gittest@latest
 ```
 
 **Quick example:**
 ```go
-import "github.com/grafana/nanogit/testutil"
+import "github.com/grafana/nanogit/gittest"
 
 func TestGitOperations(t *testing.T) {
     ctx := context.Background()
 
     // Get complete test environment
-    client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx,
-        testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
+    client, repo, local, user, cleanup, err := gittest.QuickSetup(ctx,
+        gittest.WithQuickSetupLogger(gittest.NewTestLogger(t)),
     )
     require.NoError(t, err)
     defer cleanup()

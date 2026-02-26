@@ -4,7 +4,7 @@ This guide covers testing strategies and utilities for working with nanogit in y
 
 ## Overview
 
-nanogit provides the `testutil` package - a comprehensive testing toolkit that makes it easy to test Git operations in your applications. The testutil package includes:
+nanogit provides the `testutil` package - a comprehensive testing toolkit that makes it easy to test Git operations in your applications. The gittest package includes:
 
 - 🐳 **Containerized Git Server**: Gitea running in Docker via testcontainers
 - 📁 **Local Repository Helpers**: Utilities for managing test repositories
@@ -16,7 +16,7 @@ nanogit provides the `testutil` package - a comprehensive testing toolkit that m
 ### Installation
 
 ```bash
-go get github.com/grafana/nanogit/testutil@latest
+go get github.com/grafana/nanogit/gittest@latest
 ```
 
 **Prerequisites:**
@@ -32,7 +32,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +40,7 @@ func TestMyGitFeature(t *testing.T) {
 	ctx := context.Background()
 
 	// Get a complete test environment in one call
-	client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx)
+	client, repo, local, user, cleanup, err := gittest.QuickSetup(ctx)
 	require.NoError(t, err)
 	defer cleanup()
 
@@ -62,8 +62,8 @@ Best for: Most test cases where you need a complete environment.
 func TestWithQuickSetup(t *testing.T) {
 	ctx := context.Background()
 
-	client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx,
-		testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
+	client, repo, local, user, cleanup, err := gittest.QuickSetup(ctx,
+		gittest.WithQuickSetupLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
 	defer cleanup()
@@ -90,9 +90,9 @@ func TestManualSetup(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server with custom options
-	server, err := testutil.NewServer(ctx,
-		testutil.WithLogger(testutil.NewTestLogger(t)),
-		testutil.WithTimeout(60*time.Second),
+	server, err := gittest.NewServer(ctx,
+		gittest.WithLogger(gittest.NewTestLogger(t)),
+		gittest.WithTimeout(60*time.Second),
 	)
 	require.NoError(t, err)
 	defer server.Cleanup()
@@ -129,7 +129,7 @@ Best for: Testing remote Git operations without local repositories.
 func TestRemoteOperations(t *testing.T) {
 	ctx := context.Background()
 
-	server, err := testutil.NewServer(ctx)
+	server, err := gittest.NewServer(ctx)
 	require.NoError(t, err)
 	defer server.Cleanup()
 
@@ -208,15 +208,15 @@ Choose the logging strategy that fits your test framework:
 
 ```go
 // Fastest, cleanest output
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx)
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx)
 defer cleanup()
 ```
 
 ### Standard Testing Package
 
 ```go
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx,
-	testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx,
+	gittest.WithQuickSetupLogger(gittest.NewTestLogger(t)),
 )
 defer cleanup()
 ```
@@ -224,8 +224,8 @@ defer cleanup()
 ### Ginkgo/Gomega
 
 ```go
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx,
-	testutil.WithQuickSetupLogger(testutil.NewWriterLogger(GinkgoWriter)),
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx,
+	gittest.WithQuickSetupLogger(gittest.NewWriterLogger(GinkgoWriter)),
 )
 defer cleanup()
 ```
@@ -233,8 +233,8 @@ defer cleanup()
 ### Colored Output
 
 ```go
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx,
-	testutil.WithQuickSetupLogger(testutil.NewColoredLogger(os.Stdout)),
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx,
+	gittest.WithQuickSetupLogger(gittest.NewColoredLogger(os.Stdout)),
 )
 defer cleanup()
 ```
@@ -248,16 +248,16 @@ var _ = Describe("Git Operations", func() {
 	var (
 		ctx     context.Context
 		client  nanogit.Client
-		repo    *testutil.Repo
-		local   *testutil.LocalRepo
+		repo    *gittest.Repo
+		local   *gittest.LocalRepo
 		cleanup func()
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		var err error
-		client, repo, local, _, cleanup, err = testutil.QuickSetup(ctx,
-			testutil.WithQuickSetupLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		client, repo, local, _, cleanup, err = gittest.QuickSetup(ctx,
+			gittest.WithQuickSetupLogger(gittest.NewWriterLogger(GinkgoWriter)),
 		)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -282,7 +282,7 @@ var _ = Describe("Git Operations", func() {
 func TestMultiUserCollaboration(t *testing.T) {
 	ctx := context.Background()
 
-	server, err := testutil.NewServer(ctx)
+	server, err := gittest.NewServer(ctx)
 	require.NoError(t, err)
 	defer server.Cleanup()
 
@@ -302,11 +302,11 @@ func TestMultiUserCollaboration(t *testing.T) {
 ```go
 func TestMergeConflict(t *testing.T) {
 	// Set up main branch
-	_, repo, local1, user, cleanup, _ := testutil.QuickSetup(ctx)
+	_, repo, local1, user, cleanup, _ := gittest.QuickSetup(ctx)
 	defer cleanup()
 
 	// Create second local repo (same remote)
-	local2, _ := testutil.NewLocalRepo(ctx)
+	local2, _ := gittest.NewLocalRepo(ctx)
 	defer local2.Cleanup()
 
 	// Configure local2
@@ -335,7 +335,7 @@ func TestMergeConflict(t *testing.T) {
 
 ```go
 func TestLargeRepo(t *testing.T) {
-	_, _, local, _, cleanup, _ := testutil.QuickSetup(ctx)
+	_, _, local, _, cleanup, _ := gittest.QuickSetup(ctx)
 	defer cleanup()
 
 	// Create many files
@@ -365,12 +365,12 @@ The first test that starts a Gitea container will take ~5-10 seconds while Docke
 1. **Reuse servers across tests** (for test suites):
 
 ```go
-var server *testutil.Server
+var server *gittest.Server
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 	var err error
-	server, err = testutil.NewServer(ctx)
+	server, err = gittest.NewServer(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -387,7 +387,7 @@ func TestMain(m *testing.M) {
 ```go
 func TestGitOperations(t *testing.T) {
 	// Single setup
-	client, _, local, _, cleanup, _ := testutil.QuickSetup(ctx)
+	client, _, local, _, cleanup, _ := gittest.QuickSetup(ctx)
 	defer cleanup()
 
 	tests := []struct {
@@ -414,13 +414,13 @@ func TestParallel(t *testing.T) {
 	t.Run("test1", func(t *testing.T) {
 		t.Parallel()
 		// Each parallel test needs its own setup
-		client, _, _, _, cleanup, _ := testutil.QuickSetup(context.Background())
+		client, _, _, _, cleanup, _ := gittest.QuickSetup(context.Background())
 		defer cleanup()
 	})
 
 	t.Run("test2", func(t *testing.T) {
 		t.Parallel()
-		client, _, _, _, cleanup, _ := testutil.QuickSetup(context.Background())
+		client, _, _, _, cleanup, _ := gittest.QuickSetup(context.Background())
 		defer cleanup()
 	})
 }
@@ -478,8 +478,8 @@ docker ps
 
 **Solution:** Increase timeout:
 ```go
-server, err := testutil.NewServer(ctx,
-	testutil.WithTimeout(60*time.Second),
+server, err := gittest.NewServer(ctx,
+	gittest.WithTimeout(60*time.Second),
 )
 ```
 
@@ -502,7 +502,7 @@ docker rm -f <container-id>
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 defer cancel()
 
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx)
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx)
 defer cleanup()
 ```
 
@@ -513,11 +513,11 @@ defer cleanup()
 **Solution:** Always use defer with cleanup functions:
 ```go
 // GOOD
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx)
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx)
 defer cleanup()  // Will run even if test fails
 
 // BAD
-client, _, _, _, cleanup, _ := testutil.QuickSetup(ctx)
+client, _, _, _, cleanup, _ := gittest.QuickSetup(ctx)
 cleanup()  // Only runs if test succeeds
 ```
 
@@ -543,16 +543,16 @@ cleanup()  // Only runs if test succeeds
 
 For complete working examples, see:
 
-- [testutil/examples/basic_test.go](../testutil/examples/basic_test.go) - Standard testing examples
-- [testutil/examples/ginkgo_test.go](../testutil/examples/ginkgo_test.go) - Ginkgo integration
-- [testutil/README.md](../testutil/README.md) - Detailed API documentation
+- [gittest/examples/basic_test.go](../gittest/examples/basic_test.go) - Standard testing examples
+- [gittest/examples/ginkgo_test.go](../gittest/examples/ginkgo_test.go) - Ginkgo integration
+- [gittest/README.md](../gittest/README.md) - Detailed API documentation
 
 ## API Reference
 
 For complete API documentation, see:
 
 ```bash
-go doc github.com/grafana/nanogit/testutil
+go doc github.com/grafana/nanogit/gittest
 ```
 
-Or visit: [pkg.go.dev/github.com/grafana/nanogit/testutil](https://pkg.go.dev/github.com/grafana/nanogit/testutil)
+Or visit: [pkg.go.dev/github.com/grafana/nanogit/gittest](https://pkg.go.dev/github.com/grafana/nanogit/gittest)

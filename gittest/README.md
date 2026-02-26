@@ -1,6 +1,6 @@
-# nanogit/testutil
+# nanogit/gittest
 
-Testing utilities for nanogit-based applications. This package provides a lightweight Git server (using Gitea in testcontainers) and helper functions to quickly set up test environments for Git operations.
+Testing utilities for Git operations with nanogit. This package provides a lightweight Git server (using Gitea in testcontainers) and helper functions to quickly set up test environments for Git operations.
 
 ## Features
 
@@ -13,7 +13,7 @@ Testing utilities for nanogit-based applications. This package provides a lightw
 ## Installation
 
 ```bash
-go get github.com/grafana/nanogit/testutil@latest
+go get github.com/grafana/nanogit/gittest@latest
 ```
 
 **Prerequisites:**
@@ -31,8 +31,8 @@ func TestGitOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server
-	server, err := testutil.NewServer(ctx,
-		testutil.WithLogger(testutil.NewTestLogger(t)),
+	server, err := gittest.NewServer(ctx,
+		gittest.WithLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
 	defer server.Cleanup()
@@ -46,8 +46,8 @@ func TestGitOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create local repository
-	local, err := testutil.NewLocalRepo(ctx,
-		testutil.WithRepoLogger(testutil.NewTestLogger(t)),
+	local, err := gittest.NewLocalRepo(ctx,
+		gittest.WithRepoLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
 	defer local.Cleanup()
@@ -65,7 +65,7 @@ The `Server` type represents a Gitea server running in a container.
 
 ```go
 // Create a new server
-server, err := testutil.NewServer(ctx, opts...)
+server, err := gittest.NewServer(ctx, opts...)
 defer server.Cleanup()
 
 // Create a user
@@ -93,7 +93,7 @@ The `LocalRepo` type wraps a local Git repository in a temporary directory.
 
 ```go
 // Create a new local repository
-local, err := testutil.NewLocalRepo(ctx, opts...)
+local, err := gittest.NewLocalRepo(ctx, opts...)
 defer local.Cleanup()
 
 // File operations
@@ -163,19 +163,19 @@ type Logger interface {
 
 ```go
 // No output (default)
-logger := testutil.NoopLogger()
+logger := gittest.NoopLogger()
 
 // Standard testing.T logger
-logger := testutil.NewTestLogger(t)
+logger := gittest.NewTestLogger(t)
 
 // Writer-based (e.g., for Ginkgo)
-logger := testutil.NewWriterLogger(ginkgo.GinkgoWriter)
+logger := gittest.NewWriterLogger(ginkgo.GinkgoWriter)
 
 // Colored output with emojis
-logger := testutil.NewColoredLogger(os.Stdout)
+logger := gittest.NewColoredLogger(os.Stdout)
 
 // Structured logging (nanogit.Logger-compatible)
-logger := testutil.NewStructuredLogger(testutil.NewTestLogger(t))
+logger := gittest.NewStructuredLogger(gittest.NewTestLogger(t))
 ```
 
 ## Usage with Ginkgo
@@ -190,17 +190,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 )
 
 var _ = Describe("Git Operations", func() {
 	var (
 		ctx    context.Context
-		server *testutil.Server
+		server *gittest.Server
 		client nanogit.Client
-		repo   *testutil.Repo
-		local  *testutil.LocalRepo
-		user   *testutil.User
+		repo   *gittest.Repo
+		local  *gittest.LocalRepo
+		user   *gittest.User
 	)
 
 	BeforeEach(func() {
@@ -208,8 +208,8 @@ var _ = Describe("Git Operations", func() {
 		var err error
 
 		// Create server
-		server, err = testutil.NewServer(ctx,
-			testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		server, err = gittest.NewServer(ctx,
+			gittest.WithLogger(gittest.NewWriterLogger(GinkgoWriter)),
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -221,8 +221,8 @@ var _ = Describe("Git Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create local repo
-		local, err = testutil.NewLocalRepo(ctx,
-			testutil.WithRepoLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		local, err = gittest.NewLocalRepo(ctx,
+			gittest.WithRepoLogger(gittest.NewWriterLogger(GinkgoWriter)),
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -258,7 +258,7 @@ See the [examples/](examples/) directory for complete working examples:
 Run examples:
 
 ```bash
-cd testutil/examples
+cd gittest/examples
 go test -v
 ```
 
@@ -289,8 +289,8 @@ Error: container did not start within timeout
 **Solution:** Increase the timeout:
 
 ```go
-server, err := testutil.NewServer(ctx,
-	testutil.WithTimeout(60 * time.Second),
+server, err := gittest.NewServer(ctx,
+	gittest.WithTimeout(60 * time.Second),
 )
 ```
 
@@ -302,7 +302,7 @@ server, err := testutil.NewServer(ctx,
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 defer cancel()
 
-server, err := testutil.NewServer(ctx)
+server, err := gittest.NewServer(ctx)
 defer server.Cleanup()
 ```
 
@@ -310,14 +310,14 @@ defer server.Cleanup()
 
 If you're migrating from nanogit's internal `tests/` utilities:
 
-| Old (tests/) | New (testutil) |
-|--------------|----------------|
-| `GitServer` | `testutil.Server` |
-| `LocalGitRepo` | `testutil.LocalRepo` |
-| `RemoteRepo` | `testutil.Repo` |
-| `NewGitServer(logger)` | `testutil.NewServer(ctx, testutil.WithLogger(logger))` |
-| `NewLocalGitRepo(logger)` | `testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(logger))` |
-| `TestLogger` | `testutil.NewWriterLogger(GinkgoWriter)` |
+| Old (tests/) | New (gittest) |
+|--------------|---------------|
+| `GitServer` | `gittest.Server` |
+| `LocalGitRepo` | `gittest.LocalRepo` |
+| `RemoteRepo` | `gittest.Repo` |
+| `NewGitServer(logger)` | `gittest.NewServer(ctx, gittest.WithLogger(logger))` |
+| `NewLocalGitRepo(logger)` | `gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))` |
+| `TestLogger` | `gittest.NewWriterLogger(GinkgoWriter)` |
 
 **Key differences:**
 - All functions now require `context.Context` as the first parameter

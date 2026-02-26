@@ -1,4 +1,4 @@
-package testutil
+package gittest
 
 import (
 	"context"
@@ -38,8 +38,8 @@ type LocalRepo struct {
 //
 // Options can be provided to customize behavior:
 //
-//	local, err := testutil.NewLocalRepo(ctx,
-//		testutil.WithRepoLogger(testutil.NewTestLogger(t)),
+//	local, err := gittest.NewLocalRepo(ctx,
+//		gittest.WithRepoLogger(gittest.NewTestLogger(t)),
 //	)
 //	if err != nil {
 //		t.Fatal(err)

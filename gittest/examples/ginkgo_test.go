@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -19,11 +19,11 @@ func TestGinkgoIntegration(t *testing.T) {
 var _ = Describe("Testutil with Ginkgo", func() {
 	var (
 		ctx    context.Context
-		server *testutil.Server
+		server *gittest.Server
 		client nanogit.Client
-		repo   *testutil.Repo
-		local  *testutil.LocalRepo
-		user   *testutil.User
+		repo   *gittest.Repo
+		local  *gittest.LocalRepo
+		user   *gittest.User
 	)
 
 	BeforeEach(func() {
@@ -31,8 +31,8 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 		// Create server
 		var err error
-		server, err = testutil.NewServer(ctx,
-			testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		server, err = gittest.NewServer(ctx,
+			gittest.WithLogger(gittest.NewWriterLogger(GinkgoWriter)),
 		)
 		Expect(err).NotTo(HaveOccurred(), "failed to create server")
 
@@ -44,7 +44,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to create repo")
 
 		// Create local repo
-		local, err = testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewWriterLogger(GinkgoWriter)))
+		local, err = gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(gittest.NewWriterLogger(GinkgoWriter)))
 		Expect(err).NotTo(HaveOccurred(), "failed to create local repo")
 
 		// Initialize and get client
@@ -153,13 +153,13 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 	Context("when using manual setup", func() {
 		var (
-			server *testutil.Server
+			server *gittest.Server
 		)
 
 		BeforeEach(func() {
 			var err error
-			server, err = testutil.NewServer(ctx,
-				testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
+			server, err = gittest.NewServer(ctx,
+				gittest.WithLogger(gittest.NewWriterLogger(GinkgoWriter)),
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -225,16 +225,16 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 	Context("with colored logger", func() {
 		var (
-			coloredServer *testutil.Server
+			coloredServer *gittest.Server
 			coloredClient nanogit.Client
-			coloredLocal  *testutil.LocalRepo
+			coloredLocal  *gittest.LocalRepo
 		)
 
 		BeforeEach(func() {
 			// Use colored logger for nice output
 			var err error
-			coloredServer, err = testutil.NewServer(ctx,
-				testutil.WithLogger(testutil.NewColoredLogger(GinkgoWriter)),
+			coloredServer, err = gittest.NewServer(ctx,
+				gittest.WithLogger(gittest.NewColoredLogger(GinkgoWriter)),
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -246,7 +246,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create local repo with colored logging
-			coloredLocal, err = testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewColoredLogger(GinkgoWriter)))
+			coloredLocal, err = gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(gittest.NewColoredLogger(GinkgoWriter)))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Initialize and get client

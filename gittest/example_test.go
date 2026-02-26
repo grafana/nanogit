@@ -1,11 +1,11 @@
-package testutil_test
+package gittest_test
 
 import (
 	"context"
 	"fmt"
 	"log"
 
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 )
 
 // Example demonstrates basic usage of testutil to set up a Git server and repository.
@@ -13,7 +13,7 @@ func Example() {
 	ctx := context.Background()
 
 	// Create a Git server (Gitea in testcontainers)
-	server, err := testutil.NewServer(ctx)
+	server, err := gittest.NewServer(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func Example() {
 	}
 
 	// Create a local repository wrapper
-	local, err := testutil.NewLocalRepo(ctx)
+	local, err := gittest.NewLocalRepo(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,8 +55,8 @@ func ExampleNewServer() {
 	ctx := context.Background()
 
 	// Create server with custom logger
-	server, err := testutil.NewServer(ctx,
-		testutil.WithLogger(testutil.NoopLogger()),
+	server, err := gittest.NewServer(ctx,
+		gittest.WithLogger(gittest.NoopLogger()),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -70,7 +70,7 @@ func ExampleNewServer() {
 func ExampleServer_CreateUser() {
 	ctx := context.Background()
 
-	server, err := testutil.NewServer(ctx)
+	server, err := gittest.NewServer(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func ExampleServer_CreateUser() {
 func ExampleServer_CreateRepo() {
 	ctx := context.Background()
 
-	server, err := testutil.NewServer(ctx)
+	server, err := gittest.NewServer(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func ExampleNewLocalRepo() {
 	ctx := context.Background()
 
 	// Create a local repo in a temporary directory
-	local, err := testutil.NewLocalRepo(ctx)
+	local, err := gittest.NewLocalRepo(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func ExampleLocalRepo_QuickInit() {
 	ctx := context.Background()
 
 	// Set up server and repo
-	server, err := testutil.NewServer(ctx)
+	server, err := gittest.NewServer(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func ExampleLocalRepo_QuickInit() {
 	}
 
 	// Create and initialize local repo
-	local, err := testutil.NewLocalRepo(ctx)
+	local, err := gittest.NewLocalRepo(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -179,16 +179,16 @@ func ExampleLocalRepo_QuickInit() {
 // ExampleNewTestLogger demonstrates using a test logger.
 func ExampleNewTestLogger() {
 	// In a real test function:
-	// logger := testutil.NewTestLogger(t)
+	// logger := gittest.NewTestLogger(t)
 
 	// For this example, we'll show the pattern
-	fmt.Println("Use testutil.NewTestLogger(t) in test functions")
+	fmt.Println("Use gittest.NewTestLogger(t) in test functions")
 	fmt.Println("It logs to testing.T.Logf()")
 }
 
 // ExampleNewColoredLogger demonstrates using colored output.
 func ExampleNewColoredLogger() {
-	// logger := testutil.NewColoredLogger(os.Stdout)
+	// logger := gittest.NewColoredLogger(os.Stdout)
 
 	fmt.Println("NewColoredLogger provides colored output with emojis")
 	fmt.Println("Great for visual feedback during development")

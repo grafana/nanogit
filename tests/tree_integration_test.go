@@ -6,7 +6,7 @@ import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -505,7 +505,7 @@ var _ = Describe("Trees", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 			By("Setting up the submodule source repository with content")
-			subLocal, _ := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(logger))
+			subLocal, _ := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
 			_, _ = subLocal.Git("config", "user.name", user.Username)
 			_, _ = subLocal.Git("config", "user.email", user.Email)
 			_, _ = subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
@@ -589,7 +589,7 @@ var _ = Describe("Trees", func() {
 			By("Creating a second repository to use as a submodule source")
 			subRemote, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
 		Expect(err).NotTo(HaveOccurred())
-			subLocal, _ := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(logger))
+			subLocal, _ := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
 			_, _ = subLocal.Git("config", "user.name", user.Username)
 			_, _ = subLocal.Git("config", "user.email", user.Email)
 			_, _ = subLocal.Git("remote", "add", "origin", subRemote.AuthURL)

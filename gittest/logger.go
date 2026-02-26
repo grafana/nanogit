@@ -1,4 +1,4 @@
-package testutil
+package gittest
 
 import (
 	"fmt"
@@ -45,8 +45,8 @@ func (noopLogger) Logf(format string, args ...any) {}
 //
 // Example:
 //
-//	server, err := testutil.NewServer(ctx,
-//		testutil.WithLogger(testutil.NoopLogger()),
+//	server, err := gittest.NewServer(ctx,
+//		gittest.WithLogger(gittest.NoopLogger()),
 //	)
 func NoopLogger() Logger {
 	return noopLogger{}
@@ -69,8 +69,8 @@ func (l *testLogger) Logf(format string, args ...any) {
 // Example:
 //
 //	func TestSomething(t *testing.T) {
-//		server, err := testutil.NewServer(ctx,
-//			testutil.WithLogger(testutil.NewTestLogger(t)),
+//		server, err := gittest.NewServer(ctx,
+//			gittest.WithLogger(gittest.NewTestLogger(t)),
 //		)
 //		// Server logs will appear in test output
 //	}

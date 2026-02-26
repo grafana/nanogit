@@ -1,10 +1,10 @@
-module github.com/grafana/nanogit/testutil/examples
+module github.com/grafana/nanogit/gittest/examples
 
 go 1.24.2
 
 require (
 	github.com/grafana/nanogit v0.3.9
-	github.com/grafana/nanogit/testutil v0.1.0
+	github.com/grafana/nanogit/gittest v0.1.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/stretchr/testify v1.11.1
@@ -83,4 +83,4 @@ require (
 // During development, use replace directives
 replace github.com/grafana/nanogit => ../../
 
-replace github.com/grafana/nanogit/testutil => ../
+replace github.com/grafana/nanogit/gittest => ../

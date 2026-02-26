@@ -1,4 +1,4 @@
-package testutil
+package gittest
 
 import (
 	"bytes"
@@ -82,7 +82,7 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 //
 // Example:
 //
-//	server, err := testutil.NewServer(ctx)
+//	server, err := gittest.NewServer(ctx)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
@@ -90,9 +90,9 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 //
 // Options can be provided to customize the server:
 //
-//	server, err := testutil.NewServer(ctx,
-//		testutil.WithLogger(testutil.NewTestLogger(t)),
-//		testutil.WithTimeout(60*time.Second),
+//	server, err := gittest.NewServer(ctx,
+//		gittest.WithLogger(gittest.NewTestLogger(t)),
+//		gittest.WithTimeout(60*time.Second),
 //	)
 func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 	cfg := defaultConfig()

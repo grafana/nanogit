@@ -2,7 +2,7 @@ package integration_test
 
 import (
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 	. "github.com/onsi/gomega"
 )
 
@@ -10,13 +10,13 @@ import (
 // These allow existing test code to continue working without modification
 // while using the new testutil package under the hood with Ginkgo-friendly error handling.
 
-// User is an alias for testutil.User
-type User = testutil.User
+// User is an alias for gittest.User
+type User = gittest.User
 
-// LocalGitRepo wraps testutil.LocalRepo and adds Ginkgo-friendly methods
+// LocalGitRepo wraps gittest.LocalRepo and adds Ginkgo-friendly methods
 // that automatically fail tests on errors.
 type LocalGitRepo struct {
-	*testutil.LocalRepo
+	*gittest.LocalRepo
 }
 
 // CreateFile creates a file and fails the test if there's an error.
@@ -56,15 +56,15 @@ func (r *LocalGitRepo) Git(args ...string) string {
 }
 
 // QuickInit initializes the repository with a remote and fails the test on error.
-func (r *LocalGitRepo) QuickInit(user *testutil.User, remoteURL string) (nanogit.Client, string, error) {
+func (r *LocalGitRepo) QuickInit(user *gittest.User, remoteURL string) (nanogit.Client, string, error) {
 	client, url, err := r.LocalRepo.QuickInit(user, remoteURL)
 	Expect(err).NotTo(HaveOccurred())
 	return client, url, err
 }
 
-// RemoteRepo wraps testutil.Repo to add backward-compatible methods
+// RemoteRepo wraps gittest.Repo to add backward-compatible methods
 type RemoteRepo struct {
-	*testutil.Repo
+	*gittest.Repo
 }
 
 // URL returns the public URL (for backward compatibility with old tests)

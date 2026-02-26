@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,8 +13,8 @@ func TestBasicGitOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server
-	server, err := testutil.NewServer(ctx,
-		testutil.WithLogger(testutil.NewTestLogger(t)),
+	server, err := gittest.NewServer(ctx,
+		gittest.WithLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err, "failed to create server")
 	defer server.Cleanup()
@@ -27,7 +27,7 @@ func TestBasicGitOperations(t *testing.T) {
 	require.NoError(t, err, "failed to create repo")
 
 	// Create local repo
-	local, err := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewTestLogger(t)))
+	local, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(gittest.NewTestLogger(t)))
 	require.NoError(t, err, "failed to create local repo")
 	defer local.Cleanup()
 
@@ -92,8 +92,8 @@ func TestManualSetup(t *testing.T) {
 
 	// Create server
 	t.Log("Creating Git server")
-	server, err := testutil.NewServer(ctx,
-		testutil.WithLogger(testutil.NewTestLogger(t)),
+	server, err := gittest.NewServer(ctx,
+		gittest.WithLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err, "failed to create server")
 	defer server.Cleanup()
@@ -116,8 +116,8 @@ func TestManualSetup(t *testing.T) {
 
 	// Create local repository
 	t.Log("Creating local repository")
-	local, err := testutil.NewLocalRepo(ctx,
-		testutil.WithRepoLogger(testutil.NewTestLogger(t)),
+	local, err := gittest.NewLocalRepo(ctx,
+		gittest.WithRepoLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err, "failed to create local repo")
 	defer local.Cleanup()
@@ -160,8 +160,8 @@ func TestMultipleFiles(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server
-	server, err := testutil.NewServer(ctx,
-		testutil.WithLogger(testutil.NewTestLogger(t)),
+	server, err := gittest.NewServer(ctx,
+		gittest.WithLogger(gittest.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
 	defer server.Cleanup()
@@ -174,7 +174,7 @@ func TestMultipleFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create local repo
-	local, err := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewTestLogger(t)))
+	local, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(gittest.NewTestLogger(t)))
 	require.NoError(t, err)
 	defer local.Cleanup()
 

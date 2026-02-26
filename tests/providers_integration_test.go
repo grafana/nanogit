@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/testutil"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
@@ -27,7 +27,7 @@ func TestProviders(t *testing.T) {
 		return
 	}
 
-	ctx := log.ToContext(context.Background(), testutil.NewStructuredLogger(testutil.NewTestLogger(t)))
+	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
@@ -359,7 +359,7 @@ func TestProvidersLargeBlob(t *testing.T) {
 		return
 	}
 
-	ctx := log.ToContext(context.Background(), testutil.NewStructuredLogger(testutil.NewTestLogger(t)))
+	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
@@ -467,7 +467,7 @@ func TestProvidersClone(t *testing.T) {
 		return
 	}
 
-	ctx := log.ToContext(context.Background(), testutil.NewStructuredLogger(testutil.NewTestLogger(t)))
+	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
 	client, err := nanogit.NewHTTPClient(
 		os.Getenv("TEST_REPO"),
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),

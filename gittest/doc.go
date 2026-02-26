@@ -6,7 +6,7 @@
 //
 // # Basic Usage
 //
-//	server, err := testutil.NewServer(ctx)
+//	server, err := gittest.NewServer(ctx)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
@@ -16,11 +16,11 @@
 //	repo, _ := server.CreateRepo(ctx, "test", user)
 //
 //	// Create local repo and initialize
-//	local, _ := testutil.NewLocalRepo(ctx)
+//	local, _ := gittest.NewLocalRepo(ctx)
 //	defer local.Cleanup()
 //
 //	client, _, _ := local.QuickInit(user, repo.AuthURL)
 //	// Now use client for testing
 //
 // For more examples, see the examples/ directory.
-package testutil
+package gittest
