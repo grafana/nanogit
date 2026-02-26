@@ -79,7 +79,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			} else {
 				logger.Info("Push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 				// Still consider this a valid test result - any error shows conflict detection works
-			_ = 0 // staticcheck: non-empty branch
 			}
 		})
 
@@ -186,7 +185,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else {
 				logger.Info("Server validation failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
-			_ = 0 // staticcheck: non-empty branch
 			}
 
 			By("Verifying repository remains accessible after error")
@@ -248,7 +246,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
 				logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
-				_ = 0 // staticcheck: non-empty branch
 			}
 		})
 	})
@@ -314,7 +311,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
 				logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
-				_ = 0 // staticcheck: non-empty branch
 			}
 
 			By("Demonstrating recovery by getting updated reference")
@@ -384,7 +380,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 					logger.Info("Server error with large content", "type", serverErr.ErrorType, "message", serverErr.Message)
 				} else {
 					logger.Info("Large content push failed with other error", "error", err.Error())
-					_ = 0 // staticcheck: non-empty branch
 				}
 			} else {
 				logger.Info("Large content push succeeded")
@@ -438,7 +433,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 					logger.Info("Server error with boundary conditions", "type", serverErr.ErrorType, "message", serverErr.Message)
 				} else {
 					logger.Info("Boundary condition push failed", "error", err.Error())
-					_ = 0 // staticcheck: non-empty branch
 				}
 			} else {
 				logger.Info("Boundary condition push succeeded")
