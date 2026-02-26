@@ -303,15 +303,18 @@ func (s *Server) URL() string {
 // It should be called when the server is no longer needed.
 // This method is safe to call multiple times.
 func (s *Server) Cleanup() error {
-	if s.cancelContext != nil {
-		s.cancelContext()
-	}
-
 	if s.container != nil {
 		s.logger.Logf("🧹 Cleaning up Gitea server container...")
-		if err := s.container.Terminate(s.ctx); err != nil {
+		// Use a fresh context for cleanup to avoid "context canceled" errors
+		cleanupCtx := context.Background()
+		if err := s.container.Terminate(cleanupCtx); err != nil {
 			return fmt.Errorf("failed to terminate container: %w", err)
 		}
+	}
+
+	// Cancel the context after cleanup is done
+	if s.cancelContext != nil {
+		s.cancelContext()
 	}
 
 	// Run any registered cleanup functions
