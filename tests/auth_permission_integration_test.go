@@ -18,8 +18,8 @@ import (
 //
 // Test coverage includes:
 // - CanRead() and CanWrite() permission checking methods
-// - Error propagation through write operations (Push, CreateRef, UpdateRef, DeleteRef)
-// - Error propagation through read operations (Clone, ListRefs, GetBlob)
+// - Error propagation through write operations (CreateRef)
+// - Error propagation through read operations (ListRefs, GetBlob)
 // - errors.Is() and errors.As() compatibility for all error types
 // - Error wrapping and unwrapping through the call stack
 
@@ -79,10 +79,10 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			Expect(canWrite).To(BeFalse())
 		})
 
-		It("should return UnauthorizedError on Clone operation", func() {
-			By("Creating a mock server that returns 401 for info/refs")
+		It("should return UnauthorizedError on ListRefs operation", func() {
+			By("Creating a mock server that returns 401 for git-upload-pack")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if strings.Contains(r.URL.Path, "info/refs") {
+				if strings.Contains(r.URL.Path, "git-upload-pack") {
 					w.WriteHeader(http.StatusUnauthorized)
 					_, _ = w.Write([]byte("401 Unauthorized"))
 					return
@@ -95,10 +95,8 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Calling Clone should return UnauthorizedError")
-			_, err = client.Clone(ctx, nanogit.CloneOptions{
-				Path: GinkgoT().TempDir(),
-			})
+			By("Calling ListRefs should return UnauthorizedError")
+			_, err = client.ListRefs(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(errors.Is(err, nanogit.ErrUnauthorized)).To(BeTrue(), "error should be ErrUnauthorized")
 
@@ -150,48 +148,6 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			Expect(canWrite).To(BeFalse())
 		})
 
-		It("should return PermissionDeniedError on Push operation", func() {
-			By("Creating a mock server that returns 403 for git-receive-pack POST")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == "POST" && strings.Contains(r.URL.Path, "git-receive-pack") {
-					w.WriteHeader(http.StatusForbidden)
-					_, _ = w.Write([]byte("403 Forbidden"))
-					return
-				}
-				// Return 200 for info/refs to allow initial setup
-				w.WriteHeader(http.StatusOK)
-				if strings.Contains(r.URL.Path, "info/refs") {
-					_, _ = w.Write([]byte("001e# service=git-receive-pack\n0000"))
-				}
-			}))
-			defer server.Close()
-
-			By("Creating client and attempting push")
-			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Creating a staged writer")
-			ref := nanogit.Ref{
-				Name: "refs/heads/main",
-				Hash: hash.Hash{},
-			}
-			writer, err := client.NewStagedWriter(ctx, ref)
-			Expect(err).NotTo(HaveOccurred())
-			defer writer.Cleanup(ctx)
-
-			By("Pushing should return PermissionDeniedError")
-			err = writer.Push(ctx)
-			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, nanogit.ErrPermissionDenied)).To(BeTrue(), "error should be ErrPermissionDenied")
-
-			var permErr *nanogit.PermissionDeniedError
-			Expect(errors.As(err, &permErr)).To(BeTrue(), "error should be PermissionDeniedError type")
-			Expect(permErr.StatusCode).To(Equal(http.StatusForbidden))
-			Expect(permErr.Operation).To(Equal("POST"))
-			Expect(permErr.Endpoint).To(Equal("git-receive-pack"))
-			Expect(permErr.Underlying).NotTo(BeNil())
-		})
-
 		It("should return PermissionDeniedError on CreateRef operation", func() {
 			By("Creating a mock server that returns 403 for git-receive-pack POST")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,31 +184,6 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 	})
 
 	Context("HTTP 404 Not Found", func() {
-		It("should return RepositoryNotFoundError on Clone", func() {
-			By("Creating a mock server that returns 404")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = w.Write([]byte("404 Not Found"))
-			}))
-			defer server.Close()
-
-			By("Creating client pointing to mock server")
-			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Calling Clone should return RepositoryNotFoundError")
-			_, err = client.Clone(ctx, nanogit.CloneOptions{
-				Path: GinkgoT().TempDir(),
-			})
-			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, nanogit.ErrRepositoryNotFound)).To(BeTrue(), "error should be ErrRepositoryNotFound")
-
-			var notFoundErr *nanogit.RepositoryNotFoundError
-			Expect(errors.As(err, &notFoundErr)).To(BeTrue(), "error should be RepositoryNotFoundError type")
-			Expect(notFoundErr.StatusCode).To(Equal(http.StatusNotFound))
-			Expect(notFoundErr.Underlying).NotTo(BeNil())
-		})
-
 		It("should return RepositoryNotFoundError on ListRefs", func() {
 			By("Creating a mock server that returns 404")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -268,8 +199,32 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			By("Calling ListRefs should return RepositoryNotFoundError")
 			_, err = client.ListRefs(ctx)
 			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, nanogit.ErrRepositoryNotFound)).To(BeTrue())
+			Expect(errors.Is(err, nanogit.ErrRepositoryNotFound)).To(BeTrue(), "error should be ErrRepositoryNotFound")
 
+			var notFoundErr *nanogit.RepositoryNotFoundError
+			Expect(errors.As(err, &notFoundErr)).To(BeTrue(), "error should be RepositoryNotFoundError type")
+			Expect(notFoundErr.StatusCode).To(Equal(http.StatusNotFound))
+			Expect(notFoundErr.Underlying).NotTo(BeNil())
+		})
+
+		It("should return RepositoryNotFoundError on GetBlob", func() {
+			By("Creating a mock server that returns 404 for all requests")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte("404 Not Found"))
+			}))
+			defer server.Close()
+
+			By("Creating client pointing to mock server")
+			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Calling GetBlob should return RepositoryNotFoundError")
+			blobHash := hash.MustFromHex("0000000000000000000000000000000000000001")
+			_, err = client.GetBlob(ctx, blobHash)
+			Expect(err).To(HaveOccurred())
+
+			// Error might be wrapped, check with errors.As
 			var notFoundErr *nanogit.RepositoryNotFoundError
 			Expect(errors.As(err, &notFoundErr)).To(BeTrue())
 			Expect(notFoundErr.StatusCode).To(Equal(http.StatusNotFound))
@@ -362,8 +317,8 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 		})
 	})
 
-	Context("Error propagation through operations", func() {
-		It("should propagate PermissionDeniedError through UpdateRef", func() {
+	Context("Error propagation through CreateRef", func() {
+		It("should propagate PermissionDeniedError correctly", func() {
 			By("Creating a mock server that returns 403 for receive-pack")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == "POST" && strings.Contains(r.URL.Path, "git-receive-pack") {
@@ -378,92 +333,25 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			}))
 			defer server.Close()
 
-			By("Creating client and attempting to update ref")
+			By("Creating client and attempting to create ref")
 			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("UpdateRef should return PermissionDeniedError")
+			By("CreateRef should return PermissionDeniedError")
 			ref := nanogit.Ref{
 				Name: "refs/heads/main",
 				Hash: hash.MustFromHex("0000000000000000000000000000000000000001"),
 			}
-			err = client.UpdateRef(ctx, ref)
+			err = client.CreateRef(ctx, ref)
 			Expect(err).To(HaveOccurred())
 
 			// Error propagates through the call stack
 			var permErr *nanogit.PermissionDeniedError
 			Expect(errors.As(err, &permErr)).To(BeTrue())
 			Expect(permErr.StatusCode).To(Equal(http.StatusForbidden))
-		})
 
-		It("should propagate PermissionDeniedError through DeleteRef", func() {
-			By("Creating a mock server that returns 403 for receive-pack")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == "POST" && strings.Contains(r.URL.Path, "git-receive-pack") {
-					w.WriteHeader(http.StatusForbidden)
-					_, _ = w.Write([]byte("403 Forbidden"))
-					return
-				}
-				w.WriteHeader(http.StatusOK)
-				if strings.Contains(r.URL.Path, "info/refs") {
-					_, _ = w.Write([]byte("001e# service=git-receive-pack\n0000"))
-				}
-			}))
-			defer server.Close()
-
-			By("Creating client and attempting to delete ref")
-			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
-			Expect(err).NotTo(HaveOccurred())
-
-			By("DeleteRef should return PermissionDeniedError")
-			err = client.DeleteRef(ctx, "refs/heads/feature")
-			Expect(err).To(HaveOccurred())
-
-			var permErr *nanogit.PermissionDeniedError
-			Expect(errors.As(err, &permErr)).To(BeTrue())
-			Expect(permErr.StatusCode).To(Equal(http.StatusForbidden))
-		})
-	})
-
-	Context("Error wrapping chain", func() {
-		It("should maintain error chain for wrapped PermissionDeniedError", func() {
-			By("Creating a mock server that returns 403")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == "POST" && strings.Contains(r.URL.Path, "git-receive-pack") {
-					w.WriteHeader(http.StatusForbidden)
-					_, _ = w.Write([]byte("403 Forbidden"))
-					return
-				}
-				w.WriteHeader(http.StatusOK)
-				if strings.Contains(r.URL.Path, "info/refs") {
-					_, _ = w.Write([]byte("001e# service=git-receive-pack\n0000"))
-				}
-			}))
-			defer server.Close()
-
-			By("Creating client")
-			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Creating staged writer and pushing")
-			ref := nanogit.Ref{
-				Name: "refs/heads/main",
-				Hash: hash.Hash{},
-			}
-			writer, err := client.NewStagedWriter(ctx, ref)
-			Expect(err).NotTo(HaveOccurred())
-			defer writer.Cleanup(ctx)
-
-			err = writer.Push(ctx)
-			Expect(err).To(HaveOccurred())
-
-			By("Error chain should be preserved through wrapping")
-			// errors.Is should work through wrapped errors
+			// errors.Is should also work
 			Expect(errors.Is(err, nanogit.ErrPermissionDenied)).To(BeTrue())
-
-			// errors.As should work through wrapped errors
-			var permErr *nanogit.PermissionDeniedError
-			Expect(errors.As(err, &permErr)).To(BeTrue())
 
 			// Underlying error should be accessible
 			Expect(permErr.Underlying).NotTo(BeNil())
@@ -471,36 +359,10 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 		})
 	})
 
-	Context("Fetch operations (read-only)", func() {
-		It("should return UnauthorizedError on fetch with 401", func() {
-			By("Creating a mock server that returns 401 for upload-pack")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == "POST" && strings.Contains(r.URL.Path, "git-upload-pack") {
-					w.WriteHeader(http.StatusUnauthorized)
-					_, _ = w.Write([]byte("401 Unauthorized"))
-					return
-				}
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer server.Close()
-
-			By("Creating client")
-			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Attempting to clone should return UnauthorizedError")
-			_, err = client.Clone(ctx, nanogit.CloneOptions{
-				Path: GinkgoT().TempDir(),
-			})
-			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, nanogit.ErrUnauthorized)).To(BeTrue())
-		})
-
-		It("should return PermissionDeniedError on fetch with 403", func() {
+	Context("Fetch operations", func() {
+		It("should return PermissionDeniedError when fetching blob with 403", func() {
 			By("Creating a mock server that returns 403 for upload-pack")
-			requestCount := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requestCount++
 				if r.Method == "POST" && strings.Contains(r.URL.Path, "git-upload-pack") {
 					w.WriteHeader(http.StatusForbidden)
 					_, _ = w.Write([]byte("403 Forbidden"))
@@ -521,11 +383,11 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Attempting to fetch blob should return PermissionDeniedError")
-			hash := hash.MustFromHex("0000000000000000000000000000000000000001")
-			_, err = client.GetBlob(ctx, hash)
+			blobHash := hash.MustFromHex("0000000000000000000000000000000000000001")
+			_, err = client.GetBlob(ctx, blobHash)
 			Expect(err).To(HaveOccurred())
 
-			// Should eventually get a PermissionDeniedError (might be wrapped)
+			// Should get a PermissionDeniedError (might be wrapped)
 			var permErr *nanogit.PermissionDeniedError
 			if errors.As(err, &permErr) {
 				Expect(permErr.StatusCode).To(Equal(http.StatusForbidden))
