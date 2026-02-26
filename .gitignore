@@ -4,12 +4,19 @@ vendor
 coverage.txt
 unit.cov
 integration.cov
+cli-unit.cov
+cli-integration.cov
+go.work.sum
 node_modules
 yarn.lock
 reports
 perf.test
 bin/
 go.work.sum
+
+# CLI build artifacts
+/bin/
+cli/nanogit
 
 # VitePress
 docs/.vitepress/dist

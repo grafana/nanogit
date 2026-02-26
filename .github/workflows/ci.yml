@@ -417,3 +417,88 @@ jobs:
           echo "Running full repository clone test with 1 minute timeout..."
           echo "Test will FAIL if clone takes more than 60 seconds"
           go test -v -timeout 1m -run TestCloneGrafanaGrafanaFullRepository .
+
+  cli-build:
+    name: CLI Build
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Build CLI
+        env:
+          GOWORK: "off"
+        run: |
+          cd cli
+          go build -o ../bin/nanogit .
+      - name: Verify binary
+        run: |
+          ./bin/nanogit --help
+
+  cli-format:
+    name: CLI Format
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
+      - name: Check CLI formatting
+        run: make cli-fmt
+      - name: Verify formatting
+        run: |
+          if [ -n "$(git status --porcelain cli)" ]; then
+            echo "::error::CLI code formatting issues found. Run 'make cli-fmt' to fix them."
+            git diff cli
+            exit 1
+          fi
+
+  cli-lint:
+    name: CLI Lint
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apk add --no-cache git make bash curl
+      - name: Install golangci-lint
+        run: |
+          wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+      - name: Run CLI linter
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          make cli-lint
+
+  cli-test:
+    name: CLI Integration Tests
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-cli-${{ hashFiles('cli/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-cli-
+      - name: Run CLI integration tests
+        env:
+          CGO_ENABLED: 1
+          GOWORK: "off"
+        run: |
+          cd cli
+          go test -v -run TestCLIIntegration .

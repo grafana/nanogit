@@ -54,10 +54,18 @@ test-coverage:
 		--coverprofile=integration.cov \
 		./tests
 
+	@echo "Running CLI unit tests with coverage..."
+	cd cli && GOWORK=off go test -race -coverprofile=../cli-unit.cov -covermode=atomic ./internal/...
+
+	@echo "Running CLI integration tests with coverage..."
+	cd cli && GOWORK=off go test -race -coverprofile=../cli-integration.cov -covermode=atomic -run TestCLIIntegration .
+
 	@echo "Merging coverage profiles..."
 	@echo "mode: set" > coverage.txt
 	@tail -n +2 unit.cov >> coverage.txt || true
 	@tail -n +2 integration.cov >> coverage.txt || true
+	@tail -n +2 cli-unit.cov >> coverage.txt || true
+	@tail -n +2 cli-integration.cov >> coverage.txt || true
 	@echo "Combined coverage written to coverage.txt"
 
 test-coverage-html:
@@ -108,3 +116,35 @@ docs-preview: docs-build
 
 .PHONY: docs
 docs: docs-serve
+
+# CLI targets
+.PHONY: cli-build
+cli-build: ## Build the nanogit CLI
+	@echo "Building nanogit CLI..."
+	cd cli && GOWORK=off go build -o ../bin/nanogit .
+
+.PHONY: cli-install
+cli-install: ## Install the nanogit CLI
+	@echo "Installing nanogit CLI..."
+	cd cli && GOWORK=off go install .
+
+.PHONY: cli-test
+cli-test: ## Run CLI unit tests
+	@echo "Testing nanogit CLI..."
+	cd cli && GOWORK=off go test -race -v ./...
+
+.PHONY: cli-lint
+cli-lint: ## Lint CLI code
+	@echo "Linting CLI code..."
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint not found. Install it from https://golangci-lint.run/usage/install/" && exit 1)
+	cd cli && golangci-lint run
+
+.PHONY: cli-fmt
+cli-fmt: ## Format CLI code
+	@echo "Formatting CLI code..."
+	@which goimports > /dev/null || (echo "Error: goimports not found. Install it with: go install golang.org/x/tools/cmd/goimports@latest" && exit 1)
+	cd cli && goimports -w .
+	cd cli && go fmt ./...
+
+.PHONY: cli
+cli: cli-build ## Alias for cli-build
