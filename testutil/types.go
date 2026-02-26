@@ -5,23 +5,47 @@ import (
 	"time"
 )
 
-// User represents a Git user for testing purposes.
+// User represents a test user account in the Git server.
+//
+// All fields are automatically generated when created via Server.CreateUser():
+//   - Username: Unique identifier with timestamp suffix (e.g., "user-1234567890ab")
+//   - Email: Auto-generated email address
+//   - Password: Auto-generated password for HTTPS authentication
+//   - Token: Pre-generated access token for API operations
+//
+// Example:
+//
+//	user, err := server.CreateUser(ctx)
+//	// user.Username, user.Password, user.Token are ready to use
 type User struct {
-	Username string
-	Email    string
-	Password string
-	Token    string // Generated access token (if applicable)
+	Username string // Unique username
+	Email    string // Email address
+	Password string // Password for HTTPS authentication
+	Token    string // Access token for API operations
 }
 
 // Repo represents a remote Git repository for testing.
+//
+// Created via Server.CreateRepo(), this type provides access URLs:
+//   - URL: Public HTTPS URL without credentials
+//   - AuthURL: HTTPS URL with embedded username:password for easy cloning
+//   - Name: Repository name
+//   - Owner: Username of the repository owner
+//   - User: Reference to the User who owns this repository
+//
+// The AuthURL is particularly useful for git operations:
+//
+//	repo, err := server.CreateRepo(ctx, "myrepo", user)
+//	// Use repo.AuthURL for git clone, fetch, push, etc.
 type Repo struct {
-	Name     string
-	Owner    string
-	URL      string // Public URL (no auth)
-	AuthURL  string // Authenticated URL (with credentials)
-	User     *User
-	host     string
-	port     string
+	Name    string // Repository name
+	Owner   string // Owner username
+	URL     string // Public URL (requires authentication)
+	AuthURL string // URL with embedded credentials
+	User    *User  // Repository owner
+
+	host string
+	port string
 }
 
 // CloneURL returns the authenticated clone URL for the repository.

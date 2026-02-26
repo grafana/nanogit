@@ -69,15 +69,31 @@ func (l *containerLogger) Accept(log testcontainers.Log) {
 }
 
 // NewServer creates and initializes a new Gitea server instance in a container.
-// It configures the server with default settings and waits for it to be ready.
-// The server is configured with:
-// - SQLite database
-// - Disabled registration
-// - Pre-configured admin user
-// - Disabled SSH and mailer
 //
-// Returns a Server instance ready for testing. Use Cleanup() to stop and remove
-// the container, or use the cleanup function returned by QuickServer.
+// The server is automatically configured with sensible defaults for testing:
+//   - SQLite database (no external database required)
+//   - Disabled user registration (create users via CreateUser)
+//   - Pre-configured admin user for internal operations
+//   - Disabled SSH and email (HTTPS-only)
+//   - Automatic port allocation (no conflicts)
+//
+// The function waits for the server to be fully ready before returning.
+// Always call Cleanup() when done to stop and remove the container.
+//
+// Example:
+//
+//	server, err := testutil.NewServer(ctx)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	defer server.Cleanup()
+//
+// Options can be provided to customize the server:
+//
+//	server, err := testutil.NewServer(ctx,
+//		testutil.WithLogger(testutil.NewTestLogger(t)),
+//		testutil.WithTimeout(60*time.Second),
+//	)
 func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 	cfg := defaultConfig()
 	for _, opt := range opts {
@@ -158,11 +174,27 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 	return server, nil
 }
 
-// CreateUser creates a new user in the Gitea server with the specified credentials.
-// The user is created with admin privileges and password change requirement disabled.
-// Uses a unique suffix based on timestamp and random data to avoid collisions in parallel tests.
+// CreateUser creates a new test user in the Gitea server.
 //
-// Returns the created User or an error if creation fails.
+// The user is automatically configured with:
+//   - Auto-generated unique username (e.g., "user-1234567890ab")
+//   - Auto-generated email address
+//   - Auto-generated password
+//   - Admin privileges for repository creation
+//   - Pre-generated access token for authentication
+//
+// The username includes a timestamp and random suffix to prevent collisions
+// in parallel test execution.
+//
+// Returns the created User with all credentials, or an error if creation fails.
+//
+// Example:
+//
+//	user, err := server.CreateUser(ctx)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	// user.Username, user.Password, user.Token are now available
 func (s *Server) CreateUser(ctx context.Context) (*User, error) {
 	// Generate a unique suffix using nanosecond timestamp + random bytes
 	// This ensures uniqueness even when tests run in parallel
@@ -259,11 +291,28 @@ func (s *Server) GenerateUserToken(ctx context.Context, username string) (string
 	return token, nil
 }
 
-// CreateRepo creates a new repository in the Gitea server for the specified user.
-// It returns both the public repository URL and an authenticated repository URL
-// that includes the user's credentials.
+// CreateRepo creates a new Git repository in the Gitea server.
 //
-// Returns the created Repo or an error if creation fails.
+// The repository is created under the specified user's account with these settings:
+//   - Private repository (not publicly accessible)
+//   - No initial README or .gitignore
+//   - Empty repository ready for pushes
+//
+// The returned Repo contains:
+//   - URL: Public HTTPS URL (requires authentication to access)
+//   - AuthURL: HTTPS URL with embedded credentials for easy cloning
+//   - Name: Repository name
+//   - Owner: Username of the repository owner
+//
+// Returns the created Repo with access URLs, or an error if creation fails.
+//
+// Example:
+//
+//	repo, err := server.CreateRepo(ctx, "myproject", user)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	// Use repo.AuthURL for git operations that need authentication
 func (s *Server) CreateRepo(ctx context.Context, name string, user *User) (*Repo, error) {
 	s.logger.Logf("📦 Creating repository '%s' for user '%s'...", name, user.Username)
 

@@ -7,8 +7,16 @@ import (
 	"testing"
 )
 
-// Logger is a minimal interface for test output.
-// Implementations can provide different logging behaviors for various test frameworks.
+// Logger is a minimal logging interface for test output.
+//
+// This simple interface allows testutil to work with any testing framework
+// by accepting different logging implementations. Built-in implementations:
+//   - NoopLogger: Discards all output (default, zero overhead)
+//   - NewTestLogger: Logs to testing.T (standard Go tests)
+//   - NewWriterLogger: Logs to io.Writer (e.g., Ginkgo's GinkgoWriter)
+//   - NewColoredLogger: Logs with ANSI colors and emojis
+//
+// Custom implementations can be provided for other frameworks or use cases.
 type Logger interface {
 	Logf(format string, args ...any)
 }
@@ -31,6 +39,15 @@ type noopLogger struct{}
 func (noopLogger) Logf(format string, args ...any) {}
 
 // NoopLogger returns a logger that discards all output.
+//
+// This is the default logger if none is specified. It has zero overhead
+// and is suitable for CI environments or when you don't need log output.
+//
+// Example:
+//
+//	server, err := testutil.NewServer(ctx,
+//		testutil.WithLogger(testutil.NoopLogger()),
+//	)
 func NoopLogger() Logger {
 	return noopLogger{}
 }
@@ -44,7 +61,19 @@ func (l *testLogger) Logf(format string, args ...any) {
 	l.t.Logf(format, args...)
 }
 
-// NewTestLogger creates a logger that outputs to testing.TB (e.g., *testing.T).
+// NewTestLogger creates a logger that outputs to testing.TB.
+//
+// This is the standard logger for Go tests using the testing package.
+// Output appears in test logs and is captured by `go test -v`.
+//
+// Example:
+//
+//	func TestSomething(t *testing.T) {
+//		server, err := testutil.NewServer(ctx,
+//			testutil.WithLogger(testutil.NewTestLogger(t)),
+//		)
+//		// Server logs will appear in test output
+//	}
 func NewTestLogger(t testing.TB) Logger {
 	return &testLogger{t: t}
 }

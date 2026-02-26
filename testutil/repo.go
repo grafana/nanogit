@@ -12,23 +12,43 @@ import (
 	"github.com/grafana/nanogit/options"
 )
 
-// LocalRepo represents a local Git repository used for testing.
-// It provides methods to initialize, modify, and manage a Git repository
-// in a temporary directory.
+// LocalRepo represents a local Git repository for testing.
+//
+// It wraps a temporary directory with a Git repository and provides
+// convenience methods for common operations:
+//   - File creation and modification (CreateFile, UpdateFile, DeleteFile)
+//   - Git command execution (Git)
+//   - Quick initialization with remote (QuickInit)
+//   - Content inspection (LogContents)
+//
+// The repository is automatically cleaned up when Cleanup() is called.
 type LocalRepo struct {
 	Path string
 
-	logger       Logger
-	cleanupFunc  func() error
-	coloredGit   bool
-	gitEnv       []string
+	logger      Logger
+	cleanupFunc func() error
+	coloredGit  bool
+	gitEnv      []string
 }
 
-// NewLocalRepo creates a new LocalRepo instance with a temporary directory
-// as its path. The temporary directory is automatically cleaned up when
-// Cleanup() is called.
+// NewLocalRepo creates a new local Git repository in a temporary directory.
 //
-// The repository is automatically initialized with `git init`.
+// The repository is automatically initialized with `git init` and ready to use.
+// The temporary directory and all its contents are removed when Cleanup() is called.
+//
+// Options can be provided to customize behavior:
+//
+//	local, err := testutil.NewLocalRepo(ctx,
+//		testutil.WithRepoLogger(testutil.NewTestLogger(t)),
+//	)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	defer local.Cleanup()
+//
+// The repository path is available via the Path field:
+//
+//	fmt.Println("Repository at:", local.Path)
 func NewLocalRepo(ctx context.Context, opts ...RepoOption) (*LocalRepo, error) {
 	cfg := &repoConfig{
 		logger:  NoopLogger(),
@@ -207,14 +227,33 @@ func (r *LocalRepo) GitWithError(args ...string) (string, error) {
 	return r.Git(args...)
 }
 
-// QuickInit is a convenience method that sets up a repository with:
-// - Git user configuration
-// - Remote URL configuration
-// - Initial commit with a test file
-// - Force push to main branch
-// - Branch tracking setup
+// QuickInit configures the repository and connects it to a remote server.
 //
-// Returns a configured nanogit.Client and the name of the test file created.
+// This convenience method performs a complete setup sequence:
+//   1. Configures git user.name and user.email from the User
+//   2. Adds the remote URL as origin
+//   3. Creates an initial test.txt file with content
+//   4. Commits the file ("Initial commit")
+//   5. Renames branch to main (if needed)
+//   6. Force pushes to origin/main
+//   7. Sets up branch tracking
+//   8. Creates and returns a nanogit.Client
+//
+// This is the fastest way to get a fully functional local + remote repository
+// setup for testing.
+//
+// Returns:
+//   - A configured nanogit.Client ready to use
+//   - The name of the test file created ("test.txt")
+//   - An error if any step fails
+//
+// Example:
+//
+//	client, testFile, err := local.QuickInit(user, repo.AuthURL)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	// Repository is now ready with initial commit pushed
 func (r *LocalRepo) QuickInit(user *User, remoteURL string) (nanogit.Client, string, error) {
 	r.logger.Logf("📦 [LOCAL] Setting up local repository")
 
