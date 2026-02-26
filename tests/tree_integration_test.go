@@ -47,7 +47,7 @@ var _ = Describe("Trees", func() {
 
 			By("Setting up hash helper function")
 			getHash = func(path string) hash.Hash {
-				out := local.Git("rev-parse", "HEAD:"+path)
+				out, _ := local.Git("rev-parse", "HEAD:"+path)
 				h, err := hash.FromHex(out)
 				Expect(err).NotTo(HaveOccurred())
 				return h
@@ -307,7 +307,7 @@ var _ = Describe("Trees", func() {
 
 			By("Setting up hash helper function")
 			getHash = func(path string) hash.Hash {
-				out := local.Git("rev-parse", "HEAD:"+path)
+				out, _ := local.Git("rev-parse", "HEAD:"+path)
 				h, err := hash.FromHex(out)
 				Expect(err).NotTo(HaveOccurred())
 				return h
@@ -502,11 +502,12 @@ var _ = Describe("Trees", func() {
 			By("Creating a second repository to use as a submodule source")
 			subRemote, err := gitServer.CreateRepo(ctx, "subrepo", user)
 
+		Expect(err).NotTo(HaveOccurred())
 			By("Setting up the submodule source repository with content")
 			subLocal := testutil.NewLocalRepo(logger)
 			subLocal.Git("config", "user.name", user.Username)
 			subLocal.Git("config", "user.email", user.Email)
-			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
+			subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
 			subLocal.CreateFile("lib.txt", "library content")
 			subLocal.Git("add", ".")
 			subLocal.Git("commit", "-m", "Initial submodule commit")
@@ -522,7 +523,7 @@ var _ = Describe("Trees", func() {
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			local.Git("submodule", "add", subRemote.AuthURL(), "external/lib")
+			local.Git("submodule", "add", subRemote.AuthURL, "external/lib")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Add submodule")
 
@@ -530,7 +531,6 @@ var _ = Describe("Trees", func() {
 			local.Git("branch", "-M", "main")
 			local.Git("push", "origin", "main", "--force")
 
-			By("Getting the commit hash")
 			var err error
 			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -588,10 +588,11 @@ var _ = Describe("Trees", func() {
 
 			By("Creating a second repository to use as a submodule source")
 			subRemote, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
+		Expect(err).NotTo(HaveOccurred())
 			subLocal := testutil.NewLocalRepo(logger)
 			subLocal.Git("config", "user.name", user.Username)
 			subLocal.Git("config", "user.email", user.Email)
-			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
+			subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
 			subLocal.CreateFile("lib.txt", "library content")
 			subLocal.Git("add", ".")
 			subLocal.Git("commit", "-m", "Initial submodule commit")
@@ -600,7 +601,7 @@ var _ = Describe("Trees", func() {
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			local.Git("submodule", "add", subRemote.AuthURL(), "vendor/lib")
+			local.Git("submodule", "add", subRemote.AuthURL, "vendor/lib")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Add submodule")
 			afterSubmoduleHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
