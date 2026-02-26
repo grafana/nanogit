@@ -112,7 +112,6 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if pushErr != nil {
 				// This is expected - Git itself prevents non-fast-forward pushes
 				logger.Info("Git prevented non-fast-forward push as expected", "error", pushErr.Error())
-			_ = pushErr // staticcheck: non-empty branch
 			}
 
 			By("Using nanogit writer to test protocol error handling")
