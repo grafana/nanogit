@@ -566,8 +566,8 @@ var _ = Describe("Trees", func() {
 
 	Context("CompareCommits with submodule", func() {
 		var (
-			client            nanogit.Client
-			local             *LocalGitRepo
+			client              nanogit.Client
+			local               *LocalGitRepo
 			beforeSubmoduleHash hash.Hash
 			afterSubmoduleHash  hash.Hash
 		)

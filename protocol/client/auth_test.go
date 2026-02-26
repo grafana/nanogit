@@ -62,7 +62,7 @@ func TestAuthentication(t *testing.T) {
 			}))
 			defer server.Close()
 
-			c, err := NewRawClient(server.URL + "/repo", tt.authOption)
+			c, err := NewRawClient(server.URL+"/repo", tt.authOption)
 			require.NoError(t, err)
 
 			responseReader, err := c.UploadPack(context.Background(), strings.NewReader("test"))

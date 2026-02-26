@@ -36,8 +36,16 @@ func (m *mockRawClient) LsRefs(ctx context.Context, opts client.LsRefsOptions) (
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockRawClient) IsAuthorized(ctx context.Context) (bool, error) {
+func (m *mockRawClient) CanRead(ctx context.Context) (bool, error) {
 	return true, nil
+}
+
+func (m *mockRawClient) CanWrite(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
+func (m *mockRawClient) IsAuthorized(ctx context.Context) (bool, error) {
+	return m.CanRead(ctx)
 }
 
 func (m *mockRawClient) RepoExists(ctx context.Context) (bool, error) {

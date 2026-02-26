@@ -19,7 +19,9 @@ import (
 //
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../../internal/tools/fake_header.txt -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
-	IsAuthorized(ctx context.Context) (bool, error)
+	CanRead(ctx context.Context) (bool, error)
+	CanWrite(ctx context.Context) (bool, error)
+	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
 	SmartInfo(ctx context.Context, service string) error
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
 	ReceivePack(ctx context.Context, data io.Reader) error

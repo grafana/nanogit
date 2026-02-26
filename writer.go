@@ -719,7 +719,7 @@ func (w *stagedWriter) findTreeEntriesToMove(srcPath string) []string {
 // moveTreeEntries moves all entries from source to destination paths
 func (w *stagedWriter) moveTreeEntries(ctx context.Context, srcPath, destPath string, entriesToMove []string) error {
 	logger := log.FromContext(ctx)
-	
+
 	for _, entryPath := range entriesToMove {
 		entry := w.treeEntries[entryPath]
 		newPath := w.calculateNewTreeEntryPath(srcPath, destPath, entryPath)

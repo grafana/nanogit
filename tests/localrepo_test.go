@@ -52,12 +52,12 @@ func (r *LocalGitRepo) CreateDirPath(dirpath string) {
 func (r *LocalGitRepo) CreateFile(filename, content string) {
 	r.logger.Info("📦 [LOCAL] 📝 Creating file '%s' in repository", filename)
 	fullPath := filepath.Join(r.Path, filename)
-	
+
 	// Create parent directories if they don't exist
 	parentDir := filepath.Dir(fullPath)
 	err := os.MkdirAll(parentDir, 0755)
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	err = os.WriteFile(fullPath, []byte(content), 0600)
 	Expect(err).NotTo(HaveOccurred())
 	r.logger.Success("📦 [LOCAL] 📝 File '%s' created successfully", filename)

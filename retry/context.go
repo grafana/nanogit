@@ -30,4 +30,3 @@ func FromContext(ctx context.Context) Retrier {
 func FromContextOrNoop(ctx context.Context) Retrier {
 	return FromContext(ctx)
 }
-
