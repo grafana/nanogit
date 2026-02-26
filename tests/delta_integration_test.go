@@ -27,26 +27,26 @@ var _ = Describe("Delta Object Handling", func() {
 			By("Creating a base file and committing it")
 			baseContent := strings.Repeat("base content line\n", 100) // ~1.8KB
 			local.CreateFile("delta-test.txt", baseContent)
-			gitNoError(local, "add", "delta-test.txt")
-			gitNoError(local, "commit", "-m", "Initial commit with base content")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "delta-test.txt")
+			local.Git("commit", "-m", "Initial commit with base content")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Making small modifications to the file multiple times")
 			for i := 1; i <= 5; i++ {
 				modifiedContent := strings.Replace(baseContent, "base content line", "modified content line", 1)
 				baseContent = modifiedContent
 				local.UpdateFile("delta-test.txt", baseContent)
-				gitNoError(local, "add", "delta-test.txt")
-				gitNoError(local, "commit", "-m", "Modification "+string(rune('0'+i)))
+				local.Git("add", "delta-test.txt")
+				local.Git("commit", "-m", "Modification "+string(rune('0'+i)))
 			}
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing Git to repack with deltas")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the blob hash of the latest version")
-			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:delta-test.txt"))
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:delta-test.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Fetching the blob (may be sent as delta)")
@@ -70,19 +70,19 @@ var _ = Describe("Delta Object Handling", func() {
 				local.CreateFile("file"+string(rune('0'+i))+".txt", content)
 			}
 
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add multiple similar files")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add multiple similar files")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing aggressive repacking to maximize deltification")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting all file hashes")
 			var blobHashes []hash.Hash
 			for i := 1; i <= fileCount; i++ {
 				fileName := "file" + string(rune('0'+i)) + ".txt"
-				hashStr := gitNoError(local, "rev-parse", "HEAD:"+fileName)
+				hashStr := local.Git("rev-parse", "HEAD:"+fileName)
 				blobHash, err := hash.FromHex(hashStr)
 				Expect(err).NotTo(HaveOccurred())
 				blobHashes = append(blobHashes, blobHash)
@@ -104,22 +104,22 @@ var _ = Describe("Delta Object Handling", func() {
 			for i := 1; i <= 5; i++ {
 				local.CreateFile("dir1/file"+string(rune('0'+i))+".txt", "content "+string(rune('0'+i)))
 			}
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial directory structure")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial directory structure")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Modifying the directory structure slightly")
 			local.CreateFile("dir1/file6.txt", "content 6")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add one more file")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add one more file")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing repacking")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
-			treeHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
+			treeHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Fetching the tree (may be deltified)")
@@ -134,17 +134,17 @@ var _ = Describe("Delta Object Handling", func() {
 			By("Creating multiple commits with small changes")
 			for i := 1; i <= 10; i++ {
 				local.CreateFile("commit-test-"+string(rune('0'+i))+".txt", "commit "+string(rune('0'+i)))
-				gitNoError(local, "add", ".")
-				gitNoError(local, "commit", "-m", "Commit number "+string(rune('0'+i)))
+				local.Git("add", ".")
+				local.Git("commit", "-m", "Commit number "+string(rune('0'+i)))
 			}
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing repacking")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
-			commitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Fetching the commit (may be deltified)")
@@ -159,24 +159,24 @@ var _ = Describe("Delta Object Handling", func() {
 			By("Creating a file and modifying it multiple times")
 			baseContent := "Initial content\n" + strings.Repeat("line\n", 50)
 			local.CreateFile("path-test.txt", baseContent)
-			gitNoError(local, "add", "path-test.txt")
-			gitNoError(local, "commit", "-m", "Initial")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "path-test.txt")
+			local.Git("commit", "-m", "Initial")
+			local.Git("push", "origin", "main", "--force")
 
 			for i := 1; i <= 3; i++ {
 				baseContent += "Additional line " + string(rune('0'+i)) + "\n"
 				local.UpdateFile("path-test.txt", baseContent)
-				gitNoError(local, "add", "path-test.txt")
-				gitNoError(local, "commit", "-m", "Update "+string(rune('0'+i)))
+				local.Git("add", "path-test.txt")
+				local.Git("commit", "-m", "Update "+string(rune('0'+i)))
 			}
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing repacking")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
-			treeHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
+			treeHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Fetching blob by path (underlying objects may be deltas)")
@@ -197,24 +197,24 @@ var _ = Describe("Delta Object Handling", func() {
 				local.CreateFile("docs/doc"+string(rune('0'+i))+".md", "# Documentation "+string(rune('0'+i))+"\n\nContent here.\n")
 			}
 
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial structure")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial structure")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Making incremental changes to create delta opportunities")
 			for i := 1; i <= 5; i++ {
 				local.UpdateFile("src/file1.go", "package main\n\nfunc main() {\n\t// Modified version "+string(rune('0'+i))+"\n}\n")
-				gitNoError(local, "add", ".")
-				gitNoError(local, "commit", "-m", "Update iteration "+string(rune('0'+i)))
+				local.Git("add", ".")
+				local.Git("commit", "-m", "Update iteration "+string(rune('0'+i)))
 			}
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing aggressive repacking")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the main branch commit hash")
-			commitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cloning the repository (should handle all deltas)")
@@ -271,22 +271,22 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle empty file deltification", func() {
 			By("Creating and modifying an empty file")
 			local.CreateFile("empty.txt", "")
-			gitNoError(local, "add", "empty.txt")
-			gitNoError(local, "commit", "-m", "Add empty file")
+			local.Git("add", "empty.txt")
+			local.Git("commit", "-m", "Add empty file")
 
 			local.UpdateFile("empty.txt", "now has content")
-			gitNoError(local, "add", "empty.txt")
-			gitNoError(local, "commit", "-m", "Add content")
+			local.Git("add", "empty.txt")
+			local.Git("commit", "-m", "Add content")
 
 			local.UpdateFile("empty.txt", "")
-			gitNoError(local, "add", "empty.txt")
-			gitNoError(local, "commit", "-m", "Empty again")
+			local.Git("add", "empty.txt")
+			local.Git("commit", "-m", "Empty again")
 
-			gitNoError(local, "push", "origin", "main", "--force")
-			gitNoError(local, "repack", "-a", "-d", "-f")
+			local.Git("push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f")
 
 			By("Fetching the empty file blob")
-			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:empty.txt"))
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:empty.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
 			blob, err := client.GetBlob(ctx, blobHash)
@@ -298,23 +298,23 @@ var _ = Describe("Delta Object Handling", func() {
 			By("Creating a large file")
 			largeContent := strings.Repeat("Large file content line with some variation\n", 1000) // ~47KB
 			local.CreateFile("large.txt", largeContent)
-			gitNoError(local, "add", "large.txt")
-			gitNoError(local, "commit", "-m", "Add large file")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "large.txt")
+			local.Git("commit", "-m", "Add large file")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Making a small modification to the large file")
 			modifiedContent := largeContent + "One more line\n"
 			local.UpdateFile("large.txt", modifiedContent)
-			gitNoError(local, "add", "large.txt")
-			gitNoError(local, "commit", "-m", "Small modification")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "large.txt")
+			local.Git("commit", "-m", "Small modification")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Forcing repacking")
-			gitNoError(local, "repack", "-a", "-d", "-f", "--depth=50", "--window=50")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("repack", "-a", "-d", "-f", "--depth=50", "--window=50")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Fetching the modified blob")
-			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:large.txt"))
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:large.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
 			blob, err := client.GetBlob(ctx, blobHash)

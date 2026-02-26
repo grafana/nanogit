@@ -33,18 +33,18 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up initial state with a commit")
 			local.CreateFile("initial.txt", "initial content")
-			gitNoError(local, "add", "initial.txt")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", "initial.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			By("Getting the initial commit hash")
-			initialHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			initialHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a new commit locally to advance the remote")
-			gitNoError(local, "commit", "--allow-empty", "-m", "Second commit")
-			gitNoError(local, "push", "origin", "main")
+			local.Git("commit", "--allow-empty", "-m", "Second commit")
+			local.Git("push", "origin", "main")
 
 			By("Creating a writer with the old (stale) hash")
 			ref := nanogit.Ref{
@@ -87,23 +87,23 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up initial state")
 			local.CreateFile("file1.txt", "content 1")
-			gitNoError(local, "add", "file1.txt")
-			gitNoError(local, "commit", "-m", "First commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", "file1.txt")
+			local.Git("commit", "-m", "First commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
-			firstCommitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			firstCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a divergent commit history locally")
-			gitNoError(local, "commit", "--allow-empty", "-m", "Local commit")
-			gitNoError(local, "push", "origin", "main")
+			local.Git("commit", "--allow-empty", "-m", "Local commit")
+			local.Git("push", "origin", "main")
 
 			By("Resetting local to first commit and creating conflicting commit")
-			gitNoError(local, "reset", "--hard", firstCommitHash.String())
+			local.Git("reset", "--hard", firstCommitHash.String())
 			local.CreateFile("file2.txt", "conflicting content")
-			gitNoError(local, "add", "file2.txt")
-			gitNoError(local, "commit", "-m", "Conflicting commit")
+			local.Git("add", "file2.txt")
+			local.Git("commit", "-m", "Conflicting commit")
 
 			By("Attempting to push non-fast-forward update")
 			cmd := exec.Command("git", "push", "origin", "main", "--force-with-lease")
@@ -145,14 +145,14 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			By("Setting up competing operations to trigger server validation errors")
 
 			// Get current state
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a commit locally to advance the remote
 			local.CreateFile("server-test.txt", "server test content")
-			gitNoError(local, "add", "server-test.txt")
-			gitNoError(local, "commit", "-m", "Server test commit")
-			gitNoError(local, "push", "origin", "main")
+			local.Git("add", "server-test.txt")
+			local.Git("commit", "-m", "Server test commit")
+			local.Git("push", "origin", "main")
 
 			By("Attempting push with outdated reference to trigger server validation error")
 			// Use the old hash before the server-side update
@@ -199,7 +199,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up concurrent operations that could trigger protocol conflicts")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create two writers with the same starting reference
@@ -258,13 +258,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up repository")
 			local.CreateFile("recovery-test.txt", "recovery test")
-			gitNoError(local, "add", "recovery-test.txt")
-			gitNoError(local, "commit", "-m", "Recovery test commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", "recovery-test.txt")
+			local.Git("commit", "-m", "Recovery test commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			By("Getting current state")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -340,13 +340,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up repository")
 			local.CreateFile("edge-case.txt", "edge case test")
-			gitNoError(local, "add", "edge-case.txt")
-			gitNoError(local, "commit", "-m", "Edge case test")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", "edge-case.txt")
+			local.Git("commit", "-m", "Edge case test")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			By("Testing with valid operations that might trigger edge cases")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -396,13 +396,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up repository")
 			local.CreateFile("boundary.txt", "boundary test")
-			gitNoError(local, "add", "boundary.txt")
-			gitNoError(local, "commit", "-m", "Boundary test")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", "boundary.txt")
+			local.Git("commit", "-m", "Boundary test")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			By("Testing boundary conditions")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{

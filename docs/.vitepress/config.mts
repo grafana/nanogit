@@ -6,10 +6,10 @@ export default defineConfig({
   description: "Lightweight, HTTPS-only Git implementation for cloud-native environments",
   base: '/nanogit/',
 
-  // Allow links to testutil package outside docs directory
+  // Allow links to gittest package outside docs directory
   ignoreDeadLinks: [
-    /testutil\/examples\/.*/,
-    /testutil\/README/
+    /gittest\/examples\/.*/,
+    /gittest\/README/
   ],
 
   head: [

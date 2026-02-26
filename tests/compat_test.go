@@ -20,31 +20,27 @@ type LocalGitRepo struct {
 }
 
 // CreateFile creates a file and fails the test if there's an error.
-func (r *LocalGitRepo) CreateFile(path, content string) error {
+func (r *LocalGitRepo) CreateFile(path, content string) {
 	err := r.LocalRepo.CreateFile(path, content)
 	Expect(err).NotTo(HaveOccurred())
-	return err
 }
 
 // UpdateFile updates a file and fails the test if there's an error.
-func (r *LocalGitRepo) UpdateFile(path, content string) error {
+func (r *LocalGitRepo) UpdateFile(path, content string) {
 	err := r.LocalRepo.UpdateFile(path, content)
 	Expect(err).NotTo(HaveOccurred())
-	return err
 }
 
 // DeleteFile deletes a file and fails the test if there's an error.
-func (r *LocalGitRepo) DeleteFile(path string) error {
+func (r *LocalGitRepo) DeleteFile(path string) {
 	err := r.LocalRepo.DeleteFile(path)
 	Expect(err).NotTo(HaveOccurred())
-	return err
 }
 
 // CreateDirPath creates a directory path and fails the test if there's an error.
-func (r *LocalGitRepo) CreateDirPath(dirpath string) error {
+func (r *LocalGitRepo) CreateDirPath(dirpath string) {
 	err := r.LocalRepo.CreateDirPath(dirpath)
 	Expect(err).NotTo(HaveOccurred())
-	return err
 }
 
 // Git runs a git command and fails the test if there's an error.
@@ -56,10 +52,10 @@ func (r *LocalGitRepo) Git(args ...string) string {
 }
 
 // QuickInit initializes the repository with a remote and fails the test on error.
-func (r *LocalGitRepo) QuickInit(user *gittest.User, remoteURL string) (nanogit.Client, error) {
+func (r *LocalGitRepo) QuickInit(user *gittest.User, remoteURL string) nanogit.Client {
 	client, err := r.LocalRepo.QuickInit(user, remoteURL)
 	Expect(err).NotTo(HaveOccurred())
-	return client, err
+	return client
 }
 
 // RemoteRepo wraps gittest.Repo to add backward-compatible methods

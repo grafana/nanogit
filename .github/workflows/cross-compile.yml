@@ -50,4 +50,9 @@ jobs:
           GOOS: ${{ matrix.GOOS }}
           GOARCH: ${{ matrix.GOARCH }}
           GOARM: ${{ matrix.GOARM || '' }}
-        run: go build ./...
+        run: |
+          # Build main packages, excluding test-only examples
+          go build ./...
+          cd gittest && go build ./...
+          # perf module is test-only, skip cross-compilation
+          # gittest/examples is test-only, skip cross-compilation

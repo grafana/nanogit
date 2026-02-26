@@ -1,8 +1,3 @@
 package integration_test
 
-// gitNoError is a helper that wraps LocalGitRepo.Git and fails the test on error
-// This maintains backward compatibility with the old Git() method that didn't return errors
-func gitNoError(local *LocalGitRepo, args ...string) string {
-	return local.Git(args...)
-}
-
+// Helper functions for integration tests

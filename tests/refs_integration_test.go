@@ -23,18 +23,18 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := gitNoError(local, "rev-parse", "HEAD")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
 			var err error
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up branches and tags")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
-			gitNoError(local, "branch", "test-branch")
-			gitNoError(local, "push", "origin", "test-branch", "--force")
-			gitNoError(local, "tag", "v1.0.0")
-			gitNoError(local, "push", "origin", "v1.0.0", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+			local.Git("branch", "test-branch")
+			local.Git("push", "origin", "test-branch", "--force")
+			local.Git("tag", "v1.0.0")
+			local.Git("push", "origin", "v1.0.0", "--force")
 		})
 
 		It("should list all references", func() {
@@ -65,18 +65,18 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := gitNoError(local, "rev-parse", "HEAD")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
 			var err error
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up branches and tags")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
-			gitNoError(local, "branch", "test-branch")
-			gitNoError(local, "push", "origin", "test-branch", "--force")
-			gitNoError(local, "tag", "v1.0.0")
-			gitNoError(local, "push", "origin", "v1.0.0", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
+			local.Git("branch", "test-branch")
+			local.Git("push", "origin", "test-branch", "--force")
+			local.Git("tag", "v1.0.0")
+			local.Git("push", "origin", "v1.0.0", "--force")
 		})
 
 		It("should get existing refs", func() {
@@ -106,10 +106,10 @@ var _ = Describe("References", func() {
 
 		It("should handle ambiguous ref prefix by exact matching", func() {
 			By("Creating refs with similar prefixes")
-			gitNoError(local, "branch", "test")
-			gitNoError(local, "push", "origin", "test", "--force")
-			gitNoError(local, "branch", "test-longer")
-			gitNoError(local, "push", "origin", "test-longer", "--force")
+			local.Git("branch", "test")
+			local.Git("push", "origin", "test", "--force")
+			local.Git("branch", "test-longer")
+			local.Git("push", "origin", "test-longer", "--force")
 
 			By("Getting specific ref should work despite prefix ambiguity")
 			ref, err := client.GetRef(ctx, "refs/heads/test")
@@ -137,14 +137,14 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := gitNoError(local, "rev-parse", "HEAD")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
 			var err error
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 		})
 
 		It("should create branch ref", func() {
@@ -182,14 +182,14 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := gitNoError(local, "rev-parse", "HEAD")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
 			var err error
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 		})
 
 		It("should update existing ref", func() {
@@ -198,11 +198,11 @@ var _ = Describe("References", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a new commit")
-			gitNoError(local, "commit", "--allow-empty", "-m", "new commit")
-			newHashStr := gitNoError(local, "rev-parse", "HEAD")
+			local.Git("commit", "--allow-empty", "-m", "new commit")
+			newHashStr := local.Git("rev-parse", "HEAD")
 			newHash, err := hash.FromHex(newHashStr)
 			Expect(err).NotTo(HaveOccurred())
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Updating ref to point to new commit")
 			err = client.UpdateRef(ctx, nanogit.Ref{Name: "refs/heads/update-test", Hash: newHash})
@@ -227,14 +227,14 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := gitNoError(local, "rev-parse", "HEAD")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
 			var err error
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 		})
 
 		It("should delete branch ref", func() {
@@ -282,14 +282,14 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := gitNoError(local, "rev-parse", "HEAD")
+			firstCommitStr := local.Git("rev-parse", "HEAD")
 			var err error
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 		})
 
 		It("should complete full ref lifecycle", func() {
@@ -305,11 +305,11 @@ var _ = Describe("References", func() {
 			Expect(ref.Hash).To(Equal(firstCommit))
 
 			By("Creating new commit for update")
-			gitNoError(local, "commit", "--allow-empty", "-m", "integration flow commit")
-			newHashStr := gitNoError(local, "rev-parse", "HEAD")
+			local.Git("commit", "--allow-empty", "-m", "integration flow commit")
+			newHashStr := local.Git("rev-parse", "HEAD")
 			newHash, err := hash.FromHex(newHashStr)
 			Expect(err).NotTo(HaveOccurred())
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Updating ref to new commit")
 			err = client.UpdateRef(ctx, nanogit.Ref{Name: refName, Hash: newHash})

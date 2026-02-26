@@ -33,16 +33,16 @@ var _ = Describe("Writer Operations", func() {
 
 	// Helper to verify author and committer in commit
 	verifyCommitAuthorship := func(local *LocalGitRepo) {
-		commitAuthor := gitNoError(local, "log", "-1", "--pretty=%an <%ae>")
+		commitAuthor := local.Git("log", "-1", "--pretty=%an <%ae>")
 		Expect(strings.TrimSpace(commitAuthor)).To(Equal("Test Author <test@example.com>"))
 
-		commitCommitter := gitNoError(local, "log", "-1", "--pretty=%cn <%ce>")
+		commitCommitter := local.Git("log", "-1", "--pretty=%cn <%ce>")
 		Expect(strings.TrimSpace(commitCommitter)).To(Equal("Test Committer <test@example.com>"))
 	}
 
 	// Helper to create writer from current HEAD
 	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
-		currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+		currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		Expect(err).NotTo(HaveOccurred())
 
 		ref := nanogit.Ref{
@@ -95,19 +95,19 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull", "origin", "main")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "refs/heads/main")))
+			local.Git("pull", "origin", "main")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "refs/heads/main")))
 
 			content, err := os.ReadFile(filepath.Join(local.Path, fileName))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(content).To(Equal(newContent))
 
-			actualCommitMsg := gitNoError(local, "log", "-1", "--pretty=%B")
+			actualCommitMsg := local.Git("log", "-1", "--pretty=%B")
 			Expect(strings.TrimSpace(actualCommitMsg)).To(Equal(commitMsg))
 
 			verifyCommitAuthorship(local)
 
-			hashAfterCommit := gitNoError(local, "rev-parse", "refs/heads/main")
+			hashAfterCommit := local.Git("rev-parse", "refs/heads/main")
 			Expect(hashAfterCommit).NotTo(Equal(currentHash.String()))
 
 			// Verify initial file preserved
@@ -121,9 +121,9 @@ var _ = Describe("Writer Operations", func() {
 			originalContent := []byte("original content")
 			// Ensure the file exists in the repo
 			local.CreateFile(fileName, string(originalContent))
-			gitNoError(local, "add", fileName)
-			gitNoError(local, "commit", "-m", "Add test.txt")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", fileName)
+			local.Git("commit", "-m", "Add test.txt")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 			// Try to create the same file again
@@ -193,8 +193,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "refs/heads/main")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "refs/heads/main")))
 
 			// Verify directory structure
 			dirInfo, err := os.Stat(filepath.Join(local.Path, "dir"))
@@ -211,7 +211,7 @@ var _ = Describe("Writer Operations", func() {
 
 			verifyCommitAuthorship(local)
 
-			hashAfterCommit := gitNoError(local, "rev-parse", "refs/heads/main")
+			hashAfterCommit := local.Git("rev-parse", "refs/heads/main")
 			Expect(hashAfterCommit).NotTo(Equal(currentHash.String()))
 
 			// Verify initial file preserved
@@ -249,10 +249,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit initial file plus file to be updated
 			local.CreateFile("initial.txt", "initial content")
 			local.CreateFile("tobeupdated.txt", "original content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with files")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -261,7 +261,7 @@ var _ = Describe("Writer Operations", func() {
 			commitMsg := "Update test file"
 
 			// Verify blob hash before update
-			oldBlobHash := gitNoError(local, "rev-parse", "HEAD:"+fileName)
+			oldBlobHash := local.Git("rev-parse", "HEAD:"+fileName)
 
 			blobHash, err := writer.UpdateBlob(ctx, fileName, updatedContent)
 			Expect(err).NotTo(HaveOccurred())
@@ -276,8 +276,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			content, err := os.ReadFile(filepath.Join(local.Path, fileName))
 			Expect(err).NotTo(HaveOccurred())
@@ -306,10 +306,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("initial.txt", "initial content")
 			local.CreateDirPath("dir/subdir")
 			local.CreateFile("dir/subdir/tobeupdated.txt", "original nested content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with nested file")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -329,8 +329,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			content, err := os.ReadFile(filepath.Join(local.Path, nestedPath))
 			Expect(err).NotTo(HaveOccurred())
@@ -349,9 +349,9 @@ var _ = Describe("Writer Operations", func() {
 
 			// Create and commit initial file
 			local.CreateFile("initial.txt", "initial content")
-			gitNoError(local, "add", "initial.txt")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", "initial.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -368,10 +368,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit initial files
 			local.CreateFile("initial.txt", "initial content")
 			local.CreateFile("tobedeleted.txt", "content to be deleted")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "commit", "-m", "Initial commit with files")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("branch", "-M", "main")
+			local.Git("commit", "-m", "Initial commit with files")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -390,8 +390,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			// Verify deleted file no longer exists
 			_, err = os.Stat(filepath.Join(local.Path, fileName))
@@ -413,10 +413,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("initial.txt", "initial content")
 			local.CreateDirPath("dir/subdir")
 			local.CreateFile("dir/subdir/tobedeleted.txt", "nested content to be deleted")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with nested file")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -435,8 +435,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			// Verify nested file was deleted
 			_, err = os.Stat(filepath.Join(local.Path, nestedPath))
@@ -463,10 +463,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 			local.CreateDirPath("dir")
 			local.CreateFile("dir/file.txt", "file content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add directory and file")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add directory and file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -493,10 +493,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateDirPath("shared")
 			local.CreateFile("shared/tobedeleted.txt", "content to be deleted")
 			local.CreateFile("shared/tobepreserved.txt", "content to be preserved")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with shared directory")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with shared directory")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -516,8 +516,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			// Verify deleted file no longer exists
 			_, err = os.Stat(filepath.Join(local.Path, deletePath))
@@ -545,10 +545,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit initial files
 			local.CreateFile("source.txt", "content to move")
 			local.CreateFile("other.txt", "other content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with files")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -587,8 +587,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			local.Git("pull")
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			// Source file should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -613,10 +613,10 @@ var _ = Describe("Writer Operations", func() {
 
 			// Create and commit initial file
 			local.CreateFile("source.txt", "nested content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -651,7 +651,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Source should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -680,10 +680,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateDirPath("dir/subdir")
 			local.CreateFile("dir/subdir/nested.txt", "nested file content")
 			local.CreateFile("preserved.txt", "preserved content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with nested file")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested file")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -703,7 +703,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Source should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -736,10 +736,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit files
 			local.CreateFile("source.txt", "source content")
 			local.CreateFile("destination.txt", "destination content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -753,10 +753,10 @@ var _ = Describe("Writer Operations", func() {
 
 			// Create and commit file
 			local.CreateFile("file.txt", "content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -789,10 +789,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit directory
 			local.CreateDirPath("dir")
 			local.CreateFile("dir/file.txt", "content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -808,10 +808,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("file1.txt", "content 1")
 			local.CreateFile("file2.txt", "content 2")
 			local.CreateFile("preserved.txt", "preserved")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -829,7 +829,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Original files should not exist
 			_, err = os.Stat(filepath.Join(local.Path, "file1.txt"))
@@ -862,10 +862,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("source-dir/file1.txt", "content 1")
 			local.CreateFile("source-dir/file2.txt", "content 2")
 			local.CreateFile("other.txt", "other content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with directory")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with directory")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -914,7 +914,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Source directory should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -950,10 +950,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("parent/source-dir/file1.txt", "nested content 1")
 			local.CreateFile("parent/source-dir/subdir/file2.txt", "nested content 2")
 			local.CreateFile("parent/preserved.txt", "preserved content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with nested structure")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -982,7 +982,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Source should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -1010,10 +1010,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit directory at root
 			local.CreateDirPath("root-dir")
 			local.CreateFile("root-dir/file.txt", "root file content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1049,7 +1049,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Source should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -1086,10 +1086,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("source/file.txt", "source content")
 			local.CreateDirPath("destination")
 			local.CreateFile("destination/file.txt", "destination content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1104,10 +1104,10 @@ var _ = Describe("Writer Operations", func() {
 			// Create and commit directory
 			local.CreateDirPath("directory")
 			local.CreateFile("directory/file.txt", "content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1139,10 +1139,10 @@ var _ = Describe("Writer Operations", func() {
 
 			// Create and commit file
 			local.CreateFile("file.txt", "content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1160,10 +1160,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateDirPath("dir2")
 			local.CreateFile("dir2/file2.txt", "content 2")
 			local.CreateFile("preserved.txt", "preserved")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1181,7 +1181,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Original directories should not exist
 			_, err = os.Stat(filepath.Join(local.Path, "dir1"))
@@ -1216,10 +1216,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("complex/sub1/deep1/deep1-file.txt", "deep1 content")
 			local.CreateFile("complex/sub1/deep2/deep2-file.txt", "deep2 content")
 			local.CreateFile("complex/sub2/sub2-file.txt", "sub2 content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Create complex structure")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Create complex structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1237,7 +1237,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// Source should not exist
 			_, err = os.Stat(filepath.Join(local.Path, srcPath))
@@ -1285,10 +1285,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateDirPath("dir/subdir")
 			local.CreateFile("dir/file2.txt", "file 2 content")
 			local.CreateFile("dir/subdir/file3.txt", "file 3 content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with files and directories")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files and directories")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1307,7 +1307,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull changes to local repo
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// The repository should now be empty (no files or directories except .git)
 			files, err := os.ReadDir(local.Path)
@@ -1332,10 +1332,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateDirPath("dir/subdir")
 			local.CreateFile("dir/file2.txt", "file 2 content")
 			local.CreateFile("dir/subdir/file3.txt", "file 3 content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with files and directories")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with files and directories")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
@@ -1354,7 +1354,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull changes to local repo
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// The repository should now be empty (no files or directories except .git)
 			files, err := os.ReadDir(local.Path)
@@ -1385,9 +1385,9 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("preserved.txt", string(dir1Content))
 
 			By("Adding and committing the directory with files")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add directory with files to be deleted")
-			gitNoError(local, "push")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add directory with files to be deleted")
+			local.Git("push")
 
 			By("Verifying directory and files exist before deletion")
 			_, err := os.Stat(filepath.Join(local.Path, "toberemoved"))
@@ -1398,7 +1398,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting current ref")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/main"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
 				Name: "refs/heads/main",
@@ -1424,10 +1424,10 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pulling latest changes")
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			By("Verifying commit hash")
-			Expect(commit.Hash.String()).To(Equal(gitNoError(local, "rev-parse", "HEAD")))
+			Expect(commit.Hash.String()).To(Equal(local.Git("rev-parse", "HEAD")))
 
 			By("Verifying directory was completely deleted")
 			_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
@@ -1453,7 +1453,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(otherContent).NotTo(Equal(file2Content))
 
 			By("Verifying commit message")
-			commitMsg := gitNoError(local, "log", "-1", "--pretty=%B")
+			commitMsg := local.Git("log", "-1", "--pretty=%B")
 			Expect(strings.TrimSpace(commitMsg)).To(Equal("Delete entire directory"))
 		})
 
@@ -1475,12 +1475,12 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("toberemoved/subdir2/deep/deep.txt", string(deepContent))
 
 			// logger.Info("Adding and committing the nested directory structure")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add nested directory structure")
-			gitNoError(local, "push")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add nested directory structure")
+			local.Git("push")
 
 			// logger.Info("Getting current ref")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/main"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
 				Name: "refs/heads/main",
@@ -1517,7 +1517,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// logger.Info("Pulling latest changes")
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// logger.Info("Verifying entire directory structure was deleted")
 			_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
@@ -1559,15 +1559,15 @@ var _ = Describe("Writer Operations", func() {
 			// logger.Info("Creating a file to test error case")
 			fileContent := []byte("This is a file, not a directory")
 			local.CreateFile("testfile.txt", string(fileContent))
-			gitNoError(local, "add", "testfile.txt")
-			gitNoError(local, "commit", "-m", "Add test file")
-			gitNoError(local, "push")
+			local.Git("add", "testfile.txt")
+			local.Git("commit", "-m", "Add test file")
+			local.Git("push")
 
-			fileHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:testfile.txt"))
+			fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:testfile.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// logger.Info("Getting current ref")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/main"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
 				Name: "refs/heads/main",
@@ -1604,12 +1604,12 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("parent/subdir2/file2.txt", string(subdir2File))
 
 			By("Adding and committing the directory structure")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add parent with subdirectories")
-			gitNoError(local, "push")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add parent with subdirectories")
+			local.Git("push")
 
 			// logger.Info("Getting current ref")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/main"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
 				Name: "refs/heads/main",
@@ -1635,7 +1635,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// logger.Info("Pulling latest changes")
-			gitNoError(local, "pull")
+			local.Git("pull")
 
 			// logger.Info("Verifying subdir1 was deleted")
 			_, err = os.Stat(filepath.Join(local.Path, "parent/subdir1"))
@@ -1664,7 +1664,7 @@ var _ = Describe("Writer Operations", func() {
 				ctx := ctx
 
 				// logger.Info("Getting current ref")
-				currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 				Expect(err).NotTo(HaveOccurred())
 				ref := nanogit.Ref{
 					Name: "refs/heads/main",
@@ -1711,7 +1711,7 @@ var _ = Describe("Writer Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// logger.Info("Pulling and verifying")
-				gitNoError(local, "pull")
+				local.Git("pull")
 
 				// Verify directory structure
 				// logger.Info("Verifying directory structure")
@@ -1757,10 +1757,10 @@ var _ = Describe("Writer Operations", func() {
 
 				// Verify commit details
 				// logger.Info("Verifying commit details")
-				finalHash := gitNoError(local, "rev-parse", "HEAD")
+				finalHash := local.Git("rev-parse", "HEAD")
 				Expect(finalHash).To(Equal(commit.Hash.String()))
 
-				commitMsg := gitNoError(local, "log", "-1", "--pretty=%B")
+				commitMsg := local.Git("log", "-1", "--pretty=%B")
 				Expect(commitMsg).To(Equal("Add configuration and data files"))
 			})
 
@@ -1769,7 +1769,7 @@ var _ = Describe("Writer Operations", func() {
 				ctx := ctx
 
 				// logger.Info("Getting current ref")
-				currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 				Expect(err).NotTo(HaveOccurred())
 				ref := nanogit.Ref{
 					Name: "refs/heads/main",
@@ -1840,16 +1840,16 @@ var _ = Describe("Writer Operations", func() {
 
 				// Pull and verify
 				// logger.Info("Pulling changes")
-				gitNoError(local, "pull")
+				local.Git("pull")
 
 				// Verify final commit hash
 				// logger.Info("Verifying final commit hash")
-				finalHash := gitNoError(local, "rev-parse", "HEAD")
+				finalHash := local.Git("rev-parse", "HEAD")
 				Expect(finalHash).To(Equal(commit3.Hash.String()))
 
 				// Verify all commits exist in history
 				// logger.Info("Verifying commit history")
-				commitHistory := gitNoError(local, "log", "--oneline", "--format=%H %s")
+				commitHistory := local.Git("log", "--oneline", "--format=%H %s")
 				// logger.Info("Commit history", "history", commitHistory)
 
 				Expect(commitHistory).To(ContainSubstring(commit1.Hash.String()))
@@ -1916,13 +1916,13 @@ var _ = Describe("Writer Operations", func() {
 
 				// Verify individual commits show correct files
 				// logger.Info("Verifying files in individual commits")
-				commit1Files := strings.TrimSpace(gitNoError(local, "ls-tree", "--name-only", "-r", commit1.Hash.String()))
+				commit1Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit1.Hash.String()))
 				Expect(commit1Files).To(ContainSubstring("config/database.json"))
 				Expect(commit1Files).To(ContainSubstring("config/api.json"))
 				Expect(commit1Files).To(ContainSubstring("test.txt"))
 				Expect(commit1Files).NotTo(ContainSubstring("docs/README.md"))
 
-				commit2Files := strings.TrimSpace(gitNoError(local, "ls-tree", "--name-only", "-r", commit2.Hash.String()))
+				commit2Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit2.Hash.String()))
 				Expect(commit2Files).To(ContainSubstring("config/database.json"))
 				Expect(commit2Files).To(ContainSubstring("config/api.json"))
 				Expect(commit2Files).To(ContainSubstring("docs/README.md"))
@@ -1930,7 +1930,7 @@ var _ = Describe("Writer Operations", func() {
 				Expect(commit2Files).To(ContainSubstring("test.txt"))
 				Expect(commit2Files).NotTo(ContainSubstring("tests/data/users.json"))
 
-				commit3Files := strings.TrimSpace(gitNoError(local, "ls-tree", "--name-only", "-r", commit3.Hash.String()))
+				commit3Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit3.Hash.String()))
 				Expect(commit3Files).To(ContainSubstring("config/database.json"))
 				Expect(commit3Files).To(ContainSubstring("config/api.json"))
 				Expect(commit3Files).To(ContainSubstring("docs/README.md"))
@@ -1945,7 +1945,7 @@ var _ = Describe("Writer Operations", func() {
 				ctx := ctx
 
 				// logger.Info("Getting current ref")
-				currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 				Expect(err).NotTo(HaveOccurred())
 				ref := nanogit.Ref{
 					Name: "refs/heads/main",
@@ -1995,16 +1995,16 @@ var _ = Describe("Writer Operations", func() {
 
 				// Pull and verify
 				// logger.Info("Pulling changes")
-				gitNoError(local, "pull")
+				local.Git("pull")
 
 				// Verify final commit hash
 				// logger.Info("Verifying final commit hash")
-				finalHash := gitNoError(local, "rev-parse", "HEAD")
+				finalHash := local.Git("rev-parse", "HEAD")
 				Expect(finalHash).To(Equal(commit3.Hash.String()))
 
 				// Verify all three commits exist in history
 				// logger.Info("Verifying commit history")
-				commitHistory := gitNoError(local, "log", "--oneline", "--format=%H %s")
+				commitHistory := local.Git("log", "--oneline", "--format=%H %s")
 				// logger.Info("Commit history", "history", commitHistory)
 
 				// Should contain all three commits
@@ -2039,19 +2039,19 @@ var _ = Describe("Writer Operations", func() {
 
 				// Verify individual commits are reachable
 				// logger.Info("Verifying individual commits are reachable")
-				commit1Files := strings.TrimSpace(gitNoError(local, "ls-tree", "--name-only", commit1.Hash.String()))
+				commit1Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit1.Hash.String()))
 				Expect(commit1Files).To(ContainSubstring("file1.txt"))
 				Expect(commit1Files).To(ContainSubstring(initCommitFile))
 				Expect(commit1Files).NotTo(ContainSubstring("file2.txt"))
 				Expect(commit1Files).NotTo(ContainSubstring("file3.txt"))
 
-				commit2Files := strings.TrimSpace(gitNoError(local, "ls-tree", "--name-only", commit2.Hash.String()))
+				commit2Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit2.Hash.String()))
 				Expect(commit2Files).To(ContainSubstring("file1.txt"))
 				Expect(commit2Files).To(ContainSubstring("file2.txt"))
 				Expect(commit2Files).To(ContainSubstring(initCommitFile))
 				Expect(commit2Files).NotTo(ContainSubstring("file3.txt"))
 
-				commit3Files := strings.TrimSpace(gitNoError(local, "ls-tree", "--name-only", commit3.Hash.String()))
+				commit3Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit3.Hash.String()))
 				Expect(commit3Files).To(ContainSubstring("file1.txt"))
 				Expect(commit3Files).To(ContainSubstring("file2.txt"))
 				Expect(commit3Files).To(ContainSubstring("file3.txt"))
@@ -2156,19 +2156,19 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
 			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
 			local.CreateFile("file3.txt", "original file3")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial deep nested commit")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial deep nested commit")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
 			// Get the tree hashes before update
-			rootTreeHashBefore := gitNoError(local, "rev-parse", "HEAD^{tree}")
-			dir1TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir1")
-			subdir1TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir1/subdir1")
-			dir2TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir2")
-			subdir2TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir2/subdir2")
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2/subdir2")
 
 			// Update a deep file: dir1/subdir1/file1.txt
 			newContent := []byte("updated file1 content")
@@ -2184,14 +2184,14 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull changes to local repo to verify
-			gitNoError(local, "pull", "origin", "main")
+			local.Git("pull", "origin", "main")
 
 			// Get the tree hashes after update
-			rootTreeHashAfter := gitNoError(local, "rev-parse", "HEAD^{tree}")
-			dir1TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir1")
-			subdir1TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir1/subdir1")
-			dir2TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir2")
-			subdir2TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir2/subdir2")
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2/subdir2")
 
 			// Only the relevant branch (dir1/subdir1) should have changed
 			Expect(subdir1TreeHashAfter).NotTo(Equal(subdir1TreeHashBefore))
@@ -2224,19 +2224,19 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
 			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
 			local.CreateFile("file3.txt", "original file3")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with deep structure")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with deep structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
 			// Get the tree hashes before deletion
-			rootTreeHashBefore := gitNoError(local, "rev-parse", "HEAD^{tree}")
-			dir1TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir1")
-			subdir1TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir1/subdir1")
-			dir2TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir2")
-			subdir2TreeHashBefore := gitNoError(local, "rev-parse", "HEAD:dir2/subdir2")
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashBefore := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashBefore := local.Git("rev-parse", "HEAD:dir2/subdir2")
 
 			// Delete a deep file: dir1/subdir1/file1.txt
 			_, err := writer.DeleteBlob(ctx, "dir1/subdir1/file1.txt")
@@ -2251,14 +2251,14 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull changes to local repo to verify
-			gitNoError(local, "pull", "origin", "main")
+			local.Git("pull", "origin", "main")
 
 			// Get the tree hashes after deletion
-			rootTreeHashAfter := gitNoError(local, "rev-parse", "HEAD^{tree}")
-			dir1TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir1")
-			subdir1TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir1/subdir1")
-			dir2TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir2")
-			subdir2TreeHashAfter := gitNoError(local, "rev-parse", "HEAD:dir2/subdir2")
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1")
+			subdir1TreeHashAfter := local.Git("rev-parse", "HEAD:dir1/subdir1")
+			dir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2")
+			subdir2TreeHashAfter := local.Git("rev-parse", "HEAD:dir2/subdir2")
 
 			// Only the relevant branch (dir1/subdir1) should have changed
 			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
@@ -2290,19 +2290,19 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("dirA/dirB/fileA.txt", "original A")
 			local.CreateFile("dirC/dirD/fileC.txt", "original C")
 			local.CreateFile("rootfile.txt", "root content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial nested structure")
-			gitNoError(local, "branch", "-M", "main")
-			gitNoError(local, "push", "-u", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial nested structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "-u", "origin", "main", "--force")
 
 			writer, _ := createWriterFromHead(ctx, client, local)
 
 			// Get tree hashes before
-			rootTreeHashBefore := gitNoError(local, "rev-parse", "HEAD^{tree}")
-			dirAHashBefore := gitNoError(local, "rev-parse", "HEAD:dirA")
-			dirBHashBefore := gitNoError(local, "rev-parse", "HEAD:dirA/dirB")
-			dirCHashBefore := gitNoError(local, "rev-parse", "HEAD:dirC")
-			dirDHashBefore := gitNoError(local, "rev-parse", "HEAD:dirC/dirD")
+			rootTreeHashBefore := local.Git("rev-parse", "HEAD^{tree}")
+			dirAHashBefore := local.Git("rev-parse", "HEAD:dirA")
+			dirBHashBefore := local.Git("rev-parse", "HEAD:dirA/dirB")
+			dirCHashBefore := local.Git("rev-parse", "HEAD:dirC")
+			dirDHashBefore := local.Git("rev-parse", "HEAD:dirC/dirD")
 
 			// Create a new file deep in dirA/dirB
 			newFilePath := "dirA/dirB/newdeep.txt"
@@ -2320,17 +2320,17 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull changes to local repo to verify
-			gitNoError(local, "pull", "origin", "main")
+			local.Git("pull", "origin", "main")
 
-			commitHash := gitNoError(local, "rev-parse", "HEAD")
+			commitHash := local.Git("rev-parse", "HEAD")
 			Expect(commitHash).To(Equal(commit.Hash.String()))
 
 			// Get tree hashes after
-			rootTreeHashAfter := gitNoError(local, "rev-parse", "HEAD^{tree}")
-			dirAHashAfter := gitNoError(local, "rev-parse", "HEAD:dirA")
-			dirBHashAfter := gitNoError(local, "rev-parse", "HEAD:dirA/dirB")
-			dirCHashAfter := gitNoError(local, "rev-parse", "HEAD:dirC")
-			dirDHashAfter := gitNoError(local, "rev-parse", "HEAD:dirC/dirD")
+			rootTreeHashAfter := local.Git("rev-parse", "HEAD^{tree}")
+			dirAHashAfter := local.Git("rev-parse", "HEAD:dirA")
+			dirBHashAfter := local.Git("rev-parse", "HEAD:dirA/dirB")
+			dirCHashAfter := local.Git("rev-parse", "HEAD:dirC")
+			dirDHashAfter := local.Git("rev-parse", "HEAD:dirC/dirD")
 
 			// Only the relevant branch (dirA/dirB) and its parents should have changed
 			Expect(rootTreeHashAfter).NotTo(Equal(rootTreeHashBefore))
@@ -2372,12 +2372,12 @@ var _ = Describe("Writer Operations", func() {
 			// This is done by creating an orphan branch and force-updating main to point to it.
 			// This simulates an "empty" repository state for the main branch.
 			// Create an empty tree object, commit it, and update the main ref.
-			gitNoError(local, "checkout", "--orphan", "someorphan")
-			emptyTreeHash := gitNoError(local, "mktree") // No input = empty tree
-			commitHash := gitNoError(local, "commit-tree", emptyTreeHash, "-m", "Empty commit")
-			gitNoError(local, "update-ref", "refs/heads/main", commitHash)
-			gitNoError(local, "push", "origin", "main", "--force")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/main"))
+			local.Git("checkout", "--orphan", "someorphan")
+			emptyTreeHash := local.Git("mktree") // No input = empty tree
+			commitHash := local.Git("commit-tree", emptyTreeHash, "-m", "Empty commit")
+			local.Git("update-ref", "refs/heads/main", commitHash)
+			local.Git("push", "origin", "main", "--force")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -2434,16 +2434,16 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull and verify the file exists in the local repo
-			gitNoError(local, "pull", "origin", "main")
+			local.Git("pull", "origin", "main")
 			filePath := filepath.Join(local.Path, fileName)
 			readContent, err := os.ReadFile(filePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(readContent).To(Equal(content))
 
 			// The tree for the root should now contain the file
-			treeHash := gitNoError(local, "rev-parse", "HEAD^{tree}")
+			treeHash := local.Git("rev-parse", "HEAD^{tree}")
 			Expect(treeHash).NotTo(BeEmpty())
-			lsTree := gitNoError(local, "ls-tree", "--name-only", treeHash)
+			lsTree := local.Git("ls-tree", "--name-only", treeHash)
 			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
 		})
 	})
@@ -2458,13 +2458,13 @@ var _ = Describe("Writer Operations", func() {
 			var client nanogit.Client
 			client, _, local, _ = QuickSetup()
 			// Delete the branch on the remote and locally, then recreate it as an orphan (no history).
-			gitNoError(local, "checkout", "--orphan", "temp-empty-branch")
-			gitNoError(local, "rm", "-rf", ".")
-			gitNoError(local, "commit", "--allow-empty", "-m", "Empty commit")
-			gitNoError(local, "branch", "-D", "main")
-			gitNoError(local, "branch", "-m", "main")
-			gitNoError(local, "push", "origin", "--force", "--set-upstream", "main")
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/main"))
+			local.Git("checkout", "--orphan", "temp-empty-branch")
+			local.Git("rm", "-rf", ".")
+			local.Git("commit", "--allow-empty", "-m", "Empty commit")
+			local.Git("branch", "-D", "main")
+			local.Git("branch", "-m", "main")
+			local.Git("push", "origin", "--force", "--set-upstream", "main")
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -2521,16 +2521,16 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pull and verify the file exists in the local repo
-			gitNoError(local, "pull", "origin", "main")
+			local.Git("pull", "origin", "main")
 			filePath := filepath.Join(local.Path, fileName)
 			readContent, err := os.ReadFile(filePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(readContent).To(Equal(content))
 
 			// The tree for the root should now contain the file
-			treeHash := gitNoError(local, "rev-parse", "HEAD^{tree}")
+			treeHash := local.Git("rev-parse", "HEAD^{tree}")
 			Expect(treeHash).NotTo(BeEmpty())
-			lsTree := gitNoError(local, "ls-tree", "--name-only", treeHash)
+			lsTree := local.Git("ls-tree", "--name-only", treeHash)
 			Expect(strings.TrimSpace(lsTree)).To(Equal(fileName))
 		})
 	})
@@ -2574,13 +2574,13 @@ var _ = Describe("Writer Operations", func() {
 				local.CreateDirPath(filepath.Dir(filePath))
 				local.CreateFile(filePath, content)
 			}
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Create complex tree structure")
-			gitNoError(local, "branch", "-M", "robertoonboarding")
-			gitNoError(local, "push", "-u", "origin", "robertoonboarding", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Create complex tree structure")
+			local.Git("branch", "-M", "robertoonboarding")
+			local.Git("push", "-u", "origin", "robertoonboarding", "--force")
 
 			// Get current ref for the robertoonboarding branch
-			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "refs/heads/robertoonboarding"))
+			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/robertoonboarding"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -2631,7 +2631,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the file was created successfully
-			gitNoError(local, "pull", "origin", "robertoonboarding")
+			local.Git("pull", "origin", "robertoonboarding")
 
 			// Check that the new file exists
 			filePath := filepath.Join(local.Path, newFileName)
@@ -2640,7 +2640,7 @@ var _ = Describe("Writer Operations", func() {
 			Expect(content).To(Equal(newFileContent))
 
 			// Verify the commit was successful
-			latestHash := gitNoError(local, "rev-parse", "HEAD")
+			latestHash := local.Git("rev-parse", "HEAD")
 			Expect(latestHash).To(Equal(commit.Hash.String()))
 
 			// Verify all original files are still present
@@ -2650,7 +2650,7 @@ var _ = Describe("Writer Operations", func() {
 			}
 
 			// Verify the tree structure is correctly sorted by checking git fsck passes
-			fsckOutput := gitNoError(local, "fsck", "--full")
+			fsckOutput := local.Git("fsck", "--full")
 			Expect(fsckOutput).NotTo(ContainSubstring("treeNotSorted"))
 			Expect(fsckOutput).NotTo(ContainSubstring("not properly sorted"))
 		})

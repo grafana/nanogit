@@ -28,12 +28,12 @@ var _ = Describe("Blobs", func() {
 			By("Creating and committing test file")
 			testContent := []byte("test content")
 			local.CreateFile("blob.txt", string(testContent))
-			gitNoError(local, "add", "blob.txt")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "blob.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting blob hash")
-			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:blob.txt"))
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Testing GetBlob with valid hash")
@@ -68,13 +68,13 @@ var _ = Describe("Blobs", func() {
 			By("Creating and committing test file")
 			testContent := []byte("test content")
 			local.CreateFile("blob.txt", string(testContent))
-			gitNoError(local, "add", "blob.txt")
-			gitNoError(local, "commit", "-m", "Initial commit")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "blob.txt")
+			local.Git("commit", "-m", "Initial commit")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
-			rootHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
+			rootHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -87,7 +87,7 @@ var _ = Describe("Blobs", func() {
 			Expect(file.Content).To(Equal(testContent))
 
 			By("Verifying hash matches Git CLI")
-			fileHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:blob.txt"))
+			fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:blob.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(file.Hash).To(Equal(fileHash))
 		})
@@ -148,13 +148,13 @@ var _ = Describe("Blobs", func() {
 			local.CreateFile("dir2/file2.txt", "dir2 file content")
 
 			By("Adding and committing all files")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Initial commit with nested structure")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with nested structure")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
-			rootHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
+			rootHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -163,7 +163,7 @@ var _ = Describe("Blobs", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("root file content"))
 
-			expectedHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:root.txt"))
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:root.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(file.Hash).To(Equal(expectedHash))
 		})
@@ -173,7 +173,7 @@ var _ = Describe("Blobs", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("dir1 file content"))
 
-			expectedHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:dir1/file1.txt"))
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir1/file1.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(file.Hash).To(Equal(expectedHash))
 		})
@@ -183,7 +183,7 @@ var _ = Describe("Blobs", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("deeply nested content"))
 
-			expectedHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:dir1/subdir1/nested.txt"))
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir1/subdir1/nested.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(file.Hash).To(Equal(expectedHash))
 		})
@@ -193,7 +193,7 @@ var _ = Describe("Blobs", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(file.Content)).To(Equal("dir2 file content"))
 
-			expectedHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:dir2/file2.txt"))
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir2/file2.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(file.Hash).To(Equal(expectedHash))
 		})
@@ -226,7 +226,7 @@ var _ = Describe("Blobs", func() {
 				"//dir1/file1.txt",
 			}
 			expectedContent := "dir1 file content"
-			expectedHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:dir1/file1.txt"))
+			expectedHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:dir1/file1.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
 			for _, p := range paths {
@@ -266,12 +266,12 @@ var _ = Describe("Blobs", func() {
 
 			By("Creating and committing the large dashboard file")
 			local.CreateFile("xlarge-dashboard.json", string(dashboardContent))
-			gitNoError(local, "add", "xlarge-dashboard.json")
-			gitNoError(local, "commit", "-m", "Add xlarge dashboard for blob testing")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", "xlarge-dashboard.json")
+			local.Git("commit", "-m", "Add xlarge dashboard for blob testing")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting blob hash for the large file")
-			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:xlarge-dashboard.json"))
+			blobHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:xlarge-dashboard.json"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Testing GetBlob with large blob")
@@ -282,7 +282,7 @@ var _ = Describe("Blobs", func() {
 			Expect(len(blob.Content)).To(BeNumerically(">", 3000000), "Retrieved blob should maintain size")
 
 			By("Testing GetBlobByPath with large blob")
-			rootHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
+			rootHash, err := hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 
 			file, err := client.GetBlobByPath(ctx, rootHash, "xlarge-dashboard.json")

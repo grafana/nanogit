@@ -30,12 +30,12 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("docs/api.md", "# API Documentation")
 
 			By("Committing and pushing the files")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add multiple files")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add multiple files")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
-			commitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cloning the repository")
@@ -59,18 +59,18 @@ var _ = Describe("Clone operations", func() {
 		It("should clone using a specific commit hash", func() {
 			By("Setting up repository with multiple commits")
 			local.CreateFile("first.txt", "first commit")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "First commit")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "First commit")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the first commit hash")
-			firstHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			firstHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			local.CreateFile("second.txt", "second commit")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Second commit")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Second commit")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Cloning using the first commit hash")
 			tempDir := GinkgoT().TempDir()
@@ -102,13 +102,13 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("node_modules/package/index.js", "module.exports = {}")
 
 			By("Committing and pushing the files")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Create diverse structure")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Create diverse structure")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -188,13 +188,13 @@ var _ = Describe("Clone operations", func() {
 			}
 
 			By("Committing and pushing the files")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add 15 test files")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add 15 test files")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -308,11 +308,11 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("include/file1.txt", "included 1")
 			local.CreateFile("include/file2.txt", "included 2")
 			local.CreateFile("exclude/file3.txt", "excluded 3")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add files in different dirs")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add files in different dirs")
+			local.Git("push", "origin", "main", "--force")
 
-			newCommitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			newCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			tempDir := GinkgoT().TempDir()
@@ -342,11 +342,11 @@ var _ = Describe("Clone operations", func() {
 				local.CreateFile(filepath.Join(dir, filename), "Content "+string(rune('0'+i)))
 			}
 
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add 50 files")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add 50 files")
+			local.Git("push", "origin", "main", "--force")
 
-			largeCommitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			largeCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			tempDir := GinkgoT().TempDir()
@@ -379,13 +379,13 @@ var _ = Describe("Clone operations", func() {
 			}
 
 			By("Committing and pushing the files")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add 20 test files for concurrency")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add 20 test files for concurrency")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -482,11 +482,11 @@ var _ = Describe("Clone operations", func() {
 			local.CreateFile("include/file2.txt", "included 2")
 			local.CreateFile("include/file3.txt", "included 3")
 			local.CreateFile("exclude/file4.txt", "excluded 4")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Add more files")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add more files")
+			local.Git("push", "origin", "main", "--force")
 
-			newCommitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			newCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			tempDir := GinkgoT().TempDir()
@@ -536,11 +536,11 @@ var _ = Describe("Clone operations", func() {
 
 		It("should handle filtering that results in no files", func() {
 			local.CreateFile("test.txt", "content")
-			gitNoError(local, "add", ".")
-			gitNoError(local, "commit", "-m", "Test commit")
-			gitNoError(local, "push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Test commit")
+			local.Git("push", "origin", "main", "--force")
 
-			commitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
+			commitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			tempDir := GinkgoT().TempDir()
