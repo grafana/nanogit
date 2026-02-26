@@ -73,6 +73,11 @@ func (r *RemoteRepo) AuthURL() string {
 	return r.RemoteRepository.AuthURL
 }
 
+// RepoName returns the repository name (for backward compatibility)
+func (r *RemoteRepo) RepoName() string {
+	return r.RemoteRepository.Name
+}
+
 // GitServer wraps gittest.Server to add backward-compatible methods
 type GitServer struct {
 	*gittest.Server
