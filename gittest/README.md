@@ -306,25 +306,6 @@ server, err := gittest.NewServer(ctx)
 defer server.Cleanup()
 ```
 
-## Migration from Internal Test Utilities
-
-If you're migrating from nanogit's internal `tests/` utilities:
-
-| Old (tests/) | New (gittest) |
-|--------------|---------------|
-| `GitServer` | `gittest.Server` |
-| `LocalGitRepo` | `gittest.LocalRepo` |
-| `RemoteRepo` | `gittest.Repo` |
-| `NewGitServer(logger)` | `gittest.NewServer(ctx, gittest.WithLogger(logger))` |
-| `NewLocalGitRepo(logger)` | `gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))` |
-| `TestLogger` | `gittest.NewWriterLogger(GinkgoWriter)` |
-
-**Key differences:**
-- All functions now require `context.Context` as the first parameter
-- Errors are returned instead of using `Expect()` assertions
-- Cleanup is manual via `Cleanup()` methods or cleanup functions
-- Logger is optional (defaults to `NoopLogger()`)
-
 ## Contributing
 
 Contributions are welcome! Please see the main [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
