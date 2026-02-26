@@ -14,7 +14,7 @@ var _ = Describe("References", func() {
 	Context("ListRefs operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalGitRepo
+			local       *LocalRepository
 			firstCommit hash.Hash
 		)
 
@@ -56,7 +56,7 @@ var _ = Describe("References", func() {
 	Context("GetRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalGitRepo
+			local       *LocalRepository
 			firstCommit hash.Hash
 		)
 
@@ -128,7 +128,7 @@ var _ = Describe("References", func() {
 	Context("CreateRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalGitRepo
+			local       *LocalRepository
 			firstCommit hash.Hash
 		)
 
@@ -173,7 +173,7 @@ var _ = Describe("References", func() {
 	Context("UpdateRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalGitRepo
+			local       *LocalRepository
 			firstCommit hash.Hash
 		)
 
@@ -218,7 +218,7 @@ var _ = Describe("References", func() {
 	Context("DeleteRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalGitRepo
+			local       *LocalRepository
 			firstCommit hash.Hash
 		)
 
@@ -273,7 +273,7 @@ var _ = Describe("References", func() {
 	Context("Integration workflow", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalGitRepo
+			local       *LocalRepository
 			firstCommit hash.Hash
 		)
 

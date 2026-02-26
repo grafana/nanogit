@@ -17,7 +17,7 @@ var _ = Describe("Commits", func() {
 	Context("GetCommit operations", func() {
 		var (
 			client               nanogit.Client
-			local                *LocalGitRepo
+			local                *LocalRepository
 			user                 *User
 			initialCommitHash    hash.Hash
 			modifyFileCommitHash hash.Hash
@@ -122,7 +122,7 @@ var _ = Describe("Commits", func() {
 	Context("CompareCommits operations", func() {
 		var (
 			client             nanogit.Client
-			local              *LocalGitRepo
+			local              *LocalRepository
 			initialCommitHash  hash.Hash
 			modifiedCommitHash hash.Hash
 			renamedCommitHash  hash.Hash
@@ -239,7 +239,7 @@ var _ = Describe("Commits", func() {
 		Context("basic functionality", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalGitRepo
+				local    *LocalRepository
 				headHash hash.Hash
 			)
 
@@ -288,7 +288,7 @@ var _ = Describe("Commits", func() {
 		Context("pagination", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalGitRepo
+				local    *LocalRepository
 				headHash hash.Hash
 			)
 
@@ -402,7 +402,7 @@ var _ = Describe("Commits", func() {
 		Context("path filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalGitRepo
+				local    *LocalRepository
 				headHash hash.Hash
 			)
 
@@ -491,7 +491,7 @@ var _ = Describe("Commits", func() {
 		Context("time filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalGitRepo
+				local    *LocalRepository
 				headHash hash.Hash
 				midTime  time.Time
 			)

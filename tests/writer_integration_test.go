@@ -32,7 +32,7 @@ var _ = Describe("Writer Operations", func() {
 	)
 
 	// Helper to verify author and committer in commit
-	verifyCommitAuthorship := func(local *LocalGitRepo) {
+	verifyCommitAuthorship := func(local *LocalRepository) {
 		commitAuthor := local.Git("log", "-1", "--pretty=%an <%ae>")
 		Expect(strings.TrimSpace(commitAuthor)).To(Equal("Test Author <test@example.com>"))
 
@@ -41,7 +41,7 @@ var _ = Describe("Writer Operations", func() {
 	}
 
 	// Helper to create writer from current HEAD
-	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
+	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *LocalRepository) (nanogit.StagedWriter, *hash.Hash) {
 		currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 		Expect(err).NotTo(HaveOccurred())
 
@@ -2362,7 +2362,7 @@ var _ = Describe("Writer Operations", func() {
 	Describe("Empty tree repository", func() {
 		var (
 			writer nanogit.StagedWriter
-			local  *LocalGitRepo
+			local  *LocalRepository
 		)
 
 		BeforeEach(func() {
@@ -2451,7 +2451,7 @@ var _ = Describe("Writer Operations", func() {
 	Describe("Empty branch repository", func() {
 		var (
 			writer nanogit.StagedWriter
-			local  *LocalGitRepo
+			local  *LocalRepository
 		)
 
 		BeforeEach(func() {

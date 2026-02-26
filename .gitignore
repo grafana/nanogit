@@ -8,6 +8,7 @@ node_modules
 yarn.lock
 reports
 perf.test
+*.test
 bin/
 go.work.sum
 

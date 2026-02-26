@@ -190,7 +190,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			refs, err := client.ListRefs(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(refs)).To(BeNumerically(">", 0))
-			logger.Info("Repository remains accessible after validation error", "refs_count", len(refs), "repo_name", remote.RepoName)
+			logger.Info("Repository remains accessible after validation error", "refs_count", len(refs), "repo_name", remote.RepoName())
 		})
 
 		It("should handle protocol errors during concurrent pushes", func() {

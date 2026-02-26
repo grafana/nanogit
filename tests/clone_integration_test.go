@@ -15,7 +15,7 @@ import (
 var _ = Describe("Clone operations", func() {
 	var (
 		client nanogit.Client
-		local  *LocalGitRepo
+		local  *LocalRepository
 	)
 
 	BeforeEach(func() {

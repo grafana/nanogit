@@ -326,9 +326,21 @@ For detailed information about storage architecture, writing modes, and custom i
 
 ## Testing
 
+### Unit Testing with Mocks
+
 nanogit includes generated mocks for easy unit testing. The mocks are generated using [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) and provide comprehensive test doubles for both the `Client` and `StagedWriter` interfaces.
 
 For detailed testing examples and instructions, see [CONTRIBUTING.md](CONTRIBUTING.md#testing-with-mocks). You can also find complete working examples in [mocks/example_test.go](mocks/example_test.go).
+
+### Integration Testing with gittest
+
+The `gittest` package provides utilities for testing Git operations with a containerized Gitea server:
+
+```bash
+go get github.com/grafana/nanogit/gittest@latest
+```
+
+See [gittest README](gittest/README.md) for API documentation and examples.
 
 ## Contributing
 

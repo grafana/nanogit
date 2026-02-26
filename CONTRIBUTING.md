@@ -440,6 +440,16 @@ make generate
 
 The generated mocks are located in the `mocks/` directory and provide test doubles for both `Client` and `StagedWriter` interfaces. See [mocks/example_test.go](mocks/example_test.go) for complete usage examples.
 
+### Testing with gittest
+
+The `gittest` package provides integration testing utilities with a containerized Gitea server:
+
+```bash
+go get github.com/grafana/nanogit/gittest@latest
+```
+
+For documentation and examples, see [gittest README](gittest/README.md).
+
 ### Code Style
 
 * Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)

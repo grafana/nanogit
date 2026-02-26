@@ -6,6 +6,7 @@ import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/gittest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -15,7 +16,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree operations", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 			getHash    func(string) hash.Hash
 		)
@@ -142,7 +143,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree complex structure", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 		)
 
@@ -217,7 +218,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTree operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalGitRepo
+			local    *LocalRepository
 			treeHash hash.Hash
 		)
 
@@ -275,7 +276,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTreeByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalGitRepo
+			local    *LocalRepository
 			treeHash hash.Hash
 			getHash  func(string) hash.Hash
 		)
@@ -401,7 +402,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree with fallback fetch", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 		)
 
@@ -489,7 +490,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree with submodule", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 		)
 
@@ -500,10 +501,14 @@ var _ = Describe("Trees", func() {
 			client, remote, local, user = QuickSetup()
 
 			By("Creating a second repository to use as a submodule source")
-			subRemote := gitServer.CreateRepo("subrepo", user)
+			subRepo, err := gitServer.CreateRepo(ctx, "subrepo", user)
+			Expect(err).NotTo(HaveOccurred())
+			subRemote := &RemoteRepo{RemoteRepository: subRepo}
 
 			By("Setting up the submodule source repository with content")
-			subLocal := NewLocalGitRepo(logger)
+			subLocalRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			Expect(err).NotTo(HaveOccurred())
+			subLocal := &LocalRepository{LocalRepo: subLocalRepo}
 			subLocal.Git("config", "user.name", user.Username)
 			subLocal.Git("config", "user.email", user.Email)
 			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
@@ -530,8 +535,6 @@ var _ = Describe("Trees", func() {
 			local.Git("branch", "-M", "main")
 			local.Git("push", "origin", "main", "--force")
 
-			By("Getting the commit hash")
-			var err error
 			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -567,7 +570,7 @@ var _ = Describe("Trees", func() {
 	Context("CompareCommits with submodule", func() {
 		var (
 			client              nanogit.Client
-			local               *LocalGitRepo
+			local               *LocalRepository
 			beforeSubmoduleHash hash.Hash
 			afterSubmoduleHash  hash.Hash
 		)
@@ -587,8 +590,13 @@ var _ = Describe("Trees", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a second repository to use as a submodule source")
-			subRemote := gitServer.CreateRepo("subrepo-compare", user)
-			subLocal := NewLocalGitRepo(logger)
+			subRepo, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
+			Expect(err).NotTo(HaveOccurred())
+			subRemote := &RemoteRepo{RemoteRepository: subRepo}
+
+			subLocalRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			Expect(err).NotTo(HaveOccurred())
+			subLocal := &LocalRepository{LocalRepo: subLocalRepo}
 			subLocal.Git("config", "user.name", user.Username)
 			subLocal.Git("config", "user.email", user.Email)
 			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())

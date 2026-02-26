@@ -6,6 +6,11 @@ export default defineConfig({
   description: "Lightweight, HTTPS-only Git implementation for cloud-native environments",
   base: '/nanogit/',
 
+  // Allow links to gittest package outside docs directory
+  ignoreDeadLinks: [
+    /gittest\/README/
+  ],
+
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: '/nanogit/logo.png' }],
     ['meta', { property: 'og:type', content: 'website' }],

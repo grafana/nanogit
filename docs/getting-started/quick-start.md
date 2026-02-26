@@ -247,6 +247,93 @@ ctx = retry.ToContext(ctx, retrier)
 
 Learn more about the [Retry Mechanism](../architecture/retry.md).
 
+## Testing
+
+### Unit Testing with Mocks
+
+nanogit provides generated mocks for easy unit testing:
+
+```go
+import (
+    "testing"
+
+    "github.com/grafana/nanogit/mocks"
+    "github.com/stretchr/testify/mock"
+)
+
+func TestMyService(t *testing.T) {
+    // Create a mock client
+    mockClient := &mocks.FakeClient{}
+
+    // Set up expectations
+    mockClient.GetRefReturns(&nanogit.Ref{
+        Name: "refs/heads/main",
+        Hash: hash.FromString("abc123"),
+    }, nil)
+
+    // Use the mock in your tests
+    service := NewMyService(mockClient)
+    // ... test your service
+}
+```
+
+### Integration Testing with gittest
+
+For integration tests with a real Git server:
+
+```bash
+go get github.com/grafana/nanogit/gittest@latest
+```
+
+```go
+import "github.com/grafana/nanogit/gittest"
+
+func TestGitOperations(t *testing.T) {
+    ctx := context.Background()
+
+    // Create a Git server
+    server, err := gittest.NewServer(ctx)
+    require.NoError(t, err)
+    defer server.Cleanup()
+
+    // Create user and repository
+    user, err := server.CreateUser(ctx)
+    require.NoError(t, err)
+
+    repo, err := server.CreateRepo(ctx, "myrepo", user)
+    require.NoError(t, err)
+
+    // Create local repository
+    local, err := gittest.NewLocalRepo(ctx)
+    require.NoError(t, err)
+    defer local.Cleanup()
+
+    // Initialize with remote
+    client, err := local.QuickInit(user, repo.AuthURL)
+    require.NoError(t, err)
+
+    // Test your Git operations
+    err = local.CreateFile("test.txt", "content")
+    require.NoError(t, err)
+
+    _, err = local.Git("add", "test.txt")
+    require.NoError(t, err)
+
+    _, err = local.Git("commit", "-m", "Test commit")
+    require.NoError(t, err)
+
+    _, err = local.Git("push", "origin", "main")
+    require.NoError(t, err)
+
+    // Verify with nanogit client
+    ref, err := client.GetRef(ctx, "refs/heads/main")
+    require.NoError(t, err)
+    require.NotNil(t, ref)
+}
+```
+
+Learn more in the [Testing Guide](../testing-guide.md) and [gittest documentation](https://pkg.go.dev/github.com/grafana/nanogit/gittest).
+
 ## Next Steps
 
 - **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API reference with all methods
