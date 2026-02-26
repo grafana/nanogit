@@ -58,7 +58,7 @@ func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	user, err := gitServer.CreateUser(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
-	repo, err := gitServer.CreateRepo(ctx, generateRepoName(), user)
+	repo, err := gitServer.CreateRepo(ctx, gittest.RandomRepoName(), user)
 	Expect(err).NotTo(HaveOccurred())
 
 	localRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
@@ -78,8 +78,4 @@ func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	return client, remoteRepo, local, user
 }
 
-// generateRepoName generates a unique repository name
-func generateRepoName() string {
-	return gittest.RandomRepoName()
-}
 
