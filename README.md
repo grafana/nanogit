@@ -326,9 +326,51 @@ For detailed information about storage architecture, writing modes, and custom i
 
 ## Testing
 
+### Unit Testing with Mocks
+
 nanogit includes generated mocks for easy unit testing. The mocks are generated using [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) and provide comprehensive test doubles for both the `Client` and `StagedWriter` interfaces.
 
 For detailed testing examples and instructions, see [CONTRIBUTING.md](CONTRIBUTING.md#testing-with-mocks). You can also find complete working examples in [mocks/example_test.go](mocks/example_test.go).
+
+### Integration Testing with testutil
+
+The `testutil` package provides a complete testing environment for Git operations:
+
+```bash
+go get github.com/grafana/nanogit/testutil@latest
+```
+
+**Quick example:**
+
+```go
+import "github.com/grafana/nanogit/testutil"
+
+func TestGitOperations(t *testing.T) {
+    ctx := context.Background()
+
+    // Get a complete test environment in one call
+    client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx)
+    require.NoError(t, err)
+    defer cleanup()
+
+    // Test your Git operations with:
+    // - client: nanogit.Client for remote operations
+    // - repo: Repository metadata and URLs
+    // - local: Local git repository wrapper
+    // - user: Test user credentials
+}
+```
+
+**Features:**
+- 🐳 Containerized Gitea server (via testcontainers)
+- 📁 Local repository helpers
+- 🔧 Works with standard `testing` and Ginkgo
+- 🧹 Automatic cleanup
+
+For comprehensive documentation, see:
+- [Testing Guide](docs/testing-guide.md) - Complete guide with patterns and best practices
+- [testutil README](testutil/README.md) - Detailed API reference
+- [testutil Examples](testutil/examples/) - Working code examples
 
 ## Contributing
 

@@ -1,0 +1,369 @@
+# nanogit/testutil
+
+Testing utilities for nanogit-based applications. This package provides a lightweight Git server (using Gitea in testcontainers) and helper functions to quickly set up test environments for Git operations.
+
+## Features
+
+- 🚀 **Quick Setup**: Get a complete test environment (server + user + repo + local clone) in one call
+- 🐳 **Containerized**: Uses testcontainers for isolated, reproducible tests
+- 🔧 **Flexible**: Works with standard `testing` package and Ginkgo
+- 🧹 **Clean**: Automatic cleanup with defer-friendly patterns
+- 📝 **Logging**: Optional structured logging with color support
+
+## Installation
+
+```bash
+go get github.com/grafana/nanogit/testutil@latest
+```
+
+**Prerequisites:**
+- Docker must be running (required by testcontainers)
+- Go 1.24 or later
+
+## Quick Start
+
+### Complete Setup (Recommended)
+
+For most test cases, use `QuickSetup` to get everything in one call:
+
+```go
+package mytest
+
+import (
+	"context"
+	"testing"
+
+	"github.com/grafana/nanogit/testutil"
+	"github.com/stretchr/testify/require"
+)
+
+func TestGitOperations(t *testing.T) {
+	ctx := context.Background()
+
+	// Get everything you need in one call
+	client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx,
+		testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
+	)
+	require.NoError(t, err)
+	defer cleanup()
+
+	// Now you can:
+	// - Use client (nanogit.Client) to interact with the remote repo
+	// - Use repo (*testutil.Repo) for URLs and metadata
+	// - Use local (*testutil.LocalRepo) for local Git operations
+	// - Use user (*testutil.User) for credentials
+
+	// Example: Create and push a file
+	err = local.CreateFile("hello.txt", "Hello, World!")
+	require.NoError(t, err)
+
+	_, err = local.Git("add", "hello.txt")
+	require.NoError(t, err)
+
+	_, err = local.Git("commit", "-m", "Add hello.txt")
+	require.NoError(t, err)
+
+	_, err = local.Git("push", "origin", "main")
+	require.NoError(t, err)
+
+	// Verify with nanogit client
+	ref, err := client.GetRef(ctx, "refs/heads/main")
+	require.NoError(t, err)
+	require.NotNil(t, ref)
+}
+```
+
+### Manual Setup (Advanced)
+
+For more control, create components individually:
+
+```go
+func TestManualSetup(t *testing.T) {
+	ctx := context.Background()
+
+	// Create server
+	server, cleanup, err := testutil.QuickServer(ctx,
+		testutil.WithLogger(testutil.NewTestLogger(t)),
+	)
+	require.NoError(t, err)
+	defer cleanup()
+
+	// Create user
+	user, err := server.CreateUser(ctx)
+	require.NoError(t, err)
+
+	// Create repository
+	repo, err := server.CreateRepo(ctx, "myrepo", user)
+	require.NoError(t, err)
+
+	// Create local repository
+	local, err := testutil.NewLocalRepo(ctx,
+		testutil.WithRepoLogger(testutil.NewTestLogger(t)),
+	)
+	require.NoError(t, err)
+	defer local.Cleanup()
+
+	// Use repo.AuthURL or repo.CloneURL() for authenticated access
+	t.Logf("Repository URL: %s", repo.AuthURL)
+}
+```
+
+## API Reference
+
+### Server
+
+The `Server` type represents a Gitea server running in a container.
+
+```go
+// Create a new server
+server, err := testutil.NewServer(ctx, opts...)
+
+// Or use QuickServer for automatic cleanup
+server, cleanup, err := testutil.QuickServer(ctx, opts...)
+defer cleanup()
+
+// Create a user
+user, err := server.CreateUser(ctx)
+
+// Create a repository
+repo, err := server.CreateRepo(ctx, "myrepo", user)
+
+// Generate access token
+token, err := server.GenerateUserToken(ctx, user.Username)
+
+// Get server URL
+url := server.URL()
+
+// Cleanup (if not using QuickServer)
+err = server.Cleanup()
+```
+
+**Server Options:**
+- `WithLogger(logger)` - Set custom logger
+- `WithTimeout(duration)` - Set container startup timeout
+- `WithGiteaImage(image)` - Set Docker image name
+- `WithGiteaVersion(version)` - Set Gitea version tag
+
+### LocalRepo
+
+The `LocalRepo` type wraps a local Git repository in a temporary directory.
+
+```go
+// Create a new local repository
+local, err := testutil.NewLocalRepo(ctx, opts...)
+defer local.Cleanup()
+
+// File operations
+err = local.CreateFile("path/to/file.txt", "content")
+err = local.UpdateFile("path/to/file.txt", "new content")
+err = local.DeleteFile("path/to/file.txt")
+err = local.CreateDirPath("path/to/dir")
+
+// Git operations
+output, err := local.Git("add", ".")
+output, err := local.Git("commit", "-m", "message")
+output, err := local.Git("push", "origin", "main")
+
+// Quick initialization (config + initial commit + push)
+client, fileName, err := local.QuickInit(user, repo.AuthURL)
+
+// Debug helper
+local.LogContents() // Prints directory tree
+```
+
+**LocalRepo Options:**
+- `WithRepoLogger(logger)` - Set custom logger
+- `WithTempDir(dir)` - Set parent temp directory
+
+### Types
+
+#### User
+
+```go
+type User struct {
+	Username string
+	Email    string
+	Password string
+	Token    string // Generated access token (if applicable)
+}
+```
+
+#### Repo
+
+```go
+type Repo struct {
+	Name     string
+	Owner    string
+	URL      string // Public URL (no auth)
+	AuthURL  string // Authenticated URL (with credentials)
+	User     *User
+}
+
+// Get clone URL (same as AuthURL)
+url := repo.CloneURL()
+
+// Get public URL
+url := repo.PublicURL()
+```
+
+### Logging
+
+The `Logger` interface is minimal and flexible:
+
+```go
+type Logger interface {
+	Logf(format string, args ...any)
+}
+```
+
+**Built-in Loggers:**
+
+```go
+// No output (default)
+logger := testutil.NoopLogger()
+
+// Standard testing.T logger
+logger := testutil.NewTestLogger(t)
+
+// Writer-based (e.g., for Ginkgo)
+logger := testutil.NewWriterLogger(ginkgo.GinkgoWriter)
+
+// Colored output with emojis
+logger := testutil.NewColoredLogger(os.Stdout)
+
+// Structured logging (nanogit.Logger-compatible)
+logger := testutil.NewStructuredLogger(testutil.NewTestLogger(t))
+```
+
+## Usage with Ginkgo
+
+The package works seamlessly with Ginkgo:
+
+```go
+package mytest_test
+
+import (
+	"context"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/grafana/nanogit/testutil"
+)
+
+var _ = Describe("Git Operations", func() {
+	var (
+		ctx     context.Context
+		client  nanogit.Client
+		repo    *testutil.Repo
+		local   *testutil.LocalRepo
+		user    *testutil.User
+		cleanup func()
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		var err error
+		client, repo, local, user, cleanup, err = testutil.QuickSetup(ctx,
+			testutil.WithQuickSetupLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	It("should clone and push", func() {
+		// Your test code here
+		Expect(client).NotTo(BeNil())
+		Expect(repo).NotTo(BeNil())
+	})
+})
+```
+
+## Examples
+
+See the [examples/](examples/) directory for complete working examples:
+
+- [`basic_test.go`](examples/basic_test.go) - Standard `testing` package example
+- [`ginkgo_test.go`](examples/ginkgo_test.go) - Ginkgo integration example
+
+Run examples:
+
+```bash
+cd testutil/examples
+go test -v
+```
+
+## Troubleshooting
+
+### Docker not running
+
+```
+Error: Cannot connect to the Docker daemon
+```
+
+**Solution:** Start Docker Desktop or your Docker daemon.
+
+### Port conflicts
+
+```
+Error: Bind for 0.0.0.0:3000 failed: port is already allocated
+```
+
+**Solution:** Testcontainers automatically assigns random ports, but if you see this, ensure no other Gitea instances are running.
+
+### Timeout on container startup
+
+```
+Error: container did not start within timeout
+```
+
+**Solution:** Increase the timeout:
+
+```go
+server, err := testutil.NewServer(ctx,
+	testutil.WithTimeout(60 * time.Second),
+)
+```
+
+### Tests hang on cleanup
+
+**Solution:** Ensure you're using contexts properly and calling cleanup functions:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+defer cancel()
+
+server, cleanup, err := testutil.QuickServer(ctx)
+defer cleanup()
+```
+
+## Migration from Internal Test Utilities
+
+If you're migrating from nanogit's internal `tests/` utilities:
+
+| Old (tests/) | New (testutil) |
+|--------------|----------------|
+| `GitServer` | `testutil.Server` |
+| `LocalGitRepo` | `testutil.LocalRepo` |
+| `RemoteRepo` | `testutil.Repo` |
+| `NewGitServer(logger)` | `testutil.NewServer(ctx, testutil.WithLogger(logger))` |
+| `NewLocalGitRepo(logger)` | `testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(logger))` |
+| `TestLogger` | `testutil.NewWriterLogger(GinkgoWriter)` |
+
+**Key differences:**
+- All functions now require `context.Context` as the first parameter
+- Errors are returned instead of using `Expect()` assertions
+- Cleanup is manual via `Cleanup()` methods or cleanup functions
+- Logger is optional (defaults to `NoopLogger()`)
+
+## Contributing
+
+Contributions are welcome! Please see the main [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+
+## License
+
+This package is part of nanogit and shares the same license. See [LICENSE](../LICENSE) for details.
