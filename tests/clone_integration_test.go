@@ -25,9 +25,9 @@ var _ = Describe("Clone operations", func() {
 	Context("Basic clone operations", func() {
 		It("should clone a repository and write files to filesystem", func() {
 			By("Setting up a test repository with multiple files")
-			_ = local.CreateFile("README.md", "# Test Repository")
-			_ = local.CreateFile("src/main.go", "package main\n\nfunc main() {}")
-			_ = local.CreateFile("docs/api.md", "# API Documentation")
+			local.CreateFile("README.md", "# Test Repository")
+			local.CreateFile("src/main.go", "package main\n\nfunc main() {}")
+			local.CreateFile("docs/api.md", "# API Documentation")
 
 			By("Committing and pushing the files")
 			gitNoError(local, "add", ".")
@@ -58,7 +58,7 @@ var _ = Describe("Clone operations", func() {
 
 		It("should clone using a specific commit hash", func() {
 			By("Setting up repository with multiple commits")
-			_ = local.CreateFile("first.txt", "first commit")
+			local.CreateFile("first.txt", "first commit")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "First commit")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -67,7 +67,7 @@ var _ = Describe("Clone operations", func() {
 			firstHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
-			_ = local.CreateFile("second.txt", "second commit")
+			local.CreateFile("second.txt", "second commit")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Second commit")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -94,12 +94,12 @@ var _ = Describe("Clone operations", func() {
 
 		BeforeEach(func() {
 			By("Creating a repository with diverse file structure")
-			_ = local.CreateFile("README.md", "# Main readme")
-			_ = local.CreateFile("src/main.go", "package main")
-			_ = local.CreateFile("src/utils/helper.go", "package utils")
-			_ = local.CreateFile("docs/README.md", "# Documentation")
-			_ = local.CreateFile("tests/main_test.go", "package main_test")
-			_ = local.CreateFile("node_modules/package/index.js", "module.exports = {}")
+			local.CreateFile("README.md", "# Main readme")
+			local.CreateFile("src/main.go", "package main")
+			local.CreateFile("src/utils/helper.go", "package utils")
+			local.CreateFile("docs/README.md", "# Documentation")
+			local.CreateFile("tests/main_test.go", "package main_test")
+			local.CreateFile("node_modules/package/index.js", "module.exports = {}")
 
 			By("Committing and pushing the files")
 			gitNoError(local, "add", ".")
@@ -183,7 +183,7 @@ var _ = Describe("Clone operations", func() {
 			By("Creating a repository with multiple files for batch testing")
 			// Create 15 files to test batching behavior
 			for i := 1; i <= 15; i++ {
-				_ = local.CreateFile(filepath.Join("files", "file"+string(rune('0'+i/10))+string(rune('0'+i%10))+".txt"),
+				local.CreateFile(filepath.Join("files", "file"+string(rune('0'+i/10))+string(rune('0'+i%10))+".txt"),
 					"Content of file "+string(rune('0'+i/10))+string(rune('0'+i%10)))
 			}
 
@@ -305,9 +305,9 @@ var _ = Describe("Clone operations", func() {
 
 		It("should work with batch fetching and path filtering combined", func() {
 			By("Creating files in different directories")
-			_ = local.CreateFile("include/file1.txt", "included 1")
-			_ = local.CreateFile("include/file2.txt", "included 2")
-			_ = local.CreateFile("exclude/file3.txt", "excluded 3")
+			local.CreateFile("include/file1.txt", "included 1")
+			local.CreateFile("include/file2.txt", "included 2")
+			local.CreateFile("exclude/file3.txt", "excluded 3")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Add files in different dirs")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -339,7 +339,7 @@ var _ = Describe("Clone operations", func() {
 			for i := 1; i <= 50; i++ {
 				dir := "dir" + string(rune('0'+i/10))
 				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
-				_ = local.CreateFile(filepath.Join(dir, filename), "Content "+string(rune('0'+i)))
+				local.CreateFile(filepath.Join(dir, filename), "Content "+string(rune('0'+i)))
 			}
 
 			gitNoError(local, "add", ".")
@@ -374,7 +374,7 @@ var _ = Describe("Clone operations", func() {
 			By("Creating a repository with multiple files for concurrency testing")
 			// Create 20 files to test concurrent fetching
 			for i := 1; i <= 20; i++ {
-				_ = local.CreateFile(filepath.Join("concurrent", "file"+fmt.Sprintf("%02d", i)+".txt"),
+				local.CreateFile(filepath.Join("concurrent", "file"+fmt.Sprintf("%02d", i)+".txt"),
 					"Content of file "+fmt.Sprintf("%02d", i))
 			}
 
@@ -478,10 +478,10 @@ var _ = Describe("Clone operations", func() {
 
 		It("should work with concurrency and path filtering combined", func() {
 			By("Creating files in different directories")
-			_ = local.CreateFile("include/file1.txt", "included 1")
-			_ = local.CreateFile("include/file2.txt", "included 2")
-			_ = local.CreateFile("include/file3.txt", "included 3")
-			_ = local.CreateFile("exclude/file4.txt", "excluded 4")
+			local.CreateFile("include/file1.txt", "included 1")
+			local.CreateFile("include/file2.txt", "included 2")
+			local.CreateFile("include/file3.txt", "included 3")
+			local.CreateFile("exclude/file4.txt", "excluded 4")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Add more files")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -535,7 +535,7 @@ var _ = Describe("Clone operations", func() {
 		})
 
 		It("should handle filtering that results in no files", func() {
-			_ = local.CreateFile("test.txt", "content")
+			local.CreateFile("test.txt", "content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Test commit")
 			gitNoError(local, "push", "origin", "main", "--force")

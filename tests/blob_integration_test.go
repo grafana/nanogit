@@ -27,7 +27,7 @@ var _ = Describe("Blobs", func() {
 		It("should get blob with valid hash", func() {
 			By("Creating and committing test file")
 			testContent := []byte("test content")
-			_ = local.CreateFile("blob.txt", string(testContent))
+			local.CreateFile("blob.txt", string(testContent))
 			gitNoError(local, "add", "blob.txt")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -67,7 +67,7 @@ var _ = Describe("Blobs", func() {
 
 			By("Creating and committing test file")
 			testContent := []byte("test content")
-			_ = local.CreateFile("blob.txt", string(testContent))
+			local.CreateFile("blob.txt", string(testContent))
 			gitNoError(local, "add", "blob.txt")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -137,15 +137,15 @@ var _ = Describe("Blobs", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Creating nested directory structure with files")
-			_ = local.CreateDirPath("dir1/subdir1")
-			_ = local.CreateDirPath("dir1/subdir2")
-			_ = local.CreateDirPath("dir2")
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir1/subdir2")
+			local.CreateDirPath("dir2")
 
 			// Create files at various levels
-			_ = local.CreateFile("root.txt", "root file content")
-			_ = local.CreateFile("dir1/file1.txt", "dir1 file content")
-			_ = local.CreateFile("dir1/subdir1/nested.txt", "deeply nested content")
-			_ = local.CreateFile("dir2/file2.txt", "dir2 file content")
+			local.CreateFile("root.txt", "root file content")
+			local.CreateFile("dir1/file1.txt", "dir1 file content")
+			local.CreateFile("dir1/subdir1/nested.txt", "deeply nested content")
+			local.CreateFile("dir2/file2.txt", "dir2 file content")
 
 			By("Adding and committing all files")
 			gitNoError(local, "add", ".")
@@ -265,7 +265,7 @@ var _ = Describe("Blobs", func() {
 			Expect(len(dashboardContent)).To(BeNumerically(">", 3000000), "Dashboard should be larger than 3MB")
 
 			By("Creating and committing the large dashboard file")
-			_ = local.CreateFile("xlarge-dashboard.json", string(dashboardContent))
+			local.CreateFile("xlarge-dashboard.json", string(dashboardContent))
 			gitNoError(local, "add", "xlarge-dashboard.json")
 			gitNoError(local, "commit", "-m", "Add xlarge dashboard for blob testing")
 			gitNoError(local, "push", "origin", "main", "--force")

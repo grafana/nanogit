@@ -120,7 +120,7 @@ var _ = Describe("Writer Operations", func() {
 			fileName := "test.txt"
 			originalContent := []byte("original content")
 			// Ensure the file exists in the repo
-			_ = local.CreateFile(fileName, string(originalContent))
+			local.CreateFile(fileName, string(originalContent))
 			gitNoError(local, "add", fileName)
 			gitNoError(local, "commit", "-m", "Add test.txt")
 			gitNoError(local, "push", "-u", "origin", "main", "--force")
@@ -247,8 +247,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial file plus file to be updated
-			_ = local.CreateFile("initial.txt", "initial content")
-			_ = local.CreateFile("tobeupdated.txt", "original content")
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateFile("tobeupdated.txt", "original content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with files")
 			gitNoError(local, "branch", "-M", "main")
@@ -303,9 +303,9 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial file plus nested file to be updated
-			_ = local.CreateFile("initial.txt", "initial content")
-			_ = local.CreateDirPath("dir/subdir")
-			_ = local.CreateFile("dir/subdir/tobeupdated.txt", "original nested content")
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/subdir/tobeupdated.txt", "original nested content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with nested file")
 			gitNoError(local, "branch", "-M", "main")
@@ -348,7 +348,7 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial file
-			_ = local.CreateFile("initial.txt", "initial content")
+			local.CreateFile("initial.txt", "initial content")
 			gitNoError(local, "add", "initial.txt")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "push", "-u", "origin", "main", "--force")
@@ -366,8 +366,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial files
-			_ = local.CreateFile("initial.txt", "initial content")
-			_ = local.CreateFile("tobedeleted.txt", "content to be deleted")
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateFile("tobedeleted.txt", "content to be deleted")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "branch", "-M", "main")
 			gitNoError(local, "commit", "-m", "Initial commit with files")
@@ -410,9 +410,9 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial files and nested file
-			_ = local.CreateFile("initial.txt", "initial content")
-			_ = local.CreateDirPath("dir/subdir")
-			_ = local.CreateFile("dir/subdir/tobedeleted.txt", "nested content to be deleted")
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/subdir/tobedeleted.txt", "nested content to be deleted")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with nested file")
 			gitNoError(local, "branch", "-M", "main")
@@ -461,8 +461,8 @@ var _ = Describe("Writer Operations", func() {
 
 		It("should fail with ErrUnexpectedObjectType if trying to delete a tree as a blob", func() {
 			client, _, local, _ := QuickSetup()
-			_ = local.CreateDirPath("dir")
-			_ = local.CreateFile("dir/file.txt", "file content")
+			local.CreateDirPath("dir")
+			local.CreateFile("dir/file.txt", "file content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Add directory and file")
 			gitNoError(local, "branch", "-M", "main")
@@ -489,10 +489,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit multiple files in same directory
-			_ = local.CreateFile("initial.txt", "initial content")
-			_ = local.CreateDirPath("shared")
-			_ = local.CreateFile("shared/tobedeleted.txt", "content to be deleted")
-			_ = local.CreateFile("shared/tobepreserved.txt", "content to be preserved")
+			local.CreateFile("initial.txt", "initial content")
+			local.CreateDirPath("shared")
+			local.CreateFile("shared/tobedeleted.txt", "content to be deleted")
+			local.CreateFile("shared/tobepreserved.txt", "content to be preserved")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with shared directory")
 			gitNoError(local, "branch", "-M", "main")
@@ -543,8 +543,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial files
-			_ = local.CreateFile("source.txt", "content to move")
-			_ = local.CreateFile("other.txt", "other content")
+			local.CreateFile("source.txt", "content to move")
+			local.CreateFile("other.txt", "other content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with files")
 			gitNoError(local, "branch", "-M", "main")
@@ -612,7 +612,7 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial file
-			_ = local.CreateFile("source.txt", "nested content")
+			local.CreateFile("source.txt", "nested content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -677,9 +677,9 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit nested file
-			_ = local.CreateDirPath("dir/subdir")
-			_ = local.CreateFile("dir/subdir/nested.txt", "nested file content")
-			_ = local.CreateFile("preserved.txt", "preserved content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/subdir/nested.txt", "nested file content")
+			local.CreateFile("preserved.txt", "preserved content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with nested file")
 			gitNoError(local, "branch", "-M", "main")
@@ -734,8 +734,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit files
-			_ = local.CreateFile("source.txt", "source content")
-			_ = local.CreateFile("destination.txt", "destination content")
+			local.CreateFile("source.txt", "source content")
+			local.CreateFile("destination.txt", "destination content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -752,7 +752,7 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit file
-			_ = local.CreateFile("file.txt", "content")
+			local.CreateFile("file.txt", "content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -787,8 +787,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit directory
-			_ = local.CreateDirPath("dir")
-			_ = local.CreateFile("dir/file.txt", "content")
+			local.CreateDirPath("dir")
+			local.CreateFile("dir/file.txt", "content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -805,9 +805,9 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial files
-			_ = local.CreateFile("file1.txt", "content 1")
-			_ = local.CreateFile("file2.txt", "content 2")
-			_ = local.CreateFile("preserved.txt", "preserved")
+			local.CreateFile("file1.txt", "content 1")
+			local.CreateFile("file2.txt", "content 2")
+			local.CreateFile("preserved.txt", "preserved")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -858,10 +858,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial directory structure
-			_ = local.CreateDirPath("source-dir")
-			_ = local.CreateFile("source-dir/file1.txt", "content 1")
-			_ = local.CreateFile("source-dir/file2.txt", "content 2")
-			_ = local.CreateFile("other.txt", "other content")
+			local.CreateDirPath("source-dir")
+			local.CreateFile("source-dir/file1.txt", "content 1")
+			local.CreateFile("source-dir/file2.txt", "content 2")
+			local.CreateFile("other.txt", "other content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with directory")
 			gitNoError(local, "branch", "-M", "main")
@@ -946,10 +946,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit nested directory structure
-			_ = local.CreateDirPath("parent/source-dir/subdir")
-			_ = local.CreateFile("parent/source-dir/file1.txt", "nested content 1")
-			_ = local.CreateFile("parent/source-dir/subdir/file2.txt", "nested content 2")
-			_ = local.CreateFile("parent/preserved.txt", "preserved content")
+			local.CreateDirPath("parent/source-dir/subdir")
+			local.CreateFile("parent/source-dir/file1.txt", "nested content 1")
+			local.CreateFile("parent/source-dir/subdir/file2.txt", "nested content 2")
+			local.CreateFile("parent/preserved.txt", "preserved content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with nested structure")
 			gitNoError(local, "branch", "-M", "main")
@@ -1008,8 +1008,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit directory at root
-			_ = local.CreateDirPath("root-dir")
-			_ = local.CreateFile("root-dir/file.txt", "root file content")
+			local.CreateDirPath("root-dir")
+			local.CreateFile("root-dir/file.txt", "root file content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -1082,10 +1082,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit directories
-			_ = local.CreateDirPath("source")
-			_ = local.CreateFile("source/file.txt", "source content")
-			_ = local.CreateDirPath("destination")
-			_ = local.CreateFile("destination/file.txt", "destination content")
+			local.CreateDirPath("source")
+			local.CreateFile("source/file.txt", "source content")
+			local.CreateDirPath("destination")
+			local.CreateFile("destination/file.txt", "destination content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -1102,8 +1102,8 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit directory
-			_ = local.CreateDirPath("directory")
-			_ = local.CreateFile("directory/file.txt", "content")
+			local.CreateDirPath("directory")
+			local.CreateFile("directory/file.txt", "content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -1138,7 +1138,7 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit file
-			_ = local.CreateFile("file.txt", "content")
+			local.CreateFile("file.txt", "content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -1155,11 +1155,11 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit multiple directories
-			_ = local.CreateDirPath("dir1")
-			_ = local.CreateFile("dir1/file1.txt", "content 1")
-			_ = local.CreateDirPath("dir2")
-			_ = local.CreateFile("dir2/file2.txt", "content 2")
-			_ = local.CreateFile("preserved.txt", "preserved")
+			local.CreateDirPath("dir1")
+			local.CreateFile("dir1/file1.txt", "content 1")
+			local.CreateDirPath("dir2")
+			local.CreateFile("dir2/file2.txt", "content 2")
+			local.CreateFile("preserved.txt", "preserved")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -1208,14 +1208,14 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create complex directory structure
-			_ = local.CreateDirPath("complex/sub1/deep1")
-			_ = local.CreateDirPath("complex/sub1/deep2")
-			_ = local.CreateDirPath("complex/sub2")
-			_ = local.CreateFile("complex/root-file.txt", "root content")
-			_ = local.CreateFile("complex/sub1/sub1-file.txt", "sub1 content")
-			_ = local.CreateFile("complex/sub1/deep1/deep1-file.txt", "deep1 content")
-			_ = local.CreateFile("complex/sub1/deep2/deep2-file.txt", "deep2 content")
-			_ = local.CreateFile("complex/sub2/sub2-file.txt", "sub2 content")
+			local.CreateDirPath("complex/sub1/deep1")
+			local.CreateDirPath("complex/sub1/deep2")
+			local.CreateDirPath("complex/sub2")
+			local.CreateFile("complex/root-file.txt", "root content")
+			local.CreateFile("complex/sub1/sub1-file.txt", "sub1 content")
+			local.CreateFile("complex/sub1/deep1/deep1-file.txt", "deep1 content")
+			local.CreateFile("complex/sub1/deep2/deep2-file.txt", "deep2 content")
+			local.CreateFile("complex/sub2/sub2-file.txt", "sub2 content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Create complex structure")
 			gitNoError(local, "branch", "-M", "main")
@@ -1281,10 +1281,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial files and directories
-			_ = local.CreateFile("file1.txt", "file 1 content")
-			_ = local.CreateDirPath("dir/subdir")
-			_ = local.CreateFile("dir/file2.txt", "file 2 content")
-			_ = local.CreateFile("dir/subdir/file3.txt", "file 3 content")
+			local.CreateFile("file1.txt", "file 1 content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/file2.txt", "file 2 content")
+			local.CreateFile("dir/subdir/file3.txt", "file 3 content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with files and directories")
 			gitNoError(local, "branch", "-M", "main")
@@ -1328,10 +1328,10 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Create and commit initial files and directories
-			_ = local.CreateFile("file1.txt", "file 1 content")
-			_ = local.CreateDirPath("dir/subdir")
-			_ = local.CreateFile("dir/file2.txt", "file 2 content")
-			_ = local.CreateFile("dir/subdir/file3.txt", "file 3 content")
+			local.CreateFile("file1.txt", "file 1 content")
+			local.CreateDirPath("dir/subdir")
+			local.CreateFile("dir/file2.txt", "file 2 content")
+			local.CreateFile("dir/subdir/file3.txt", "file 3 content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with files and directories")
 			gitNoError(local, "branch", "-M", "main")
@@ -1379,10 +1379,10 @@ var _ = Describe("Writer Operations", func() {
 			dir1Content := []byte("Directory 1 file content")
 			file1Content := []byte("File 1 content")
 			file2Content := []byte("File 2 content")
-			_ = local.CreateDirPath("toberemoved")
-			_ = local.CreateFile("toberemoved/file1.txt", string(file1Content))
-			_ = local.CreateFile("toberemoved/file2.txt", string(file2Content))
-			_ = local.CreateFile("preserved.txt", string(dir1Content))
+			local.CreateDirPath("toberemoved")
+			local.CreateFile("toberemoved/file1.txt", string(file1Content))
+			local.CreateFile("toberemoved/file2.txt", string(file2Content))
+			local.CreateFile("preserved.txt", string(dir1Content))
 
 			By("Adding and committing the directory with files")
 			gitNoError(local, "add", ".")
@@ -1467,12 +1467,12 @@ var _ = Describe("Writer Operations", func() {
 			nested2Content := []byte("Nested 2 content")
 			deepContent := []byte("Deep nested content")
 
-			_ = local.CreateDirPath("toberemoved/subdir1")
-			_ = local.CreateDirPath("toberemoved/subdir2/deep")
-			_ = local.CreateFile("preserved.txt", string(preservedContent))
-			_ = local.CreateFile("toberemoved/file.txt", string(nested1Content))
-			_ = local.CreateFile("toberemoved/subdir1/nested.txt", string(nested2Content))
-			_ = local.CreateFile("toberemoved/subdir2/deep/deep.txt", string(deepContent))
+			local.CreateDirPath("toberemoved/subdir1")
+			local.CreateDirPath("toberemoved/subdir2/deep")
+			local.CreateFile("preserved.txt", string(preservedContent))
+			local.CreateFile("toberemoved/file.txt", string(nested1Content))
+			local.CreateFile("toberemoved/subdir1/nested.txt", string(nested2Content))
+			local.CreateFile("toberemoved/subdir2/deep/deep.txt", string(deepContent))
 
 			// logger.Info("Adding and committing the nested directory structure")
 			gitNoError(local, "add", ".")
@@ -1558,7 +1558,7 @@ var _ = Describe("Writer Operations", func() {
 
 			// logger.Info("Creating a file to test error case")
 			fileContent := []byte("This is a file, not a directory")
-			_ = local.CreateFile("testfile.txt", string(fileContent))
+			local.CreateFile("testfile.txt", string(fileContent))
 			gitNoError(local, "add", "testfile.txt")
 			gitNoError(local, "commit", "-m", "Add test file")
 			gitNoError(local, "push")
@@ -1597,11 +1597,11 @@ var _ = Describe("Writer Operations", func() {
 			subdir1File := []byte("Subdirectory 1 file")
 			subdir2File := []byte("Subdirectory 2 file")
 
-			_ = local.CreateDirPath("parent/subdir1")
-			_ = local.CreateDirPath("parent/subdir2")
-			_ = local.CreateFile("parent/parentfile.txt", string(parentFile))
-			_ = local.CreateFile("parent/subdir1/file1.txt", string(subdir1File))
-			_ = local.CreateFile("parent/subdir2/file2.txt", string(subdir2File))
+			local.CreateDirPath("parent/subdir1")
+			local.CreateDirPath("parent/subdir2")
+			local.CreateFile("parent/parentfile.txt", string(parentFile))
+			local.CreateFile("parent/subdir1/file1.txt", string(subdir1File))
+			local.CreateFile("parent/subdir2/file2.txt", string(subdir2File))
 
 			By("Adding and committing the directory structure")
 			gitNoError(local, "add", ".")
@@ -2151,11 +2151,11 @@ var _ = Describe("Writer Operations", func() {
 			//     subdir2/
 			//       file2.txt
 			//   file3.txt
-			_ = local.CreateDirPath("dir1/subdir1")
-			_ = local.CreateDirPath("dir2/subdir2")
-			_ = local.CreateFile("dir1/subdir1/file1.txt", "original file1")
-			_ = local.CreateFile("dir2/subdir2/file2.txt", "original file2")
-			_ = local.CreateFile("file3.txt", "original file3")
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir2/subdir2")
+			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
+			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
+			local.CreateFile("file3.txt", "original file3")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial deep nested commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -2219,11 +2219,11 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Setup: create a deep directory structure with files
-			_ = local.CreateDirPath("dir1/subdir1")
-			_ = local.CreateDirPath("dir2/subdir2")
-			_ = local.CreateFile("dir1/subdir1/file1.txt", "original file1")
-			_ = local.CreateFile("dir2/subdir2/file2.txt", "original file2")
-			_ = local.CreateFile("file3.txt", "original file3")
+			local.CreateDirPath("dir1/subdir1")
+			local.CreateDirPath("dir2/subdir2")
+			local.CreateFile("dir1/subdir1/file1.txt", "original file1")
+			local.CreateFile("dir2/subdir2/file2.txt", "original file2")
+			local.CreateFile("file3.txt", "original file3")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial commit with deep structure")
 			gitNoError(local, "branch", "-M", "main")
@@ -2285,11 +2285,11 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 
 			// Setup: create a multi-level directory structure
-			_ = local.CreateDirPath("dirA/dirB")
-			_ = local.CreateDirPath("dirC/dirD")
-			_ = local.CreateFile("dirA/dirB/fileA.txt", "original A")
-			_ = local.CreateFile("dirC/dirD/fileC.txt", "original C")
-			_ = local.CreateFile("rootfile.txt", "root content")
+			local.CreateDirPath("dirA/dirB")
+			local.CreateDirPath("dirC/dirD")
+			local.CreateFile("dirA/dirB/fileA.txt", "original A")
+			local.CreateFile("dirC/dirD/fileC.txt", "original C")
+			local.CreateFile("rootfile.txt", "root content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial nested structure")
 			gitNoError(local, "branch", "-M", "main")
@@ -2571,8 +2571,8 @@ var _ = Describe("Writer Operations", func() {
 
 			// Create all files in the structure first
 			for filePath, content := range treeStructure {
-				_ = local.CreateDirPath(filepath.Dir(filePath))
-				_ = local.CreateFile(filePath, content)
+				local.CreateDirPath(filepath.Dir(filePath))
+				local.CreateFile(filePath, content)
 			}
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Create complex tree structure")

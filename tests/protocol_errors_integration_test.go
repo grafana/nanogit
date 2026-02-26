@@ -32,7 +32,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up initial state with a commit")
-			_ = local.CreateFile("initial.txt", "initial content")
+			local.CreateFile("initial.txt", "initial content")
 			gitNoError(local, "add", "initial.txt")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -86,7 +86,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up initial state")
-			_ = local.CreateFile("file1.txt", "content 1")
+			local.CreateFile("file1.txt", "content 1")
 			gitNoError(local, "add", "file1.txt")
 			gitNoError(local, "commit", "-m", "First commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -101,7 +101,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Resetting local to first commit and creating conflicting commit")
 			gitNoError(local, "reset", "--hard", firstCommitHash.String())
-			_ = local.CreateFile("file2.txt", "conflicting content")
+			local.CreateFile("file2.txt", "conflicting content")
 			gitNoError(local, "add", "file2.txt")
 			gitNoError(local, "commit", "-m", "Conflicting commit")
 
@@ -149,7 +149,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a commit locally to advance the remote
-			_ = local.CreateFile("server-test.txt", "server test content")
+			local.CreateFile("server-test.txt", "server test content")
 			gitNoError(local, "add", "server-test.txt")
 			gitNoError(local, "commit", "-m", "Server test commit")
 			gitNoError(local, "push", "origin", "main")
@@ -257,7 +257,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up repository")
-			_ = local.CreateFile("recovery-test.txt", "recovery test")
+			local.CreateFile("recovery-test.txt", "recovery test")
 			gitNoError(local, "add", "recovery-test.txt")
 			gitNoError(local, "commit", "-m", "Recovery test commit")
 			gitNoError(local, "branch", "-M", "main")
@@ -339,7 +339,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up repository")
-			_ = local.CreateFile("edge-case.txt", "edge case test")
+			local.CreateFile("edge-case.txt", "edge case test")
 			gitNoError(local, "add", "edge-case.txt")
 			gitNoError(local, "commit", "-m", "Edge case test")
 			gitNoError(local, "branch", "-M", "main")
@@ -395,7 +395,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up repository")
-			_ = local.CreateFile("boundary.txt", "boundary test")
+			local.CreateFile("boundary.txt", "boundary test")
 			gitNoError(local, "add", "boundary.txt")
 			gitNoError(local, "commit", "-m", "Boundary test")
 			gitNoError(local, "branch", "-M", "main")
