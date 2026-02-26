@@ -75,7 +75,7 @@ func (r *RemoteRepo) AuthURL() string {
 
 // RepoName returns the repository name (for backward compatibility)
 func (r *RemoteRepo) RepoName() string {
-	return r.RemoteRepository.Name
+	return r.Name
 }
 
 // GitServer wraps gittest.Server to add backward-compatible methods
@@ -86,7 +86,7 @@ type GitServer struct {
 // GenerateUserToken generates a user token (backward compatible method).
 // This wraps the new CreateToken API and maintains the old signature that didn't return errors.
 func (s *GitServer) GenerateUserToken(username, password string) string {
-	token, err := s.Server.CreateToken(ctx, username)
+	token, err := s.CreateToken(ctx, username)
 	Expect(err).NotTo(HaveOccurred())
 	return token
 }
