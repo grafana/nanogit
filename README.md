@@ -348,24 +348,53 @@ import "github.com/grafana/nanogit/gittest"
 func TestGitOperations(t *testing.T) {
     ctx := context.Background()
 
-    // Get a complete test environment in one call
-    client, repo, local, user, cleanup, err := gittest.QuickSetup(ctx)
+    // Create a Git server
+    server, err := gittest.NewServer(ctx,
+        gittest.WithLogger(gittest.NewTestLogger(t)),
+    )
     require.NoError(t, err)
-    defer cleanup()
+    defer server.Cleanup()
 
-    // Test your Git operations with:
-    // - client: nanogit.Client for remote operations
-    // - repo: Repository metadata and URLs
-    // - local: Local git repository wrapper
-    // - user: Test user credentials
+    // Create user and repository
+    user, err := server.CreateUser(ctx)
+    require.NoError(t, err)
+
+    repo, err := server.CreateRepo(ctx, "myrepo", user)
+    require.NoError(t, err)
+
+    // Create local repository
+    local, err := gittest.NewLocalRepo(ctx,
+        gittest.WithRepoLogger(gittest.NewTestLogger(t)),
+    )
+    require.NoError(t, err)
+    defer local.Cleanup()
+
+    // Initialize with remote
+    client, err := local.QuickInit(user, repo.AuthURL)
+    require.NoError(t, err)
+
+    // Test your Git operations
+    err = local.CreateFile("README.md", "# My Project")
+    require.NoError(t, err)
+
+    _, err = local.Git("add", "README.md")
+    require.NoError(t, err)
+
+    _, err = local.Git("commit", "-m", "Initial commit")
+    require.NoError(t, err)
+
+    _, err = local.Git("push", "origin", "main")
+    require.NoError(t, err)
 }
 ```
 
 **Features:**
 - 🐳 Containerized Gitea server (via testcontainers)
-- 📁 Local repository helpers
+- 📁 Local repository helpers with file operations
 - 🔧 Works with standard `testing` and Ginkgo
-- 🧹 Automatic cleanup
+- 🧹 Automatic cleanup with defer-friendly API
+- 📝 Multiple logger implementations (noop, test, colored)
+- ⚙️ Flexible configuration via functional options
 
 For comprehensive documentation, see:
 - [Testing Guide](docs/testing-guide.md) - Complete guide with patterns and best practices

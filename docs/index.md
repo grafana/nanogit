@@ -90,6 +90,16 @@ Learn about nanogit's design and internals:
 - **[Delta Resolution](architecture/delta-resolution.md)** - Git delta handling implementation
 - **[Performance](architecture/performance.md)** - Performance characteristics and benchmarks
 
+## Testing
+
+nanogit provides comprehensive testing tools for applications using Git operations:
+
+- **[Testing Guide](testing-guide.md)** - Complete guide with patterns and best practices
+- **[gittest Package](https://pkg.go.dev/github.com/grafana/nanogit/gittest)** - Integration testing with containerized Git servers
+- **Unit Testing** - Generated mocks for `Client` and `StagedWriter` interfaces
+
+The `gittest` package makes it easy to test Git operations with a real Git server running in Docker, local repository helpers, and automatic cleanup.
+
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](https://github.com/grafana/nanogit/blob/main/CONTRIBUTING.md) for details on how to submit pull requests, report issues, and set up your development environment.
