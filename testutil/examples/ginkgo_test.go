@@ -18,28 +18,46 @@ func TestGinkgoIntegration(t *testing.T) {
 
 var _ = Describe("Testutil with Ginkgo", func() {
 	var (
-		ctx     context.Context
-		client  nanogit.Client
-		repo    *testutil.Repo
-		local   *testutil.LocalRepo
-		user    *testutil.User
-		cleanup func()
+		ctx    context.Context
+		server *testutil.Server
+		client nanogit.Client
+		repo   *testutil.Repo
+		local  *testutil.LocalRepo
+		user   *testutil.User
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 
-		// Use QuickSetup with Ginkgo-friendly logger
+		// Create server
 		var err error
-		client, repo, local, user, cleanup, err = testutil.QuickSetup(ctx,
-			testutil.WithQuickSetupLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		server, err = testutil.QuickServer(ctx,
+			testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
 		)
-		Expect(err).NotTo(HaveOccurred(), "failed to set up test environment")
+		Expect(err).NotTo(HaveOccurred(), "failed to create server")
+
+		// Create user and repo
+		user, err = server.CreateUser(ctx)
+		Expect(err).NotTo(HaveOccurred(), "failed to create user")
+
+		repo, err = server.CreateRepo(ctx, "testrepo", user)
+		Expect(err).NotTo(HaveOccurred(), "failed to create repo")
+
+		// Create local repo
+		local, err = testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewWriterLogger(GinkgoWriter)))
+		Expect(err).NotTo(HaveOccurred(), "failed to create local repo")
+
+		// Initialize and get client
+		client, _, err = local.QuickInit(user, repo.AuthURL)
+		Expect(err).NotTo(HaveOccurred(), "failed to initialize local repo")
 	})
 
 	AfterEach(func() {
-		if cleanup != nil {
-			cleanup()
+		if local != nil {
+			_ = local.Cleanup()
+		}
+		if server != nil {
+			_ = server.Cleanup()
 		}
 	})
 
@@ -135,21 +153,20 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 	Context("when using manual setup", func() {
 		var (
-			server        *testutil.Server
-			serverCleanup func()
+			server *testutil.Server
 		)
 
 		BeforeEach(func() {
 			var err error
-			server, serverCleanup, err = testutil.QuickServer(ctx,
+			server, err = testutil.QuickServer(ctx,
 				testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			if serverCleanup != nil {
-				serverCleanup()
+			if server != nil {
+				_ = server.Cleanup()
 			}
 		})
 
@@ -208,24 +225,41 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 	Context("with colored logger", func() {
 		var (
-			coloredClient  nanogit.Client
-			coloredRepo    *testutil.Repo
-			coloredLocal   *testutil.LocalRepo
-			coloredCleanup func()
+			coloredServer *testutil.Server
+			coloredClient nanogit.Client
+			coloredLocal  *testutil.LocalRepo
 		)
 
 		BeforeEach(func() {
 			// Use colored logger for nice output
 			var err error
-			coloredClient, coloredRepo, coloredLocal, _, coloredCleanup, err = testutil.QuickSetup(ctx,
-				testutil.WithQuickSetupLogger(testutil.NewColoredLogger(GinkgoWriter)),
+			coloredServer, err = testutil.QuickServer(ctx,
+				testutil.WithLogger(testutil.NewColoredLogger(GinkgoWriter)),
 			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create user and repo with colored logging
+			user, err := coloredServer.CreateUser(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			repo, err := coloredServer.CreateRepo(ctx, "colored-repo", user)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create local repo with colored logging
+			coloredLocal, err = testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewColoredLogger(GinkgoWriter)))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Initialize and get client
+			coloredClient, _, err = coloredLocal.QuickInit(user, repo.AuthURL)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			if coloredCleanup != nil {
-				coloredCleanup()
+			if coloredLocal != nil {
+				_ = coloredLocal.Cleanup()
+			}
+			if coloredServer != nil {
+				_ = coloredServer.Cleanup()
 			}
 		})
 

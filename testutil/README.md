@@ -22,71 +22,20 @@ go get github.com/grafana/nanogit/testutil@latest
 
 ## Quick Start
 
-### Complete Setup (Recommended)
+### Basic Setup
 
-For most test cases, use `QuickSetup` to get everything in one call:
+Create test environment components:
 
 ```go
-package mytest
-
-import (
-	"context"
-	"testing"
-
-	"github.com/grafana/nanogit/testutil"
-	"github.com/stretchr/testify/require"
-)
-
 func TestGitOperations(t *testing.T) {
 	ctx := context.Background()
 
-	// Get everything you need in one call
-	client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx,
-		testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
-	)
-	require.NoError(t, err)
-	defer cleanup()
-
-	// Now you can:
-	// - Use client (nanogit.Client) to interact with the remote repo
-	// - Use repo (*testutil.Repo) for URLs and metadata
-	// - Use local (*testutil.LocalRepo) for local Git operations
-	// - Use user (*testutil.User) for credentials
-
-	// Example: Create and push a file
-	err = local.CreateFile("hello.txt", "Hello, World!")
-	require.NoError(t, err)
-
-	_, err = local.Git("add", "hello.txt")
-	require.NoError(t, err)
-
-	_, err = local.Git("commit", "-m", "Add hello.txt")
-	require.NoError(t, err)
-
-	_, err = local.Git("push", "origin", "main")
-	require.NoError(t, err)
-
-	// Verify with nanogit client
-	ref, err := client.GetRef(ctx, "refs/heads/main")
-	require.NoError(t, err)
-	require.NotNil(t, ref)
-}
-```
-
-### Manual Setup (Advanced)
-
-For more control, create components individually:
-
-```go
-func TestManualSetup(t *testing.T) {
-	ctx := context.Background()
-
 	// Create server
-	server, cleanup, err := testutil.QuickServer(ctx,
+	server, err := testutil.QuickServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
-	defer cleanup()
+	defer server.Cleanup()
 
 	// Create user
 	user, err := server.CreateUser(ctx)
@@ -252,26 +201,48 @@ import (
 
 var _ = Describe("Git Operations", func() {
 	var (
-		ctx     context.Context
-		client  nanogit.Client
-		repo    *testutil.Repo
-		local   *testutil.LocalRepo
-		user    *testutil.User
-		cleanup func()
+		ctx    context.Context
+		server *testutil.Server
+		client nanogit.Client
+		repo   *testutil.Repo
+		local  *testutil.LocalRepo
+		user   *testutil.User
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		var err error
-		client, repo, local, user, cleanup, err = testutil.QuickSetup(ctx,
-			testutil.WithQuickSetupLogger(testutil.NewWriterLogger(GinkgoWriter)),
+
+		// Create server
+		server, err = testutil.QuickServer(ctx,
+			testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
 		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create user and repo
+		user, err = server.CreateUser(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		repo, err = server.CreateRepo(ctx, "testrepo", user)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create local repo
+		local, err = testutil.NewLocalRepo(ctx,
+			testutil.WithRepoLogger(testutil.NewWriterLogger(GinkgoWriter)),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Initialize and get client
+		client, _, err = local.QuickInit(user, repo.AuthURL)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		if cleanup != nil {
-			cleanup()
+		if local != nil {
+			_ = local.Cleanup()
+		}
+		if server != nil {
+			_ = server.Cleanup()
 		}
 	})
 
@@ -331,14 +302,14 @@ server, err := testutil.NewServer(ctx,
 
 ### Tests hang on cleanup
 
-**Solution:** Ensure you're using contexts properly and calling cleanup functions:
+**Solution:** Ensure you're using contexts properly and calling cleanup methods:
 
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 defer cancel()
 
-server, cleanup, err := testutil.QuickServer(ctx)
-defer cleanup()
+server, err := testutil.QuickServer(ctx)
+defer server.Cleanup()
 ```
 
 ## Migration from Internal Test Utilities

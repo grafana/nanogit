@@ -327,27 +327,18 @@ func (s *Server) Cleanup() error {
 	return nil
 }
 
-// QuickServer is a convenience function that creates a Server and returns a cleanup function.
-// It's useful for simple test setups where you want automatic cleanup via defer.
+// QuickServer is a convenience function that creates a Server.
+// The server includes a Cleanup() method that should be called when done.
 //
 // Example:
 //
-//	server, cleanup, err := testutil.QuickServer(ctx)
+//	server, err := testutil.QuickServer(ctx)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
-//	defer cleanup()
-func QuickServer(ctx context.Context, opts ...ServerOption) (*Server, func(), error) {
-	server, err := NewServer(ctx, opts...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cleanup := func() {
-		_ = server.Cleanup()
-	}
-
-	return server, cleanup, nil
+//	defer server.Cleanup()
+func QuickServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
+	return NewServer(ctx, opts...)
 }
 
 // MustQuickServer is like QuickServer but panics on error.
@@ -355,12 +346,12 @@ func QuickServer(ctx context.Context, opts ...ServerOption) (*Server, func(), er
 //
 // Example:
 //
-//	server, cleanup := testutil.MustQuickServer(ctx)
-//	defer cleanup()
-func MustQuickServer(ctx context.Context, opts ...ServerOption) (*Server, func()) {
-	server, cleanup, err := QuickServer(ctx, opts...)
+//	server := testutil.MustQuickServer(ctx)
+//	defer server.Cleanup()
+func MustQuickServer(ctx context.Context, opts ...ServerOption) *Server {
+	server, err := QuickServer(ctx, opts...)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create quick server: %v", err))
 	}
-	return server, cleanup
+	return server
 }

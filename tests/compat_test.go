@@ -48,11 +48,11 @@ func (r *LocalGitRepo) CreateDirPath(dirpath string) error {
 }
 
 // Git runs a git command and fails the test if there's an error.
-// This maintains backward compatibility with the old Git() method.
-func (r *LocalGitRepo) Git(args ...string) (string, error) {
+// This maintains backward compatibility with the old Git() method that only returned string.
+func (r *LocalGitRepo) Git(args ...string) string {
 	output, err := r.LocalRepo.Git(args...)
 	Expect(err).NotTo(HaveOccurred(), "git command failed: %v", err)
-	return output, err
+	return output
 }
 
 // QuickInit initializes the repository with a remote and fails the test on error.

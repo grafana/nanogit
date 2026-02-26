@@ -12,18 +12,28 @@ import (
 func TestBasicGitOperations(t *testing.T) {
 	ctx := context.Background()
 
-	// Quick setup: get everything in one call
-	client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx,
-		testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
+	// Create server
+	server, err := testutil.QuickServer(ctx,
+		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
-	require.NoError(t, err, "failed to set up test environment")
-	defer cleanup()
+	require.NoError(t, err, "failed to create server")
+	defer server.Cleanup()
 
-	// Verify we got valid instances
-	require.NotNil(t, client, "client should not be nil")
-	require.NotNil(t, repo, "repo should not be nil")
-	require.NotNil(t, local, "local should not be nil")
-	require.NotNil(t, user, "user should not be nil")
+	// Create user and repo
+	user, err := server.CreateUser(ctx)
+	require.NoError(t, err, "failed to create user")
+
+	repo, err := server.CreateRepo(ctx, "testrepo", user)
+	require.NoError(t, err, "failed to create repo")
+
+	// Create local repo
+	local, err := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewTestLogger(t)))
+	require.NoError(t, err, "failed to create local repo")
+	defer local.Cleanup()
+
+	// Initialize local repo and get client
+	client, _, err := local.QuickInit(user, repo.AuthURL)
+	require.NoError(t, err, "failed to initialize local repo")
 
 	t.Logf("Test environment ready:")
 	t.Logf("  Server: %s", repo.URL)
@@ -82,11 +92,11 @@ func TestManualSetup(t *testing.T) {
 
 	// Create server
 	t.Log("Creating Git server")
-	server, serverCleanup, err := testutil.QuickServer(ctx,
+	server, err := testutil.QuickServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err, "failed to create server")
-	defer serverCleanup()
+	defer server.Cleanup()
 
 	t.Logf("Server ready at: %s", server.URL())
 
@@ -149,11 +159,28 @@ func TestManualSetup(t *testing.T) {
 func TestMultipleFiles(t *testing.T) {
 	ctx := context.Background()
 
-	client, _, local, _, cleanup, err := testutil.QuickSetup(ctx,
-		testutil.WithQuickSetupLogger(testutil.NewTestLogger(t)),
+	// Create server
+	server, err := testutil.QuickServer(ctx,
+		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
-	defer cleanup()
+	defer server.Cleanup()
+
+	// Create user and repo
+	user, err := server.CreateUser(ctx)
+	require.NoError(t, err)
+
+	repo, err := server.CreateRepo(ctx, "multifile-test", user)
+	require.NoError(t, err)
+
+	// Create local repo
+	local, err := testutil.NewLocalRepo(ctx, testutil.WithRepoLogger(testutil.NewTestLogger(t)))
+	require.NoError(t, err)
+	defer local.Cleanup()
+
+	// Initialize and get client
+	client, _, err := local.QuickInit(user, repo.AuthURL)
+	require.NoError(t, err)
 
 	// Create a directory structure
 	t.Log("Creating directory structure")

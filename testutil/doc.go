@@ -6,31 +6,21 @@
 //
 // # Basic Usage
 //
-//	server, cleanup, err := testutil.QuickServer(ctx)
+//	server, err := testutil.QuickServer(ctx)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
-//	defer cleanup()
+//	defer server.Cleanup()
 //
 //	user, _ := server.CreateUser(ctx)
 //	repo, _ := server.CreateRepo(ctx, "test", user)
-//	// Use repo.AuthURL with your Git client
 //
-// # Quick Setup
+//	// Create local repo and initialize
+//	local, _ := testutil.NewLocalRepo(ctx)
+//	defer local.Cleanup()
 //
-// For complete test environment setup in one call:
-//
-//	client, repo, local, user, cleanup, err := testutil.QuickSetup(ctx)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	defer cleanup()
-//
-//	// Now you can use:
-//	// - client: nanogit.Client connected to the test server
-//	// - repo: Remote repository info (repo.AuthURL, etc.)
-//	// - local: Local git repository wrapper
-//	// - user: Test user with credentials
+//	client, _, _ := local.QuickInit(user, repo.AuthURL)
+//	// Now use client for testing
 //
 // For more examples, see the examples/ directory.
 package testutil

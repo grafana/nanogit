@@ -34,12 +34,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Initial commit with tree structure")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Initial commit with tree structure")
 
 			By("Creating and switching to main branch")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
@@ -48,7 +48,7 @@ var _ = Describe("Trees", func() {
 
 			By("Setting up hash helper function")
 			getHash = func(path string) hash.Hash {
-				out, _ := local.Git("rev-parse", "HEAD:"+path)
+				out := local.Git("rev-parse", "HEAD:"+path)
 				h, err := hash.FromHex(out)
 				Expect(err).NotTo(HaveOccurred())
 				return h
@@ -166,12 +166,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Initial commit with complex tree structure")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Initial commit with complex tree structure")
 
 			By("Creating and switching to main branch")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
 			var err error
@@ -235,12 +235,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Initial commit with tree structure")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Initial commit with tree structure")
 
 			By("Creating and switching to main branch")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
 			var err error
@@ -294,12 +294,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Initial commit with tree structure")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Initial commit with tree structure")
 
 			By("Creating and switching to main branch")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
 			var err error
@@ -308,7 +308,7 @@ var _ = Describe("Trees", func() {
 
 			By("Setting up hash helper function")
 			getHash = func(path string) hash.Hash {
-				out, _ := local.Git("rev-parse", "HEAD:"+path)
+				out := local.Git("rev-parse", "HEAD:"+path)
 				h, err := hash.FromHex(out)
 				Expect(err).NotTo(HaveOccurred())
 				return h
@@ -428,10 +428,10 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("level1/level2b/level3d/level4/file4.txt", "deep content at level4")
 
 			By("Committing the complex structure")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Complex nested tree structure")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Complex nested tree structure")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
@@ -519,18 +519,18 @@ var _ = Describe("Trees", func() {
 			local.CreateDirPath("src")
 			local.CreateFile("src/main.txt", "main content")
 			local.CreateFile("README.md", "readme")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Add source files")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Add source files")
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			_, _ = local.Git("submodule", "add", subRemote.AuthURL, "external/lib")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Add submodule")
+			_ = local.Git("submodule", "add", subRemote.AuthURL, "external/lib")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Add submodule")
 
 			By("Pushing the main repository")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 
 			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -580,8 +580,8 @@ var _ = Describe("Trees", func() {
 
 			By("Creating initial commit in main repo")
 			local.CreateFile("README.md", "readme")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Initial commit")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Initial commit")
 			var err error
 			beforeSubmoduleHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -601,15 +601,15 @@ var _ = Describe("Trees", func() {
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			_, _ = local.Git("submodule", "add", subRemote.AuthURL, "vendor/lib")
-			_, _ = local.Git("add", ".")
-			_, _ = local.Git("commit", "-m", "Add submodule")
+			_ = local.Git("submodule", "add", subRemote.AuthURL, "vendor/lib")
+			_ = local.Git("add", ".")
+			_ = local.Git("commit", "-m", "Add submodule")
 			afterSubmoduleHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing the main repository")
-			_, _ = local.Git("branch", "-M", "main")
-			_, _ = local.Git("push", "origin", "main", "--force")
+			_ = local.Git("branch", "-M", "main")
+			_ = local.Git("push", "origin", "main", "--force")
 		})
 
 		It("should compare commits across submodule addition without errors", func() {
