@@ -131,10 +131,10 @@ type User struct {
 }
 ```
 
-#### Repo
+#### RemoteRepository
 
 ```go
-type Repo struct {
+type RemoteRepository struct {
 	Name     string
 	Owner    string
 	URL      string // Public URL (no auth)
@@ -198,7 +198,7 @@ var _ = Describe("Git Operations", func() {
 		ctx    context.Context
 		server *gittest.Server
 		client nanogit.Client
-		repo   *gittest.Repo
+		repo   *gittest.RemoteRepository
 		local  *gittest.LocalRepo
 		user   *gittest.User
 	)
@@ -227,7 +227,8 @@ var _ = Describe("Git Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize and get client
-		client, err = local.QuickInit(user, repo.AuthURL)
+		remote := repo
+		client, err = local.InitWithRemote(user, remote)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

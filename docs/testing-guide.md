@@ -78,7 +78,8 @@ local, err := gittest.NewLocalRepo(ctx,
 )
 defer local.Cleanup()
 
-client, err := local.QuickInit(user, repo.AuthURL)
+remote := repo
+client, err := local.InitWithRemote(user, remote)
 
 err = local.CreateFile("path/file.txt", "content")
 err = local.UpdateFile("path/file.txt", "new content")
