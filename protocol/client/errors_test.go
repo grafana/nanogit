@@ -383,6 +383,9 @@ func TestCheckHTTPClientError_EdgeCases(t *testing.T) {
 		require.True(t, errors.As(err, &unauthErr))
 		assert.Equal(t, "", unauthErr.Operation)
 		assert.Equal(t, "", unauthErr.Endpoint)
+		// Error message should use "unknown" for empty fields
+		assert.Contains(t, err.Error(), "operation unknown")
+		assert.Contains(t, err.Error(), "endpoint unknown")
 	})
 
 	t.Run("handles request with empty URL path", func(t *testing.T) {
@@ -405,5 +408,29 @@ func TestCheckHTTPClientError_EdgeCases(t *testing.T) {
 		require.True(t, errors.As(err, &permErr))
 		assert.Equal(t, "POST", permErr.Operation)
 		assert.Equal(t, "unknown", permErr.Endpoint)
+	})
+
+	t.Run("handles request with nil URL", func(t *testing.T) {
+		t.Parallel()
+		req := &http.Request{
+			Method: "GET",
+			URL:    nil, // nil URL
+		}
+
+		res := &http.Response{
+			StatusCode: http.StatusNotFound,
+			Status:     "404 Not Found",
+			Request:    req,
+		}
+
+		err := CheckHTTPClientError(res)
+		require.NotNil(t, err)
+
+		var notFoundErr *RepositoryNotFoundError
+		require.True(t, errors.As(err, &notFoundErr))
+		assert.Equal(t, "GET", notFoundErr.Operation)
+		assert.Equal(t, "", notFoundErr.Endpoint) // Empty when URL is nil
+		// Error message should use "unknown" for empty endpoint
+		assert.Contains(t, err.Error(), "endpoint unknown")
 	})
 }

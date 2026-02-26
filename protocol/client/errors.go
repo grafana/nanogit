@@ -98,12 +98,21 @@ type UnauthorizedError struct {
 }
 
 func (e *UnauthorizedError) Error() string {
+	operation := e.Operation
+	if operation == "" {
+		operation = "unknown"
+	}
+	endpoint := e.Endpoint
+	if endpoint == "" {
+		endpoint = "unknown"
+	}
+
 	if e.Underlying != nil {
 		return fmt.Sprintf("unauthorized (operation %s, endpoint %s, status code %d): %v",
-			e.Operation, e.Endpoint, e.StatusCode, e.Underlying)
+			operation, endpoint, e.StatusCode, e.Underlying)
 	}
 	return fmt.Sprintf("unauthorized (operation %s, endpoint %s, status code %d)",
-		e.Operation, e.Endpoint, e.StatusCode)
+		operation, endpoint, e.StatusCode)
 }
 
 func (e *UnauthorizedError) Unwrap() error {
@@ -136,12 +145,21 @@ type PermissionDeniedError struct {
 }
 
 func (e *PermissionDeniedError) Error() string {
+	operation := e.Operation
+	if operation == "" {
+		operation = "unknown"
+	}
+	endpoint := e.Endpoint
+	if endpoint == "" {
+		endpoint = "unknown"
+	}
+
 	if e.Underlying != nil {
 		return fmt.Sprintf("permission denied (operation %s, endpoint %s, status code %d): %v",
-			e.Operation, e.Endpoint, e.StatusCode, e.Underlying)
+			operation, endpoint, e.StatusCode, e.Underlying)
 	}
 	return fmt.Sprintf("permission denied (operation %s, endpoint %s, status code %d)",
-		e.Operation, e.Endpoint, e.StatusCode)
+		operation, endpoint, e.StatusCode)
 }
 
 func (e *PermissionDeniedError) Unwrap() error {
@@ -174,12 +192,21 @@ type RepositoryNotFoundError struct {
 }
 
 func (e *RepositoryNotFoundError) Error() string {
+	operation := e.Operation
+	if operation == "" {
+		operation = "unknown"
+	}
+	endpoint := e.Endpoint
+	if endpoint == "" {
+		endpoint = "unknown"
+	}
+
 	if e.Underlying != nil {
 		return fmt.Sprintf("repository not found (operation %s, endpoint %s, status code %d): %v",
-			e.Operation, e.Endpoint, e.StatusCode, e.Underlying)
+			operation, endpoint, e.StatusCode, e.Underlying)
 	}
 	return fmt.Sprintf("repository not found (operation %s, endpoint %s, status code %d)",
-		e.Operation, e.Endpoint, e.StatusCode)
+		operation, endpoint, e.StatusCode)
 }
 
 func (e *RepositoryNotFoundError) Unwrap() error {
@@ -218,7 +245,9 @@ func CheckHTTPClientError(res *http.Response) error {
 	endpoint := ""
 	if res.Request != nil {
 		operation = res.Request.Method
-		endpoint = extractEndpoint(res.Request.URL.Path)
+		if res.Request.URL != nil {
+			endpoint = extractEndpoint(res.Request.URL.Path)
+		}
 	}
 
 	underlying := fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)

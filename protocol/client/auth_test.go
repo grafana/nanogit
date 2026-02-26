@@ -164,6 +164,7 @@ func TestIsAuthorized(t *testing.T) {
 }
 
 func TestCanRead(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		statusCode    int
@@ -214,10 +215,12 @@ func TestCanRead(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/repo.git/info/refs" {
 					t.Errorf("expected path /repo.git/info/refs, got %s", r.URL.Path)
+					http.Error(w, "unexpected request path", http.StatusInternalServerError)
 					return
 				}
 				if r.URL.Query().Get("service") != "git-upload-pack" {
 					t.Errorf("expected service=git-upload-pack, got %s", r.URL.Query().Get("service"))
+					http.Error(w, "unexpected service query parameter", http.StatusInternalServerError)
 					return
 				}
 
@@ -245,6 +248,7 @@ func TestCanRead(t *testing.T) {
 }
 
 func TestCanWrite(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		statusCode    int
@@ -295,10 +299,12 @@ func TestCanWrite(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/repo.git/info/refs" {
 					t.Errorf("expected path /repo.git/info/refs, got %s", r.URL.Path)
+					http.Error(w, "unexpected request path", http.StatusInternalServerError)
 					return
 				}
 				if r.URL.Query().Get("service") != "git-receive-pack" {
 					t.Errorf("expected service=git-receive-pack, got %s", r.URL.Query().Get("service"))
+					http.Error(w, "unexpected service query parameter", http.StatusInternalServerError)
 					return
 				}
 
