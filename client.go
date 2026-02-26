@@ -68,7 +68,9 @@ type StagedWriter interface {
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header internal/tools/fake_header.txt -o mocks/client.go . Client
 type Client interface {
 	// Repo operations
-	IsAuthorized(ctx context.Context) (bool, error)
+	CanRead(ctx context.Context) (bool, error)
+	CanWrite(ctx context.Context) (bool, error)
+	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
 	RepoExists(ctx context.Context) (bool, error)
 	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)

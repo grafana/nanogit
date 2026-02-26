@@ -1193,7 +1193,7 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 	// This ensures proper zlib stream boundaries for each Git object
 	zw := getPooledZlibWriter(writer)
 	defer returnPooledZlibWriter(zw)
-	
+
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}
@@ -1203,7 +1203,6 @@ func (pw *PackfileWriter) writeObjectToWriter(writer io.Writer, obj PackfileObje
 
 	return nil
 }
-
 
 // addObject adds an object using the appropriate storage method based on the storage mode.
 func (pw *PackfileWriter) addObject(obj PackfileObject) error {
@@ -1308,7 +1307,7 @@ func (w *PackfileWriter) writeObjectToFile(obj PackfileObject) error {
 	// This ensures proper zlib stream boundaries for each Git object
 	zw := getPooledZlibWriter(w.tempFile)
 	defer returnPooledZlibWriter(zw)
-	
+
 	if _, err := zw.Write(obj.Data); err != nil {
 		return fmt.Errorf("compressing object data: %w", err)
 	}

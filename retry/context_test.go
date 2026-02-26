@@ -58,4 +58,3 @@ func TestContextHelpers(t *testing.T) {
 		require.NotEqual(t, FromContext(ctx1), FromContext(ctx2))
 	})
 }
-

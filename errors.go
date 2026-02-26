@@ -56,6 +56,21 @@ var (
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	// It is re-exported from the protocol/client package to avoid import cycles.
 	ErrServerUnavailable = client.ErrServerUnavailable
+
+	// ErrUnauthorized is returned when authentication fails (HTTP 401).
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	// It is re-exported from the protocol/client package to avoid import cycles.
+	ErrUnauthorized = client.ErrUnauthorized
+
+	// ErrPermissionDenied is returned when the user lacks permission for the operation (HTTP 403).
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	// It is re-exported from the protocol/client package to avoid import cycles.
+	ErrPermissionDenied = client.ErrPermissionDenied
+
+	// ErrRepositoryNotFound is returned when the repository does not exist (HTTP 404).
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	// It is re-exported from the protocol/client package to avoid import cycles.
+	ErrRepositoryNotFound = client.ErrRepositoryNotFound
 )
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
@@ -246,3 +261,17 @@ type ServerUnavailableError = client.ServerUnavailableError
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified status code and underlying error.
 // It is re-exported from the protocol/client package to avoid import cycles.
 var NewServerUnavailableError = client.NewServerUnavailableError
+
+// UnauthorizedError provides structured information about an authentication failure.
+type UnauthorizedError = client.UnauthorizedError
+
+// PermissionDeniedError provides structured information about a permission denial.
+type PermissionDeniedError = client.PermissionDeniedError
+
+// RepositoryNotFoundError provides structured information about a repository not found error.
+type RepositoryNotFoundError = client.RepositoryNotFoundError
+
+// Re-export constructors
+var NewUnauthorizedError = client.NewUnauthorizedError
+var NewPermissionDeniedError = client.NewPermissionDeniedError
+var NewRepositoryNotFoundError = client.NewRepositoryNotFoundError

@@ -13,6 +13,32 @@ import (
 )
 
 type FakeRawClient struct {
+	CanReadStub        func(context.Context) (bool, error)
+	canReadMutex       sync.RWMutex
+	canReadArgsForCall []struct {
+		arg1 context.Context
+	}
+	canReadReturns struct {
+		result1 bool
+		result2 error
+	}
+	canReadReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
+	CanWriteStub        func(context.Context) (bool, error)
+	canWriteMutex       sync.RWMutex
+	canWriteArgsForCall []struct {
+		arg1 context.Context
+	}
+	canWriteReturns struct {
+		result1 bool
+		result2 error
+	}
+	canWriteReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
 	FetchStub        func(context.Context, client.FetchOptions) (map[string]*protocol.PackfileObject, error)
 	fetchMutex       sync.RWMutex
 	fetchArgsForCall []struct {
@@ -94,6 +120,134 @@ type FakeRawClient struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeRawClient) CanRead(arg1 context.Context) (bool, error) {
+	fake.canReadMutex.Lock()
+	ret, specificReturn := fake.canReadReturnsOnCall[len(fake.canReadArgsForCall)]
+	fake.canReadArgsForCall = append(fake.canReadArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.CanReadStub
+	fakeReturns := fake.canReadReturns
+	fake.recordInvocation("CanRead", []interface{}{arg1})
+	fake.canReadMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeRawClient) CanReadCallCount() int {
+	fake.canReadMutex.RLock()
+	defer fake.canReadMutex.RUnlock()
+	return len(fake.canReadArgsForCall)
+}
+
+func (fake *FakeRawClient) CanReadCalls(stub func(context.Context) (bool, error)) {
+	fake.canReadMutex.Lock()
+	defer fake.canReadMutex.Unlock()
+	fake.CanReadStub = stub
+}
+
+func (fake *FakeRawClient) CanReadArgsForCall(i int) context.Context {
+	fake.canReadMutex.RLock()
+	defer fake.canReadMutex.RUnlock()
+	argsForCall := fake.canReadArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRawClient) CanReadReturns(result1 bool, result2 error) {
+	fake.canReadMutex.Lock()
+	defer fake.canReadMutex.Unlock()
+	fake.CanReadStub = nil
+	fake.canReadReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) CanReadReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.canReadMutex.Lock()
+	defer fake.canReadMutex.Unlock()
+	fake.CanReadStub = nil
+	if fake.canReadReturnsOnCall == nil {
+		fake.canReadReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.canReadReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) CanWrite(arg1 context.Context) (bool, error) {
+	fake.canWriteMutex.Lock()
+	ret, specificReturn := fake.canWriteReturnsOnCall[len(fake.canWriteArgsForCall)]
+	fake.canWriteArgsForCall = append(fake.canWriteArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.CanWriteStub
+	fakeReturns := fake.canWriteReturns
+	fake.recordInvocation("CanWrite", []interface{}{arg1})
+	fake.canWriteMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeRawClient) CanWriteCallCount() int {
+	fake.canWriteMutex.RLock()
+	defer fake.canWriteMutex.RUnlock()
+	return len(fake.canWriteArgsForCall)
+}
+
+func (fake *FakeRawClient) CanWriteCalls(stub func(context.Context) (bool, error)) {
+	fake.canWriteMutex.Lock()
+	defer fake.canWriteMutex.Unlock()
+	fake.CanWriteStub = stub
+}
+
+func (fake *FakeRawClient) CanWriteArgsForCall(i int) context.Context {
+	fake.canWriteMutex.RLock()
+	defer fake.canWriteMutex.RUnlock()
+	argsForCall := fake.canWriteArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRawClient) CanWriteReturns(result1 bool, result2 error) {
+	fake.canWriteMutex.Lock()
+	defer fake.canWriteMutex.Unlock()
+	fake.CanWriteStub = nil
+	fake.canWriteReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) CanWriteReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.canWriteMutex.Lock()
+	defer fake.canWriteMutex.Unlock()
+	fake.CanWriteStub = nil
+	if fake.canWriteReturnsOnCall == nil {
+		fake.canWriteReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.canWriteReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 client.FetchOptions) (map[string]*protocol.PackfileObject, error) {

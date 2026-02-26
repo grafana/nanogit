@@ -105,7 +105,7 @@ func TestExponentialBackoffRetrier_ShouldRetry(t *testing.T) {
 		require.False(t, retrier.ShouldRetry(ctx, err, 1))
 		require.False(t, retrier.ShouldRetry(ctx, err, 2))
 		require.False(t, retrier.ShouldRetry(ctx, err, 3))
-		
+
 		// MaxAttempts should still return the correct value
 		require.Equal(t, 3, retrier.MaxAttempts())
 	})
@@ -290,4 +290,3 @@ type temporaryError struct{}
 func (e *temporaryError) Error() string   { return "temporary" }
 func (e *temporaryError) Timeout() bool   { return false }
 func (e *temporaryError) Temporary() bool { return true }
-

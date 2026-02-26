@@ -62,7 +62,7 @@ func TestAuthentication(t *testing.T) {
 			}))
 			defer server.Close()
 
-			c, err := NewRawClient(server.URL + "/repo", tt.authOption)
+			c, err := NewRawClient(server.URL+"/repo", tt.authOption)
 			require.NoError(t, err)
 
 			responseReader, err := c.UploadPack(context.Background(), strings.NewReader("test"))
@@ -159,6 +159,174 @@ func TestIsAuthorized(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedAuth, authorized)
+		})
+	}
+}
+
+func TestCanRead(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedRead  bool
+		expectedError string
+	}{
+		{
+			name:          "can read - 200 OK",
+			statusCode:    http.StatusOK,
+			responseBody:  "capabilities",
+			expectedRead:  true,
+			expectedError: "",
+		},
+		{
+			name:          "cannot read - 401 Unauthorized",
+			statusCode:    http.StatusUnauthorized,
+			responseBody:  "unauthorized",
+			expectedRead:  false,
+			expectedError: "",
+		},
+		{
+			name:          "cannot read - 403 Forbidden",
+			statusCode:    http.StatusForbidden,
+			responseBody:  "forbidden",
+			expectedRead:  false,
+			expectedError: "",
+		},
+		{
+			name:          "server error - 500",
+			statusCode:    http.StatusInternalServerError,
+			responseBody:  "server error",
+			expectedRead:  false,
+			expectedError: "check read permission",
+		},
+		{
+			name:          "not found - 404",
+			statusCode:    http.StatusNotFound,
+			responseBody:  "not found",
+			expectedRead:  false,
+			expectedError: "check read permission",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/repo.git/info/refs" {
+					t.Errorf("expected path /repo.git/info/refs, got %s", r.URL.Path)
+					http.Error(w, "unexpected request path", http.StatusInternalServerError)
+					return
+				}
+				if r.URL.Query().Get("service") != "git-upload-pack" {
+					t.Errorf("expected service=git-upload-pack, got %s", r.URL.Query().Get("service"))
+					http.Error(w, "unexpected service query parameter", http.StatusInternalServerError)
+					return
+				}
+
+				w.WriteHeader(tt.statusCode)
+				if _, err := w.Write([]byte(tt.responseBody)); err != nil {
+					t.Errorf("failed to write response: %v", err)
+					return
+				}
+			}))
+			defer server.Close()
+
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			canRead, err := client.CanRead(context.Background())
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedRead, canRead)
+		})
+	}
+}
+
+func TestCanWrite(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedWrite bool
+		expectedError string
+	}{
+		{
+			name:          "can write - 200 OK",
+			statusCode:    http.StatusOK,
+			responseBody:  "capabilities",
+			expectedWrite: true,
+			expectedError: "",
+		},
+		{
+			name:          "cannot write - 401 Unauthorized",
+			statusCode:    http.StatusUnauthorized,
+			responseBody:  "unauthorized",
+			expectedWrite: false,
+			expectedError: "",
+		},
+		{
+			name:          "cannot write - 403 Forbidden (read-only)",
+			statusCode:    http.StatusForbidden,
+			responseBody:  "forbidden",
+			expectedWrite: false,
+			expectedError: "",
+		},
+		{
+			name:          "server error - 500",
+			statusCode:    http.StatusInternalServerError,
+			responseBody:  "server error",
+			expectedWrite: false,
+			expectedError: "check write permission",
+		},
+		{
+			name:          "not found - 404",
+			statusCode:    http.StatusNotFound,
+			responseBody:  "not found",
+			expectedWrite: false,
+			expectedError: "check write permission",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/repo.git/info/refs" {
+					t.Errorf("expected path /repo.git/info/refs, got %s", r.URL.Path)
+					http.Error(w, "unexpected request path", http.StatusInternalServerError)
+					return
+				}
+				if r.URL.Query().Get("service") != "git-receive-pack" {
+					t.Errorf("expected service=git-receive-pack, got %s", r.URL.Query().Get("service"))
+					http.Error(w, "unexpected service query parameter", http.StatusInternalServerError)
+					return
+				}
+
+				w.WriteHeader(tt.statusCode)
+				if _, err := w.Write([]byte(tt.responseBody)); err != nil {
+					t.Errorf("failed to write response: %v", err)
+					return
+				}
+			}))
+			defer server.Close()
+
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			canWrite, err := client.CanWrite(context.Background())
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedWrite, canWrite)
 		})
 	}
 }

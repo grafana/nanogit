@@ -508,18 +508,18 @@ func TestProvidersClone(t *testing.T) {
 
 	// Create a diverse set of files for comprehensive clone testing
 	testFiles := map[string]string{
-		"README.md":                  "# Test Repository\nThis is a test repository for clone operations.",
-		"src/main.go":               "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
-		"src/utils/helper.go":       "package utils\n\nfunc Helper() string {\n\treturn \"helper\"\n}",
-		"docs/api/endpoints.md":     "# API Endpoints\n\n## GET /api/v1/health\n\nReturns health status.",
-		"docs/user/guide.md":        "# User Guide\n\nThis guide explains how to use the application.",
-		"config/app.yaml":           "app:\n  name: test-app\n  port: 8080\n  debug: true",
-		"config/database.yaml":      "database:\n  host: localhost\n  port: 5432\n  name: testdb",
-		"scripts/build.sh":          "#!/bin/bash\necho \"Building application...\"\ngo build -o app src/main.go",
-		"tests/unit/main_test.go":   "package main\n\nimport \"testing\"\n\nfunc TestMain(t *testing.T) {\n\t// Test main function\n}",
-		"vendor/lib/external.txt":   "External library placeholder",
-		".gitignore":                "*.log\n*.tmp\nbuild/\ndist/",
-		"Makefile":                  "build:\n\tgo build -o app src/main.go\n\ntest:\n\tgo test ./...",
+		"README.md":               "# Test Repository\nThis is a test repository for clone operations.",
+		"src/main.go":             "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
+		"src/utils/helper.go":     "package utils\n\nfunc Helper() string {\n\treturn \"helper\"\n}",
+		"docs/api/endpoints.md":   "# API Endpoints\n\n## GET /api/v1/health\n\nReturns health status.",
+		"docs/user/guide.md":      "# User Guide\n\nThis guide explains how to use the application.",
+		"config/app.yaml":         "app:\n  name: test-app\n  port: 8080\n  debug: true",
+		"config/database.yaml":    "database:\n  host: localhost\n  port: 5432\n  name: testdb",
+		"scripts/build.sh":        "#!/bin/bash\necho \"Building application...\"\ngo build -o app src/main.go",
+		"tests/unit/main_test.go": "package main\n\nimport \"testing\"\n\nfunc TestMain(t *testing.T) {\n\t// Test main function\n}",
+		"vendor/lib/external.txt": "External library placeholder",
+		".gitignore":              "*.log\n*.tmp\nbuild/\ndist/",
+		"Makefile":                "build:\n\tgo build -o app src/main.go\n\ntest:\n\tgo test ./...",
 	}
 
 	t.Logf("Creating %d test files for clone operation...", len(testFiles))
@@ -557,7 +557,7 @@ func TestProvidersClone(t *testing.T) {
 	require.Equal(t, commit.Hash, result.Commit.Hash)
 	require.Equal(t, "Add test files for clone operation", result.Commit.Message)
 	require.Equal(t, author.Email, result.Commit.Author.Email)
-	
+
 	// The repository may have pre-existing files, so we should have at least our test files
 	require.GreaterOrEqual(t, result.FilteredFiles, len(testFiles), "Should clone at least our test files")
 	totalFilesInRepo := result.TotalFiles
@@ -572,7 +572,7 @@ func TestProvidersClone(t *testing.T) {
 		require.NoError(t, err, "Should be able to read our test file: %s", expectedPath)
 		require.Equal(t, expectedContent, string(actualContent), "Our test file content should match: %s", expectedPath)
 	}
-	
+
 	t.Logf("Full clone completed: %d total files in repo, %d files cloned, %d test files created",
 		totalFilesInRepo, actualTestFiles, len(testFiles))
 
@@ -601,7 +601,7 @@ func TestProvidersClone(t *testing.T) {
 	for _, expectedPath := range expectedSourceFiles {
 		fullPath := filepath.Join(sourceCloneDir, expectedPath)
 		require.FileExists(t, fullPath, "Our expected test file should exist: %s", expectedPath)
-		
+
 		// Verify content matches our test data
 		if expectedContent, exists := testFiles[expectedPath]; exists {
 			actualContent, err := os.ReadFile(fullPath)
@@ -650,7 +650,7 @@ func TestProvidersClone(t *testing.T) {
 	for _, includedPath := range includedFiles {
 		fullPath := filepath.Join(filteredCloneDir, includedPath)
 		require.FileExists(t, fullPath, "Our non-excluded test file should exist: %s", includedPath)
-		
+
 		// Verify content matches our test data
 		if expectedContent, exists := testFiles[includedPath]; exists {
 			actualContent, err := os.ReadFile(fullPath)
@@ -687,7 +687,7 @@ func TestProvidersClone(t *testing.T) {
 	require.FileExists(t, filepath.Join(complexCloneDir, "src/utils/helper.go"), "Our included test file should exist")
 	require.NoFileExists(t, filepath.Join(complexCloneDir, "docs/api/endpoints.md"), "Our excluded test file should not exist")
 	require.NoFileExists(t, filepath.Join(complexCloneDir, "README.md"), "Our non-included test file should not exist")
-	
+
 	// Verify content of files we know should exist
 	testFilesToCheck := []string{"docs/user/guide.md", "src/main.go", "src/utils/helper.go"}
 	for _, filePath := range testFilesToCheck {

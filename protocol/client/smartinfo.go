@@ -62,6 +62,12 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	}()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		// Check for structured client errors (401, 403, 404)
+		if clientErr := CheckHTTPClientError(res); clientErr != nil {
+			return clientErr
+		}
+
+		// Generic error for other non-2xx codes
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 

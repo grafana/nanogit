@@ -43,6 +43,12 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 			logger.Error("error closing response body", "error", closeErr)
 		}
 
+		// Check for structured client errors (401, 403, 404)
+		if clientErr := CheckHTTPClientError(res); clientErr != nil {
+			return nil, clientErr
+		}
+
+		// Generic error for other non-2xx codes
 		return nil, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
