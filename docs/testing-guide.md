@@ -90,12 +90,12 @@ func TestManualSetup(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server with custom options
-	server, cleanup, err := testutil.QuickServer(ctx,
+	server, err := testutil.NewServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 		testutil.WithTimeout(60*time.Second),
 	)
 	require.NoError(t, err)
-	defer cleanup()
+	defer server.Cleanup()
 
 	// Create user
 	user, err := server.CreateUser(ctx)
@@ -129,9 +129,9 @@ Best for: Testing remote Git operations without local repositories.
 func TestRemoteOperations(t *testing.T) {
 	ctx := context.Background()
 
-	server, cleanup, err := testutil.QuickServer(ctx)
+	server, err := testutil.NewServer(ctx)
 	require.NoError(t, err)
-	defer cleanup()
+	defer server.Cleanup()
 
 	user, err := server.CreateUser(ctx)
 	require.NoError(t, err)
@@ -282,9 +282,9 @@ var _ = Describe("Git Operations", func() {
 func TestMultiUserCollaboration(t *testing.T) {
 	ctx := context.Background()
 
-	server, cleanup, err := testutil.QuickServer(ctx)
+	server, err := testutil.NewServer(ctx)
 	require.NoError(t, err)
-	defer cleanup()
+	defer server.Cleanup()
 
 	// Create users
 	alice, _ := server.CreateUser(ctx)
@@ -370,7 +370,7 @@ var server *testutil.Server
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 	var err error
-	server, _, err = testutil.QuickServer(ctx)
+	server, err = testutil.NewServer(ctx)
 	if err != nil {
 		panic(err)
 	}

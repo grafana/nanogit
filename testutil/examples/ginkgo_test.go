@@ -31,7 +31,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 		// Create server
 		var err error
-		server, err = testutil.QuickServer(ctx,
+		server, err = testutil.NewServer(ctx,
 			testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
 		)
 		Expect(err).NotTo(HaveOccurred(), "failed to create server")
@@ -158,7 +158,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 
 		BeforeEach(func() {
 			var err error
-			server, err = testutil.QuickServer(ctx,
+			server, err = testutil.NewServer(ctx,
 				testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -233,7 +233,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 		BeforeEach(func() {
 			// Use colored logger for nice output
 			var err error
-			coloredServer, err = testutil.QuickServer(ctx,
+			coloredServer, err = testutil.NewServer(ctx,
 				testutil.WithLogger(testutil.NewColoredLogger(GinkgoWriter)),
 			)
 			Expect(err).NotTo(HaveOccurred())

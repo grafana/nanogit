@@ -326,32 +326,3 @@ func (s *Server) Cleanup() error {
 
 	return nil
 }
-
-// QuickServer is a convenience function that creates a Server.
-// The server includes a Cleanup() method that should be called when done.
-//
-// Example:
-//
-//	server, err := testutil.QuickServer(ctx)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	defer server.Cleanup()
-func QuickServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
-	return NewServer(ctx, opts...)
-}
-
-// MustQuickServer is like QuickServer but panics on error.
-// Useful for test setup where failure should halt execution.
-//
-// Example:
-//
-//	server := testutil.MustQuickServer(ctx)
-//	defer server.Cleanup()
-func MustQuickServer(ctx context.Context, opts ...ServerOption) *Server {
-	server, err := QuickServer(ctx, opts...)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create quick server: %v", err))
-	}
-	return server
-}

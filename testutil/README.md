@@ -31,7 +31,7 @@ func TestGitOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server
-	server, err := testutil.QuickServer(ctx,
+	server, err := testutil.NewServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
@@ -66,10 +66,7 @@ The `Server` type represents a Gitea server running in a container.
 ```go
 // Create a new server
 server, err := testutil.NewServer(ctx, opts...)
-
-// Or use QuickServer for automatic cleanup
-server, cleanup, err := testutil.QuickServer(ctx, opts...)
-defer cleanup()
+defer server.Cleanup()
 
 // Create a user
 user, err := server.CreateUser(ctx)
@@ -82,9 +79,6 @@ token, err := server.GenerateUserToken(ctx, user.Username)
 
 // Get server URL
 url := server.URL()
-
-// Cleanup (if not using QuickServer)
-err = server.Cleanup()
 ```
 
 **Server Options:**
@@ -214,7 +208,7 @@ var _ = Describe("Git Operations", func() {
 		var err error
 
 		// Create server
-		server, err = testutil.QuickServer(ctx,
+		server, err = testutil.NewServer(ctx,
 			testutil.WithLogger(testutil.NewWriterLogger(GinkgoWriter)),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -308,7 +302,7 @@ server, err := testutil.NewServer(ctx,
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 defer cancel()
 
-server, err := testutil.QuickServer(ctx)
+server, err := testutil.NewServer(ctx)
 defer server.Cleanup()
 ```
 

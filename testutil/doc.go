@@ -6,7 +6,7 @@
 //
 // # Basic Usage
 //
-//	server, err := testutil.QuickServer(ctx)
+//	server, err := testutil.NewServer(ctx)
 //	if err != nil {
 //		t.Fatal(err)
 //	}

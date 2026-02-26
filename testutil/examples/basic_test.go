@@ -13,7 +13,7 @@ func TestBasicGitOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server
-	server, err := testutil.QuickServer(ctx,
+	server, err := testutil.NewServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err, "failed to create server")
@@ -92,7 +92,7 @@ func TestManualSetup(t *testing.T) {
 
 	// Create server
 	t.Log("Creating Git server")
-	server, err := testutil.QuickServer(ctx,
+	server, err := testutil.NewServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err, "failed to create server")
@@ -160,7 +160,7 @@ func TestMultipleFiles(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server
-	server, err := testutil.QuickServer(ctx,
+	server, err := testutil.NewServer(ctx,
 		testutil.WithLogger(testutil.NewTestLogger(t)),
 	)
 	require.NoError(t, err)
