@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/options"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -10,15 +11,15 @@ import (
 
 var _ = Describe("Authorization", func() {
 	var (
-		remote    *RemoteRepo
-		user      *User
+		remote    *gittest.RemoteRepository
+		user      *gittest.User
 		remoteURL string
 	)
 
 	BeforeEach(func() {
 		By("Setting up test repository using shared Git server")
 		_, remote, _, user = QuickSetup()
-		remoteURL = remote.URL()
+		remoteURL = remote.URL
 	})
 
 	It("should successfully authorize with basic auth", func() {
@@ -46,7 +47,8 @@ var _ = Describe("Authorization", func() {
 
 	It("should successfully authorize with access token", func() {
 		By("Generating access token for user")
-		token := gitServer.GenerateUserToken(user.Username, user.Password)
+		token, err := gitServer.CreateToken(ctx, user.Username)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(token).NotTo(BeEmpty())
 
 		By("Creating client with access token")

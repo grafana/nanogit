@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/protocol/hash"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -14,7 +15,7 @@ var _ = Describe("References", func() {
 	Context("ListRefs operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalRepository
+			local       *gittest.LocalRepo
 			firstCommit hash.Hash
 		)
 
@@ -23,18 +24,24 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := local.Git("rev-parse", "HEAD")
-			var err error
+			firstCommitStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up branches and tags")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
-			local.Git("branch", "test-branch")
-			local.Git("push", "origin", "test-branch", "--force")
-			local.Git("tag", "v1.0.0")
-			local.Git("push", "origin", "v1.0.0", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "-u", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("branch", "test-branch")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "test-branch", "--force")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("tag", "v1.0.0")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "v1.0.0", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should list all references", func() {
@@ -56,7 +63,7 @@ var _ = Describe("References", func() {
 	Context("GetRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalRepository
+			local       *gittest.LocalRepo
 			firstCommit hash.Hash
 		)
 
@@ -65,18 +72,24 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := local.Git("rev-parse", "HEAD")
-			var err error
+			firstCommitStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up branches and tags")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
-			local.Git("branch", "test-branch")
-			local.Git("push", "origin", "test-branch", "--force")
-			local.Git("tag", "v1.0.0")
-			local.Git("push", "origin", "v1.0.0", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "-u", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("branch", "test-branch")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "test-branch", "--force")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("tag", "v1.0.0")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "v1.0.0", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should get existing refs", func() {
@@ -106,10 +119,14 @@ var _ = Describe("References", func() {
 
 		It("should handle ambiguous ref prefix by exact matching", func() {
 			By("Creating refs with similar prefixes")
-			local.Git("branch", "test")
-			local.Git("push", "origin", "test", "--force")
-			local.Git("branch", "test-longer")
-			local.Git("push", "origin", "test-longer", "--force")
+			_, err := local.Git("branch", "test")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "test", "--force")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("branch", "test-longer")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "test-longer", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting specific ref should work despite prefix ambiguity")
 			ref, err := client.GetRef(ctx, "refs/heads/test")
@@ -128,7 +145,7 @@ var _ = Describe("References", func() {
 	Context("CreateRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalRepository
+			local       *gittest.LocalRepo
 			firstCommit hash.Hash
 		)
 
@@ -137,14 +154,16 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := local.Git("rev-parse", "HEAD")
-			var err error
+			firstCommitStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "-u", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should create branch ref", func() {
@@ -173,7 +192,7 @@ var _ = Describe("References", func() {
 	Context("UpdateRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalRepository
+			local       *gittest.LocalRepo
 			firstCommit hash.Hash
 		)
 
@@ -182,14 +201,16 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := local.Git("rev-parse", "HEAD")
-			var err error
+			firstCommitStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "-u", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update existing ref", func() {
@@ -198,11 +219,14 @@ var _ = Describe("References", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a new commit")
-			local.Git("commit", "--allow-empty", "-m", "new commit")
-			newHashStr := local.Git("rev-parse", "HEAD")
+			_, err = local.Git("commit", "--allow-empty", "-m", "new commit")
+			Expect(err).NotTo(HaveOccurred())
+			newHashStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			newHash, err := hash.FromHex(newHashStr)
 			Expect(err).NotTo(HaveOccurred())
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Updating ref to point to new commit")
 			err = client.UpdateRef(ctx, nanogit.Ref{Name: "refs/heads/update-test", Hash: newHash})
@@ -218,7 +242,7 @@ var _ = Describe("References", func() {
 	Context("DeleteRef operations", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalRepository
+			local       *gittest.LocalRepo
 			firstCommit hash.Hash
 		)
 
@@ -227,14 +251,16 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := local.Git("rev-parse", "HEAD")
-			var err error
+			firstCommitStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "-u", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should delete branch ref", func() {
@@ -273,7 +299,7 @@ var _ = Describe("References", func() {
 	Context("Integration workflow", func() {
 		var (
 			client      nanogit.Client
-			local       *LocalRepository
+			local       *gittest.LocalRepo
 			firstCommit hash.Hash
 		)
 
@@ -282,14 +308,16 @@ var _ = Describe("References", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Getting initial commit hash")
-			firstCommitStr := local.Git("rev-parse", "HEAD")
-			var err error
+			firstCommitStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			firstCommit, err = hash.FromHex(firstCommitStr)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up main branch")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "-u", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should complete full ref lifecycle", func() {
@@ -305,11 +333,14 @@ var _ = Describe("References", func() {
 			Expect(ref.Hash).To(Equal(firstCommit))
 
 			By("Creating new commit for update")
-			local.Git("commit", "--allow-empty", "-m", "integration flow commit")
-			newHashStr := local.Git("rev-parse", "HEAD")
+			_, err = local.Git("commit", "--allow-empty", "-m", "integration flow commit")
+			Expect(err).NotTo(HaveOccurred())
+			newHashStr, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
 			newHash, err := hash.FromHex(newHashStr)
 			Expect(err).NotTo(HaveOccurred())
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Updating ref to new commit")
 			err = client.UpdateRef(ctx, nanogit.Ref{Name: refName, Hash: newHash})

@@ -14,7 +14,7 @@ import (
 
 // Shared test infrastructure
 var (
-	gitServer *GitServer
+	gitServer *gittest.Server
 	logger    interface {
 		gittest.Logger
 		Debug(msg string, keysAndValues ...any)
@@ -42,13 +42,10 @@ var _ = BeforeSuite(func() {
 	logger = gittest.NewStructuredLogger(baseLogger)
 
 	var err error
-	server, err := gittest.NewServer(context.Background(),
+	gitServer, err = gittest.NewServer(context.Background(),
 		gittest.WithLogger(baseLogger),
 	)
 	Expect(err).NotTo(HaveOccurred())
-
-	// Wrap server for backward compatibility
-	gitServer = &GitServer{Server: server}
 
 	logger.Success("🚀 Integration test suite setup complete")
 	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
@@ -64,29 +61,23 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalRepository, *User) {
+func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo, *gittest.User) {
 	user, err := gitServer.CreateUser(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	repo, err := gitServer.CreateRepo(ctx, gittest.RandomRepoName(), user)
 	Expect(err).NotTo(HaveOccurred())
 
-	localRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+	local, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(func() {
-		Expect(localRepo.Cleanup()).To(Succeed())
+		Expect(local.Cleanup()).To(Succeed())
 	})
 
-	// Wrap local repo for Ginkgo-friendly error handling
-	local := &LocalRepository{LocalRepo: localRepo}
+	client, err := local.InitWithRemote(user, repo)
+	Expect(err).NotTo(HaveOccurred())
 
-	remote := repo
-	client := local.InitWithRemote(user, remote)
-
-	// Wrap repo for backward compatibility
-	remoteRepo := &RemoteRepo{RemoteRepository: repo}
-
-	return client, remoteRepo, local, user
+	return client, repo, local, user
 }
 
 

@@ -16,7 +16,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree operations", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalRepository
+			local      *gittest.LocalRepo
 			commitHash hash.Hash
 			getHash    func(string) hash.Hash
 		)
@@ -26,29 +26,41 @@ var _ = Describe("Trees", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Creating a directory structure with files")
-			local.CreateDirPath("dir1")
-			local.CreateDirPath("dir2")
-			local.CreateFile("dir1/file1.txt", "content1")
-			local.CreateFile("dir1/file2.txt", "content2")
-			local.CreateFile("dir2/file3.txt", "content3")
-			local.CreateFile("root.txt", "root content")
+			err := local.CreateDirPath("dir1")
+			Expect(err).NotTo(HaveOccurred())
+			err = local.CreateDirPath("dir2")
+			Expect(err).NotTo(HaveOccurred())
+			err = local.CreateFile("dir1/file1.txt", "content1")
+			Expect(err).NotTo(HaveOccurred())
+			err = local.CreateFile("dir1/file2.txt", "content2")
+			Expect(err).NotTo(HaveOccurred())
+			err = local.CreateFile("dir2/file3.txt", "content3")
+			Expect(err).NotTo(HaveOccurred())
+			err = local.CreateFile("root.txt", "root content")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding and committing the files")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Initial commit with tree structure")
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Initial commit with tree structure")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating and switching to main branch")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the commit hash")
-			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			commitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up hash helper function")
 			getHash = func(path string) hash.Hash {
-				out := local.Git("rev-parse", "HEAD:"+path)
+				out, err := local.Git("rev-parse", "HEAD:"+path)
+				Expect(err).NotTo(HaveOccurred())
 				h, err := hash.FromHex(out)
 				Expect(err).NotTo(HaveOccurred())
 				return h
@@ -143,7 +155,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree complex structure", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalRepository
+			local      *gittest.LocalRepo
 			commitHash hash.Hash
 		)
 
@@ -174,8 +186,9 @@ var _ = Describe("Trees", func() {
 			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
-			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			commitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -218,7 +231,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTree operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalRepository
+			local    *gittest.LocalRepo
 			treeHash hash.Hash
 		)
 
@@ -243,8 +256,9 @@ var _ = Describe("Trees", func() {
 			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
-			var err error
-			treeHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			output, err := local.Git("rev-parse", "HEAD^{tree}")
+			Expect(err).NotTo(HaveOccurred())
+			treeHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -276,7 +290,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTreeByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalRepository
+			local    *gittest.LocalRepo
 			treeHash hash.Hash
 			getHash  func(string) hash.Hash
 		)
@@ -302,13 +316,15 @@ var _ = Describe("Trees", func() {
 			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
-			var err error
-			treeHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			output, err := local.Git("rev-parse", "HEAD^{tree}")
+			Expect(err).NotTo(HaveOccurred())
+			treeHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up hash helper function")
 			getHash = func(path string) hash.Hash {
-				out := local.Git("rev-parse", "HEAD:"+path)
+				out, err := local.Git("rev-parse", "HEAD:"+path)
+				Expect(err).NotTo(HaveOccurred())
 				h, err := hash.FromHex(out)
 				Expect(err).NotTo(HaveOccurred())
 				return h
@@ -402,7 +418,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree with fallback fetch", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalRepository
+			local      *gittest.LocalRepo
 			commitHash hash.Hash
 		)
 
@@ -434,8 +450,9 @@ var _ = Describe("Trees", func() {
 			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
-			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			commitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -490,52 +507,65 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree with submodule", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalRepository
+			local      *gittest.LocalRepo
 			commitHash hash.Hash
 		)
 
 		BeforeEach(func() {
 			By("Setting up main repository")
-			var remote *RemoteRepo
-			var user *User
+			var remote *gittest.RemoteRepository
+			var user *gittest.User
 			client, remote, local, user = QuickSetup()
 
 			By("Creating a second repository to use as a submodule source")
 			subRepo, err := gitServer.CreateRepo(ctx, "subrepo", user)
 			Expect(err).NotTo(HaveOccurred())
-			subRemote := &RemoteRepo{RemoteRepository: subRepo}
 
 			By("Setting up the submodule source repository with content")
-			subLocalRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			subLocal, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
 			Expect(err).NotTo(HaveOccurred())
-			subLocal := &LocalRepository{LocalRepo: subLocalRepo}
-			subLocal.Git("config", "user.name", user.Username)
-			subLocal.Git("config", "user.email", user.Email)
-			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
-			subLocal.CreateFile("lib.txt", "library content")
-			subLocal.Git("add", ".")
-			subLocal.Git("commit", "-m", "Initial submodule commit")
-			subLocal.Git("branch", "-M", "main")
-			subLocal.Git("push", "origin", "main", "--force")
+			_, err = subLocal.Git("config", "user.name", user.Username)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("config", "user.email", user.Email)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("remote", "add", "origin", subRepo.AuthURL)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(subLocal.CreateFile("lib.txt", "library content")).To(Succeed())
+			Expect(subLocal.Git("add", ".")).To(Succeed())
+			_, err = subLocal.Git("commit", "-m", "Initial submodule commit")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding files to the main repository")
-			local.CreateDirPath("src")
-			local.CreateFile("src/main.txt", "main content")
-			local.CreateFile("README.md", "readme")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Add source files")
+			Expect(local.CreateDirPath("src")).To(Succeed())
+			Expect(local.CreateFile("src/main.txt", "main content")).To(Succeed())
+			Expect(local.CreateFile("README.md", "readme")).To(Succeed())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add source files")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			local.Git("submodule", "add", subRemote.AuthURL(), "external/lib")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Add submodule")
+			_, err = local.Git("submodule", "add", subRepo.AuthURL, "external/lib")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add submodule")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing the main repository")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			commitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -570,53 +600,67 @@ var _ = Describe("Trees", func() {
 	Context("CompareCommits with submodule", func() {
 		var (
 			client              nanogit.Client
-			local               *LocalRepository
+			local               *gittest.LocalRepo
 			beforeSubmoduleHash hash.Hash
 			afterSubmoduleHash  hash.Hash
 		)
 
 		BeforeEach(func() {
 			By("Setting up main repository")
-			var remote *RemoteRepo
-			var user *User
+			var remote *gittest.RemoteRepository
+			var user *gittest.User
 			client, remote, local, user = QuickSetup()
 
 			By("Creating initial commit in main repo")
-			local.CreateFile("README.md", "readme")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Initial commit")
-			var err error
-			beforeSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(local.CreateFile("README.md", "readme")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Initial commit")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			beforeSubmoduleHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a second repository to use as a submodule source")
 			subRepo, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
 			Expect(err).NotTo(HaveOccurred())
-			subRemote := &RemoteRepo{RemoteRepository: subRepo}
 
-			subLocalRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			subLocal, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
 			Expect(err).NotTo(HaveOccurred())
-			subLocal := &LocalRepository{LocalRepo: subLocalRepo}
-			subLocal.Git("config", "user.name", user.Username)
-			subLocal.Git("config", "user.email", user.Email)
-			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
-			subLocal.CreateFile("lib.txt", "library content")
-			subLocal.Git("add", ".")
-			subLocal.Git("commit", "-m", "Initial submodule commit")
-			subLocal.Git("branch", "-M", "main")
-			subLocal.Git("push", "origin", "main", "--force")
+			_, err = subLocal.Git("config", "user.name", user.Username)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("config", "user.email", user.Email)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("remote", "add", "origin", subRepo.AuthURL)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(subLocal.CreateFile("lib.txt", "library content")).To(Succeed())
+			Expect(subLocal.Git("add", ".")).To(Succeed())
+			_, err = subLocal.Git("commit", "-m", "Initial submodule commit")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = subLocal.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			local.Git("submodule", "add", subRemote.AuthURL(), "vendor/lib")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Add submodule")
-			afterSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			_, err = local.Git("submodule", "add", subRepo.AuthURL, "vendor/lib")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add submodule")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			afterSubmoduleHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing the main repository")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("branch", "-M", "main")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should compare commits across submodule addition without errors", func() {
