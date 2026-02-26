@@ -13,7 +13,3 @@ func gitNoError(local *testutil.LocalRepo, args ...string) string {
 	return output
 }
 
-// mustGit is an alias for gitNoError for tests that prefer this naming
-func mustGit(local *testutil.LocalRepo, args ...string) string {
-	return gitNoError(local, args...)
-}

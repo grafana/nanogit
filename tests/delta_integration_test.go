@@ -26,7 +26,7 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle ref-delta objects for modified files", func() {
 			By("Creating a base file and committing it")
 			baseContent := strings.Repeat("base content line\n", 100) // ~1.8KB
-			local.CreateFile("delta-test.txt", baseContent)
+			_ = local.CreateFile("delta-test.txt", baseContent)
 			gitNoError(local, "add", "delta-test.txt")
 			gitNoError(local, "commit", "-m", "Initial commit with base content")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -35,7 +35,7 @@ var _ = Describe("Delta Object Handling", func() {
 			for i := 1; i <= 5; i++ {
 				modifiedContent := strings.Replace(baseContent, "base content line", "modified content line", 1)
 				baseContent = modifiedContent
-				local.UpdateFile("delta-test.txt", baseContent)
+				_ = local.UpdateFile("delta-test.txt", baseContent)
 				gitNoError(local, "add", "delta-test.txt")
 				gitNoError(local, "commit", "-m", "Modification "+string(rune('0'+i)))
 			}
@@ -67,7 +67,7 @@ var _ = Describe("Delta Object Handling", func() {
 
 			for i := 1; i <= fileCount; i++ {
 				content := strings.Replace(baseTemplate, "%d", string(rune('0'+i)), 1)
-				local.CreateFile("file"+string(rune('0'+i))+".txt", content)
+				_ = local.CreateFile("file"+string(rune('0'+i))+".txt", content)
 			}
 
 			gitNoError(local, "add", ".")
@@ -100,16 +100,16 @@ var _ = Describe("Delta Object Handling", func() {
 
 		It("should handle deltified tree objects", func() {
 			By("Creating a directory structure")
-			local.CreateDirPath("dir1")
+			_ = local.CreateDirPath("dir1")
 			for i := 1; i <= 5; i++ {
-				local.CreateFile("dir1/file"+string(rune('0'+i))+".txt", "content "+string(rune('0'+i)))
+				_ = local.CreateFile("dir1/file"+string(rune('0'+i))+".txt", "content "+string(rune('0'+i)))
 			}
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Initial directory structure")
 			gitNoError(local, "push", "origin", "main", "--force")
 
 			By("Modifying the directory structure slightly")
-			local.CreateFile("dir1/file6.txt", "content 6")
+			_ = local.CreateFile("dir1/file6.txt", "content 6")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Add one more file")
 			gitNoError(local, "push", "origin", "main", "--force")
@@ -133,7 +133,7 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle deltified commits", func() {
 			By("Creating multiple commits with small changes")
 			for i := 1; i <= 10; i++ {
-				local.CreateFile("commit-test-"+string(rune('0'+i))+".txt", "commit "+string(rune('0'+i)))
+				_ = local.CreateFile("commit-test-"+string(rune('0'+i))+".txt", "commit "+string(rune('0'+i)))
 				gitNoError(local, "add", ".")
 				gitNoError(local, "commit", "-m", "Commit number "+string(rune('0'+i)))
 			}
@@ -158,14 +158,14 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle GetBlobByPath with deltified objects", func() {
 			By("Creating a file and modifying it multiple times")
 			baseContent := "Initial content\n" + strings.Repeat("line\n", 50)
-			local.CreateFile("path-test.txt", baseContent)
+			_ = local.CreateFile("path-test.txt", baseContent)
 			gitNoError(local, "add", "path-test.txt")
 			gitNoError(local, "commit", "-m", "Initial")
 			gitNoError(local, "push", "origin", "main", "--force")
 
 			for i := 1; i <= 3; i++ {
 				baseContent += "Additional line " + string(rune('0'+i)) + "\n"
-				local.UpdateFile("path-test.txt", baseContent)
+				_ = local.UpdateFile("path-test.txt", baseContent)
 				gitNoError(local, "add", "path-test.txt")
 				gitNoError(local, "commit", "-m", "Update "+string(rune('0'+i)))
 			}
@@ -188,13 +188,13 @@ var _ = Describe("Delta Object Handling", func() {
 
 		It("should handle clone with deltified repository", func() {
 			By("Creating a realistic repository structure")
-			local.CreateDirPath("src")
-			local.CreateDirPath("docs")
+			_ = local.CreateDirPath("src")
+			_ = local.CreateDirPath("docs")
 
 			// Create base files
 			for i := 1; i <= 5; i++ {
-				local.CreateFile("src/file"+string(rune('0'+i))+".go", "package main\n\nfunc main() {\n\t// Version "+string(rune('0'+i))+"\n}\n")
-				local.CreateFile("docs/doc"+string(rune('0'+i))+".md", "# Documentation "+string(rune('0'+i))+"\n\nContent here.\n")
+				_ = local.CreateFile("src/file"+string(rune('0'+i))+".go", "package main\n\nfunc main() {\n\t// Version "+string(rune('0'+i))+"\n}\n")
+				_ = local.CreateFile("docs/doc"+string(rune('0'+i))+".md", "# Documentation "+string(rune('0'+i))+"\n\nContent here.\n")
 			}
 
 			gitNoError(local, "add", ".")
@@ -203,7 +203,7 @@ var _ = Describe("Delta Object Handling", func() {
 
 			By("Making incremental changes to create delta opportunities")
 			for i := 1; i <= 5; i++ {
-				local.UpdateFile("src/file1.go", "package main\n\nfunc main() {\n\t// Modified version "+string(rune('0'+i))+"\n}\n")
+				_ = local.UpdateFile("src/file1.go", "package main\n\nfunc main() {\n\t// Modified version "+string(rune('0'+i))+"\n}\n")
 				gitNoError(local, "add", ".")
 				gitNoError(local, "commit", "-m", "Update iteration "+string(rune('0'+i)))
 			}
@@ -270,15 +270,15 @@ var _ = Describe("Delta Object Handling", func() {
 
 		It("should handle empty file deltification", func() {
 			By("Creating and modifying an empty file")
-			local.CreateFile("empty.txt", "")
+			_ = local.CreateFile("empty.txt", "")
 			gitNoError(local, "add", "empty.txt")
 			gitNoError(local, "commit", "-m", "Add empty file")
 
-			local.UpdateFile("empty.txt", "now has content")
+			_ = local.UpdateFile("empty.txt", "now has content")
 			gitNoError(local, "add", "empty.txt")
 			gitNoError(local, "commit", "-m", "Add content")
 
-			local.UpdateFile("empty.txt", "")
+			_ = local.UpdateFile("empty.txt", "")
 			gitNoError(local, "add", "empty.txt")
 			gitNoError(local, "commit", "-m", "Empty again")
 
@@ -297,14 +297,14 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle large file with deltas", func() {
 			By("Creating a large file")
 			largeContent := strings.Repeat("Large file content line with some variation\n", 1000) // ~47KB
-			local.CreateFile("large.txt", largeContent)
+			_ = local.CreateFile("large.txt", largeContent)
 			gitNoError(local, "add", "large.txt")
 			gitNoError(local, "commit", "-m", "Add large file")
 			gitNoError(local, "push", "origin", "main", "--force")
 
 			By("Making a small modification to the large file")
 			modifiedContent := largeContent + "One more line\n"
-			local.UpdateFile("large.txt", modifiedContent)
+			_ = local.UpdateFile("large.txt", modifiedContent)
 			gitNoError(local, "add", "large.txt")
 			gitNoError(local, "commit", "-m", "Small modification")
 			gitNoError(local, "push", "origin", "main", "--force")

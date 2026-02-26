@@ -87,7 +87,6 @@ jobs:
       - name: Run unit tests
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
         run: make test-unit
 
   test-coverage:
@@ -124,7 +123,6 @@ jobs:
       - name: Run tests with coverage
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
         run: make test-coverage
       - name: Upload coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
@@ -157,7 +155,6 @@ jobs:
       - name: Run integration tests
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
         run: make test-integration
 
   test-github-provider:
@@ -196,7 +193,6 @@ jobs:
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
           TEST_USER: ${{ env.GH_REPO_USER }}
           TEST_TOKEN: ${{ env.GH_REPO_TOKEN }}
@@ -243,7 +239,6 @@ jobs:
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
           TEST_USER: ${{ env.GITLAB_REPO_USER }}
           TEST_TOKEN: ${{ env.GITLAB_REPO_TOKEN }}
@@ -289,7 +284,6 @@ jobs:
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
-          GOFLAGS: -mod=vendor
           TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
           TEST_USER: ${{ env.BITBUCKET_REPO_USER }}
           TEST_TOKEN: ${{ env.BITBUCKET_REPO_TOKEN }}

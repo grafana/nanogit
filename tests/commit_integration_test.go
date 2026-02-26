@@ -34,7 +34,7 @@ var _ = Describe("Commits", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating modify file commit")
-			local.UpdateFile("test.txt", "modified content")
+			_ = local.UpdateFile("test.txt", "modified content")
 			gitNoError(local, "add", "test.txt")
 			gitNoError(local, "commit", "-m", "Modify file")
 			modifyFileCommitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
@@ -42,7 +42,7 @@ var _ = Describe("Commits", func() {
 
 			By("Creating rename file commit")
 			gitNoError(local, "mv", "test.txt", "renamed.txt")
-			local.CreateFile("renamed.txt", "modified content")
+			_ = local.CreateFile("renamed.txt", "modified content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Rename and add files")
 			renameCommitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
@@ -135,7 +135,7 @@ var _ = Describe("Commits", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Creating initial commit with a file")
-			local.CreateFile("test.txt", "initial content")
+			_ = local.CreateFile("test.txt", "initial content")
 			gitNoError(local, "add", "test.txt")
 			gitNoError(local, "commit", "-m", "Initial commit")
 			var err error
@@ -143,7 +143,7 @@ var _ = Describe("Commits", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating second commit that modifies the file")
-			local.CreateFile("test.txt", "modified content")
+			_ = local.CreateFile("test.txt", "modified content")
 			gitNoError(local, "add", "test.txt")
 			gitNoError(local, "commit", "-m", "Modify file")
 			modifiedCommitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
@@ -151,7 +151,7 @@ var _ = Describe("Commits", func() {
 
 			By("Creating third commit that renames and adds files")
 			gitNoError(local, "mv", "test.txt", "renamed.txt")
-			local.CreateFile("new.txt", "modified content")
+			_ = local.CreateFile("new.txt", "modified content")
 			gitNoError(local, "add", ".")
 			gitNoError(local, "commit", "-m", "Rename and add files")
 			renamedCommitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
@@ -248,17 +248,17 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating several commits to test with")
-				local.CreateFile("file1.txt", "content 1")
+				_ = local.CreateFile("file1.txt", "content 1")
 				gitNoError(local, "add", "file1.txt")
 				gitNoError(local, "commit", "-m", "Add file1")
 				gitNoError(local, "push", "-u", "origin", "main", "--force")
 
-				local.CreateFile("file2.txt", "content 2")
+				_ = local.CreateFile("file2.txt", "content 2")
 				gitNoError(local, "add", "file2.txt")
 				gitNoError(local, "commit", "-m", "Add file2")
 				gitNoError(local, "push", "origin", "main")
 
-				local.CreateFile("file3.txt", "content 3")
+				_ = local.CreateFile("file3.txt", "content 3")
 				gitNoError(local, "add", "file3.txt")
 				gitNoError(local, "commit", "-m", "Add file3")
 				gitNoError(local, "push", "origin", "main")
@@ -298,7 +298,7 @@ var _ = Describe("Commits", func() {
 
 				By("Creating multiple commits")
 				for i := 1; i <= 120; i++ {
-					local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
+					_ = local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
 					gitNoError(local, "add", fmt.Sprintf("file%d.txt", i))
 					gitNoError(local, "commit", "-m", fmt.Sprintf("Add file%d", i))
 				}
@@ -411,20 +411,20 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating commits affecting different paths")
-				local.CreateDirPath("docs")
-				local.CreateFile("docs/readme.md", "readme content")
+				_ = local.CreateDirPath("docs")
+				_ = local.CreateFile("docs/readme.md", "readme content")
 				gitNoError(local, "add", "docs/readme.md")
 				gitNoError(local, "commit", "-m", "Add docs")
 				gitNoError(local, "branch", "-M", "main")
 				gitNoError(local, "push", "-u", "origin", "main", "--force")
 
-				local.CreateDirPath("src")
-				local.CreateFile("src/main.go", "main content")
+				_ = local.CreateDirPath("src")
+				_ = local.CreateFile("src/main.go", "main content")
 				gitNoError(local, "add", "src/main.go")
 				gitNoError(local, "commit", "-m", "Add main")
 				gitNoError(local, "push", "origin", "main")
 
-				local.CreateFile("docs/guide.md", "guide content")
+				_ = local.CreateFile("docs/guide.md", "guide content")
 				gitNoError(local, "add", "docs/guide.md")
 				gitNoError(local, "commit", "-m", "Add guide")
 				gitNoError(local, "push", "origin", "main")
@@ -501,7 +501,7 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating first commit")
-				local.CreateFile("file1.txt", "content 1")
+				_ = local.CreateFile("file1.txt", "content 1")
 				gitNoError(local, "add", "file1.txt")
 				gitNoError(local, "commit", "-m", "Old commit")
 				gitNoError(local, "branch", "-M", "main")
@@ -513,7 +513,7 @@ var _ = Describe("Commits", func() {
 				time.Sleep(2 * time.Second)
 
 				By("Creating second commit")
-				local.CreateFile("file2.txt", "content 2")
+				_ = local.CreateFile("file2.txt", "content 2")
 				gitNoError(local, "add", "file2.txt")
 				gitNoError(local, "commit", "-m", "New commit")
 				gitNoError(local, "push", "origin", "main")
