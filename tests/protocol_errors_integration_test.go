@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"errors"
-	"fmt"
 	"os/exec"
 	"time"
 
@@ -34,18 +33,18 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up initial state with a commit")
 			local.CreateFile("initial.txt", "initial content")
-			local.Git("add", "initial.txt")
-			local.Git("commit", "-m", "Initial commit")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			gitNoError(local, "add", "initial.txt")
+			gitNoError(local, "commit", "-m", "Initial commit")
+			gitNoError(local, "branch", "-M", "main")
+			gitNoError(local, "push", "-u", "origin", "main", "--force")
 
 			By("Getting the initial commit hash")
-			initialHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			initialHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a new commit locally to advance the remote")
-			local.Git("commit", "--allow-empty", "-m", "Second commit")
-			local.Git("push", "origin", "main")
+			gitNoError(local, "commit", "--allow-empty", "-m", "Second commit")
+			gitNoError(local, "push", "origin", "main")
 
 			By("Creating a writer with the old (stale) hash")
 			ref := nanogit.Ref{
@@ -71,13 +70,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
 				Expect(refUpdateErr.RefName).To(Equal("refs/heads/main"))
-				logger.Info("Reference update failed as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				// logger.Info("Reference update failed as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				logger.Info("Push failed with Git server error as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
+				// logger.Info("Push failed with Git server error as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
-				logger.Info("Push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				// logger.Info("Push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 				// Still consider this a valid test result - any error shows conflict detection works
 			}
 		})
@@ -87,23 +86,23 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up initial state")
 			local.CreateFile("file1.txt", "content 1")
-			local.Git("add", "file1.txt")
-			local.Git("commit", "-m", "First commit")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			gitNoError(local, "add", "file1.txt")
+			gitNoError(local, "commit", "-m", "First commit")
+			gitNoError(local, "branch", "-M", "main")
+			gitNoError(local, "push", "-u", "origin", "main", "--force")
 
-			firstCommitHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			firstCommitHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a divergent commit history locally")
-			local.Git("commit", "--allow-empty", "-m", "Local commit")
-			local.Git("push", "origin", "main")
+			gitNoError(local, "commit", "--allow-empty", "-m", "Local commit")
+			gitNoError(local, "push", "origin", "main")
 
 			By("Resetting local to first commit and creating conflicting commit")
-			local.Git("reset", "--hard", firstCommitHash.String())
+			gitNoError(local, "reset", "--hard", firstCommitHash.String())
 			local.CreateFile("file2.txt", "conflicting content")
-			local.Git("add", "file2.txt")
-			local.Git("commit", "-m", "Conflicting commit")
+			gitNoError(local, "add", "file2.txt")
+			gitNoError(local, "commit", "-m", "Conflicting commit")
 
 			By("Attempting to push non-fast-forward update")
 			cmd := exec.Command("git", "push", "origin", "main", "--force-with-lease")
@@ -111,7 +110,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			pushErr := cmd.Run()
 			if pushErr != nil {
 				// This is expected - Git itself prevents non-fast-forward pushes
-				logger.Info("Git prevented non-fast-forward push as expected", "error", pushErr.Error())
+				// logger.Info("Git prevented non-fast-forward push as expected", "error", pushErr.Error())
 			}
 
 			By("Using nanogit writer to test protocol error handling")
@@ -133,25 +132,25 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			logger.Info("Valid push succeeded as expected")
+			// logger.Info("Valid push succeeded as expected")
 		})
 	})
 
 	Context("Git Server Error Messages", func() {
 		It("should handle server-side validation errors", func() {
-			client, remote, local, _ := QuickSetup()
+			client, _, local, _ := QuickSetup()
 
 			By("Setting up competing operations to trigger server validation errors")
 
 			// Get current state
-			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a commit locally to advance the remote
 			local.CreateFile("server-test.txt", "server test content")
-			local.Git("add", "server-test.txt")
-			local.Git("commit", "-m", "Server test commit")
-			local.Git("push", "origin", "main")
+			gitNoError(local, "add", "server-test.txt")
+			gitNoError(local, "commit", "-m", "Server test commit")
+			gitNoError(local, "push", "origin", "main")
 
 			By("Attempting push with outdated reference to trigger server validation error")
 			// Use the old hash before the server-side update
@@ -177,27 +176,27 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				logger.Info("Git server error detected as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
+				// logger.Info("Git server error detected as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else if protocol.IsGitReferenceUpdateError(err) {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
-				logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				// logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else {
-				logger.Info("Server validation failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				// logger.Info("Server validation failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 			}
 
 			By("Verifying repository remains accessible after error")
 			refs, err := client.ListRefs(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(refs)).To(BeNumerically(">", 0))
-			logger.Info("Repository remains accessible after validation error", "refs_count", len(refs), "repo_name", remote.RepoName)
+			// logger.Info("Repository remains accessible after validation error", "refs_count", len(refs), "repo_name", remote.RepoName)
 		})
 
 		It("should handle protocol errors during concurrent pushes", func() {
 			client, _, local, _ := QuickSetup()
 
 			By("Setting up concurrent operations that could trigger protocol conflicts")
-			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create two writers with the same starting reference
@@ -228,7 +227,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			By("First push should succeed")
 			err = writer1.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			logger.Info("First writer push succeeded")
+			// logger.Info("First writer push succeeded")
 
 			By("Second push should fail with protocol error")
 			err = writer2.Push(ctx)
@@ -238,13 +237,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if protocol.IsGitReferenceUpdateError(err) {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
-				logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				// logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
+				// logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
-				logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				// logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 			}
 		})
 	})
@@ -255,13 +254,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up repository")
 			local.CreateFile("recovery-test.txt", "recovery test")
-			local.Git("add", "recovery-test.txt")
-			local.Git("commit", "-m", "Recovery test commit")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			gitNoError(local, "add", "recovery-test.txt")
+			gitNoError(local, "commit", "-m", "Recovery test commit")
+			gitNoError(local, "branch", "-M", "main")
+			gitNoError(local, "push", "-u", "origin", "main", "--force")
 
 			By("Getting current state")
-			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -293,7 +292,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			By("First writer pushes successfully")
 			err = writer1.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			logger.Info("First writer pushed successfully", "commit", commit1.Hash.String())
+			// logger.Info("First writer pushed successfully", "commit", commit1.Hash.String())
 
 			By("Second writer should fail due to stale reference")
 			err = writer2.Push(ctx)
@@ -303,20 +302,20 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if protocol.IsGitReferenceUpdateError(err) {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
-				logger.Info("Reference update error as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				// logger.Info("Reference update error as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
+				// logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
-				logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				// logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 			}
 
 			By("Demonstrating recovery by getting updated reference")
 			updatedRef, err := client.GetRef(ctx, "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedRef.Hash).To(Equal(commit1.Hash))
-			logger.Info("Successfully retrieved updated reference for recovery", "new_hash", updatedRef.Hash.String())
+			// logger.Info("Successfully retrieved updated reference for recovery", "new_hash", updatedRef.Hash.String())
 
 			By("Verifying repository state after conflict")
 			refs, err := client.ListRefs(ctx)
@@ -326,7 +325,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			finalRef, err := client.GetRef(ctx, "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(finalRef.Hash).To(Equal(commit1.Hash))
-			logger.Info("Repository state is consistent", "final_commit", finalRef.Hash.String())
+			// logger.Info("Repository state is consistent", "final_commit", finalRef.Hash.String())
 		})
 	})
 
@@ -336,13 +335,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up repository")
 			local.CreateFile("edge-case.txt", "edge case test")
-			local.Git("add", "edge-case.txt")
-			local.Git("commit", "-m", "Edge case test")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			gitNoError(local, "add", "edge-case.txt")
+			gitNoError(local, "commit", "-m", "Edge case test")
+			gitNoError(local, "branch", "-M", "main")
+			gitNoError(local, "push", "-u", "origin", "main", "--force")
 
 			By("Testing with valid operations that might trigger edge cases")
-			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -372,16 +371,16 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				if protocol.IsGitUnpackError(err) {
 					var unpackErr *protocol.GitUnpackError
 					Expect(errors.As(err, &unpackErr)).To(BeTrue())
-					logger.Info("Unpack error with large content", "message", unpackErr.Message)
+					// logger.Info("Unpack error with large content", "message", unpackErr.Message)
 				} else if protocol.IsGitServerError(err) {
 					var serverErr *protocol.GitServerError
 					Expect(errors.As(err, &serverErr)).To(BeTrue())
-					logger.Info("Server error with large content", "type", serverErr.ErrorType, "message", serverErr.Message)
+					// logger.Info("Server error with large content", "type", serverErr.ErrorType, "message", serverErr.Message)
 				} else {
-					logger.Info("Large content push failed with other error", "error", err.Error())
+					// logger.Info("Large content push failed with other error", "error", err.Error())
 				}
 			} else {
-				logger.Info("Large content push succeeded")
+				// logger.Info("Large content push succeeded")
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -391,13 +390,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 			By("Setting up repository")
 			local.CreateFile("boundary.txt", "boundary test")
-			local.Git("add", "boundary.txt")
-			local.Git("commit", "-m", "Boundary test")
-			local.Git("branch", "-M", "main")
-			local.Git("push", "-u", "origin", "main", "--force")
+			gitNoError(local, "add", "boundary.txt")
+			gitNoError(local, "commit", "-m", "Boundary test")
+			gitNoError(local, "branch", "-M", "main")
+			gitNoError(local, "push", "-u", "origin", "main", "--force")
 
 			By("Testing boundary conditions")
-			currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+			currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			ref := nanogit.Ref{
@@ -429,12 +428,12 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				if protocol.IsGitServerError(err) {
 					var serverErr *protocol.GitServerError
 					Expect(errors.As(err, &serverErr)).To(BeTrue())
-					logger.Info("Server error with boundary conditions", "type", serverErr.ErrorType, "message", serverErr.Message)
+					// logger.Info("Server error with boundary conditions", "type", serverErr.ErrorType, "message", serverErr.Message)
 				} else {
-					logger.Info("Boundary condition push failed", "error", err.Error())
+					// logger.Info("Boundary condition push failed", "error", err.Error())
 				}
 			} else {
-				logger.Info("Boundary condition push succeeded")
+				// logger.Info("Boundary condition push succeeded")
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})

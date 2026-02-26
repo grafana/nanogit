@@ -10,9 +10,21 @@ type (
 	// User is an alias for testutil.User
 	User = testutil.User
 
-	// RemoteRepo is an alias for testutil.Repo
-	RemoteRepo = testutil.Repo
-
 	// LocalGitRepo is an alias for testutil.LocalRepo
 	LocalGitRepo = testutil.LocalRepo
 )
+
+// RemoteRepo wraps testutil.Repo to add backward-compatible URL() method
+type RemoteRepo struct {
+	*testutil.Repo
+}
+
+// URL returns the public URL (for backward compatibility with old tests)
+func (r *RemoteRepo) URL() string {
+	return r.Repo.URL
+}
+
+// AuthURL returns the authenticated URL (for backward compatibility)
+func (r *RemoteRepo) AuthURL() string {
+	return r.Repo.AuthURL
+}

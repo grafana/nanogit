@@ -28,9 +28,9 @@ var _ = Describe("Blobs", func() {
 			By("Creating and committing test file")
 			testContent := []byte("test content")
 			local.CreateFile("blob.txt", string(testContent))
-			local.Git("add", "blob.txt")
-			local.Git("commit", "-m", "Initial commit")
-			local.Git("push", "origin", "main", "--force")
+			gitNoError(local, "add", "blob.txt")
+			gitNoError(local, "commit", "-m", "Initial commit")
+			gitNoError(local, "push", "origin", "main", "--force")
 
 			By("Getting blob hash")
 			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:blob.txt"))
@@ -68,9 +68,9 @@ var _ = Describe("Blobs", func() {
 			By("Creating and committing test file")
 			testContent := []byte("test content")
 			local.CreateFile("blob.txt", string(testContent))
-			local.Git("add", "blob.txt")
-			local.Git("commit", "-m", "Initial commit")
-			local.Git("push", "origin", "main", "--force")
+			gitNoError(local, "add", "blob.txt")
+			gitNoError(local, "commit", "-m", "Initial commit")
+			gitNoError(local, "push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
@@ -148,9 +148,9 @@ var _ = Describe("Blobs", func() {
 			local.CreateFile("dir2/file2.txt", "dir2 file content")
 
 			By("Adding and committing all files")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Initial commit with nested structure")
-			local.Git("push", "origin", "main", "--force")
+			gitNoError(local, "add", ".")
+			gitNoError(local, "commit", "-m", "Initial commit with nested structure")
+			gitNoError(local, "push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
@@ -266,9 +266,9 @@ var _ = Describe("Blobs", func() {
 
 			By("Creating and committing the large dashboard file")
 			local.CreateFile("xlarge-dashboard.json", string(dashboardContent))
-			local.Git("add", "xlarge-dashboard.json")
-			local.Git("commit", "-m", "Add xlarge dashboard for blob testing")
-			local.Git("push", "origin", "main", "--force")
+			gitNoError(local, "add", "xlarge-dashboard.json")
+			gitNoError(local, "commit", "-m", "Add xlarge dashboard for blob testing")
+			gitNoError(local, "push", "origin", "main", "--force")
 
 			By("Getting blob hash for the large file")
 			blobHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD:xlarge-dashboard.json"))

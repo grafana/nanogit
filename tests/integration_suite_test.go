@@ -56,7 +56,7 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *testutil.Repo, *testutil.LocalRepo, *testutil.User) {
+func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	user, err := gitServer.CreateUser(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -72,7 +72,10 @@ func QuickSetup() (nanogit.Client, *testutil.Repo, *testutil.LocalRepo, *testuti
 	client, _, err := local.QuickInit(user, repo.AuthURL)
 	Expect(err).NotTo(HaveOccurred())
 
-	return client, repo, local, user
+	// Wrap repo for backward compatibility
+	remoteRepo := &RemoteRepo{Repo: repo}
+
+	return client, remoteRepo, local, user
 }
 
 // generateRepoName generates a unique repository name

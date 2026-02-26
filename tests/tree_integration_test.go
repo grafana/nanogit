@@ -42,7 +42,7 @@ var _ = Describe("Trees", func() {
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up hash helper function")
@@ -174,7 +174,7 @@ var _ = Describe("Trees", func() {
 
 			By("Getting the tree hash")
 			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -243,7 +243,7 @@ var _ = Describe("Trees", func() {
 
 			By("Getting the tree hash")
 			var err error
-			treeHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			treeHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -302,7 +302,7 @@ var _ = Describe("Trees", func() {
 
 			By("Getting the tree hash")
 			var err error
-			treeHash, err = hash.FromHex(local.Git("rev-parse", "HEAD^{tree}"))
+			treeHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD^{tree}"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up hash helper function")
@@ -434,7 +434,7 @@ var _ = Describe("Trees", func() {
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -500,10 +500,10 @@ var _ = Describe("Trees", func() {
 			client, remote, local, user = QuickSetup()
 
 			By("Creating a second repository to use as a submodule source")
-			subRemote := gitServer.CreateRepo("subrepo", user)
+			subRemote, err := gitServer.CreateRepo(ctx, "subrepo", user)
 
 			By("Setting up the submodule source repository with content")
-			subLocal := NewLocalGitRepo(logger)
+			subLocal := testutil.NewLocalRepo(logger)
 			subLocal.Git("config", "user.name", user.Username)
 			subLocal.Git("config", "user.email", user.Email)
 			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
@@ -532,7 +532,7 @@ var _ = Describe("Trees", func() {
 
 			By("Getting the commit hash")
 			var err error
-			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			commitHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -583,12 +583,12 @@ var _ = Describe("Trees", func() {
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Initial commit")
 			var err error
-			beforeSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			beforeSubmoduleHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating a second repository to use as a submodule source")
-			subRemote := gitServer.CreateRepo("subrepo-compare", user)
-			subLocal := NewLocalGitRepo(logger)
+			subRemote, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
+			subLocal := testutil.NewLocalRepo(logger)
 			subLocal.Git("config", "user.name", user.Username)
 			subLocal.Git("config", "user.email", user.Email)
 			subLocal.Git("remote", "add", "origin", subRemote.AuthURL())
@@ -603,7 +603,7 @@ var _ = Describe("Trees", func() {
 			local.Git("submodule", "add", subRemote.AuthURL(), "vendor/lib")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Add submodule")
-			afterSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			afterSubmoduleHash, err = hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing the main repository")

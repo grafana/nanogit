@@ -229,7 +229,7 @@ var _ = Describe("Server Unavailable Error Handling", func() {
 					break
 				}
 				if errors.Is(lastErr, nanogit.ErrServerUnavailable) {
-					logger.Info("Server unavailable, retrying", "attempt", i+1, "max_retries", maxRetries)
+					// logger.Info("Server unavailable, retrying", "attempt", i+1, "max_retries", maxRetries)
 					continue
 				}
 				break
