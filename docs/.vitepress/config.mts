@@ -9,7 +9,7 @@ export default defineConfig({
   // Allow links to testutil package outside docs directory
   ignoreDeadLinks: [
     /testutil\/examples\/.*/,
-    /testutil\/README\.md/
+    /testutil\/README/
   ],
 
   head: [
