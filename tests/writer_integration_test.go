@@ -33,16 +33,16 @@ var _ = Describe("Writer Operations", func() {
 
 	// Helper to verify author and committer in commit
 	verifyCommitAuthorship := func(local *LocalGitRepo) {
-		commitAuthor := local.Git("log", "-1", "--pretty=%an <%ae>")
+		commitAuthor := gitNoError(local, "log", "-1", "--pretty=%an <%ae>")
 		Expect(strings.TrimSpace(commitAuthor)).To(Equal("Test Author <test@example.com>"))
 
-		commitCommitter := local.Git("log", "-1", "--pretty=%cn <%ce>")
+		commitCommitter := gitNoError(local, "log", "-1", "--pretty=%cn <%ce>")
 		Expect(strings.TrimSpace(commitCommitter)).To(Equal("Test Committer <test@example.com>"))
 	}
 
 	// Helper to create writer from current HEAD
 	createWriterFromHead := func(ctx context.Context, client nanogit.Client, local *LocalGitRepo) (nanogit.StagedWriter, *hash.Hash) {
-		currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
+		currentHash, err := hash.FromHex(gitNoError(local, "rev-parse", "HEAD"))
 		Expect(err).NotTo(HaveOccurred())
 
 		ref := nanogit.Ref{
