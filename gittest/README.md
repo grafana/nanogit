@@ -75,7 +75,7 @@ user, err := server.CreateUser(ctx)
 repo, err := server.CreateRepo(ctx, "myrepo", user)
 
 // Generate access token
-token, err := server.GenerateUserToken(ctx, user.Username)
+token, err := server.CreateToken(ctx, user.Username)
 
 // Get server URL
 url := server.URL()

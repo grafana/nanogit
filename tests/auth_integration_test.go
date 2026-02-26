@@ -46,7 +46,7 @@ var _ = Describe("Authorization", func() {
 
 	It("should successfully authorize with access token", func() {
 		By("Generating access token for user")
-		token, err := gitServer.GenerateUserToken(ctx, user.Username)
+		token, err := gitServer.CreateToken(ctx, user.Username)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(token).NotTo(BeEmpty())
 
