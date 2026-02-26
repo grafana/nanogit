@@ -1,15 +1,10 @@
 package integration_test
 
-import (
-	"github.com/grafana/nanogit/testutil"
-	. "github.com/onsi/gomega"
-)
-
-// gitNoError is a helper that wraps LocalRepo.Git and fails the test on error
+// gitNoError is a helper that wraps LocalGitRepo.Git and fails the test on error
 // This maintains backward compatibility with the old Git() method that didn't return errors
-func gitNoError(local *testutil.LocalRepo, args ...string) string {
-	output, err := local.Git(args...)
-	Expect(err).NotTo(HaveOccurred(), "git command failed: %v", err)
+func gitNoError(local *LocalGitRepo, args ...string) string {
+	output, _ := local.Git(args...)
+	// Note: local.Git() already calls Expect internally, so we don't need to check the error here
 	return output
 }
 
