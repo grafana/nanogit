@@ -12,12 +12,15 @@ import (
 var ErrServerUnavailable = errors.New("server unavailable")
 
 // ErrUnauthorized is returned when authentication fails (HTTP 401).
+// This error should only be used with errors.Is() for comparison, not for type assertions.
 var ErrUnauthorized = errors.New("unauthorized")
 
 // ErrPermissionDenied is returned when the user lacks permission for the operation (HTTP 403).
+// This error should only be used with errors.Is() for comparison, not for type assertions.
 var ErrPermissionDenied = errors.New("permission denied")
 
 // ErrRepositoryNotFound is returned when the repository does not exist (HTTP 404).
+// This error should only be used with errors.Is() for comparison, not for type assertions.
 var ErrRepositoryNotFound = errors.New("repository not found")
 
 // ServerUnavailableError provides structured information about a Git server that is unavailable.
@@ -122,9 +125,13 @@ func NewUnauthorizedError(operation, endpoint string, underlying error) *Unautho
 
 // PermissionDeniedError provides structured information about a permission denial.
 type PermissionDeniedError struct {
+	// StatusCode is the HTTP status code (403)
 	StatusCode int
-	Operation  string
-	Endpoint   string
+	// Operation is the HTTP method that failed (e.g., "GET", "POST")
+	Operation string
+	// Endpoint is the Git protocol endpoint (e.g., "git-receive-pack", "git-upload-pack")
+	Endpoint string
+	// Underlying is the underlying error
 	Underlying error
 }
 
@@ -156,9 +163,13 @@ func NewPermissionDeniedError(operation, endpoint string, underlying error) *Per
 
 // RepositoryNotFoundError provides structured information about a repository not found error.
 type RepositoryNotFoundError struct {
+	// StatusCode is the HTTP status code (404)
 	StatusCode int
-	Operation  string
-	Endpoint   string
+	// Operation is the HTTP method that failed (e.g., "GET", "POST")
+	Operation string
+	// Endpoint is the Git protocol endpoint (e.g., "git-receive-pack", "git-upload-pack")
+	Endpoint string
+	// Underlying is the underlying error
 	Underlying error
 }
 
