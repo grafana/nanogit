@@ -2,8 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/grafana/nanogit"
@@ -34,7 +32,7 @@ var _ = BeforeSuite(func() {
 	By("Setting up shared Git server for integration tests")
 
 	logger = gittest.NewWriterLogger(GinkgoWriter)
-	structuredLogger := newGinkgoStructuredLogger(logger)
+	structuredLogger := gittest.NewStructuredLogger(logger)
 
 	var err error
 	gitServer, err = gittest.NewServer(context.Background(),
@@ -82,69 +80,6 @@ func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 
 // generateRepoName generates a unique repository name
 func generateRepoName() string {
-	return fmt.Sprintf("testrepo-%d", GinkgoRandomSeed())
+	return gittest.RandomRepoName()
 }
 
-// ginkgoStructuredLogger wraps gittest.Logger to provide structured logging methods
-type ginkgoStructuredLogger struct {
-	logger gittest.Logger
-}
-
-func newGinkgoStructuredLogger(logger gittest.Logger) *ginkgoStructuredLogger {
-	return &ginkgoStructuredLogger{logger: logger}
-}
-
-func (l *ginkgoStructuredLogger) Logf(format string, args ...any) {
-	l.logger.Logf(format, args...)
-}
-
-func (l *ginkgoStructuredLogger) Debug(msg string, keysAndValues ...any) {
-	l.log("DEBUG", msg, keysAndValues)
-}
-
-func (l *ginkgoStructuredLogger) Info(msg string, keysAndValues ...any) {
-	l.log("INFO", msg, keysAndValues)
-}
-
-func (l *ginkgoStructuredLogger) Warn(msg string, keysAndValues ...any) {
-	l.log("WARN", msg, keysAndValues)
-}
-
-func (l *ginkgoStructuredLogger) Error(msg string, keysAndValues ...any) {
-	l.log("ERROR", msg, keysAndValues)
-}
-
-func (l *ginkgoStructuredLogger) Success(msg string, keysAndValues ...any) {
-	l.log("SUCCESS", msg, keysAndValues)
-}
-
-func (l *ginkgoStructuredLogger) log(level, msg string, args []any) {
-	formattedMsg := msg
-	if len(args) > 0 {
-		var pairs []string
-		for i := 0; i < len(args); i += 2 {
-			if i+1 < len(args) {
-				pairs = append(pairs, fmt.Sprintf("%s=%v", args[i], args[i+1]))
-			}
-		}
-		if len(pairs) > 0 {
-			formattedMsg = msg + " (" + strings.Join(pairs, ", ") + ")"
-		}
-	}
-
-	var emoji string
-	switch level {
-	case "DEBUG":
-		emoji = "🔍"
-	case "INFO":
-		emoji = "ℹ️ "
-	case "WARN":
-		emoji = "⚠️ "
-	case "ERROR":
-		emoji = "❌"
-	case "SUCCESS":
-		emoji = "✅"
-	}
-
-	l.logger.Logf("%s [%s] %s", emoji, level, formattedMsg)
-}

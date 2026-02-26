@@ -1434,7 +1434,6 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			// logger.Info("Verifying all files in directory were deleted")
 			_, err = os.Stat(filepath.Join(local.Path, "toberemoved/file1.txt"))
 			Expect(err).To(HaveOccurred())
 			Expect(os.IsNotExist(err)).To(BeTrue())
@@ -1461,7 +1460,6 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 			ctx := ctx
 
-			// logger.Info("Creating nested directory structure to be deleted")
 			preservedContent := []byte("Preserved content")
 			nested1Content := []byte("Nested 1 content")
 			nested2Content := []byte("Nested 2 content")
@@ -1474,12 +1472,10 @@ var _ = Describe("Writer Operations", func() {
 			local.CreateFile("toberemoved/subdir1/nested.txt", string(nested2Content))
 			local.CreateFile("toberemoved/subdir2/deep/deep.txt", string(deepContent))
 
-			// logger.Info("Adding and committing the nested directory structure")
 			local.Git("add", ".")
 			local.Git("commit", "-m", "Add nested directory structure")
 			local.Git("push")
 
-			// logger.Info("Getting current ref")
 			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
@@ -1487,11 +1483,9 @@ var _ = Describe("Writer Operations", func() {
 				Hash: currentHash,
 			}
 
-			// logger.Info("Creating ref writer")
 			writer, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Deleting the entire nested directory")
 			treeHash, err := writer.DeleteTree(ctx, "toberemoved")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(treeHash).NotTo(BeNil())
@@ -1507,24 +1501,19 @@ var _ = Describe("Writer Operations", func() {
 				Time:  time.Now(),
 			}
 
-			// logger.Info("Committing nested directory deletion")
 			commit, err := writer.Commit(ctx, "Delete nested directory structure", author, committer)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			// logger.Info("Pushing changes")
 			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Pulling latest changes")
 			local.Git("pull")
 
-			// logger.Info("Verifying entire directory structure was deleted")
 			_, err = os.Stat(filepath.Join(local.Path, "toberemoved"))
 			Expect(err).To(HaveOccurred())
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			// logger.Info("Verifying preserved file still exists")
 			content, err := os.ReadFile(filepath.Join(local.Path, "preserved.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(content).To(Equal(preservedContent))
@@ -1538,15 +1527,12 @@ var _ = Describe("Writer Operations", func() {
 			client, _, _, _ := QuickSetup()
 			ctx := ctx
 
-			// logger.Info("Getting current ref")
 			ref, err := client.GetRef(ctx, "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Creating a writer")
 			writer, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Trying to delete a nonexistent directory")
 			_, err = writer.DeleteTree(ctx, "nonexistent")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(&nanogit.PathNotFoundError{Path: "nonexistent"}))
@@ -1556,7 +1542,6 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 			ctx := ctx
 
-			// logger.Info("Creating a file to test error case")
 			fileContent := []byte("This is a file, not a directory")
 			local.CreateFile("testfile.txt", string(fileContent))
 			local.Git("add", "testfile.txt")
@@ -1566,7 +1551,6 @@ var _ = Describe("Writer Operations", func() {
 			fileHash, err := hash.FromHex(local.Git("rev-parse", "HEAD:testfile.txt"))
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Getting current ref")
 			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
@@ -1574,11 +1558,9 @@ var _ = Describe("Writer Operations", func() {
 				Hash: currentHash,
 			}
 
-			// logger.Info("Creating a writer")
 			writer, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Trying to delete a file as if it were a directory")
 			_, err = writer.DeleteTree(ctx, "testfile.txt")
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(MatchError(&nanogit.UnexpectedObjectTypeError{
@@ -1592,7 +1574,6 @@ var _ = Describe("Writer Operations", func() {
 			client, _, local, _ := QuickSetup()
 			ctx := ctx
 
-			// logger.Info("Creating parent directory with subdirectories")
 			parentFile := []byte("Parent file")
 			subdir1File := []byte("Subdirectory 1 file")
 			subdir2File := []byte("Subdirectory 2 file")
@@ -1608,7 +1589,6 @@ var _ = Describe("Writer Operations", func() {
 			local.Git("commit", "-m", "Add parent with subdirectories")
 			local.Git("push")
 
-			// logger.Info("Getting current ref")
 			currentHash, err := hash.FromHex(local.Git("rev-parse", "refs/heads/main"))
 			Expect(err).NotTo(HaveOccurred())
 			ref := nanogit.Ref{
@@ -1616,43 +1596,34 @@ var _ = Describe("Writer Operations", func() {
 				Hash: currentHash,
 			}
 
-			// logger.Info("Creating ref writer")
 			writer, err := client.NewStagedWriter(ctx, ref)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Deleting only subdir1, leaving subdir2 and parent")
 			treeHash, err := writer.DeleteTree(ctx, "parent/subdir1")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(treeHash).NotTo(BeNil())
 
-			// logger.Info("Committing subdirectory deletion")
 			commit, err := writer.Commit(ctx, "Delete only subdir1", testAuthor, testCommitter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit).NotTo(BeNil())
 
-			// logger.Info("Pushing changes")
 			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Pulling latest changes")
 			local.Git("pull")
 
-			// logger.Info("Verifying subdir1 was deleted")
 			_, err = os.Stat(filepath.Join(local.Path, "parent/subdir1"))
 			Expect(err).To(HaveOccurred())
 			Expect(os.IsNotExist(err)).To(BeTrue())
 
-			// logger.Info("Verifying parent directory still exists")
 			parentContent, err := os.ReadFile(filepath.Join(local.Path, "parent/parentfile.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(parentContent).To(Equal(parentFile))
 
-			// logger.Info("Verifying subdir2 still exists")
 			subdir2Content, err := os.ReadFile(filepath.Join(local.Path, "parent/subdir2/file2.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(subdir2Content).To(Equal(subdir2File))
 
-			// logger.Info("Verifying other files were preserved")
 			otherContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(otherContent).NotTo(Equal(subdir1File))
@@ -1663,7 +1634,6 @@ var _ = Describe("Writer Operations", func() {
 				client, _, local, _ := QuickSetup()
 				ctx := ctx
 
-				// logger.Info("Getting current ref")
 				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 				Expect(err).NotTo(HaveOccurred())
 				ref := nanogit.Ref{
@@ -1671,12 +1641,10 @@ var _ = Describe("Writer Operations", func() {
 					Hash: currentHash,
 				}
 
-				// logger.Info("Creating staged writer")
 				writer, err := client.NewStagedWriter(ctx, ref)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create multiple files in the same directory
-				// logger.Info("Creating multiple JSON files in config directory")
 				config1Content := []byte(`{"database": {"host": "localhost", "port": 5432}}`)
 				config2Content := []byte(`{"api": {"timeout": 30, "retries": 3}}`)
 				config3Content := []byte(`{"logging": {"level": "info", "output": "stdout"}}`)
@@ -1691,7 +1659,6 @@ var _ = Describe("Writer Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create files in different subdirectories
-				// logger.Info("Creating files in different subdirectories")
 				dataContent := []byte(`{"users": [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]}`)
 				schemaContent := []byte(`{"type": "object", "properties": {"name": {"type": "string"}}}`)
 
@@ -1701,20 +1668,16 @@ var _ = Describe("Writer Operations", func() {
 				_, err = writer.CreateBlob(ctx, "schemas/user.json", schemaContent)
 				Expect(err).NotTo(HaveOccurred())
 
-				// logger.Info("Committing all files")
 				commit, err := writer.Commit(ctx, "Add configuration and data files", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit).NotTo(BeNil())
 
-				// logger.Info("Pushing changes")
 				err = writer.Push(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// logger.Info("Pulling and verifying")
 				local.Git("pull")
 
 				// Verify directory structure
-				// logger.Info("Verifying directory structure")
 				configDir, err := os.Stat(filepath.Join(local.Path, "config"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(configDir.IsDir()).To(BeTrue())
@@ -1728,7 +1691,6 @@ var _ = Describe("Writer Operations", func() {
 				Expect(schemasDir.IsDir()).To(BeTrue())
 
 				// Verify all files exist with correct content
-				// logger.Info("Verifying file contents")
 				content1, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(content1).To(Equal(config1Content))
@@ -1750,13 +1712,11 @@ var _ = Describe("Writer Operations", func() {
 				Expect(schemaFileContent).To(Equal(schemaContent))
 
 				// Verify original file is preserved
-				// logger.Info("Verifying original file preserved")
 				originalContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(originalContent).NotTo(BeEmpty())
 
 				// Verify commit details
-				// logger.Info("Verifying commit details")
 				finalHash := local.Git("rev-parse", "HEAD")
 				Expect(finalHash).To(Equal(commit.Hash.String()))
 
@@ -1768,7 +1728,6 @@ var _ = Describe("Writer Operations", func() {
 				client, _, local, _ := QuickSetup()
 				ctx := ctx
 
-				// logger.Info("Getting current ref")
 				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 				Expect(err).NotTo(HaveOccurred())
 				ref := nanogit.Ref{
@@ -1776,12 +1735,10 @@ var _ = Describe("Writer Operations", func() {
 					Hash: currentHash,
 				}
 
-				// logger.Info("Creating staged writer")
 				writer, err := client.NewStagedWriter(ctx, ref)
 				Expect(err).NotTo(HaveOccurred())
 
 				// First commit: Create config files
-				// logger.Info("First commit: Creating configuration files")
 				dbConfigContent := []byte(`{"host": "localhost", "port": 5432, "database": "myapp"}`)
 				apiConfigContent := []byte(`{"baseUrl": "https://api.example.com", "timeout": 30}`)
 
@@ -1794,10 +1751,8 @@ var _ = Describe("Writer Operations", func() {
 				commit1, err := writer.Commit(ctx, "Add database and API configuration", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit1).NotTo(BeNil())
-				// logger.Info("First commit created", "hash", commit1.Hash.String())
 
 				// Second commit: Create documentation files
-				// logger.Info("Second commit: Creating documentation files")
 				readmeContent := []byte(`# My Application\n\nThis is a sample application.`)
 				apiDocsContent := []byte(`# API Documentation\n\n## Endpoints\n\n- GET /users`)
 
@@ -1810,10 +1765,8 @@ var _ = Describe("Writer Operations", func() {
 				commit2, err := writer.Commit(ctx, "Add documentation files", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit2).NotTo(BeNil())
-				// logger.Info("Second commit created", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
 
 				// Third commit: Create test and data files
-				// logger.Info("Third commit: Creating test and data files")
 				testDataContent := []byte(`{"testUsers": [{"id": 1, "name": "Test User"}]}`)
 				schemaContent := []byte(`{"$schema": "http://json-schema.org/draft-07/schema#", "type": "object"}`)
 
@@ -1826,7 +1779,6 @@ var _ = Describe("Writer Operations", func() {
 				commit3, err := writer.Commit(ctx, "Add test data and schema files", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit3).NotTo(BeNil())
-				// logger.Info("Third commit created", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
 
 				// Verify commit chain before push
 				Expect(currentHash).To(Equal(commit1.Parent))
@@ -1834,23 +1786,18 @@ var _ = Describe("Writer Operations", func() {
 				Expect(commit2.Hash).To(Equal(commit3.Parent))
 
 				// Push all commits at once
-				// logger.Info("Pushing all three commits")
 				err = writer.Push(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Pull and verify
-				// logger.Info("Pulling changes")
 				local.Git("pull")
 
 				// Verify final commit hash
-				// logger.Info("Verifying final commit hash")
 				finalHash := local.Git("rev-parse", "HEAD")
 				Expect(finalHash).To(Equal(commit3.Hash.String()))
 
 				// Verify all commits exist in history
-				// logger.Info("Verifying commit history")
 				commitHistory := local.Git("log", "--oneline", "--format=%H %s")
-				// logger.Info("Commit history", "history", commitHistory)
 
 				Expect(commitHistory).To(ContainSubstring(commit1.Hash.String()))
 				Expect(commitHistory).To(ContainSubstring(commit2.Hash.String()))
@@ -1861,7 +1808,6 @@ var _ = Describe("Writer Operations", func() {
 				Expect(commitHistory).To(ContainSubstring("Add test data and schema files"))
 
 				// Verify directory structure
-				// logger.Info("Verifying directory structure")
 				configDir, err := os.Stat(filepath.Join(local.Path, "config"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(configDir.IsDir()).To(BeTrue())
@@ -1883,7 +1829,6 @@ var _ = Describe("Writer Operations", func() {
 				Expect(schemasDir.IsDir()).To(BeTrue())
 
 				// Verify all files exist with correct content
-				// logger.Info("Verifying file contents")
 				dbConfig, err := os.ReadFile(filepath.Join(local.Path, "config/database.json"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dbConfig).To(Equal(dbConfigContent))
@@ -1909,13 +1854,11 @@ var _ = Describe("Writer Operations", func() {
 				Expect(schema).To(Equal(schemaContent))
 
 				// Verify original file is preserved
-				// logger.Info("Verifying original file preserved")
 				originalContent, err := os.ReadFile(filepath.Join(local.Path, "test.txt"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(originalContent).NotTo(BeEmpty())
 
 				// Verify individual commits show correct files
-				// logger.Info("Verifying files in individual commits")
 				commit1Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", "-r", commit1.Hash.String()))
 				Expect(commit1Files).To(ContainSubstring("config/database.json"))
 				Expect(commit1Files).To(ContainSubstring("config/api.json"))
@@ -1944,7 +1887,6 @@ var _ = Describe("Writer Operations", func() {
 				client, _, local, _ := QuickSetup()
 				ctx := ctx
 
-				// logger.Info("Getting current ref")
 				currentHash, err := hash.FromHex(local.Git("rev-parse", "HEAD"))
 				Expect(err).NotTo(HaveOccurred())
 				ref := nanogit.Ref{
@@ -1952,36 +1894,29 @@ var _ = Describe("Writer Operations", func() {
 					Hash: currentHash,
 				}
 
-				// logger.Info("Creating staged writer")
 				writer, err := client.NewStagedWriter(ctx, ref)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create first commit
-				// logger.Info("Creating first file and commit")
 				_, err = writer.CreateBlob(ctx, "file1.txt", []byte("First file content"))
 				Expect(err).NotTo(HaveOccurred())
 				commit1, err := writer.Commit(ctx, "Add first file", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit1).NotTo(BeNil())
-				// logger.Info("First commit", "hash", commit1.Hash.String())
 
 				// Create second commit
-				// logger.Info("Creating second file and commit")
 				_, err = writer.CreateBlob(ctx, "file2.txt", []byte("Second file content"))
 				Expect(err).NotTo(HaveOccurred())
 				commit2, err := writer.Commit(ctx, "Add second file", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit2).NotTo(BeNil())
-				// logger.Info("Second commit", "hash", commit2.Hash.String(), "parent", commit2.Parent.String())
 
 				// Create third commit
-				// logger.Info("Creating third file and commit")
 				_, err = writer.CreateBlob(ctx, "file3.txt", []byte("Third file content"))
 				Expect(err).NotTo(HaveOccurred())
 				commit3, err := writer.Commit(ctx, "Add third file", testAuthor, testCommitter)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(commit3).NotTo(BeNil())
-				// logger.Info("Third commit", "hash", commit3.Hash.String(), "parent", commit3.Parent.String())
 
 				// Verify commit chain is correct
 				Expect(currentHash).To(Equal(commit1.Parent))
@@ -1989,23 +1924,18 @@ var _ = Describe("Writer Operations", func() {
 				Expect(commit2.Hash).To(Equal(commit3.Parent))
 
 				// Push all commits
-				// logger.Info("Pushing all commits")
 				err = writer.Push(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Pull and verify
-				// logger.Info("Pulling changes")
 				local.Git("pull")
 
 				// Verify final commit hash
-				// logger.Info("Verifying final commit hash")
 				finalHash := local.Git("rev-parse", "HEAD")
 				Expect(finalHash).To(Equal(commit3.Hash.String()))
 
 				// Verify all three commits exist in history
-				// logger.Info("Verifying commit history")
 				commitHistory := local.Git("log", "--oneline", "--format=%H %s")
-				// logger.Info("Commit history", "history", commitHistory)
 
 				// Should contain all three commits
 				Expect(commitHistory).To(ContainSubstring(commit1.Hash.String()))
@@ -2018,7 +1948,6 @@ var _ = Describe("Writer Operations", func() {
 				Expect(commitHistory).To(ContainSubstring("Add third file"))
 
 				// Verify all files exist
-				// logger.Info("Verifying all files exist")
 				content1, err := os.ReadFile(filepath.Join(local.Path, "file1.txt"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(content1).To(Equal([]byte("First file content")))
@@ -2038,7 +1967,6 @@ var _ = Describe("Writer Operations", func() {
 				Expect(otherContent).NotTo(BeEmpty())
 
 				// Verify individual commits are reachable
-				// logger.Info("Verifying individual commits are reachable")
 				commit1Files := strings.TrimSpace(local.Git("ls-tree", "--name-only", commit1.Hash.String()))
 				Expect(commit1Files).To(ContainSubstring("file1.txt"))
 				Expect(commit1Files).To(ContainSubstring(initCommitFile))
