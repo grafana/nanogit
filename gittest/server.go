@@ -324,7 +324,7 @@ func (s *Server) CreateToken(ctx context.Context, username string) (string, erro
 //		t.Fatal(err)
 //	}
 //	// Use repo.AuthURL for git operations that need authentication
-func (s *Server) CreateRepo(ctx context.Context, name string, user *User) (*Repo, error) {
+func (s *Server) CreateRepo(ctx context.Context, name string, user *User) (*RemoteRepository, error) {
 	s.logger.Logf("📦 Creating repository '%s' for user '%s'...", name, user.Username)
 
 	httpClient := http.Client{}

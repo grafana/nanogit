@@ -1,14 +1,13 @@
 # nanogit/gittest
 
-Testing utilities for Git operations with nanogit. This package provides a lightweight Git server (using Gitea in testcontainers) and helper functions to quickly set up test environments for Git operations.
+Testing utilities for Git operations with nanogit. This package provides a lightweight Git server (using Gitea in testcontainers) and helper functions to set up test environments for Git operations.
 
 ## Features
 
-- 🚀 **Quick Setup**: Get a complete test environment (server + user + repo + local clone) in one call
 - 🐳 **Containerized**: Uses testcontainers for isolated, reproducible tests
 - 🔧 **Flexible**: Works with standard `testing` package and Ginkgo
 - 🧹 **Clean**: Automatic cleanup with defer-friendly patterns
-- 📝 **Logging**: Optional structured logging with color support
+- 📝 **Logging**: Optional structured logging
 
 ## Installation
 
@@ -42,7 +41,7 @@ func TestGitOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create repository
-	repo, err := server.CreateRepo(ctx, "myrepo", user)
+	repo, err := server.CreateRepo(ctx, gittest.RandomRepoName(), user)
 	require.NoError(t, err)
 
 	// Create local repository
@@ -107,8 +106,9 @@ output, err := local.Git("add", ".")
 output, err := local.Git("commit", "-m", "message")
 output, err := local.Git("push", "origin", "main")
 
-// Quick initialization (config + initial commit + push)
-client, fileName, err := local.QuickInit(user, repo.AuthURL)
+// Initialize with remote (config + initial commit + push)
+remote := repo
+client, err := local.InitWithRemote(user, remote)
 
 // Debug helper
 local.LogContents() // Prints directory tree
@@ -217,7 +217,7 @@ var _ = Describe("Git Operations", func() {
 		user, err = server.CreateUser(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		repo, err = server.CreateRepo(ctx, "testrepo", user)
+		repo, err = server.CreateRepo(ctx, gittest.RandomRepoName(), user)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create local repo
@@ -227,7 +227,7 @@ var _ = Describe("Git Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize and get client
-		client, _, err = local.QuickInit(user, repo.AuthURL)
+		client, err = local.QuickInit(user, repo.AuthURL)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

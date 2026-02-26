@@ -14,9 +14,16 @@ import (
 
 // Shared test infrastructure
 var (
-	gitServer *gittest.Server
-	logger    gittest.Logger
-	ctx       context.Context
+	gitServer *GitServer
+	logger    interface {
+		gittest.Logger
+		Debug(msg string, keysAndValues ...any)
+		Info(msg string, keysAndValues ...any)
+		Warn(msg string, keysAndValues ...any)
+		Error(msg string, keysAndValues ...any)
+		Success(msg string, keysAndValues ...any)
+	}
+	ctx context.Context
 )
 
 func TestIntegrationSuite(t *testing.T) {
@@ -31,19 +38,22 @@ func TestIntegrationSuite(t *testing.T) {
 var _ = BeforeSuite(func() {
 	By("Setting up shared Git server for integration tests")
 
-	logger = gittest.NewWriterLogger(GinkgoWriter)
-	structuredLogger := gittest.NewStructuredLogger(logger)
+	baseLogger := gittest.NewWriterLogger(GinkgoWriter)
+	logger = gittest.NewStructuredLogger(baseLogger)
 
 	var err error
-	gitServer, err = gittest.NewServer(context.Background(),
-		gittest.WithLogger(logger),
+	server, err := gittest.NewServer(context.Background(),
+		gittest.WithLogger(baseLogger),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	structuredLogger.Success("🚀 Integration test suite setup complete")
-	structuredLogger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
+	// Wrap server for backward compatibility
+	gitServer = &GitServer{Server: server}
+
+	logger.Success("🚀 Integration test suite setup complete")
+	logger.Info("📋 Git server available", "host", gitServer.Host, "port", gitServer.Port)
 	//nolint:fatcontext // we need to pass the logger to the context for the tests to work
-	ctx = log.ToContext(context.Background(), structuredLogger)
+	ctx = log.ToContext(context.Background(), logger)
 })
 
 var _ = AfterSuite(func() {
@@ -54,7 +64,7 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
+func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalRepository, *User) {
 	user, err := gitServer.CreateUser(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -68,12 +78,13 @@ func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	})
 
 	// Wrap local repo for Ginkgo-friendly error handling
-	local := &LocalGitRepo{LocalRepo: localRepo}
+	local := &LocalRepository{LocalRepo: localRepo}
 
-	client := local.QuickInit(user, repo.AuthURL)
+	remote := repo
+	client := local.InitWithRemote(user, remote)
 
 	// Wrap repo for backward compatibility
-	remoteRepo := &RemoteRepo{Repo: repo}
+	remoteRepo := &RemoteRepo{RemoteRepository: repo}
 
 	return client, remoteRepo, local, user
 }

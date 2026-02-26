@@ -25,7 +25,7 @@ type User struct {
 	Token    string // Access token for API operations
 }
 
-// Repo represents a remote Git repository for testing.
+// RemoteRepository represents a remote Git repository for testing.
 //
 // Created via Server.CreateRepo(), this type provides access URLs:
 //   - URL: Public HTTPS URL without credentials
@@ -38,7 +38,7 @@ type User struct {
 //
 //	repo, err := server.CreateRepo(ctx, "myrepo", user)
 //	// Use repo.AuthURL for git clone, fetch, push, etc.
-type Repo struct {
+type RemoteRepository struct {
 	Name    string // Repository name
 	Owner   string // Owner username
 	URL     string // Public URL (requires authentication)
@@ -50,17 +50,17 @@ type Repo struct {
 }
 
 // CloneURL returns the authenticated clone URL for the repository.
-func (r *Repo) CloneURL() string {
+func (r *RemoteRepository) CloneURL() string {
 	return r.AuthURL
 }
 
 // PublicURL returns the public URL for the repository (without auth).
-func (r *Repo) PublicURL() string {
+func (r *RemoteRepository) PublicURL() string {
 	return r.URL
 }
 
-// newRepo creates a new Repo instance with the specified configuration.
-func newRepo(repoName string, user *User, host, port string) *Repo {
+// newRepo creates a new RemoteRepository instance with the specified configuration.
+func newRepo(repoName string, user *User, host, port string) *RemoteRepository {
 	// Build AuthURL with properly URL-encoded credentials
 	authURL := &url.URL{
 		Scheme: "http",
@@ -69,7 +69,7 @@ func newRepo(repoName string, user *User, host, port string) *Repo {
 		Path:   fmt.Sprintf("/%s/%s.git", user.Username, repoName),
 	}
 
-	return &Repo{
+	return &RemoteRepository{
 		Name:    repoName,
 		Owner:   user.Username,
 		URL:     fmt.Sprintf("http://%s:%s/%s/%s.git", host, port, user.Username, repoName),

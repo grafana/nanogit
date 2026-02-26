@@ -15,7 +15,7 @@ var _ = Describe("Delta Object Handling", func() {
 	Context("when server sends deltified objects", func() {
 		var (
 			client nanogit.Client
-			local  *LocalGitRepo
+			local  *LocalRepository
 		)
 
 		BeforeEach(func() {
@@ -260,7 +260,7 @@ var _ = Describe("Delta Object Handling", func() {
 	Context("edge cases with deltas", func() {
 		var (
 			client nanogit.Client
-			local  *LocalGitRepo
+			local  *LocalRepository
 		)
 
 		BeforeEach(func() {

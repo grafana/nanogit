@@ -13,62 +13,75 @@ import (
 // User is an alias for gittest.User
 type User = gittest.User
 
-// LocalGitRepo wraps gittest.LocalRepo and adds Ginkgo-friendly methods
+// LocalRepository wraps gittest.LocalRepo and adds Ginkgo-friendly methods
 // that automatically fail tests on errors.
-type LocalGitRepo struct {
+type LocalRepository struct {
 	*gittest.LocalRepo
 }
 
 // CreateFile creates a file and fails the test if there's an error.
-func (r *LocalGitRepo) CreateFile(path, content string) {
+func (r *LocalRepository) CreateFile(path, content string) {
 	err := r.LocalRepo.CreateFile(path, content)
 	Expect(err).NotTo(HaveOccurred())
 }
 
 // UpdateFile updates a file and fails the test if there's an error.
-func (r *LocalGitRepo) UpdateFile(path, content string) {
+func (r *LocalRepository) UpdateFile(path, content string) {
 	err := r.LocalRepo.UpdateFile(path, content)
 	Expect(err).NotTo(HaveOccurred())
 }
 
 // DeleteFile deletes a file and fails the test if there's an error.
-func (r *LocalGitRepo) DeleteFile(path string) {
+func (r *LocalRepository) DeleteFile(path string) {
 	err := r.LocalRepo.DeleteFile(path)
 	Expect(err).NotTo(HaveOccurred())
 }
 
 // CreateDirPath creates a directory path and fails the test if there's an error.
-func (r *LocalGitRepo) CreateDirPath(dirpath string) {
+func (r *LocalRepository) CreateDirPath(dirpath string) {
 	err := r.LocalRepo.CreateDirPath(dirpath)
 	Expect(err).NotTo(HaveOccurred())
 }
 
 // Git runs a git command and fails the test if there's an error.
 // This maintains backward compatibility with the old Git() method that only returned string.
-func (r *LocalGitRepo) Git(args ...string) string {
+func (r *LocalRepository) Git(args ...string) string {
 	output, err := r.LocalRepo.Git(args...)
 	Expect(err).NotTo(HaveOccurred(), "git command failed: %v", err)
 	return output
 }
 
-// QuickInit initializes the repository with a remote and fails the test on error.
-func (r *LocalGitRepo) QuickInit(user *gittest.User, remoteURL string) nanogit.Client {
-	client, err := r.LocalRepo.QuickInit(user, remoteURL)
+// InitWithRemote initializes the repository with a remote and fails the test on error.
+func (r *LocalRepository) InitWithRemote(user *gittest.User, remote *gittest.RemoteRepository) nanogit.Client {
+	client, err := r.LocalRepo.InitWithRemote(user, remote)
 	Expect(err).NotTo(HaveOccurred())
 	return client
 }
 
-// RemoteRepo wraps gittest.Repo to add backward-compatible methods
+// RemoteRepo wraps gittest.RemoteRepository to add backward-compatible methods
 type RemoteRepo struct {
-	*gittest.Repo
+	*gittest.RemoteRepository
 }
 
 // URL returns the public URL (for backward compatibility with old tests)
 func (r *RemoteRepo) URL() string {
-	return r.Repo.URL
+	return r.RemoteRepository.URL
 }
 
 // AuthURL returns the authenticated URL (for backward compatibility)
 func (r *RemoteRepo) AuthURL() string {
-	return r.Repo.AuthURL
+	return r.RemoteRepository.AuthURL
+}
+
+// GitServer wraps gittest.Server to add backward-compatible methods
+type GitServer struct {
+	*gittest.Server
+}
+
+// GenerateUserToken generates a user token (backward compatible method).
+// This wraps the new CreateToken API and maintains the old signature that didn't return errors.
+func (s *GitServer) GenerateUserToken(username, password string) string {
+	token, err := s.Server.CreateToken(ctx, username)
+	Expect(err).NotTo(HaveOccurred())
+	return token
 }

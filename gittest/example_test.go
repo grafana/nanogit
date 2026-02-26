@@ -39,7 +39,8 @@ func Example() {
 	defer local.Cleanup()
 
 	// Initialize local repo and get a nanogit client
-	client, err := local.QuickInit(user, repo.AuthURL)
+	remote := repo
+	client, err := local.InitWithRemote(user, remote)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -138,8 +139,8 @@ func ExampleNewLocalRepo() {
 	fmt.Println("Local repository created")
 }
 
-// ExampleLocalRepo_QuickInit demonstrates initializing a local repo with a remote.
-func ExampleLocalRepo_QuickInit() {
+// ExampleLocalRepo_InitWithRemote demonstrates initializing a local repo with a remote.
+func ExampleLocalRepo_InitWithRemote() {
 	ctx := context.Background()
 
 	// Set up server and repo
@@ -154,7 +155,7 @@ func ExampleLocalRepo_QuickInit() {
 		log.Fatal(err)
 	}
 
-	repo, err := server.CreateRepo(ctx, "test", user)
+	repo, err := server.CreateRepo(ctx, gittest.RandomRepoName(), user)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -166,8 +167,9 @@ func ExampleLocalRepo_QuickInit() {
 	}
 	defer local.Cleanup()
 
-	// QuickInit configures git user, creates initial commit, and returns a client
-	client, err := local.QuickInit(user, repo.AuthURL)
+	// InitWithRemote configures git user, creates initial commit, and returns a client
+	remote := repo
+	client, err := local.InitWithRemote(user, remote)
 	if err != nil {
 		log.Fatal(err)
 	}

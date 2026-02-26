@@ -16,7 +16,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree operations", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 			getHash    func(string) hash.Hash
 		)
@@ -143,7 +143,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree complex structure", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 		)
 
@@ -218,7 +218,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTree operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalGitRepo
+			local    *LocalRepository
 			treeHash hash.Hash
 		)
 
@@ -276,7 +276,7 @@ var _ = Describe("Trees", func() {
 	Context("GetTreeByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalGitRepo
+			local    *LocalRepository
 			treeHash hash.Hash
 			getHash  func(string) hash.Hash
 		)
@@ -402,7 +402,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree with fallback fetch", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 		)
 
@@ -490,7 +490,7 @@ var _ = Describe("Trees", func() {
 	Context("GetFlatTree with submodule", func() {
 		var (
 			client     nanogit.Client
-			local      *LocalGitRepo
+			local      *LocalRepository
 			commitHash hash.Hash
 		)
 
@@ -567,7 +567,7 @@ var _ = Describe("Trees", func() {
 	Context("CompareCommits with submodule", func() {
 		var (
 			client              nanogit.Client
-			local               *LocalGitRepo
+			local               *LocalRepository
 			beforeSubmoduleHash hash.Hash
 			afterSubmoduleHash  hash.Hash
 		)

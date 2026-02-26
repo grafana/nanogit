@@ -1,8 +1,8 @@
-// Package testutil provides testing utilities for nanogit-based applications.
+// Package gittest provides testing utilities for nanogit-based applications.
 //
 // It includes a lightweight Git server (using Gitea in testcontainers),
-// local repository wrappers, and helper functions to quickly set up
-// test environments for Git operations.
+// local repository wrappers, and helper functions to set up test environments
+// for Git operations.
 //
 // # Basic Usage
 //
@@ -13,14 +13,12 @@
 //	defer server.Cleanup()
 //
 //	user, _ := server.CreateUser(ctx)
-//	repo, _ := server.CreateRepo(ctx, "test", user)
+//	repo, _ := server.CreateRepo(ctx, gittest.RandomRepoName(), user)
 //
-//	// Create local repo and initialize
 //	local, _ := gittest.NewLocalRepo(ctx)
 //	defer local.Cleanup()
 //
-//	client, _, _ := local.QuickInit(user, repo.AuthURL)
+//	remote := repo
+//	client, _ := local.InitWithRemote(user, remote)
 //	// Now use client for testing
-//
-// For more examples, see the examples/ directory.
 package gittest

@@ -19,7 +19,7 @@ import (
 // convenience methods for common operations:
 //   - File creation and modification (CreateFile, UpdateFile, DeleteFile)
 //   - Git command execution (Git)
-//   - Quick initialization with remote (QuickInit)
+//   - Remote initialization (InitWithRemote)
 //   - Content inspection (LogContents)
 //
 // The repository is automatically cleaned up when Cleanup() is called.
@@ -222,11 +222,11 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 	return outputStr, nil
 }
 
-// QuickInit configures the repository and connects it to a remote server.
+// InitWithRemote configures the repository and connects it to a remote server.
 //
 // This convenience method performs a complete setup sequence:
 //   1. Configures git user.name and user.email from the User
-//   2. Adds the remote URL as origin
+//   2. Adds the remote repository's AuthURL as origin
 //   3. Creates an initial test.txt file with content
 //   4. Commits the file ("Initial commit")
 //   5. Renames branch to main (if needed)
@@ -241,12 +241,13 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 //
 // Example:
 //
-//	client, err := local.QuickInit(user, repo.AuthURL)
+//	remote := repo
+//	client, err := local.InitWithRemote(user, remote)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
 //	// Repository is now ready with initial commit pushed
-func (r *LocalRepo) QuickInit(user *User, remoteURL string) (nanogit.Client, error) {
+func (r *LocalRepo) InitWithRemote(user *User, remote *RemoteRepository) (nanogit.Client, error) {
 	r.logger.Logf("📦 [LOCAL] Setting up local repository")
 
 	if _, err := r.Git("config", "user.name", user.Username); err != nil {
@@ -255,7 +256,7 @@ func (r *LocalRepo) QuickInit(user *User, remoteURL string) (nanogit.Client, err
 	if _, err := r.Git("config", "user.email", user.Email); err != nil {
 		return nil, err
 	}
-	if _, err := r.Git("remote", "add", "origin", remoteURL); err != nil {
+	if _, err := r.Git("remote", "add", "origin", remote.AuthURL); err != nil {
 		return nil, err
 	}
 
@@ -285,7 +286,7 @@ func (r *LocalRepo) QuickInit(user *User, remoteURL string) (nanogit.Client, err
 		return nil, err
 	}
 
-	client, err := nanogit.NewHTTPClient(remoteURL, options.WithBasicAuth(user.Username, user.Password))
+	client, err := nanogit.NewHTTPClient(remote.AuthURL, options.WithBasicAuth(user.Username, user.Password))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nanogit client: %w", err)
 	}

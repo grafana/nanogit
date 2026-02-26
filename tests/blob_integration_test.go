@@ -16,7 +16,7 @@ var _ = Describe("Blobs", func() {
 	Context("GetBlob operations", func() {
 		var (
 			client nanogit.Client
-			local  *LocalGitRepo
+			local  *LocalRepository
 		)
 
 		BeforeEach(func() {
@@ -57,7 +57,7 @@ var _ = Describe("Blobs", func() {
 	Context("GetBlobByPath operations", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalGitRepo
+			local    *LocalRepository
 			rootHash hash.Hash
 		)
 
@@ -128,7 +128,7 @@ var _ = Describe("Blobs", func() {
 	Context("GetBlobByPath with nested directories", func() {
 		var (
 			client   nanogit.Client
-			local    *LocalGitRepo
+			local    *LocalRepository
 			rootHash hash.Hash
 		)
 
@@ -249,7 +249,7 @@ var _ = Describe("Blobs", func() {
 	Context("Large blob operations", func() {
 		var (
 			client nanogit.Client
-			local  *LocalGitRepo
+			local  *LocalRepository
 		)
 
 		BeforeEach(func() {
