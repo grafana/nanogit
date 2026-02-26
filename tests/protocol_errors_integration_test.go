@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"time"
 
@@ -70,13 +71,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
 				Expect(refUpdateErr.RefName).To(Equal("refs/heads/main"))
-				// logger.Info("Reference update failed as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				logger.Info("Reference update failed as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				// logger.Info("Push failed with Git server error as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
+				logger.Info("Push failed with Git server error as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
-				// logger.Info("Push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				logger.Info("Push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 				// Still consider this a valid test result - any error shows conflict detection works
 			_ = 0 // staticcheck: non-empty branch
 			}
@@ -111,7 +112,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			pushErr := cmd.Run()
 			if pushErr != nil {
 				// This is expected - Git itself prevents non-fast-forward pushes
-				// logger.Info("Git prevented non-fast-forward push as expected", "error", pushErr.Error())
+				logger.Info("Git prevented non-fast-forward push as expected", "error", pushErr.Error())
 			_ = pushErr // staticcheck: non-empty branch
 			}
 
@@ -134,7 +135,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			err = writer.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			// logger.Info("Valid push succeeded as expected")
+			logger.Info("Valid push succeeded as expected")
 		})
 	})
 
@@ -178,13 +179,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				// logger.Info("Git server error detected as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
+				logger.Info("Git server error detected as expected", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else if protocol.IsGitReferenceUpdateError(err) {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
-				// logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else {
-				// logger.Info("Server validation failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				logger.Info("Server validation failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 			_ = 0 // staticcheck: non-empty branch
 			}
 
@@ -192,7 +193,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			refs, err := client.ListRefs(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(refs)).To(BeNumerically(">", 0))
-			// logger.Info("Repository remains accessible after validation error", "refs_count", len(refs), "repo_name", remote.RepoName)
+			logger.Info("Repository remains accessible after validation error", "refs_count", len(refs))
 		})
 
 		It("should handle protocol errors during concurrent pushes", func() {
@@ -230,7 +231,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			By("First push should succeed")
 			err = writer1.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			// logger.Info("First writer push succeeded")
+			logger.Info("First writer push succeeded")
 
 			By("Second push should fail with protocol error")
 			err = writer2.Push(ctx)
@@ -240,13 +241,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if protocol.IsGitReferenceUpdateError(err) {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
-				// logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				logger.Info("Reference update error detected as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				// logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
+				logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
-				// logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 				_ = 0 // staticcheck: non-empty branch
 			}
 		})
@@ -296,7 +297,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			By("First writer pushes successfully")
 			err = writer1.Push(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			// logger.Info("First writer pushed successfully", "commit", commit1.Hash.String())
+			logger.Info("First writer pushed successfully", "commit", commit1.Hash.String())
 
 			By("Second writer should fail due to stale reference")
 			err = writer2.Push(ctx)
@@ -306,13 +307,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			if protocol.IsGitReferenceUpdateError(err) {
 				var refUpdateErr *protocol.GitReferenceUpdateError
 				Expect(errors.As(err, &refUpdateErr)).To(BeTrue())
-				// logger.Info("Reference update error as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
+				logger.Info("Reference update error as expected", "ref", refUpdateErr.RefName, "reason", refUpdateErr.Reason)
 			} else if protocol.IsGitServerError(err) {
 				var serverErr *protocol.GitServerError
 				Expect(errors.As(err, &serverErr)).To(BeTrue())
-				// logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
+				logger.Info("Git server error during concurrent push", "type", serverErr.ErrorType, "message", serverErr.Message)
 			} else {
-				// logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
+				logger.Info("Concurrent push failed with other error type", "error", err.Error(), "type", fmt.Sprintf("%T", err))
 				_ = 0 // staticcheck: non-empty branch
 			}
 
@@ -320,7 +321,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			updatedRef, err := client.GetRef(ctx, "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedRef.Hash).To(Equal(commit1.Hash))
-			// logger.Info("Successfully retrieved updated reference for recovery", "new_hash", updatedRef.Hash.String())
+			logger.Info("Successfully retrieved updated reference for recovery", "new_hash", updatedRef.Hash.String())
 
 			By("Verifying repository state after conflict")
 			refs, err := client.ListRefs(ctx)
@@ -330,7 +331,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			finalRef, err := client.GetRef(ctx, "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(finalRef.Hash).To(Equal(commit1.Hash))
-			// logger.Info("Repository state is consistent", "final_commit", finalRef.Hash.String())
+			logger.Info("Repository state is consistent", "final_commit", finalRef.Hash.String())
 		})
 	})
 
@@ -376,17 +377,17 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				if protocol.IsGitUnpackError(err) {
 					var unpackErr *protocol.GitUnpackError
 					Expect(errors.As(err, &unpackErr)).To(BeTrue())
-					// logger.Info("Unpack error with large content", "message", unpackErr.Message)
+					logger.Info("Unpack error with large content", "message", unpackErr.Message)
 				} else if protocol.IsGitServerError(err) {
 					var serverErr *protocol.GitServerError
 					Expect(errors.As(err, &serverErr)).To(BeTrue())
-					// logger.Info("Server error with large content", "type", serverErr.ErrorType, "message", serverErr.Message)
+					logger.Info("Server error with large content", "type", serverErr.ErrorType, "message", serverErr.Message)
 				} else {
-					// logger.Info("Large content push failed with other error", "error", err.Error())
+					logger.Info("Large content push failed with other error", "error", err.Error())
 					_ = 0 // staticcheck: non-empty branch
 				}
 			} else {
-				// logger.Info("Large content push succeeded")
+				logger.Info("Large content push succeeded")
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -434,13 +435,13 @@ var _ = Describe("Protocol Error Scenarios", func() {
 				if protocol.IsGitServerError(err) {
 					var serverErr *protocol.GitServerError
 					Expect(errors.As(err, &serverErr)).To(BeTrue())
-					// logger.Info("Server error with boundary conditions", "type", serverErr.ErrorType, "message", serverErr.Message)
+					logger.Info("Server error with boundary conditions", "type", serverErr.ErrorType, "message", serverErr.Message)
 				} else {
-					// logger.Info("Boundary condition push failed", "error", err.Error())
+					logger.Info("Boundary condition push failed", "error", err.Error())
 					_ = 0 // staticcheck: non-empty branch
 				}
 			} else {
-				// logger.Info("Boundary condition push succeeded")
+				logger.Info("Boundary condition push succeeded")
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
