@@ -334,72 +334,13 @@ For detailed testing examples and instructions, see [CONTRIBUTING.md](CONTRIBUTI
 
 ### Integration Testing with gittest
 
-The `gittest` package provides a complete testing environment for Git operations:
+The `gittest` package provides utilities for testing Git operations with a containerized Gitea server:
 
 ```bash
 go get github.com/grafana/nanogit/gittest@latest
 ```
 
-**Quick example:**
-
-```go
-import "github.com/grafana/nanogit/gittest"
-
-func TestGitOperations(t *testing.T) {
-    ctx := context.Background()
-
-    // Create a Git server
-    server, err := gittest.NewServer(ctx,
-        gittest.WithLogger(gittest.NewTestLogger(t)),
-    )
-    require.NoError(t, err)
-    defer server.Cleanup()
-
-    // Create user and repository
-    user, err := server.CreateUser(ctx)
-    require.NoError(t, err)
-
-    repo, err := server.CreateRepo(ctx, "myrepo", user)
-    require.NoError(t, err)
-
-    // Create local repository
-    local, err := gittest.NewLocalRepo(ctx,
-        gittest.WithRepoLogger(gittest.NewTestLogger(t)),
-    )
-    require.NoError(t, err)
-    defer local.Cleanup()
-
-    // Initialize with remote
-    client, err := local.QuickInit(user, repo.AuthURL)
-    require.NoError(t, err)
-
-    // Test your Git operations
-    err = local.CreateFile("README.md", "# My Project")
-    require.NoError(t, err)
-
-    _, err = local.Git("add", "README.md")
-    require.NoError(t, err)
-
-    _, err = local.Git("commit", "-m", "Initial commit")
-    require.NoError(t, err)
-
-    _, err = local.Git("push", "origin", "main")
-    require.NoError(t, err)
-}
-```
-
-**Features:**
-- 🐳 Containerized Gitea server (via testcontainers)
-- 📁 Local repository helpers with file operations
-- 🔧 Works with standard `testing` and Ginkgo
-- 🧹 Automatic cleanup with defer-friendly API
-- 📝 Multiple logger implementations (noop, test, colored)
-- ⚙️ Flexible configuration via functional options
-
-For comprehensive documentation, see:
-- [Testing Guide](docs/testing-guide.md) - Complete guide with patterns and best practices
-- [gittest README](gittest/README.md) - Detailed API reference with examples
-- [gittest GoDoc](https://pkg.go.dev/github.com/grafana/nanogit/gittest) - Package documentation
+See [gittest README](gittest/README.md) for API documentation and examples.
 
 ## Contributing
 

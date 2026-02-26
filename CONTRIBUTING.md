@@ -440,50 +440,15 @@ make generate
 
 The generated mocks are located in the `mocks/` directory and provide test doubles for both `Client` and `StagedWriter` interfaces. See [mocks/example_test.go](mocks/example_test.go) for complete usage examples.
 
-### Testing with testutil
+### Testing with gittest
 
-The `testutil` package provides comprehensive integration testing utilities for nanogit:
+The `gittest` package provides integration testing utilities with a containerized Gitea server:
 
 ```bash
-# Install testutil
 go get github.com/grafana/nanogit/gittest@latest
 ```
 
-**Quick example:**
-```go
-import "github.com/grafana/nanogit/gittest"
-
-func TestGitOperations(t *testing.T) {
-    ctx := context.Background()
-
-    // Get complete test environment
-    client, repo, local, user, cleanup, err := gittest.QuickSetup(ctx,
-        gittest.WithQuickSetupLogger(gittest.NewTestLogger(t)),
-    )
-    require.NoError(t, err)
-    defer cleanup()
-
-    // Test your operations
-}
-```
-
-**Key features:**
-- Containerized Gitea server (via testcontainers)
-- Local repository wrappers for Git operations
-- Automatic resource cleanup
-- Works with both standard `testing` and Ginkgo
-- Optional colored logging
-
-**When to use testutil:**
-- Writing integration tests for applications using nanogit
-- Testing Git workflows and operations
-- Validating authentication and authorization
-- Performance testing with real Git operations
-
-For detailed documentation:
-- [Testing Guide](docs/testing-guide.md) - Comprehensive patterns and best practices
-- [testutil README](testutil/README.md) - Complete API reference
-- [testutil Examples](testutil/examples/) - Working code examples
+For documentation and examples, see [gittest README](gittest/README.md).
 
 ### Code Style
 
