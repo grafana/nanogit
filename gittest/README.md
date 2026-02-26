@@ -117,6 +117,7 @@ local.LogContents() // Prints directory tree
 **LocalRepo Options:**
 - `WithRepoLogger(logger)` - Set custom logger
 - `WithTempDir(dir)` - Set parent temp directory
+- `WithGitTrace()` - Enable Git protocol tracing (for debugging only)
 
 ### Types
 

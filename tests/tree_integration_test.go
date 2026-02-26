@@ -506,7 +506,10 @@ var _ = Describe("Trees", func() {
 			subRemote := &RemoteRepo{RemoteRepository: subRepo}
 
 			By("Setting up the submodule source repository with content")
-			subLocalRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			subLocalRepo, err := gittest.NewLocalRepo(ctx,
+				gittest.WithRepoLogger(logger),
+				gittest.WithGitTrace(),
+			)
 			Expect(err).NotTo(HaveOccurred())
 			subLocal := &LocalRepository{LocalRepo: subLocalRepo}
 			subLocal.Git("config", "user.name", user.Username)
@@ -594,7 +597,10 @@ var _ = Describe("Trees", func() {
 			Expect(err).NotTo(HaveOccurred())
 			subRemote := &RemoteRepo{RemoteRepository: subRepo}
 
-			subLocalRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			subLocalRepo, err := gittest.NewLocalRepo(ctx,
+				gittest.WithRepoLogger(logger),
+				gittest.WithGitTrace(),
+			)
 			Expect(err).NotTo(HaveOccurred())
 			subLocal := &LocalRepository{LocalRepo: subLocalRepo}
 			subLocal.Git("config", "user.name", user.Username)

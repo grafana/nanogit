@@ -68,6 +68,12 @@ func NewLocalRepo(ctx context.Context, opts ...RepoOption) (*LocalRepo, error) {
 
 	cfg.logger.Logf("📦 [LOCAL] 📁 Creating new local repository at %s", tempDir)
 
+	// Build git environment variables
+	gitEnv := []string{"GIT_TERMINAL_PROMPT=0"}
+	if cfg.gitTrace {
+		gitEnv = append(gitEnv, "GIT_TRACE_PACKET=1")
+	}
+
 	repo := &LocalRepo{
 		Path:   tempDir,
 		ctx:    ctx,
@@ -77,7 +83,7 @@ func NewLocalRepo(ctx context.Context, opts ...RepoOption) (*LocalRepo, error) {
 			return os.RemoveAll(tempDir)
 		},
 		coloredGit: true,
-		gitEnv:     []string{"GIT_TERMINAL_PROMPT=0"},
+		gitEnv:     gitEnv,
 	}
 
 	// Initialize the repository
