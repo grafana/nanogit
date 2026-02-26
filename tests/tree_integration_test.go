@@ -34,12 +34,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Initial commit with tree structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with tree structure")
 
 			By("Creating and switching to main branch")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
@@ -166,12 +166,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Initial commit with complex tree structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with complex tree structure")
 
 			By("Creating and switching to main branch")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
 			var err error
@@ -235,12 +235,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Initial commit with tree structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with tree structure")
 
 			By("Creating and switching to main branch")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
 			var err error
@@ -294,12 +294,12 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("root.txt", "root content")
 
 			By("Adding and committing the files")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Initial commit with tree structure")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit with tree structure")
 
 			By("Creating and switching to main branch")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the tree hash")
 			var err error
@@ -428,10 +428,10 @@ var _ = Describe("Trees", func() {
 			local.CreateFile("level1/level2b/level3d/level4/file4.txt", "deep content at level4")
 
 			By("Committing the complex structure")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Complex nested tree structure")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Complex nested tree structure")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
 			By("Getting the commit hash")
 			var err error
@@ -506,31 +506,31 @@ var _ = Describe("Trees", func() {
 		Expect(err).NotTo(HaveOccurred())
 			By("Setting up the submodule source repository with content")
 			subLocal, _ := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
-			_, _ = subLocal.Git("config", "user.name", user.Username)
-			_, _ = subLocal.Git("config", "user.email", user.Email)
-			_, _ = subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
+			subLocal.Git("config", "user.name", user.Username)
+			subLocal.Git("config", "user.email", user.Email)
+			subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
 			_ = subLocal.CreateFile("lib.txt", "library content")
-			_, _ = subLocal.Git("add", ".")
-			_, _ = subLocal.Git("commit", "-m", "Initial submodule commit")
-			_, _ = subLocal.Git("branch", "-M", "main")
-			_, _ = subLocal.Git("push", "origin", "main", "--force")
+			subLocal.Git("add", ".")
+			subLocal.Git("commit", "-m", "Initial submodule commit")
+			subLocal.Git("branch", "-M", "main")
+			subLocal.Git("push", "origin", "main", "--force")
 
 			By("Adding files to the main repository")
 			local.CreateDirPath("src")
 			local.CreateFile("src/main.txt", "main content")
 			local.CreateFile("README.md", "readme")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Add source files")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add source files")
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			_ = local.Git("submodule", "add", subRemote.AuthURL, "external/lib")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Add submodule")
+			local.Git("submodule", "add", subRemote.AuthURL, "external/lib")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add submodule")
 
 			By("Pushing the main repository")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 
 			commitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -580,8 +580,8 @@ var _ = Describe("Trees", func() {
 
 			By("Creating initial commit in main repo")
 			local.CreateFile("README.md", "readme")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Initial commit")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Initial commit")
 			var err error
 			beforeSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
@@ -590,26 +590,26 @@ var _ = Describe("Trees", func() {
 			subRemote, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
 		Expect(err).NotTo(HaveOccurred())
 			subLocal, _ := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
-			_, _ = subLocal.Git("config", "user.name", user.Username)
-			_, _ = subLocal.Git("config", "user.email", user.Email)
-			_, _ = subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
+			subLocal.Git("config", "user.name", user.Username)
+			subLocal.Git("config", "user.email", user.Email)
+			subLocal.Git("remote", "add", "origin", subRemote.AuthURL)
 			_ = subLocal.CreateFile("lib.txt", "library content")
-			_, _ = subLocal.Git("add", ".")
-			_, _ = subLocal.Git("commit", "-m", "Initial submodule commit")
-			_, _ = subLocal.Git("branch", "-M", "main")
-			_, _ = subLocal.Git("push", "origin", "main", "--force")
+			subLocal.Git("add", ".")
+			subLocal.Git("commit", "-m", "Initial submodule commit")
+			subLocal.Git("branch", "-M", "main")
+			subLocal.Git("push", "origin", "main", "--force")
 
 			By("Adding the submodule to the main repository")
 			_ = remote // main remote is used by QuickInit
-			_ = local.Git("submodule", "add", subRemote.AuthURL, "vendor/lib")
-			_ = local.Git("add", ".")
-			_ = local.Git("commit", "-m", "Add submodule")
+			local.Git("submodule", "add", subRemote.AuthURL, "vendor/lib")
+			local.Git("add", ".")
+			local.Git("commit", "-m", "Add submodule")
 			afterSubmoduleHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing the main repository")
-			_ = local.Git("branch", "-M", "main")
-			_ = local.Git("push", "origin", "main", "--force")
+			local.Git("branch", "-M", "main")
+			local.Git("push", "origin", "main", "--force")
 		})
 
 		It("should compare commits across submodule addition without errors", func() {

@@ -139,7 +139,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 
 	Context("Git Server Error Messages", func() {
 		It("should handle server-side validation errors", func() {
-			client, _, local, _ := QuickSetup()
+			client, remote, local, _ := QuickSetup()
 
 			By("Setting up competing operations to trigger server validation errors")
 
@@ -190,7 +190,7 @@ var _ = Describe("Protocol Error Scenarios", func() {
 			refs, err := client.ListRefs(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(refs)).To(BeNumerically(">", 0))
-			logger.Info("Repository remains accessible after validation error", "refs_count", len(refs))
+			logger.Info("Repository remains accessible after validation error", "refs_count", len(refs), "repo_name", remote.Name)
 		})
 
 		It("should handle protocol errors during concurrent pushes", func() {
