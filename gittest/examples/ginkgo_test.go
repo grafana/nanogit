@@ -48,7 +48,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 		Expect(err).NotTo(HaveOccurred(), "failed to create local repo")
 
 		// Initialize and get client
-		client, _, err = local.QuickInit(user, repo.AuthURL)
+		client, err = local.QuickInit(user, repo.AuthURL)
 		Expect(err).NotTo(HaveOccurred(), "failed to initialize local repo")
 	})
 
@@ -214,7 +214,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Generate token
-			token, err := server.GenerateUserToken(ctx, user.Username)
+			token, err := server.CreateToken(ctx, user.Username)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(token).NotTo(BeEmpty())
 			Expect(token).To(HavePrefix("token "))
@@ -250,7 +250,7 @@ var _ = Describe("Testutil with Ginkgo", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Initialize and get client
-			coloredClient, _, err = coloredLocal.QuickInit(user, repo.AuthURL)
+			coloredClient, err = coloredLocal.QuickInit(user, repo.AuthURL)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

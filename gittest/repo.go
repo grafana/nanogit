@@ -221,12 +221,6 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 	return outputStr, nil
 }
 
-// GitWithError is an alias for Git that returns both output and error.
-// Provided for compatibility with test code that expects this signature.
-func (r *LocalRepo) GitWithError(args ...string) (string, error) {
-	return r.Git(args...)
-}
-
 // QuickInit configures the repository and connects it to a remote server.
 //
 // This convenience method performs a complete setup sequence:
@@ -242,63 +236,60 @@ func (r *LocalRepo) GitWithError(args ...string) (string, error) {
 // This is the fastest way to get a fully functional local + remote repository
 // setup for testing.
 //
-// Returns:
-//   - A configured nanogit.Client ready to use
-//   - The name of the test file created ("test.txt")
-//   - An error if any step fails
+// Returns a configured nanogit.Client ready to use, or an error if setup fails.
 //
 // Example:
 //
-//	client, testFile, err := local.QuickInit(user, repo.AuthURL)
+//	client, err := local.QuickInit(user, repo.AuthURL)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
 //	// Repository is now ready with initial commit pushed
-func (r *LocalRepo) QuickInit(user *User, remoteURL string) (nanogit.Client, string, error) {
+func (r *LocalRepo) QuickInit(user *User, remoteURL string) (nanogit.Client, error) {
 	r.logger.Logf("📦 [LOCAL] Setting up local repository")
 
 	if _, err := r.Git("config", "user.name", user.Username); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if _, err := r.Git("config", "user.email", user.Email); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if _, err := r.Git("remote", "add", "origin", remoteURL); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	r.logger.Logf("📦 [LOCAL] Creating and committing test file")
 	testContent := "test content"
 	fileName := "test.txt"
 	if err := r.CreateFile(fileName, testContent); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if _, err := r.Git("add", fileName); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if _, err := r.Git("commit", "-m", "Initial commit"); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	r.logger.Logf("📦 [LOCAL] Setting up main branch and pushing changes")
 	if _, err := r.Git("branch", "-M", "main"); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if _, err := r.Git("push", "origin", "main", "--force"); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	r.logger.Logf("📦 [LOCAL] Tracking current branch")
 	if _, err := r.Git("branch", "--set-upstream-to=origin/main", "main"); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	client, err := nanogit.NewHTTPClient(remoteURL, options.WithBasicAuth(user.Username, user.Password))
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create nanogit client: %w", err)
+		return nil, fmt.Errorf("failed to create nanogit client: %w", err)
 	}
 
-	return client, fileName, nil
+	return client, nil
 }
 
 // LogContents logs the contents of the repository directory tree.

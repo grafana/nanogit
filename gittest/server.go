@@ -238,11 +238,21 @@ func (s *Server) CreateUser(ctx context.Context) (*User, error) {
 	return user, nil
 }
 
-// GenerateUserToken creates a new access token for the specified user in the Gitea server.
-// The token is created with all permissions enabled.
+// CreateToken creates a new access token for the specified user in the Gitea server.
 //
-// Returns the generated token string (prefixed with "token ") or an error if generation fails.
-func (s *Server) GenerateUserToken(ctx context.Context, username string) (string, error) {
+// The token is created with all permissions enabled and is prefixed with "token ".
+// This is consistent with other Create* methods in the API.
+//
+// Returns the generated token string or an error if creation fails.
+//
+// Example:
+//
+//	token, err := server.CreateToken(ctx, user.Username)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	// Use token for API authentication
+func (s *Server) CreateToken(ctx context.Context, username string) (string, error) {
 	s.logger.Logf("🔑 Generating access token for user '%s'...", username)
 
 	execResult, reader, err := s.container.Exec(ctx, []string{

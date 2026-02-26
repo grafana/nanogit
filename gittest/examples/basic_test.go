@@ -32,7 +32,7 @@ func TestBasicGitOperations(t *testing.T) {
 	defer local.Cleanup()
 
 	// Initialize local repo and get client
-	client, _, err := local.QuickInit(user, repo.AuthURL)
+	client, err := local.QuickInit(user, repo.AuthURL)
 	require.NoError(t, err, "failed to initialize local repo")
 
 	t.Logf("Test environment ready:")
@@ -179,7 +179,7 @@ func TestMultipleFiles(t *testing.T) {
 	defer local.Cleanup()
 
 	// Initialize and get client
-	client, _, err := local.QuickInit(user, repo.AuthURL)
+	client, err := local.QuickInit(user, repo.AuthURL)
 	require.NoError(t, err)
 
 	// Create a directory structure
@@ -223,7 +223,7 @@ func TestMultipleFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ref)
 
-	t.Logf("Successfully pushed %d files", len(files)+1) // +1 for test.txt from QuickInit
+	t.Logf("Successfully pushed %d files", len(files)+1) // +1 for initial test.txt
 
 	// Log the repository contents
 	local.LogContents()

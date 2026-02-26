@@ -72,7 +72,7 @@ func QuickSetup() (nanogit.Client, *RemoteRepo, *LocalGitRepo, *User) {
 	// Wrap local repo for Ginkgo-friendly error handling
 	local := &LocalGitRepo{LocalRepo: localRepo}
 
-	client, _, err := localRepo.QuickInit(user, repo.AuthURL)
+	client, err := localRepo.QuickInit(user, repo.AuthURL)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Wrap repo for backward compatibility

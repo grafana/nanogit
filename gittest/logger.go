@@ -21,16 +21,16 @@ type Logger interface {
 	Logf(format string, args ...any)
 }
 
-// ANSI color codes for terminal output (optional, used by ColoredLogger)
+// ANSI color codes for terminal output (used internally by ColoredLogger)
 const (
-	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m"
-	ColorGreen  = "\033[32m"
-	ColorYellow = "\033[33m"
-	ColorBlue   = "\033[34m"
-	ColorPurple = "\033[35m"
-	ColorCyan   = "\033[36m"
-	ColorGray   = "\033[90m"
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorPurple = "\033[35m"
+	colorCyan   = "\033[36m"
+	colorGray   = "\033[90m"
 )
 
 // noopLogger is a logger that discards all output.
@@ -105,15 +105,15 @@ func (l *coloredLogger) Logf(format string, args ...any) {
 	// Add color based on content hints
 	switch {
 	case strings.Contains(msg, "[ERROR]") || strings.Contains(strings.ToLower(msg), "error"):
-		fmt.Fprintf(l.w, "%s%s%s\n", ColorRed, msg, ColorReset)
+		fmt.Fprintf(l.w, "%s%s%s\n", colorRed, msg, colorReset)
 	case strings.Contains(msg, "[WARN]") || strings.Contains(strings.ToLower(msg), "warn"):
-		fmt.Fprintf(l.w, "%s%s%s\n", ColorYellow, msg, ColorReset)
+		fmt.Fprintf(l.w, "%s%s%s\n", colorYellow, msg, colorReset)
 	case strings.Contains(msg, "[SUCCESS]") || strings.Contains(msg, "✅") || strings.Contains(msg, "✨"):
-		fmt.Fprintf(l.w, "%s%s%s\n", ColorGreen, msg, ColorReset)
+		fmt.Fprintf(l.w, "%s%s%s\n", colorGreen, msg, colorReset)
 	case strings.Contains(msg, "[DEBUG]"):
-		fmt.Fprintf(l.w, "%s%s%s\n", ColorGray, msg, ColorReset)
+		fmt.Fprintf(l.w, "%s%s%s\n", colorGray, msg, colorReset)
 	case strings.Contains(msg, "[INFO]"):
-		fmt.Fprintf(l.w, "%s%s%s\n", ColorBlue, msg, ColorReset)
+		fmt.Fprintf(l.w, "%s%s%s\n", colorBlue, msg, colorReset)
 	default:
 		fmt.Fprintf(l.w, "%s\n", msg)
 	}

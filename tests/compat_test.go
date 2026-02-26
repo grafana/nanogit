@@ -56,10 +56,10 @@ func (r *LocalGitRepo) Git(args ...string) string {
 }
 
 // QuickInit initializes the repository with a remote and fails the test on error.
-func (r *LocalGitRepo) QuickInit(user *gittest.User, remoteURL string) (nanogit.Client, string, error) {
-	client, url, err := r.LocalRepo.QuickInit(user, remoteURL)
+func (r *LocalGitRepo) QuickInit(user *gittest.User, remoteURL string) (nanogit.Client, error) {
+	client, err := r.LocalRepo.QuickInit(user, remoteURL)
 	Expect(err).NotTo(HaveOccurred())
-	return client, url, err
+	return client, err
 }
 
 // RemoteRepo wraps gittest.Repo to add backward-compatible methods

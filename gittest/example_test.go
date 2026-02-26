@@ -39,7 +39,7 @@ func Example() {
 	defer local.Cleanup()
 
 	// Initialize local repo and get a nanogit client
-	client, _, err := local.QuickInit(user, repo.AuthURL)
+	client, err := local.QuickInit(user, repo.AuthURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func ExampleLocalRepo_QuickInit() {
 	defer local.Cleanup()
 
 	// QuickInit configures git user, creates initial commit, and returns a client
-	client, _, err := local.QuickInit(user, repo.AuthURL)
+	client, err := local.QuickInit(user, repo.AuthURL)
 	if err != nil {
 		log.Fatal(err)
 	}
