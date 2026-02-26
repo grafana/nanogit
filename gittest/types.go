@@ -2,6 +2,7 @@ package gittest
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -60,11 +61,19 @@ func (r *Repo) PublicURL() string {
 
 // newRepo creates a new Repo instance with the specified configuration.
 func newRepo(repoName string, user *User, host, port string) *Repo {
+	// Build AuthURL with properly URL-encoded credentials
+	authURL := &url.URL{
+		Scheme: "http",
+		User:   url.UserPassword(user.Username, user.Password),
+		Host:   fmt.Sprintf("%s:%s", host, port),
+		Path:   fmt.Sprintf("/%s/%s.git", user.Username, repoName),
+	}
+
 	return &Repo{
 		Name:    repoName,
 		Owner:   user.Username,
 		URL:     fmt.Sprintf("http://%s:%s/%s/%s.git", host, port, user.Username, repoName),
-		AuthURL: fmt.Sprintf("http://%s:%s@%s:%s/%s/%s.git", user.Username, user.Password, host, port, user.Username, repoName),
+		AuthURL: authURL.String(),
 		User:    user,
 		host:    host,
 		port:    port,

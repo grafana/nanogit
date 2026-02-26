@@ -539,13 +539,12 @@ cleanup()  // Only runs if test succeeds
 - **Don't hardcode URLs**: Use the provided repo URLs
 - **Don't assume timing**: Git operations can be slow; don't use time.Sleep
 
-## Examples
+## Documentation
 
-For complete working examples, see:
+For detailed documentation, see:
 
-- [gittest/examples/basic_test.go](../gittest/examples/basic_test.go) - Standard testing examples
-- [gittest/examples/ginkgo_test.go](../gittest/examples/ginkgo_test.go) - Ginkgo integration
-- [gittest/README.md](../gittest/README.md) - Detailed API documentation
+- [gittest/README.md](../gittest/README.md) - Complete API reference with examples
+- [gittest godoc](https://pkg.go.dev/github.com/grafana/nanogit/gittest) - Package documentation with example tests
 
 ## API Reference
 

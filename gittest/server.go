@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -328,7 +329,12 @@ func (s *Server) CreateRepo(ctx context.Context, name string, user *User) (*Repo
 
 	httpClient := http.Client{}
 	createRepoURL := fmt.Sprintf("http://%s:%s/api/v1/user/repos", s.Host, s.Port)
-	jsonData := []byte(fmt.Sprintf(`{"name":"%s"}`, name))
+
+	// Use json.Marshal to properly escape the repository name
+	jsonData, err := json.Marshal(map[string]string{"name": name})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", createRepoURL, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -369,11 +375,14 @@ func (s *Server) Cleanup() error {
 		if err := s.container.Terminate(cleanupCtx); err != nil {
 			return fmt.Errorf("failed to terminate container: %w", err)
 		}
+		// Set to nil to make this method truly idempotent
+		s.container = nil
 	}
 
 	// Cancel the context after cleanup is done
 	if s.cancelContext != nil {
 		s.cancelContext()
+		s.cancelContext = nil
 	}
 
 	// Run any registered cleanup functions
@@ -382,6 +391,7 @@ func (s *Server) Cleanup() error {
 			return err
 		}
 	}
+	s.cleanupFuncs = nil
 
 	return nil
 }

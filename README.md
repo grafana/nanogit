@@ -398,8 +398,8 @@ func TestGitOperations(t *testing.T) {
 
 For comprehensive documentation, see:
 - [Testing Guide](docs/testing-guide.md) - Complete guide with patterns and best practices
-- [gittest README](gittest/README.md) - Detailed API reference
-- [gittest Examples](gittest/examples/) - Working code examples
+- [gittest README](gittest/README.md) - Detailed API reference with examples
+- [gittest GoDoc](https://pkg.go.dev/github.com/grafana/nanogit/gittest) - Package documentation
 
 ## Contributing
 

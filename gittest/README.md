@@ -248,20 +248,6 @@ var _ = Describe("Git Operations", func() {
 })
 ```
 
-## Examples
-
-See the [examples/](examples/) directory for complete working examples:
-
-- [`basic_test.go`](examples/basic_test.go) - Standard `testing` package example
-- [`ginkgo_test.go`](examples/ginkgo_test.go) - Ginkgo integration example
-
-Run examples:
-
-```bash
-cd gittest/examples
-go test -v
-```
-
 ## Troubleshooting
 
 ### Docker not running

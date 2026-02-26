@@ -3,6 +3,7 @@ package gittest
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -165,8 +166,8 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 	cmd.Dir = r.Path
 	cmd.Env = append(os.Environ(), r.gitEnv...)
 
-	// Format the command for display
-	cmdStr := strings.Join(args, " ")
+	// Format the command for display, redacting credentials from URLs
+	cmdStr := redactCredentials(strings.Join(args, " "))
 
 	if r.coloredGit {
 		// Log the git command being executed with a special format
@@ -326,4 +327,21 @@ func (r *LocalRepo) Cleanup() error {
 		return err
 	}
 	return nil
+}
+
+// redactCredentials redacts credentials from URLs in git command strings.
+// This prevents credential leakage in logs when commands contain authenticated URLs.
+func redactCredentials(cmdStr string) string {
+	// Use net/url to parse and redact credentials from any URLs in the command
+	words := strings.Fields(cmdStr)
+	for i, word := range words {
+		if strings.Contains(word, "://") {
+			if u, err := url.Parse(word); err == nil && u.User != nil {
+				// Redact the credentials
+				u.User = url.User("***REDACTED***")
+				words[i] = u.String()
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }

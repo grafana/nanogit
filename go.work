@@ -3,6 +3,5 @@ go 1.24.10
 use (
 	.
 	./gittest
-	./gittest/examples
 	./perf
 )

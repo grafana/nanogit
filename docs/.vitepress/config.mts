@@ -8,7 +8,6 @@ export default defineConfig({
 
   // Allow links to gittest package outside docs directory
   ignoreDeadLinks: [
-    /gittest\/examples\/.*/,
     /gittest\/README/
   ],
 
