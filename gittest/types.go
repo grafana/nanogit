@@ -49,6 +49,26 @@ type RemoteRepository struct {
 	port string
 }
 
+// ConnectionInfo contains authentication details for connecting to a Git repository.
+//
+// Returned by LocalRepo.InitWithRemote(), this struct provides all information
+// needed to create a Git client and authenticate with the remote repository:
+//   - URL: The HTTPS URL of the repository
+//   - Username: Username for authentication
+//   - Password: Password for authentication
+//
+// Example:
+//
+//	connInfo, err := local.InitWithRemote(user, remote)
+//	// Use connInfo to create your Git client
+//	client, err := nanogit.NewHTTPClient(connInfo.URL,
+//		options.WithBasicAuth(connInfo.Username, connInfo.Password))
+type ConnectionInfo struct {
+	URL      string // Repository HTTPS URL
+	Username string // Username for authentication
+	Password string // Password for authentication
+}
+
 // CloneURL returns the authenticated clone URL for the repository.
 func (r *RemoteRepository) CloneURL() string {
 	return r.AuthURL

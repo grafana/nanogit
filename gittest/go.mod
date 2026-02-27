@@ -3,7 +3,6 @@ module github.com/grafana/nanogit/gittest
 go 1.24.2
 
 require (
-	github.com/grafana/nanogit v0.0.0
 	github.com/testcontainers/testcontainers-go v0.40.0
 )
 
@@ -67,6 +66,3 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// During development, use replace directive
-replace github.com/grafana/nanogit => ../

@@ -3,6 +3,7 @@ package integration_test
 import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/options"
 	. "github.com/onsi/gomega"
 )
 
@@ -52,9 +53,15 @@ func (r *LocalRepository) Git(args ...string) string {
 }
 
 // InitWithRemote initializes the repository with a remote and fails the test on error.
+// Returns a configured nanogit.Client ready to use.
 func (r *LocalRepository) InitWithRemote(user *gittest.User, remote *gittest.RemoteRepository) nanogit.Client {
-	client, err := r.LocalRepo.InitWithRemote(user, remote)
+	connInfo, err := r.LocalRepo.InitWithRemote(user, remote)
 	Expect(err).NotTo(HaveOccurred())
+
+	client, err := nanogit.NewHTTPClient(connInfo.URL,
+		options.WithBasicAuth(connInfo.Username, connInfo.Password))
+	Expect(err).NotTo(HaveOccurred())
+
 	return client
 }
 
