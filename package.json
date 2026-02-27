@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "vitepress": "1.6.4",
-    "vue": "3.5.28"
+    "vue": "3.5.29"
   },
   "scripts": {
     "docs:dev": "vitepress dev docs",
