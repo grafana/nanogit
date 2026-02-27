@@ -30,18 +30,15 @@ var _ = Describe("Blobs", func() {
 			testContent := []byte("test content")
 			err := local.CreateFile("blob.txt", string(testContent))
 			Expect(err).NotTo(HaveOccurred())
-			output, err := local.Git("add", "blob.txt")
+			_, err = local.Git("add", "blob.txt")
 			Expect(err).NotTo(HaveOccurred())
-			_ = output
-			output, err = local.Git("commit", "-m", "Initial commit")
+			_, err = local.Git("commit", "-m", "Initial commit")
 			Expect(err).NotTo(HaveOccurred())
-			_ = output
-			output, err = local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("push", "origin", "main", "--force")
 			Expect(err).NotTo(HaveOccurred())
-			_ = output
 
 			By("Getting blob hash")
-			output, err = local.Git("rev-parse", "HEAD:blob.txt")
+			output, err := local.Git("rev-parse", "HEAD:blob.txt")
 			Expect(err).NotTo(HaveOccurred())
 			blobHash, err := hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())

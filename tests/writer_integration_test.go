@@ -100,7 +100,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			Expect(local.Git("pull", "origin", "main")).To(Succeed())
+			_, err = local.Git("pull", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
 			mainHash, err := local.Git("rev-parse", "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit.Hash.String()).To(Equal(mainHash))
@@ -202,7 +203,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify results
-			local.Git("pull")
+			_, err = local.Git("pull")
+			Expect(err).NotTo(HaveOccurred())
 			mainHash, err := local.Git("rev-parse", "refs/heads/main")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(commit.Hash.String()).To(Equal(mainHash))
@@ -1451,7 +1453,8 @@ var _ = Describe("Writer Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pulling latest changes")
-			local.Git("pull")
+			_, err = local.Git("pull")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying commit hash")
 			headHash, err := local.Git("rev-parse", "HEAD")
