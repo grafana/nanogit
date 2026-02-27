@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/options"
 )
 
 // Example demonstrates basic usage of testutil to set up a Git server and repository.
@@ -38,9 +40,16 @@ func Example() {
 	}
 	defer local.Cleanup()
 
-	// Initialize local repo and get a nanogit client
+	// Initialize local repo and get connection info
 	remote := repo
-	client, err := local.InitWithRemote(user, remote)
+	connInfo, err := local.InitWithRemote(user, remote)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create nanogit client from connection info
+	client, err := nanogit.NewHTTPClient(connInfo.URL,
+		options.WithBasicAuth(connInfo.Username, connInfo.Password))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -167,9 +176,17 @@ func ExampleLocalRepo_InitWithRemote() {
 	}
 	defer local.Cleanup()
 
-	// InitWithRemote configures git user, creates initial commit, and returns a client
+	// InitWithRemote configures git user, creates initial commit, and returns connection info
 	remote := repo
-	client, err := local.InitWithRemote(user, remote)
+	connInfo, err := local.InitWithRemote(user, remote)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create your Git client from the connection info
+	// Example with nanogit:
+	client, err := nanogit.NewHTTPClient(connInfo.URL,
+		options.WithBasicAuth(connInfo.Username, connInfo.Password))
 	if err != nil {
 		log.Fatal(err)
 	}

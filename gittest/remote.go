@@ -8,9 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/options"
 )
 
 // LocalRepo represents a local Git repository for testing.
@@ -241,22 +238,23 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 //   5. Renames branch to main (if needed)
 //   6. Force pushes to origin/main
 //   7. Sets up branch tracking
-//   8. Creates and returns a nanogit.Client
+//   8. Returns ConnectionInfo with URL and credentials
 //
 // This is the fastest way to get a fully functional local + remote repository
 // setup for testing.
 //
-// Returns a configured nanogit.Client ready to use, or an error if setup fails.
+// Returns ConnectionInfo with authentication details, or an error if setup fails.
 //
 // Example:
 //
-//	remote := repo
-//	client, err := local.InitWithRemote(user, remote)
+//	connInfo, err := local.InitWithRemote(user, remote)
 //	if err != nil {
 //		t.Fatal(err)
 //	}
-//	// Repository is now ready with initial commit pushed
-func (r *LocalRepo) InitWithRemote(user *User, remote *RemoteRepository) (nanogit.Client, error) {
+//	// Use connInfo to create your Git client
+//	client, err := nanogit.NewHTTPClient(connInfo.URL,
+//		options.WithBasicAuth(connInfo.Username, connInfo.Password))
+func (r *LocalRepo) InitWithRemote(user *User, remote *RemoteRepository) (*ConnectionInfo, error) {
 	r.logger.Logf("📦 [LOCAL] Setting up local repository")
 
 	if _, err := r.Git("config", "user.name", user.Username); err != nil {
@@ -295,12 +293,11 @@ func (r *LocalRepo) InitWithRemote(user *User, remote *RemoteRepository) (nanogi
 		return nil, err
 	}
 
-	client, err := nanogit.NewHTTPClient(remote.AuthURL, options.WithBasicAuth(user.Username, user.Password))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create nanogit client: %w", err)
-	}
-
-	return client, nil
+	return &ConnectionInfo{
+		URL:      remote.URL,
+		Username: user.Username,
+		Password: user.Password,
+	}, nil
 }
 
 // LogContents logs the contents of the repository directory tree.

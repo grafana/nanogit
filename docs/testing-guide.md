@@ -19,7 +19,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,9 +45,14 @@ func TestGitOperations(t *testing.T) {
 	require.NoError(t, err)
 	defer local.Cleanup()
 
-	// Initialize with remote
+	// Initialize with remote and get connection info
 	remote := repo
-	client, err := local.InitWithRemote(user, remote)
+	connInfo, err := local.InitWithRemote(user, remote)
+	require.NoError(t, err)
+
+	// Create nanogit client from connection info
+	client, err := nanogit.NewHTTPClient(connInfo.URL,
+		options.WithBasicAuth(connInfo.Username, connInfo.Password))
 	require.NoError(t, err)
 
 	// Test your feature
@@ -78,8 +85,13 @@ local, err := gittest.NewLocalRepo(ctx,
 )
 defer local.Cleanup()
 
+// Initialize with remote - returns connection info
 remote := repo
-client, err := local.InitWithRemote(user, remote)
+connInfo, err := local.InitWithRemote(user, remote)
+
+// Create your Git client from the connection info
+client, err := nanogit.NewHTTPClient(connInfo.URL,
+	options.WithBasicAuth(connInfo.Username, connInfo.Password))
 
 err = local.CreateFile("path/file.txt", "content")
 err = local.UpdateFile("path/file.txt", "new content")
