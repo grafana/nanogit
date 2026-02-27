@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/options"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -77,7 +78,13 @@ func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo
 		Expect(local.Cleanup()).To(Succeed())
 	})
 
-	client, err := local.InitWithRemote(user, repo)
+	// Initialize with remote and get connection info
+	connInfo, err := local.InitWithRemote(user, repo)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create nanogit client from connection info
+	client, err := nanogit.NewHTTPClient(connInfo.URL,
+		options.WithBasicAuth(connInfo.Username, connInfo.Password))
 	Expect(err).NotTo(HaveOccurred())
 
 	return client, repo, local, user
