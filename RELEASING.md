@@ -27,15 +27,15 @@ When a PR is merged to `main`:
 1. **CI Checks Run**: All tests, linting, and security checks must pass
 2. **Semantic Release Activates**: The release workflow analyzes commits since the last release
 3. **Version Determined**: Based on commit message types
-4. **Tags Created**: Three synchronized Git tags are created:
+4. **Tags Created**: Two synchronized Git tags are created:
    - `v0.5.3` - Main nanogit module
-   - `gittest/v0.5.3` - Test utilities module
-   - `tests/v0.5.3` - Integration tests module
+   - `gittest/v0.5.3` - Test utilities module (public)
+   - Note: `tests/` module is internal only (no tag needed)
 5. **GitHub Release**: Release is published with auto-generated release notes
 6. **CHANGELOG PR Created**: Workflow creates a new branch with updated CHANGELOG.md
 7. **Auto-Merge Enabled**: PR is set to auto-merge once CI passes
 8. **CHANGELOG PR Merges**: After CI passes, PR merges automatically
-9. **pkg.go.dev Updated**: Go module proxy automatically indexes all three modules
+9. **pkg.go.dev Updated**: Go module proxy automatically indexes both public modules
 
 **Note**: The CHANGELOG update happens via an automated PR (not direct push) to respect branch protection rules. This PR will auto-merge if CI passes and auto-merge is enabled in repository settings.
 
@@ -212,13 +212,11 @@ nanogit uses a multi-module architecture with synchronized versioning:
 
 ### Synchronized Versioning
 
-All modules share the same version number. When releasing v0.5.3:
-- Main: `v0.5.3`
-- gittest: `gittest/v0.5.3`
-- tests: `tests/v0.5.3`
-- perf: `perf/v0.5.3` (if applicable)
+Public modules share the same version number. When releasing v0.5.3:
+- Main: `v0.5.3` (runtime library)
+- gittest: `gittest/v0.5.3` (public test utility)
 
-This simplifies dependency management and makes it clear which versions work together.
+Internal modules (tests, perf) are not tagged as they're only used via the workspace.
 
 ### Usage
 
