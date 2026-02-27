@@ -107,8 +107,12 @@ output, err := local.Git("commit", "-m", "message")
 output, err := local.Git("push", "origin", "main")
 
 // Initialize with remote (config + initial commit + push)
+// Returns connection info - create your Git client from it
 remote := repo
-client, err := local.InitWithRemote(user, remote)
+connInfo, err := local.InitWithRemote(user, remote)
+// Example: creating a nanogit client
+// client, err := nanogit.NewHTTPClient(connInfo.URL,
+//     options.WithBasicAuth(connInfo.Username, connInfo.Password))
 
 // Debug helper
 local.LogContents() // Prints directory tree
@@ -148,6 +152,21 @@ url := repo.CloneURL()
 
 // Get public URL
 url := repo.PublicURL()
+```
+
+#### ConnectionInfo
+
+```go
+type ConnectionInfo struct {
+	URL      string // Repository HTTPS URL
+	Username string // Username for authentication
+	Password string // Password for authentication
+}
+
+// Returned by InitWithRemote - use to create your Git client
+connInfo, err := local.InitWithRemote(user, remote)
+client, err := nanogit.NewHTTPClient(connInfo.URL,
+    options.WithBasicAuth(connInfo.Username, connInfo.Password))
 ```
 
 ### Logging
@@ -191,7 +210,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/options"
 )
 
 var _ = Describe("Git Operations", func() {
@@ -227,9 +248,14 @@ var _ = Describe("Git Operations", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Initialize and get client
+		// Initialize with remote and get connection info
 		remote := repo
-		client, err = local.InitWithRemote(user, remote)
+		connInfo, err := local.InitWithRemote(user, remote)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create nanogit client from connection info
+		client, err = nanogit.NewHTTPClient(connInfo.URL,
+			options.WithBasicAuth(connInfo.Username, connInfo.Password))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
