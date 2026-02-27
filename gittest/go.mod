@@ -3,7 +3,6 @@ module github.com/grafana/nanogit/gittest
 go 1.25.6
 
 require (
-	github.com/grafana/nanogit v1.0.0
 	github.com/testcontainers/testcontainers-go v0.40.0
 )
 
