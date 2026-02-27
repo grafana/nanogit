@@ -68,7 +68,10 @@ func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo
 	repo, err := gitServer.CreateRepo(ctx, gittest.RandomRepoName(), user)
 	Expect(err).NotTo(HaveOccurred())
 
-	local, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+	local, err := gittest.NewLocalRepo(ctx,
+		gittest.WithRepoLogger(logger),
+		gittest.WithGitTrace(),
+	)
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(func() {
 		Expect(local.Cleanup()).To(Succeed())

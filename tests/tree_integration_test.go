@@ -522,7 +522,10 @@ var _ = Describe("Trees", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Setting up the submodule source repository with content")
-			subLocal, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			subLocal, err := gittest.NewLocalRepo(ctx,
+				gittest.WithRepoLogger(logger),
+				gittest.WithGitTrace(),
+			)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = subLocal.Git("config", "user.name", user.Username)
 			Expect(err).NotTo(HaveOccurred())
@@ -531,7 +534,8 @@ var _ = Describe("Trees", func() {
 			_, err = subLocal.Git("remote", "add", "origin", subRepo.AuthURL)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(subLocal.CreateFile("lib.txt", "library content")).To(Succeed())
-			Expect(subLocal.Git("add", ".")).To(Succeed())
+			_, err = subLocal.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
 			_, err = subLocal.Git("commit", "-m", "Initial submodule commit")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = subLocal.Git("branch", "-M", "main")
@@ -626,7 +630,10 @@ var _ = Describe("Trees", func() {
 			subRepo, err := gitServer.CreateRepo(ctx, "subrepo-compare", user)
 			Expect(err).NotTo(HaveOccurred())
 
-			subLocal, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+			subLocal, err := gittest.NewLocalRepo(ctx,
+				gittest.WithRepoLogger(logger),
+				gittest.WithGitTrace(),
+			)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = subLocal.Git("config", "user.name", user.Username)
 			Expect(err).NotTo(HaveOccurred())
@@ -635,7 +642,8 @@ var _ = Describe("Trees", func() {
 			_, err = subLocal.Git("remote", "add", "origin", subRepo.AuthURL)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(subLocal.CreateFile("lib.txt", "library content")).To(Succeed())
-			Expect(subLocal.Git("add", ".")).To(Succeed())
+			_, err = subLocal.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
 			_, err = subLocal.Git("commit", "-m", "Initial submodule commit")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = subLocal.Git("branch", "-M", "main")

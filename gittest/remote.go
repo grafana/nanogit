@@ -26,6 +26,7 @@ import (
 type LocalRepo struct {
 	Path string
 
+	ctx         context.Context
 	logger      Logger
 	cleanupFunc func() error
 	coloredGit  bool
@@ -67,15 +68,22 @@ func NewLocalRepo(ctx context.Context, opts ...RepoOption) (*LocalRepo, error) {
 
 	cfg.logger.Logf("📦 [LOCAL] 📁 Creating new local repository at %s", tempDir)
 
+	// Build git environment variables
+	gitEnv := []string{"GIT_TERMINAL_PROMPT=0"}
+	if cfg.gitTrace {
+		gitEnv = append(gitEnv, "GIT_TRACE_PACKET=1")
+	}
+
 	repo := &LocalRepo{
 		Path:   tempDir,
+		ctx:    ctx,
 		logger: cfg.logger,
 		cleanupFunc: func() error {
 			cfg.logger.Logf("📦 [LOCAL] 🧹 Cleaning up local repository at %s", tempDir)
 			return os.RemoveAll(tempDir)
 		},
 		coloredGit: true,
-		gitEnv:     []string{"GIT_TERMINAL_PROMPT=0", "GIT_TRACE_PACKET=1"},
+		gitEnv:     gitEnv,
 	}
 
 	// Initialize the repository
@@ -159,10 +167,11 @@ func (r *LocalRepo) DeleteFile(path string) error {
 // Git executes a Git command in the repository directory.
 // It logs the command being executed and its output for debugging purposes.
 // The command is executed with GIT_TERMINAL_PROMPT=0 to prevent interactive prompts.
+// The command respects the context for cancellation and timeouts.
 //
 // Returns the command output and any error encountered.
 func (r *LocalRepo) Git(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(r.ctx, "git", args...)
 	cmd.Dir = r.Path
 	cmd.Env = append(os.Environ(), r.gitEnv...)
 

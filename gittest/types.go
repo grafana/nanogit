@@ -94,6 +94,6 @@ func defaultConfig() *Config {
 		Logger:       NoopLogger(),
 		StartTimeout: 30 * time.Second,
 		GiteaImage:   "gitea/gitea",
-		GiteaVersion: "latest",
+		GiteaVersion: "1.22", // Pinned to stable version to prevent supply chain attacks
 	}
 }

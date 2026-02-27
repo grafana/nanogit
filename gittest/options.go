@@ -35,8 +35,9 @@ func WithGiteaVersion(version string) ServerOption {
 
 // repoConfig holds configuration for LocalRepo.
 type repoConfig struct {
-	logger  Logger
-	tempDir string
+	logger   Logger
+	tempDir  string
+	gitTrace bool
 }
 
 // RepoOption configures a LocalRepo instance.
@@ -54,5 +55,14 @@ func WithRepoLogger(logger Logger) RepoOption {
 func WithTempDir(dir string) RepoOption {
 	return func(c *repoConfig) {
 		c.tempDir = dir
+	}
+}
+
+// WithGitTrace enables Git protocol tracing (GIT_TRACE_PACKET=1).
+// This is useful for debugging Git protocol issues but should be used with caution
+// as it generates verbose output and may expose sensitive information in logs.
+func WithGitTrace() RepoOption {
+	return func(c *repoConfig) {
+		c.gitTrace = true
 	}
 }
