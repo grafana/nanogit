@@ -294,7 +294,7 @@ func (r *LocalRepo) InitWithRemote(user *User, remote *RemoteRepository) (*Conne
 	}
 
 	return &ConnectionInfo{
-		URL:      remote.AuthURL,
+		URL:      remote.URL,
 		Username: user.Username,
 		Password: user.Password,
 	}, nil
