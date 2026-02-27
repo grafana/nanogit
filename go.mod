@@ -1,6 +1,6 @@
 module github.com/grafana/nanogit
 
-go 1.24.2
+go 1.25.6
 
 require (
 	github.com/klauspost/compress v1.18.4

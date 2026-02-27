@@ -165,6 +165,6 @@ kubectl apply -f generated_dashboards/small-dashboard.json -n monitoring
 
 ## Dependencies
 
-- Go 1.24+
+- Go 1.25+
 - No external dependencies (uses only standard library)
 - Compatible with all Grafana versions 8.0+
