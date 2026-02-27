@@ -102,6 +102,31 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "New release tag: $NEW_TAG"
 
+      - name: Create module tags
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        env:
+          NEW_VERSION: ${{ steps.new_release.outputs.new_tag }}
+        run: |
+          # Extract version without 'v' prefix
+          VERSION="${NEW_VERSION#v}"
+
+          # Get the commit SHA for the new release tag
+          COMMIT_SHA=$(git rev-parse "${NEW_VERSION}")
+
+          echo "Creating module tags for version ${VERSION} at commit ${COMMIT_SHA}"
+
+          # Create gittest module tag
+          git tag "gittest/v${VERSION}" "${COMMIT_SHA}"
+          git push origin "gittest/v${VERSION}"
+          echo "✅ Created gittest/v${VERSION}"
+
+          # Create tests module tag
+          git tag "tests/v${VERSION}" "${COMMIT_SHA}"
+          git push origin "tests/v${VERSION}"
+          echo "✅ Created tests/v${VERSION}"
+
+          echo "All module tags created successfully"
+
       - name: Create CHANGELOG PR
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
         env:
@@ -157,16 +182,31 @@ jobs:
 
       - name: Summary
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        env:
+          NEW_VERSION: ${{ steps.new_release.outputs.new_tag }}
         run: |
+          VERSION="${NEW_VERSION#v}"
+
           echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**New Version:** \`${{ steps.new_release.outputs.new_tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Previous Version:** \`${{ steps.last_release.outputs.last_tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Package Links" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Module Tags Created" >> $GITHUB_STEP_SUMMARY
+          echo "- \`v${VERSION}\` - Main nanogit module" >> $GITHUB_STEP_SUMMARY
+          echo "- \`gittest/v${VERSION}\` - Test utilities module" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/v${VERSION}\` - Integration tests module" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📚 Package Links" >> $GITHUB_STEP_SUMMARY
+          echo "**nanogit (main):**" >> $GITHUB_STEP_SUMMARY
           echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.new_release.outputs.new_tag }})" >> $GITHUB_STEP_SUMMARY
           echo "- [pkg.go.dev](https://pkg.go.dev/github.com/grafana/nanogit@${{ steps.new_release.outputs.new_tag }})" >> $GITHUB_STEP_SUMMARY
-          echo "- [Go Module Proxy](https://proxy.golang.org/github.com/grafana/nanogit/@v/${{ steps.new_release.outputs.new_tag }}.info)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**gittest:**" >> $GITHUB_STEP_SUMMARY
+          echo "- [pkg.go.dev](https://pkg.go.dev/github.com/grafana/nanogit/gittest@gittest/v${VERSION})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**tests:**" >> $GITHUB_STEP_SUMMARY
+          echo "- [pkg.go.dev](https://pkg.go.dev/github.com/grafana/nanogit/tests@tests/v${VERSION})" >> $GITHUB_STEP_SUMMARY
 
       - name: No release needed
         if: steps.new_release.outputs.new_tag == steps.last_release.outputs.last_tag
