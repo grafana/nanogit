@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.24 or later** - nanogit requires Go 1.24+ for building and using the library
+- **Go 1.25 or later** - nanogit requires Go 1.24+ for building and using the library
 - **Git** (for development) - Only needed if you're contributing to nanogit
 
 ## Installing nanogit

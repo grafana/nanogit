@@ -11,7 +11,7 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to keep our com
 Before you begin contributing, ensure you have the following installed:
 
 * [Docker](https://docs.docker.com/get-docker/) - Required for running integration tests
-* Go 1.24 or later
+* Go 1.25 or later
 * Git
 
 ## How to Contribute

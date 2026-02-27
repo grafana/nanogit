@@ -79,7 +79,7 @@ For detailed performance metrics, see the [latest performance report](perf/LAST_
 
 ### Prerequisites
 
-- Go 1.24 or later.
+- Go 1.25 or later.
 - Git (for development)
 
 ### Installation
