@@ -26,15 +26,12 @@ var _ = Describe("Clone operations", func() {
 	Context("Basic clone operations", func() {
 		It("should clone a repository and write files to filesystem", func() {
 			By("Setting up a test repository with multiple files")
-			err := local.CreateFile("README.md", "# Test Repository")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("src/main.go", "package main\n\nfunc main() {}")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("docs/api.md", "# API Documentation")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("README.md", "# Test Repository")).To(Succeed())
+			Expect(local.CreateFile("src/main.go", "package main\n\nfunc main() {}")).To(Succeed())
+			Expect(local.CreateFile("docs/api.md", "# API Documentation")).To(Succeed())
 
 			By("Committing and pushing the files")
-			_, err = local.Git("add", ".")
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add multiple files")
 			Expect(err).NotTo(HaveOccurred())
@@ -67,9 +64,8 @@ var _ = Describe("Clone operations", func() {
 
 		It("should clone using a specific commit hash", func() {
 			By("Setting up repository with multiple commits")
-			err := local.CreateFile("first.txt", "first commit")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", ".")
+			Expect(local.CreateFile("first.txt", "first commit")).To(Succeed())
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "First commit")
 			Expect(err).NotTo(HaveOccurred())
@@ -82,8 +78,7 @@ var _ = Describe("Clone operations", func() {
 			firstHash, err := hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = local.CreateFile("second.txt", "second commit")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("second.txt", "second commit")).To(Succeed())
 			_, err = local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Second commit")
@@ -113,21 +108,15 @@ var _ = Describe("Clone operations", func() {
 
 		BeforeEach(func() {
 			By("Creating a repository with diverse file structure")
-			err := local.CreateFile("README.md", "# Main readme")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("src/main.go", "package main")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("src/utils/helper.go", "package utils")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("docs/README.md", "# Documentation")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("tests/main_test.go", "package main_test")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("node_modules/package/index.js", "module.exports = {}")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("README.md", "# Main readme")).To(Succeed())
+			Expect(local.CreateFile("src/main.go", "package main")).To(Succeed())
+			Expect(local.CreateFile("src/utils/helper.go", "package utils")).To(Succeed())
+			Expect(local.CreateFile("docs/README.md", "# Documentation")).To(Succeed())
+			Expect(local.CreateFile("tests/main_test.go", "package main_test")).To(Succeed())
+			Expect(local.CreateFile("node_modules/package/index.js", "module.exports = {}")).To(Succeed())
 
 			By("Committing and pushing the files")
-			_, err = local.Git("add", ".")
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Create diverse structure")
 			Expect(err).NotTo(HaveOccurred())
@@ -212,9 +201,8 @@ var _ = Describe("Clone operations", func() {
 			By("Creating a repository with multiple files for batch testing")
 			// Create 15 files to test batching behavior
 			for i := 1; i <= 15; i++ {
-				err := local.CreateFile(filepath.Join("files", "file"+string(rune('0'+i/10))+string(rune('0'+i%10))+".txt"),
-					"Content of file "+string(rune('0'+i/10))+string(rune('0'+i%10)))
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.CreateFile(filepath.Join("files", "file"+string(rune('0'+i/10))+string(rune('0'+i%10))+".txt"),
+					"Content of file "+string(rune('0'+i/10))+string(rune('0'+i%10)))).To(Succeed())
 			}
 
 			By("Committing and pushing the files")
@@ -339,13 +327,10 @@ var _ = Describe("Clone operations", func() {
 
 		It("should work with batch fetching and path filtering combined", func() {
 			By("Creating files in different directories")
-			err := local.CreateFile("include/file1.txt", "included 1")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("include/file2.txt", "included 2")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("exclude/file3.txt", "excluded 3")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", ".")
+			Expect(local.CreateFile("include/file1.txt", "included 1")).To(Succeed())
+			Expect(local.CreateFile("include/file2.txt", "included 2")).To(Succeed())
+			Expect(local.CreateFile("exclude/file3.txt", "excluded 3")).To(Succeed())
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add files in different dirs")
 			Expect(err).NotTo(HaveOccurred())
@@ -381,8 +366,7 @@ var _ = Describe("Clone operations", func() {
 			for i := 1; i <= 50; i++ {
 				dir := "dir" + string(rune('0'+i/10))
 				filename := "file" + string(rune('0'+i/10)) + string(rune('0'+i%10)) + ".txt"
-				err := local.CreateFile(filepath.Join(dir, filename), "Content "+string(rune('0'+i)))
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.CreateFile(filepath.Join(dir, filename), "Content "+string(rune('0'+i)))).To(Succeed())
 			}
 
 			_, err := local.Git("add", ".")
@@ -422,9 +406,8 @@ var _ = Describe("Clone operations", func() {
 			By("Creating a repository with multiple files for concurrency testing")
 			// Create 20 files to test concurrent fetching
 			for i := 1; i <= 20; i++ {
-				err := local.CreateFile(filepath.Join("concurrent", "file"+fmt.Sprintf("%02d", i)+".txt"),
-					"Content of file "+fmt.Sprintf("%02d", i))
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.CreateFile(filepath.Join("concurrent", "file"+fmt.Sprintf("%02d", i)+".txt"),
+					"Content of file "+fmt.Sprintf("%02d", i))).To(Succeed())
 			}
 
 			By("Committing and pushing the files")
@@ -531,15 +514,11 @@ var _ = Describe("Clone operations", func() {
 
 		It("should work with concurrency and path filtering combined", func() {
 			By("Creating files in different directories")
-			err := local.CreateFile("include/file1.txt", "included 1")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("include/file2.txt", "included 2")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("include/file3.txt", "included 3")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateFile("exclude/file4.txt", "excluded 4")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", ".")
+			Expect(local.CreateFile("include/file1.txt", "included 1")).To(Succeed())
+			Expect(local.CreateFile("include/file2.txt", "included 2")).To(Succeed())
+			Expect(local.CreateFile("include/file3.txt", "included 3")).To(Succeed())
+			Expect(local.CreateFile("exclude/file4.txt", "excluded 4")).To(Succeed())
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add more files")
 			Expect(err).NotTo(HaveOccurred())
@@ -597,9 +576,8 @@ var _ = Describe("Clone operations", func() {
 		})
 
 		It("should handle filtering that results in no files", func() {
-			err := local.CreateFile("test.txt", "content")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", ".")
+			Expect(local.CreateFile("test.txt", "content")).To(Succeed())
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Test commit")
 			Expect(err).NotTo(HaveOccurred())

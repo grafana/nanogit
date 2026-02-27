@@ -27,9 +27,8 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle ref-delta objects for modified files", func() {
 			By("Creating a base file and committing it")
 			baseContent := strings.Repeat("base content line\n", 100) // ~1.8KB
-			err := local.CreateFile("delta-test.txt", baseContent)
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", "delta-test.txt")
+			Expect(local.CreateFile("delta-test.txt", baseContent)).To(Succeed())
+			_, err := local.Git("add", "delta-test.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Initial commit with base content")
 			Expect(err).NotTo(HaveOccurred())
@@ -40,8 +39,7 @@ var _ = Describe("Delta Object Handling", func() {
 			for i := 1; i <= 5; i++ {
 				modifiedContent := strings.Replace(baseContent, "base content line", "modified content line", 1)
 				baseContent = modifiedContent
-				err = local.UpdateFile("delta-test.txt", baseContent)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.UpdateFile("delta-test.txt", baseContent)).To(Succeed())
 				_, err = local.Git("add", "delta-test.txt")
 				Expect(err).NotTo(HaveOccurred())
 				_, err = local.Git("commit", "-m", "Modification "+string(rune('0'+i)))
@@ -80,8 +78,7 @@ var _ = Describe("Delta Object Handling", func() {
 
 			for i := 1; i <= fileCount; i++ {
 				content := strings.Replace(baseTemplate, "%d", string(rune('0'+i)), 1)
-				err := local.CreateFile("file"+string(rune('0'+i))+".txt", content)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.CreateFile("file"+string(rune('0'+i))+".txt", content)).To(Succeed())
 			}
 
 			_, err := local.Git("add", ".")
@@ -120,13 +117,11 @@ var _ = Describe("Delta Object Handling", func() {
 
 		It("should handle deltified tree objects", func() {
 			By("Creating a directory structure")
-			err := local.CreateDirPath("dir1")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateDirPath("dir1")).To(Succeed())
 			for i := 1; i <= 5; i++ {
-				err := local.CreateFile("dir1/file"+string(rune('0'+i))+".txt", "content "+string(rune('0'+i)))
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.CreateFile("dir1/file"+string(rune('0'+i))+".txt", "content "+string(rune('0'+i)))).To(Succeed())
 			}
-			_, err = local.Git("add", ".")
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Initial directory structure")
 			Expect(err).NotTo(HaveOccurred())
@@ -134,8 +129,7 @@ var _ = Describe("Delta Object Handling", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Modifying the directory structure slightly")
-			err = local.CreateFile("dir1/file6.txt", "content 6")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("dir1/file6.txt", "content 6")).To(Succeed())
 			_, err = local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add one more file")
@@ -166,9 +160,8 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle deltified commits", func() {
 			By("Creating multiple commits with small changes")
 			for i := 1; i <= 10; i++ {
-				err := local.CreateFile("commit-test-"+string(rune('0'+i))+".txt", "commit "+string(rune('0'+i)))
-				Expect(err).NotTo(HaveOccurred())
-				_, err = local.Git("add", ".")
+				Expect(local.CreateFile("commit-test-"+string(rune('0'+i))+".txt", "commit "+string(rune('0'+i)))).To(Succeed())
+				_, err := local.Git("add", ".")
 				Expect(err).NotTo(HaveOccurred())
 				_, err = local.Git("commit", "-m", "Commit number "+string(rune('0'+i)))
 				Expect(err).NotTo(HaveOccurred())
@@ -199,9 +192,8 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle GetBlobByPath with deltified objects", func() {
 			By("Creating a file and modifying it multiple times")
 			baseContent := "Initial content\n" + strings.Repeat("line\n", 50)
-			err := local.CreateFile("path-test.txt", baseContent)
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", "path-test.txt")
+			Expect(local.CreateFile("path-test.txt", baseContent)).To(Succeed())
+			_, err := local.Git("add", "path-test.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Initial")
 			Expect(err).NotTo(HaveOccurred())
@@ -210,8 +202,7 @@ var _ = Describe("Delta Object Handling", func() {
 
 			for i := 1; i <= 3; i++ {
 				baseContent += "Additional line " + string(rune('0'+i)) + "\n"
-				err = local.UpdateFile("path-test.txt", baseContent)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.UpdateFile("path-test.txt", baseContent)).To(Succeed())
 				_, err = local.Git("add", "path-test.txt")
 				Expect(err).NotTo(HaveOccurred())
 				_, err = local.Git("commit", "-m", "Update "+string(rune('0'+i)))
@@ -241,20 +232,16 @@ var _ = Describe("Delta Object Handling", func() {
 
 		It("should handle clone with deltified repository", func() {
 			By("Creating a realistic repository structure")
-			err := local.CreateDirPath("src")
-			Expect(err).NotTo(HaveOccurred())
-			err = local.CreateDirPath("docs")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateDirPath("src")).To(Succeed())
+			Expect(local.CreateDirPath("docs")).To(Succeed())
 
 			// Create base files
 			for i := 1; i <= 5; i++ {
-				err := local.CreateFile("src/file"+string(rune('0'+i))+".go", "package main\n\nfunc main() {\n\t// Version "+string(rune('0'+i))+"\n}\n")
-				Expect(err).NotTo(HaveOccurred())
-				err = local.CreateFile("docs/doc"+string(rune('0'+i))+".md", "# Documentation "+string(rune('0'+i))+"\n\nContent here.\n")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(local.CreateFile("src/file"+string(rune('0'+i))+".go", "package main\n\nfunc main() {\n\t// Version "+string(rune('0'+i))+"\n}\n")).To(Succeed())
+				Expect(local.CreateFile("docs/doc"+string(rune('0'+i))+".md", "# Documentation "+string(rune('0'+i))+"\n\nContent here.\n")).To(Succeed())
 			}
 
-			_, err = local.Git("add", ".")
+			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Initial structure")
 			Expect(err).NotTo(HaveOccurred())
@@ -263,9 +250,8 @@ var _ = Describe("Delta Object Handling", func() {
 
 			By("Making incremental changes to create delta opportunities")
 			for i := 1; i <= 5; i++ {
-				err := local.UpdateFile("src/file1.go", "package main\n\nfunc main() {\n\t// Modified version "+string(rune('0'+i))+"\n}\n")
-				Expect(err).NotTo(HaveOccurred())
-				_, err = local.Git("add", ".")
+				Expect(local.UpdateFile("src/file1.go", "package main\n\nfunc main() {\n\t// Modified version "+string(rune('0'+i))+"\n}\n")).To(Succeed())
+				_, err := local.Git("add", ".")
 				Expect(err).NotTo(HaveOccurred())
 				_, err = local.Git("commit", "-m", "Update iteration "+string(rune('0'+i)))
 				Expect(err).NotTo(HaveOccurred())
@@ -338,22 +324,19 @@ var _ = Describe("Delta Object Handling", func() {
 
 		It("should handle empty file deltification", func() {
 			By("Creating and modifying an empty file")
-			err := local.CreateFile("empty.txt", "")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", "empty.txt")
+			Expect(local.CreateFile("empty.txt", "")).To(Succeed())
+			_, err := local.Git("add", "empty.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add empty file")
 			Expect(err).NotTo(HaveOccurred())
 
-			err = local.UpdateFile("empty.txt", "now has content")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.UpdateFile("empty.txt", "now has content")).To(Succeed())
 			_, err = local.Git("add", "empty.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add content")
 			Expect(err).NotTo(HaveOccurred())
 
-			err = local.UpdateFile("empty.txt", "")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.UpdateFile("empty.txt", "")).To(Succeed())
 			_, err = local.Git("add", "empty.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Empty again")
@@ -378,9 +361,8 @@ var _ = Describe("Delta Object Handling", func() {
 		It("should handle large file with deltas", func() {
 			By("Creating a large file")
 			largeContent := strings.Repeat("Large file content line with some variation\n", 1000) // ~47KB
-			err := local.CreateFile("large.txt", largeContent)
-			Expect(err).NotTo(HaveOccurred())
-			_, err = local.Git("add", "large.txt")
+			Expect(local.CreateFile("large.txt", largeContent)).To(Succeed())
+			_, err := local.Git("add", "large.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Add large file")
 			Expect(err).NotTo(HaveOccurred())
@@ -389,8 +371,7 @@ var _ = Describe("Delta Object Handling", func() {
 
 			By("Making a small modification to the large file")
 			modifiedContent := largeContent + "One more line\n"
-			err = local.UpdateFile("large.txt", modifiedContent)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(local.UpdateFile("large.txt", modifiedContent)).To(Succeed())
 			_, err = local.Git("add", "large.txt")
 			Expect(err).NotTo(HaveOccurred())
 			_, err = local.Git("commit", "-m", "Small modification")
