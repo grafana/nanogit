@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 
@@ -17,8 +18,8 @@ var _ = Describe("Commits", func() {
 	Context("GetCommit operations", func() {
 		var (
 			client               nanogit.Client
-			local                *LocalRepository
-			user                 *User
+			local                *gittest.LocalRepo
+			user                 *gittest.User
 			initialCommitHash    hash.Hash
 			modifyFileCommitHash hash.Hash
 			renameCommitHash     hash.Hash
@@ -29,27 +30,38 @@ var _ = Describe("Commits", func() {
 			client, _, local, user = QuickSetup()
 
 			By("Getting initial commit hash")
-			var err error
-			initialCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			initialCommitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating modify file commit")
-			local.UpdateFile("test.txt", "modified content")
-			local.Git("add", "test.txt")
-			local.Git("commit", "-m", "Modify file")
-			modifyFileCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(local.UpdateFile("test.txt", "modified content")).To(Succeed())
+			_, err = local.Git("add", "test.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Modify file")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			modifyFileCommitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating rename file commit")
-			local.Git("mv", "test.txt", "renamed.txt")
-			local.CreateFile("renamed.txt", "modified content")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Rename and add files")
-			renameCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			_, err = local.Git("mv", "test.txt", "renamed.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("renamed.txt", "modified content")).To(Succeed())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename and add files")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			renameCommitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing commits")
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should get initial commit details", func() {
@@ -122,7 +134,7 @@ var _ = Describe("Commits", func() {
 	Context("CompareCommits operations", func() {
 		var (
 			client             nanogit.Client
-			local              *LocalRepository
+			local              *gittest.LocalRepo
 			initialCommitHash  hash.Hash
 			modifiedCommitHash hash.Hash
 			renamedCommitHash  hash.Hash
@@ -135,35 +147,52 @@ var _ = Describe("Commits", func() {
 			client, _, local, _ = QuickSetup()
 
 			By("Creating initial commit with a file")
-			local.CreateFile("test.txt", "initial content")
-			local.Git("add", "test.txt")
-			local.Git("commit", "-m", "Initial commit")
-			var err error
-			initialCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(local.CreateFile("test.txt", "initial content")).To(Succeed())
+			_, err := local.Git("add", "test.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Initial commit")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			initialCommitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating second commit that modifies the file")
-			local.CreateFile("test.txt", "modified content")
-			local.Git("add", "test.txt")
-			local.Git("commit", "-m", "Modify file")
-			modifiedCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			Expect(local.CreateFile("test.txt", "modified content")).To(Succeed())
+			_, err = local.Git("add", "test.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Modify file")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			modifiedCommitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating third commit that renames and adds files")
-			local.Git("mv", "test.txt", "renamed.txt")
-			local.CreateFile("new.txt", "modified content")
-			local.Git("add", ".")
-			local.Git("commit", "-m", "Rename and add files")
-			renamedCommitHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+			_, err = local.Git("mv", "test.txt", "renamed.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("new.txt", "modified content")).To(Succeed())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename and add files")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			renamedCommitHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Pushing all commits")
-			local.Git("push", "origin", "main", "--force")
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Getting the file hashes for verification")
-			initialFileHash, err = hash.FromHex(local.Git("rev-parse", initialCommitHash.String()+":test.txt"))
+			output, err = local.Git("rev-parse", initialCommitHash.String()+":test.txt")
 			Expect(err).NotTo(HaveOccurred())
-			modifiedFileHash, err = hash.FromHex(local.Git("rev-parse", modifiedCommitHash.String()+":test.txt"))
+			initialFileHash, err = hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", modifiedCommitHash.String()+":test.txt")
+			Expect(err).NotTo(HaveOccurred())
+			modifiedFileHash, err = hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -239,7 +268,7 @@ var _ = Describe("Commits", func() {
 		Context("basic functionality", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalRepository
+				local    *gittest.LocalRepo
 				headHash hash.Hash
 			)
 
@@ -248,24 +277,37 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating several commits to test with")
-				local.CreateFile("file1.txt", "content 1")
-				local.Git("add", "file1.txt")
-				local.Git("commit", "-m", "Add file1")
-				local.Git("push", "-u", "origin", "main", "--force")
+				err := local.CreateFile("file1.txt", "content 1")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "file1.txt")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Add file1")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "-u", "origin", "main", "--force")
+				Expect(err).NotTo(HaveOccurred())
 
-				local.CreateFile("file2.txt", "content 2")
-				local.Git("add", "file2.txt")
-				local.Git("commit", "-m", "Add file2")
-				local.Git("push", "origin", "main")
+				err = local.CreateFile("file2.txt", "content 2")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "file2.txt")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Add file2")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "origin", "main")
+				Expect(err).NotTo(HaveOccurred())
 
-				local.CreateFile("file3.txt", "content 3")
-				local.Git("add", "file3.txt")
-				local.Git("commit", "-m", "Add file3")
-				local.Git("push", "origin", "main")
+				err = local.CreateFile("file3.txt", "content 3")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "file3.txt")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Add file3")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "origin", "main")
+				Expect(err).NotTo(HaveOccurred())
 
 				By("Getting the current HEAD commit")
-				var err error
-				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				output, err := local.Git("rev-parse", "HEAD")
+				Expect(err).NotTo(HaveOccurred())
+				headHash, err = hash.FromHex(output)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -288,7 +330,7 @@ var _ = Describe("Commits", func() {
 		Context("pagination", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalRepository
+				local    *gittest.LocalRepo
 				headHash hash.Hash
 			)
 
@@ -298,15 +340,20 @@ var _ = Describe("Commits", func() {
 
 				By("Creating multiple commits")
 				for i := 1; i <= 120; i++ {
-					local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
-					local.Git("add", fmt.Sprintf("file%d.txt", i))
-					local.Git("commit", "-m", fmt.Sprintf("Add file%d", i))
+					err := local.CreateFile(fmt.Sprintf("file%d.txt", i), fmt.Sprintf("content %d", i))
+					Expect(err).NotTo(HaveOccurred())
+					_, err = local.Git("add", fmt.Sprintf("file%d.txt", i))
+					Expect(err).NotTo(HaveOccurred())
+					_, err = local.Git("commit", "-m", fmt.Sprintf("Add file%d", i))
+					Expect(err).NotTo(HaveOccurred())
 				}
 
-				local.Git("push", "-u", "origin", "main", "--force")
+				_, err := local.Git("push", "-u", "origin", "main", "--force")
+				Expect(err).NotTo(HaveOccurred())
 
-				var err error
-				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				output, err := local.Git("rev-parse", "HEAD")
+				Expect(err).NotTo(HaveOccurred())
+				headHash, err = hash.FromHex(output)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -402,7 +449,7 @@ var _ = Describe("Commits", func() {
 		Context("path filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalRepository
+				local    *gittest.LocalRepo
 				headHash hash.Hash
 			)
 
@@ -411,26 +458,42 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating commits affecting different paths")
-				local.CreateDirPath("docs")
-				local.CreateFile("docs/readme.md", "readme content")
-				local.Git("add", "docs/readme.md")
-				local.Git("commit", "-m", "Add docs")
-				local.Git("branch", "-M", "main")
-				local.Git("push", "-u", "origin", "main", "--force")
+				err := local.CreateDirPath("docs")
+				Expect(err).NotTo(HaveOccurred())
+				err = local.CreateFile("docs/readme.md", "readme content")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "docs/readme.md")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Add docs")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("branch", "-M", "main")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "-u", "origin", "main", "--force")
+				Expect(err).NotTo(HaveOccurred())
 
-				local.CreateDirPath("src")
-				local.CreateFile("src/main.go", "main content")
-				local.Git("add", "src/main.go")
-				local.Git("commit", "-m", "Add main")
-				local.Git("push", "origin", "main")
+				err = local.CreateDirPath("src")
+				Expect(err).NotTo(HaveOccurred())
+				err = local.CreateFile("src/main.go", "main content")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "src/main.go")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Add main")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "origin", "main")
+				Expect(err).NotTo(HaveOccurred())
 
-				local.CreateFile("docs/guide.md", "guide content")
-				local.Git("add", "docs/guide.md")
-				local.Git("commit", "-m", "Add guide")
-				local.Git("push", "origin", "main")
+				err = local.CreateFile("docs/guide.md", "guide content")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "docs/guide.md")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Add guide")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "origin", "main")
+				Expect(err).NotTo(HaveOccurred())
 
-				var err error
-				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				output, err := local.Git("rev-parse", "HEAD")
+				Expect(err).NotTo(HaveOccurred())
+				headHash, err = hash.FromHex(output)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -491,7 +554,7 @@ var _ = Describe("Commits", func() {
 		Context("time filtering", func() {
 			var (
 				client   nanogit.Client
-				local    *LocalRepository
+				local    *gittest.LocalRepo
 				headHash hash.Hash
 				midTime  time.Time
 			)
@@ -501,11 +564,16 @@ var _ = Describe("Commits", func() {
 				client, _, local, _ = QuickSetup()
 
 				By("Creating first commit")
-				local.CreateFile("file1.txt", "content 1")
-				local.Git("add", "file1.txt")
-				local.Git("commit", "-m", "Old commit")
-				local.Git("branch", "-M", "main")
-				local.Git("push", "-u", "origin", "main", "--force")
+				err := local.CreateFile("file1.txt", "content 1")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "file1.txt")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "Old commit")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("branch", "-M", "main")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "-u", "origin", "main", "--force")
+				Expect(err).NotTo(HaveOccurred())
 
 				By("Waiting and recording mid time")
 				time.Sleep(2 * time.Second)
@@ -513,13 +581,18 @@ var _ = Describe("Commits", func() {
 				time.Sleep(2 * time.Second)
 
 				By("Creating second commit")
-				local.CreateFile("file2.txt", "content 2")
-				local.Git("add", "file2.txt")
-				local.Git("commit", "-m", "New commit")
-				local.Git("push", "origin", "main")
+				err = local.CreateFile("file2.txt", "content 2")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("add", "file2.txt")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("commit", "-m", "New commit")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = local.Git("push", "origin", "main")
+				Expect(err).NotTo(HaveOccurred())
 
-				var err error
-				headHash, err = hash.FromHex(local.Git("rev-parse", "HEAD"))
+				output, err := local.Git("rev-parse", "HEAD")
+				Expect(err).NotTo(HaveOccurred())
+				headHash, err = hash.FromHex(output)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
