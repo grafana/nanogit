@@ -5,7 +5,7 @@ go 1.25.6
 require (
 	github.com/go-git/go-billy/v5 v5.7.0
 	github.com/go-git/go-git/v5 v5.16.5
-	github.com/grafana/nanogit v0.3.7
+	github.com/grafana/nanogit v0.5.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.40.0
 )
