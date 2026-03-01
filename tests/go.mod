@@ -3,7 +3,7 @@ module github.com/grafana/nanogit/tests
 go 1.25.6
 
 require (
-	github.com/grafana/nanogit v0.0.0
+	github.com/grafana/nanogit v0.5.1
 	github.com/grafana/nanogit/gittest v0.0.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
