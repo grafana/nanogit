@@ -97,22 +97,22 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 //	ctx     - Context for request cancellation and deadlines.
 //	service - The Git service to query ("git-upload-pack" or "git-receive-pack").
 //
-// Returns:
-//
-//	The detected ProtocolVersion and an error only for connection/network issues.
-func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (version ProtocolVersion, err error) {
+// IsServerCompatible checks if the server supports Git protocol v2, which is required by nanogit.
+// Returns true if the server supports protocol v2, false otherwise.
+// Returns an error only for connection/network issues.
+func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, err error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
-	query.Set("service", service)
+	query.Set("service", "git-upload-pack")
 	u.RawQuery = query.Encode()
 
 	logger := log.FromContext(ctx)
-	logger.Debug("CheckProtocolVersion", "url", u.String(), "service", service)
+	logger.Debug("Checking protocol compatibility", "url", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return ProtocolVersionUnknown, err
+		return false, err
 	}
 
 	c.addDefaultHeaders(req)
@@ -120,7 +120,7 @@ func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (v
 	// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) for GET requests
 	res, err := c.do(ctx, req)
 	if err != nil {
-		return ProtocolVersionUnknown, err
+		return false, err
 	}
 
 	defer func() {
@@ -132,18 +132,19 @@ func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (v
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		// Check for structured client errors (401, 403, 404)
 		if clientErr := CheckHTTPClientError(res); clientErr != nil {
-			return ProtocolVersionUnknown, clientErr
+			return false, clientErr
 		}
 
 		// Generic error for other non-2xx codes
-		return ProtocolVersionUnknown, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+		return false, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
 	// Parse the response to detect protocol version
-	version = detectProtocolVersionFromReader(res.Body)
+	version := detectProtocolVersionFromReader(res.Body)
+	compatible = version == ProtocolVersionV2
 
-	logger.Debug("Protocol version detected", "version", version)
-	return version, nil
+	logger.Debug("Protocol compatibility checked", "version", version, "compatible", compatible)
+	return compatible, nil
 }
 
 // detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response

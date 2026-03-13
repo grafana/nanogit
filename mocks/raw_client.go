@@ -39,20 +39,6 @@ type FakeRawClient struct {
 		result1 bool
 		result2 error
 	}
-	CheckProtocolVersionStub        func(context.Context, string) (client.ProtocolVersion, error)
-	checkProtocolVersionMutex       sync.RWMutex
-	checkProtocolVersionArgsForCall []struct {
-		arg1 context.Context
-		arg2 string
-	}
-	checkProtocolVersionReturns struct {
-		result1 client.ProtocolVersion
-		result2 error
-	}
-	checkProtocolVersionReturnsOnCall map[int]struct {
-		result1 client.ProtocolVersion
-		result2 error
-	}
 	FetchStub        func(context.Context, client.FetchOptions) (map[string]*protocol.PackfileObject, error)
 	fetchMutex       sync.RWMutex
 	fetchArgsForCall []struct {
@@ -77,6 +63,19 @@ type FakeRawClient struct {
 		result2 error
 	}
 	isAuthorizedReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
+	IsServerCompatibleStub        func(context.Context) (bool, error)
+	isServerCompatibleMutex       sync.RWMutex
+	isServerCompatibleArgsForCall []struct {
+		arg1 context.Context
+	}
+	isServerCompatibleReturns struct {
+		result1 bool
+		result2 error
+	}
+	isServerCompatibleReturnsOnCall map[int]struct {
 		result1 bool
 		result2 error
 	}
@@ -264,71 +263,6 @@ func (fake *FakeRawClient) CanWriteReturnsOnCall(i int, result1 bool, result2 er
 	}{result1, result2}
 }
 
-func (fake *FakeRawClient) CheckProtocolVersion(arg1 context.Context, arg2 string) (client.ProtocolVersion, error) {
-	fake.checkProtocolVersionMutex.Lock()
-	ret, specificReturn := fake.checkProtocolVersionReturnsOnCall[len(fake.checkProtocolVersionArgsForCall)]
-	fake.checkProtocolVersionArgsForCall = append(fake.checkProtocolVersionArgsForCall, struct {
-		arg1 context.Context
-		arg2 string
-	}{arg1, arg2})
-	stub := fake.CheckProtocolVersionStub
-	fakeReturns := fake.checkProtocolVersionReturns
-	fake.recordInvocation("CheckProtocolVersion", []interface{}{arg1, arg2})
-	fake.checkProtocolVersionMutex.Unlock()
-	if stub != nil {
-		return stub(arg1, arg2)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	return fakeReturns.result1, fakeReturns.result2
-}
-
-func (fake *FakeRawClient) CheckProtocolVersionCallCount() int {
-	fake.checkProtocolVersionMutex.RLock()
-	defer fake.checkProtocolVersionMutex.RUnlock()
-	return len(fake.checkProtocolVersionArgsForCall)
-}
-
-func (fake *FakeRawClient) CheckProtocolVersionCalls(stub func(context.Context, string) (client.ProtocolVersion, error)) {
-	fake.checkProtocolVersionMutex.Lock()
-	defer fake.checkProtocolVersionMutex.Unlock()
-	fake.CheckProtocolVersionStub = stub
-}
-
-func (fake *FakeRawClient) CheckProtocolVersionArgsForCall(i int) (context.Context, string) {
-	fake.checkProtocolVersionMutex.RLock()
-	defer fake.checkProtocolVersionMutex.RUnlock()
-	argsForCall := fake.checkProtocolVersionArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
-}
-
-func (fake *FakeRawClient) CheckProtocolVersionReturns(result1 client.ProtocolVersion, result2 error) {
-	fake.checkProtocolVersionMutex.Lock()
-	defer fake.checkProtocolVersionMutex.Unlock()
-	fake.CheckProtocolVersionStub = nil
-	fake.checkProtocolVersionReturns = struct {
-		result1 client.ProtocolVersion
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeRawClient) CheckProtocolVersionReturnsOnCall(i int, result1 client.ProtocolVersion, result2 error) {
-	fake.checkProtocolVersionMutex.Lock()
-	defer fake.checkProtocolVersionMutex.Unlock()
-	fake.CheckProtocolVersionStub = nil
-	if fake.checkProtocolVersionReturnsOnCall == nil {
-		fake.checkProtocolVersionReturnsOnCall = make(map[int]struct {
-			result1 client.ProtocolVersion
-			result2 error
-		})
-	}
-	fake.checkProtocolVersionReturnsOnCall[i] = struct {
-		result1 client.ProtocolVersion
-		result2 error
-	}{result1, result2}
-}
-
 func (fake *FakeRawClient) Fetch(arg1 context.Context, arg2 client.FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	fake.fetchMutex.Lock()
 	ret, specificReturn := fake.fetchReturnsOnCall[len(fake.fetchArgsForCall)]
@@ -453,6 +387,70 @@ func (fake *FakeRawClient) IsAuthorizedReturnsOnCall(i int, result1 bool, result
 		})
 	}
 	fake.isAuthorizedReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) IsServerCompatible(arg1 context.Context) (bool, error) {
+	fake.isServerCompatibleMutex.Lock()
+	ret, specificReturn := fake.isServerCompatibleReturnsOnCall[len(fake.isServerCompatibleArgsForCall)]
+	fake.isServerCompatibleArgsForCall = append(fake.isServerCompatibleArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.IsServerCompatibleStub
+	fakeReturns := fake.isServerCompatibleReturns
+	fake.recordInvocation("IsServerCompatible", []interface{}{arg1})
+	fake.isServerCompatibleMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeRawClient) IsServerCompatibleCallCount() int {
+	fake.isServerCompatibleMutex.RLock()
+	defer fake.isServerCompatibleMutex.RUnlock()
+	return len(fake.isServerCompatibleArgsForCall)
+}
+
+func (fake *FakeRawClient) IsServerCompatibleCalls(stub func(context.Context) (bool, error)) {
+	fake.isServerCompatibleMutex.Lock()
+	defer fake.isServerCompatibleMutex.Unlock()
+	fake.IsServerCompatibleStub = stub
+}
+
+func (fake *FakeRawClient) IsServerCompatibleArgsForCall(i int) context.Context {
+	fake.isServerCompatibleMutex.RLock()
+	defer fake.isServerCompatibleMutex.RUnlock()
+	argsForCall := fake.isServerCompatibleArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRawClient) IsServerCompatibleReturns(result1 bool, result2 error) {
+	fake.isServerCompatibleMutex.Lock()
+	defer fake.isServerCompatibleMutex.Unlock()
+	fake.IsServerCompatibleStub = nil
+	fake.isServerCompatibleReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) IsServerCompatibleReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.isServerCompatibleMutex.Lock()
+	defer fake.isServerCompatibleMutex.Unlock()
+	fake.IsServerCompatibleStub = nil
+	if fake.isServerCompatibleReturnsOnCall == nil {
+		fake.isServerCompatibleReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.isServerCompatibleReturnsOnCall[i] = struct {
 		result1 bool
 		result2 error
 	}{result1, result2}

@@ -173,52 +173,52 @@ func TestSmartInfo(t *testing.T) {
 	}
 }
 
-func TestCheckProtocolVersion(t *testing.T) {
+func TestIsServerCompatible(t *testing.T) {
 	tests := []struct {
-		name            string
-		responseBody    string
-		expectedVersion ProtocolVersion
+		name               string
+		responseBody       string
+		expectedCompatible bool
 	}{
 		{
-			name:            "protocol v2 - version announcement",
-			responseBody:    formatTestResponse(t, protocol.PackLine("version 2\n")),
-			expectedVersion: ProtocolVersionV2,
+			name:               "protocol v2 - version announcement",
+			responseBody:       formatTestResponse(t, protocol.PackLine("version 2\n")),
+			expectedCompatible: true,
 		},
 		{
-			name:            "protocol v2 - capability line",
-			responseBody:    formatTestResponse(t, protocol.PackLine("=capability1\n")),
-			expectedVersion: ProtocolVersionV2,
+			name:               "protocol v2 - capability line",
+			responseBody:       formatTestResponse(t, protocol.PackLine("=capability1\n")),
+			expectedCompatible: true,
 		},
 		{
 			name: "protocol v2 - mixed content",
 			responseBody: formatTestResponse(t,
 				protocol.PackLine("version 2\n"),
 				protocol.PackLine("=capability1\n")),
-			expectedVersion: ProtocolVersionV2,
+			expectedCompatible: true,
 		},
 		{
 			name: "protocol v1 - ref advertisement",
 			// Typical v1 response with ref + capabilities
 			responseBody: formatTestResponse(t,
 				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1 cap2\n")),
-			expectedVersion: ProtocolVersionV1,
+			expectedCompatible: false,
 		},
 		{
 			name: "protocol v1 - multiple refs",
 			responseBody: formatTestResponse(t,
 				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1\n"),
 				protocol.PackLine("abcdef1234567890abcdef1234567890abcdef12 refs/heads/dev\n")),
-			expectedVersion: ProtocolVersionV1,
+			expectedCompatible: false,
 		},
 		{
-			name:            "unknown - empty response",
-			responseBody:    string(protocol.FlushPacket),
-			expectedVersion: ProtocolVersionUnknown,
+			name:               "unknown - empty response",
+			responseBody:       string(protocol.FlushPacket),
+			expectedCompatible: false,
 		},
 		{
-			name:            "unknown - invalid format",
-			responseBody:    "invalid data",
-			expectedVersion: ProtocolVersionUnknown,
+			name:               "unknown - invalid format",
+			responseBody:       "invalid data",
+			expectedCompatible: false,
 		},
 	}
 
@@ -229,9 +229,15 @@ func TestCheckProtocolVersion(t *testing.T) {
 
 			// Test the detection function directly
 			version := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody))
-			require.Equal(t, tt.expectedVersion, version, "protocol version detection mismatch")
+			expectedVersion := ProtocolVersionV2
+			if !tt.expectedCompatible {
+				// Could be v1 or unknown, but we just care if it's not v2
+				require.NotEqual(t, ProtocolVersionV2, version, "protocol version detection mismatch")
+			} else {
+				require.Equal(t, expectedVersion, version, "protocol version detection mismatch")
+			}
 
-			// Test via CheckProtocolVersion
+			// Test via IsServerCompatible
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				if _, err := w.Write([]byte(tt.responseBody)); err != nil {
@@ -244,9 +250,9 @@ func TestCheckProtocolVersion(t *testing.T) {
 			client, err := NewRawClient(server.URL + "/repo")
 			require.NoError(t, err)
 
-			version, err = client.CheckProtocolVersion(context.Background(), "git-upload-pack")
+			compatible, err := client.IsServerCompatible(context.Background())
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedVersion, version)
+			require.Equal(t, tt.expectedCompatible, compatible)
 		})
 	}
 }

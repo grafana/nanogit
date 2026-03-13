@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/grafana/nanogit/log"
-	"github.com/grafana/nanogit/protocol/client"
 )
 
 // RepoExists checks if the repository exists on the server.
@@ -33,29 +32,16 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// ProtocolVersion detects which Git protocol version the server supports.
-// This method can be called before performing Git operations to check
-// server capabilities.
+// IsServerCompatible checks if the server supports Git protocol v2, which is required by nanogit.
+// This method can be called before performing Git operations to verify server compatibility.
 //
 // Returns:
-//   - ProtocolVersionV2: Server supports protocol v2 (modern servers)
-//   - ProtocolVersionV1: Server only supports protocol v1 (legacy servers)
-//   - ProtocolVersionUnknown: Version could not be determined
+//   - true: Server supports protocol v2 (nanogit can work with this server)
+//   - false: Server only supports protocol v1 or version could not be determined
 //   - error: Connection issues or other problems
 //
 // Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
-// Nanogit requires protocol v2 for full functionality. Callers should check
-// the returned version and decide how to handle v1 or unknown servers.
-func (c *httpClient) ProtocolVersion(ctx context.Context) (client.ProtocolVersion, error) {
-	logger := log.FromContext(ctx)
-	logger.Debug("Detecting protocol version")
-
-	version, err := c.CheckProtocolVersion(ctx, "git-upload-pack")
-	if err != nil {
-		logger.Debug("Protocol detection failed", "error", err)
-		return client.ProtocolVersionUnknown, err
-	}
-
-	logger.Debug("Protocol version detected", "version", version)
-	return version, nil
+// Nanogit requires protocol v2 for full functionality.
+func (c *httpClient) IsServerCompatible(ctx context.Context) (bool, error) {
+	return c.RawClient.IsServerCompatible(ctx)
 }
