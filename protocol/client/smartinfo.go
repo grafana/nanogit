@@ -79,12 +79,6 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	// Parse the response to detect protocol version
-	// Protocol v1 servers are not supported, so we need to detect and fail with a clear error
-	if err := c.detectProtocolVersion(res.Body); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -103,25 +97,77 @@ const (
 	ProtocolVersionV2
 )
 
-// detectProtocolVersion parses the SmartInfo response to detect the Git protocol version.
+// CheckProtocolVersion checks if the Git server supports protocol v2.
 // It returns an error if the server only supports protocol v1.
+//
+// This method makes a single request to the /info/refs endpoint to detect the protocol version
+// and returns ErrProtocolV1NotSupported if the server only supports v1.
 //
 // Protocol Detection:
 //   - Protocol v2: Response contains "version 2" announcement or capability lines starting with '='
 //   - Protocol v1: Response contains ref advertisements (hash + space + refname) without v2 indicators
+//   - Unknown: No clear indicators (allows operations to proceed)
 //
-// Most modern Git servers (GitHub, GitLab, Bitbucket, etc.) support protocol v2 since ~2018.
-func (c *rawClient) detectProtocolVersion(body io.Reader) error {
-	version := detectProtocolVersionFromReader(body)
+// Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
+//
+// Parameters:
+//
+//	ctx     - Context for request cancellation and deadlines.
+//	service - The Git service to query ("git-upload-pack" or "git-receive-pack").
+//
+// Returns:
+//
+//	The detected ProtocolVersion and an error if v1-only server is detected.
+func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (ProtocolVersion, error) {
+	u := c.base.JoinPath("info/refs")
+
+	query := make(url.Values)
+	query.Set("service", service)
+	u.RawQuery = query.Encode()
+
+	logger := log.FromContext(ctx)
+	logger.Debug("CheckProtocolVersion", "url", u.String(), "service", service)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return ProtocolVersionUnknown, err
+	}
+
+	c.addDefaultHeaders(req)
+
+	// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) for GET requests
+	res, err := c.do(ctx, req)
+	if err != nil {
+		return ProtocolVersionUnknown, err
+	}
+
+	defer func() {
+		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %w", closeErr)
+		}
+	}()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		// Check for structured client errors (401, 403, 404)
+		if clientErr := CheckHTTPClientError(res); clientErr != nil {
+			return ProtocolVersionUnknown, clientErr
+		}
+
+		// Generic error for other non-2xx codes
+		return ProtocolVersionUnknown, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
+	}
+
+	// Parse the response to detect protocol version
+	version := detectProtocolVersionFromReader(res.Body)
 
 	if version == ProtocolVersionV1 {
-		return fmt.Errorf("%w: server at %s only supports Git protocol v1. "+
-			"Please upgrade your Git server or use a service that supports protocol v2 "+
-			"(GitHub, GitLab, Bitbucket, and most modern Git servers support v2)",
+		return version, fmt.Errorf("%w: server at %s only supports Git protocol v1. "+
+			"Please upgrade your Git server to a version that supports protocol v2 (Git 2.18+)",
 			ErrProtocolV1NotSupported, c.base.Host)
 	}
 
-	return nil
+	logger.Debug("Protocol version detected", "version", version)
+	return version, nil
 }
 
 // detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response

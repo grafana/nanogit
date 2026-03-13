@@ -204,6 +204,19 @@ type FakeClient struct {
 		result1 bool
 		result2 error
 	}
+	IsProtocolCompatibleStub        func(context.Context) (bool, error)
+	isProtocolCompatibleMutex       sync.RWMutex
+	isProtocolCompatibleArgsForCall []struct {
+		arg1 context.Context
+	}
+	isProtocolCompatibleReturns struct {
+		result1 bool
+		result2 error
+	}
+	isProtocolCompatibleReturnsOnCall map[int]struct {
+		result1 bool
+		result2 error
+	}
 	ListCommitsStub        func(context.Context, hash.Hash, nanogit.ListCommitsOptions) ([]nanogit.Commit, error)
 	listCommitsMutex       sync.RWMutex
 	listCommitsArgsForCall []struct {
@@ -1175,6 +1188,70 @@ func (fake *FakeClient) IsAuthorizedReturnsOnCall(i int, result1 bool, result2 e
 		})
 	}
 	fake.isAuthorizedReturnsOnCall[i] = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) IsProtocolCompatible(arg1 context.Context) (bool, error) {
+	fake.isProtocolCompatibleMutex.Lock()
+	ret, specificReturn := fake.isProtocolCompatibleReturnsOnCall[len(fake.isProtocolCompatibleArgsForCall)]
+	fake.isProtocolCompatibleArgsForCall = append(fake.isProtocolCompatibleArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.IsProtocolCompatibleStub
+	fakeReturns := fake.isProtocolCompatibleReturns
+	fake.recordInvocation("IsProtocolCompatible", []interface{}{arg1})
+	fake.isProtocolCompatibleMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeClient) IsProtocolCompatibleCallCount() int {
+	fake.isProtocolCompatibleMutex.RLock()
+	defer fake.isProtocolCompatibleMutex.RUnlock()
+	return len(fake.isProtocolCompatibleArgsForCall)
+}
+
+func (fake *FakeClient) IsProtocolCompatibleCalls(stub func(context.Context) (bool, error)) {
+	fake.isProtocolCompatibleMutex.Lock()
+	defer fake.isProtocolCompatibleMutex.Unlock()
+	fake.IsProtocolCompatibleStub = stub
+}
+
+func (fake *FakeClient) IsProtocolCompatibleArgsForCall(i int) context.Context {
+	fake.isProtocolCompatibleMutex.RLock()
+	defer fake.isProtocolCompatibleMutex.RUnlock()
+	argsForCall := fake.isProtocolCompatibleArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeClient) IsProtocolCompatibleReturns(result1 bool, result2 error) {
+	fake.isProtocolCompatibleMutex.Lock()
+	defer fake.isProtocolCompatibleMutex.Unlock()
+	fake.IsProtocolCompatibleStub = nil
+	fake.isProtocolCompatibleReturns = struct {
+		result1 bool
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) IsProtocolCompatibleReturnsOnCall(i int, result1 bool, result2 error) {
+	fake.isProtocolCompatibleMutex.Lock()
+	defer fake.isProtocolCompatibleMutex.Unlock()
+	fake.IsProtocolCompatibleStub = nil
+	if fake.isProtocolCompatibleReturnsOnCall == nil {
+		fake.isProtocolCompatibleReturnsOnCall = make(map[int]struct {
+			result1 bool
+			result2 error
+		})
+	}
+	fake.isProtocolCompatibleReturnsOnCall[i] = struct {
 		result1 bool
 		result2 error
 	}{result1, result2}

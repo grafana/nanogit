@@ -23,6 +23,7 @@ type RawClient interface {
 	CanWrite(ctx context.Context) (bool, error)
 	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
 	SmartInfo(ctx context.Context, service string) error
+	CheckProtocolVersion(ctx context.Context, service string) (ProtocolVersion, error)
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
 	ReceivePack(ctx context.Context, data io.Reader) error
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)

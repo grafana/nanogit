@@ -42,10 +42,10 @@ var _ = Describe("Protocol Version Detection", func() {
 				options.WithBasicAuth("test", "test"))
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking if repository exists - should fail with protocol v1 error")
-			exists, err := client.RepoExists(ctx)
+			By("Checking protocol compatibility - should fail with protocol v1 error")
+			compatible, err := client.IsProtocolCompatible(ctx)
 			Expect(err).To(HaveOccurred(), "Should fail when connecting to v1-only server")
-			Expect(exists).To(BeFalse())
+			Expect(compatible).To(BeFalse())
 
 			By("Verifying error is ErrProtocolV1NotSupported")
 			Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeTrue(),
@@ -80,8 +80,8 @@ var _ = Describe("Protocol Version Detection", func() {
 				options.WithBasicAuth("test", "test"))
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking repository permissions - should fail with protocol v1 error")
-			_, err = client.CanRead(ctx)
+			By("Checking protocol compatibility - should fail with protocol v1 error")
+			_, err = client.IsProtocolCompatible(ctx)
 			Expect(err).To(HaveOccurred())
 
 			By("Verifying protocol v1 error")
@@ -114,8 +114,8 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking repository existence should fail with v1 error")
-			_, err = client.RepoExists(ctx)
+			By("Checking protocol compatibility should fail with v1 error")
+			_, err = client.IsProtocolCompatible(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeTrue())
 		})
@@ -151,10 +151,10 @@ var _ = Describe("Protocol Version Detection", func() {
 				options.WithBasicAuth("test", "test"))
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking repository existence should succeed")
-			exists, err := client.RepoExists(ctx)
+			By("Checking protocol compatibility should succeed")
+			compatible, err := client.IsProtocolCompatible(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(exists).To(BeTrue())
+			Expect(compatible).To(BeTrue())
 			logger.Info("Successfully connected to v2 server")
 		})
 
@@ -186,10 +186,10 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking repository existence should succeed")
-			exists, err := client.RepoExists(ctx)
+			By("Checking protocol compatibility should succeed")
+			compatible, err := client.IsProtocolCompatible(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(exists).To(BeTrue())
+			Expect(compatible).To(BeTrue())
 			logger.Info("Successfully connected to v2 server with capability lines")
 		})
 
@@ -226,7 +226,7 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Operations may fail later, but not due to protocol v1 detection")
-			_, err = client.RepoExists(ctx)
+			_, err = client.IsProtocolCompatible(ctx)
 			// It's OK if this fails, but it should NOT be a protocol v1 error
 			if err != nil {
 				Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeFalse(),
@@ -263,9 +263,9 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Should be detected as v2, not v1")
-			exists, err := client.RepoExists(ctx)
+			compatible, err := client.IsProtocolCompatible(ctx)
 			Expect(err).NotTo(HaveOccurred(), "Should succeed when v2 indicator is present")
-			Expect(exists).To(BeTrue())
+			Expect(compatible).To(BeTrue())
 			logger.Info("Mixed v1/v2 response correctly prioritized v2")
 		})
 
@@ -287,7 +287,7 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Should handle gracefully without panic")
-			_, err = client.RepoExists(ctx)
+			_, err = client.IsProtocolCompatible(ctx)
 			// Operation will likely fail, but should not crash
 			if err != nil {
 				logger.Info("Malformed response handled gracefully", "error", err.Error())
@@ -317,7 +317,7 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = client.RepoExists(context.Background())
+			_, err = client.IsProtocolCompatible(context.Background())
 			Expect(err).To(HaveOccurred())
 
 			By("Checking error message quality")

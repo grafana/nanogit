@@ -164,7 +164,7 @@ func TestSmartInfo(t *testing.T) {
 	}
 }
 
-func TestProtocolVersionDetection(t *testing.T) {
+func TestCheckProtocolVersion(t *testing.T) {
 	tests := []struct {
 		name             string
 		responseBody     string
@@ -229,7 +229,7 @@ func TestProtocolVersionDetection(t *testing.T) {
 			version := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody))
 			require.Equal(t, tt.expectedVersion, version, "protocol version detection mismatch")
 
-			// Test via SmartInfo
+			// Test via CheckProtocolVersion
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				if _, err := w.Write([]byte(tt.responseBody)); err != nil {
@@ -242,13 +242,15 @@ func TestProtocolVersionDetection(t *testing.T) {
 			client, err := NewRawClient(server.URL + "/repo")
 			require.NoError(t, err)
 
-			err = client.SmartInfo(context.Background(), "git-upload-pack")
+			version, err = client.CheckProtocolVersion(context.Background(), "git-upload-pack")
 			if tt.expectError {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedErrorMsg)
 				require.ErrorIs(t, err, ErrProtocolV1NotSupported)
+				require.Equal(t, tt.expectedVersion, version)
 			} else {
 				require.NoError(t, err)
+				require.Equal(t, tt.expectedVersion, version)
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol/client"
 )
 
 // RepoExists checks if the repository exists on the server.
@@ -30,4 +31,29 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 
 	logger.Debug("Repository exists")
 	return true, nil
+}
+
+// IsProtocolCompatible checks if the Git server supports protocol v2.
+// This method can be called before performing Git operations to ensure
+// the server is compatible with nanogit.
+//
+// Returns:
+//   - true if the server supports protocol v2
+//   - false if the server only supports protocol v1
+//   - error if there are connection issues or other problems
+//
+// Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
+// If this method returns false, operations will fail with ErrProtocolV1NotSupported.
+func (c *httpClient) IsProtocolCompatible(ctx context.Context) (bool, error) {
+	logger := log.FromContext(ctx)
+	logger.Debug("Check protocol compatibility")
+
+	version, err := c.CheckProtocolVersion(ctx, "git-upload-pack")
+	if err != nil {
+		logger.Debug("Protocol check failed", "error", err)
+		return false, err
+	}
+
+	logger.Debug("Protocol version detected", "version", version)
+	return version == client.ProtocolVersionV2, nil
 }
