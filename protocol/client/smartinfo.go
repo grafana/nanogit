@@ -75,6 +75,8 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
+	// For SmartInfo, we just need to validate that we got a successful HTTP response
+	// The actual content parsing is not needed since callers only care about authorization/existence
+
 	return nil
 }
-
