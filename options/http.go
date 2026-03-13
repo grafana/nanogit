@@ -27,3 +27,15 @@ func WithUserAgent(userAgent string) Option {
 		return nil
 	}
 }
+
+// WithoutGitSuffix disables the automatic appending of ".git" to the repository URL path.
+// By default, nanogit appends ".git" to URLs that don't already end with it.
+// Some Git hosting providers (e.g., Azure DevOps) treat ".git" as a literal part of
+// the repository name rather than a suffix to strip, causing 404 errors.
+// Use this option when connecting to such providers.
+func WithoutGitSuffix() Option {
+	return func(o *Options) error {
+		o.SkipGitSuffix = true
+		return nil
+	}
+}

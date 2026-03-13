@@ -272,3 +272,43 @@ func TestNewRawClient_GitExtensionAppending(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRawClient_WithoutGitSuffix(t *testing.T) {
+	tests := []struct {
+		name         string
+		inputURL     string
+		expectedPath string
+	}{
+		{
+			name:         "Azure DevOps URL without .git suffix preserved",
+			inputURL:     "https://dev.azure.com/org/project/_git/MyRepo",
+			expectedPath: "/org/project/_git/MyRepo",
+		},
+		{
+			name:         "Standard URL without .git suffix preserved",
+			inputURL:     "https://github.com/owner/repo",
+			expectedPath: "/owner/repo",
+		},
+		{
+			name:         "URL with .git suffix remains unchanged",
+			inputURL:     "https://github.com/owner/repo.git",
+			expectedPath: "/owner/repo.git",
+		},
+		{
+			name:         "URL with trailing slash without .git suffix preserved",
+			inputURL:     "https://dev.azure.com/org/project/_git/MyRepo/",
+			expectedPath: "/org/project/_git/MyRepo",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			client, err := NewRawClient(tt.inputURL, options.WithoutGitSuffix())
+			require.NoError(t, err)
+			require.NotNil(t, client)
+			require.Equal(t, tt.expectedPath, client.base.Path)
+		})
+	}
+}
