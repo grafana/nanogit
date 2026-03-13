@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/grafana/nanogit/compare/v0.6.0...v0.7.0) (2026-03-13)
+
+
+### Features
+
+* **options:** add WithoutGitSuffix option to skip .git URL suffix ([#207](https://github.com/grafana/nanogit/issues/207)) ([4e59ab7](https://github.com/grafana/nanogit/commit/4e59ab7e72d14496370ba8a3a0ef6fea441f6302))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-billy/v5 to v5.8.0 ([#198](https://github.com/grafana/nanogit/issues/198)) ([1b6ff88](https://github.com/grafana/nanogit/commit/1b6ff889c7eb00529f6ac9f36d0ae0581cf4099a))
+* **security:** upgrade to Go 1.25.8 to address standard library vulnerabilities ([#209](https://github.com/grafana/nanogit/issues/209)) ([ac9dd9f](https://github.com/grafana/nanogit/commit/ac9dd9fcfc848a3d90a548e58e30d5badebc7345))
+
 ## [0.6.0](https://github.com/grafana/nanogit/compare/v0.5.2...v0.6.0) (2026-02-27)
 
 
