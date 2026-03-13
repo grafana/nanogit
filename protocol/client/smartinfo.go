@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -82,21 +81,6 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	return nil
 }
 
-// ErrProtocolV1NotSupported is returned when a Git server only supports protocol v1.
-var ErrProtocolV1NotSupported = errors.New("git protocol v1 is not supported; nanogit requires protocol v2")
-
-// ProtocolVersion represents the detected Git protocol version.
-type ProtocolVersion int
-
-const (
-	// ProtocolVersionUnknown indicates the protocol version could not be determined.
-	ProtocolVersionUnknown ProtocolVersion = iota
-	// ProtocolVersionV1 indicates Git protocol v1.
-	ProtocolVersionV1
-	// ProtocolVersionV2 indicates Git protocol v2.
-	ProtocolVersionV2
-)
-
 // CheckProtocolVersion checks if the Git server supports protocol v2.
 // It returns an error if the server only supports protocol v1.
 //
@@ -173,8 +157,12 @@ func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (P
 // detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response
 // to determine the protocol version.
 func detectProtocolVersionFromReader(body io.Reader) ProtocolVersion {
+	// Limit read to 1MB to prevent memory exhaustion from malicious servers
+	const maxResponseSize = 1024 * 1024 // 1MB
+	limitedReader := io.LimitReader(body, maxResponseSize)
+
 	// Read all content from body first
-	content, err := io.ReadAll(body)
+	content, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return ProtocolVersionUnknown
 	}
@@ -190,18 +178,13 @@ func detectProtocolVersionFromReader(body io.Reader) ProtocolVersion {
 	for {
 		line, err := parser.Next()
 		if err != nil {
-			// Check if there's more data after this position
-			if err == io.EOF {
-				// If we hit EOF, check if we've read all the content
-				// If not, there might be more packets after a flush
-				if reader.Len() > 0 {
-					// Reset parser to continue reading
-					parser = protocol.NewParser(reader)
-					continue
-				}
-				break
+			// EOF can mean either end of stream or flush packet - check if more data remains
+			if err == io.EOF && reader.Len() > 0 {
+				// More data after flush packet - recreate parser to continue
+				parser = protocol.NewParser(reader)
+				continue
 			}
-			// Ignore other parse errors - we're just doing detection
+			// End of stream or other error - stop parsing
 			break
 		}
 

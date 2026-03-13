@@ -11,9 +11,18 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
 )
+
+// formatTestResponse is a helper to create properly formatted pkt-line responses for tests
+func formatTestResponse(t *testing.T, packs ...protocol.Pack) string {
+	t.Helper()
+	data, err := protocol.FormatPacks(packs...)
+	require.NoError(t, err)
+	return string(data)
+}
 
 func TestSmartInfo(t *testing.T) {
 	tests := []struct {
@@ -26,7 +35,7 @@ func TestSmartInfo(t *testing.T) {
 		{
 			name:          "successful response",
 			statusCode:    http.StatusOK,
-			responseBody:  "000eversion 2\n0000", // Valid Git protocol response
+			responseBody:  formatTestResponse(t, protocol.PackLine("version 2\n")),
 			expectedError: "",
 			setupClient:   nil,
 		},
@@ -174,41 +183,45 @@ func TestCheckProtocolVersion(t *testing.T) {
 	}{
 		{
 			name:            "protocol v2 - version announcement",
-			responseBody:    "000eversion 2\n0000",
+			responseBody:    formatTestResponse(t, protocol.PackLine("version 2\n")),
 			expectedVersion: ProtocolVersionV2,
 			expectError:     false,
 		},
 		{
 			name:            "protocol v2 - capability line",
-			responseBody:    "0010=capability1\n0000",
+			responseBody:    formatTestResponse(t, protocol.PackLine("=capability1\n")),
 			expectedVersion: ProtocolVersionV2,
 			expectError:     false,
 		},
 		{
-			name:            "protocol v2 - mixed content",
-			responseBody:    "000eversion 2\n0010=capability1\n0000",
+			name: "protocol v2 - mixed content",
+			responseBody: formatTestResponse(t,
+				protocol.PackLine("version 2\n"),
+				protocol.PackLine("=capability1\n")),
 			expectedVersion: ProtocolVersionV2,
 			expectError:     false,
 		},
 		{
 			name: "protocol v1 - ref advertisement",
 			// Typical v1 response with ref + capabilities
-			responseBody:     "003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1 cap2\n0000",
+			responseBody: formatTestResponse(t,
+				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1 cap2\n")),
 			expectedVersion:  ProtocolVersionV1,
 			expectError:      true,
 			expectedErrorMsg: "git protocol v1 is not supported",
 		},
 		{
 			name: "protocol v1 - multiple refs",
-			responseBody: "003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1\n" +
-				"0035abcdef1234567890abcdef1234567890abcdef12 refs/heads/dev\n0000",
+			responseBody: formatTestResponse(t,
+				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1\n"),
+				protocol.PackLine("abcdef1234567890abcdef1234567890abcdef12 refs/heads/dev\n")),
 			expectedVersion:  ProtocolVersionV1,
 			expectError:      true,
 			expectedErrorMsg: "git protocol v1 is not supported",
 		},
 		{
 			name:            "unknown - empty response",
-			responseBody:    "0000",
+			responseBody:    string(protocol.FlushPacket),
 			expectedVersion: ProtocolVersionUnknown,
 			expectError:     false,
 		},
@@ -276,7 +289,9 @@ func TestProtocolVersionDetection_EdgeCases(t *testing.T) {
 
 	t.Run("mixed v1 and v2 indicators - v2 wins", func(t *testing.T) {
 		// If a server sends both v1 refs AND v2 indicators, treat as v2
-		responseBody := "000eversion 2\n003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\n0000"
+		responseBody := formatTestResponse(t,
+			protocol.PackLine("version 2\n"),
+			protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\n"))
 		version := detectProtocolVersionFromReader(strings.NewReader(responseBody))
 		require.Equal(t, ProtocolVersionV2, version, "should detect v2 when both indicators present")
 	})
@@ -287,6 +302,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 
 	t.Run("retries on 5xx errors", func(t *testing.T) {
 		attemptCount := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attemptCount++
 			if attemptCount < 3 {
@@ -294,7 +310,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("000eversion 2\n0000"))
+			_, _ = w.Write([]byte(successResponse))
 		}))
 		defer server.Close()
 
@@ -344,6 +360,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 
 	t.Run("retries on network errors", func(t *testing.T) {
 		attemptCount := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attemptCount++
 			if attemptCount < 2 {
@@ -357,7 +374,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("000eversion 2\n0000"))
+			_, _ = w.Write([]byte(successResponse))
 		}))
 		defer server.Close()
 

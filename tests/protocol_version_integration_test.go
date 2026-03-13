@@ -8,11 +8,19 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	protocolclient "github.com/grafana/nanogit/protocol/client"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// formatPacks is a helper to create properly formatted pkt-line responses for integration tests
+func formatPacks(packs ...protocol.Pack) string {
+	data, err := protocol.FormatPacks(packs...)
+	Expect(err).NotTo(HaveOccurred())
+	return string(data)
+}
 
 var _ = Describe("Protocol Version Detection", func() {
 	Context("Protocol v1 Detection", func() {
@@ -23,11 +31,11 @@ var _ = Describe("Protocol Version Detection", func() {
 				// v1 response format: <hash> <refname>\0<capabilities>
 				if r.URL.Path == "/repo.git/info/refs" {
 					// Real Git smart HTTP format for v1
-					v1Response := "001e# service=git-upload-pack\n" + // service announcement
-						"0000" + // flush after service announcement
-						"003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\000caps\n" + // ref with capabilities
-						"00351234567890abcdef1234567890abcdef12345678 refs/heads/dev\n" + // additional ref
-						"0000" // final flush
+					v1Response := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000caps\n"),
+						protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/dev\n"))
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(v1Response))
@@ -62,10 +70,10 @@ var _ = Describe("Protocol Version Detection", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
 					// v1 advertisement format
-					v1Response := "001e# service=git-upload-pack\n" +
-						"0000" +
-						"003fabcdef1234567890abcdef1234567890abcdef12 refs/heads/master\000caps\n" +
-						"0000"
+					v1Response := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("abcdef1234567890abcdef1234567890abcdef12 refs/heads/master\000caps\n"))
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(v1Response))
@@ -94,13 +102,13 @@ var _ = Describe("Protocol Version Detection", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
 					// Multiple refs in v1 format
-					v1Response := "001e# service=git-upload-pack\n" +
-						"0000" +
-						"003f1111111111111111111111111111111111111111 HEAD\000caps\n" +
-						"00352222222222222222222222222222222222222222 refs/heads/main\n" +
-						"00353333333333333333333333333333333333333333 refs/heads/dev\n" +
-						"003a4444444444444444444444444444444444444444 refs/tags/v1.0.0\n" +
-						"0000"
+					v1Response := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("1111111111111111111111111111111111111111 HEAD\000caps\n"),
+						protocol.PackLine("2222222222222222222222222222222222222222 refs/heads/main\n"),
+						protocol.PackLine("3333333333333333333333333333333333333333 refs/heads/dev\n"),
+						protocol.PackLine("4444444444444444444444444444444444444444 refs/tags/v1.0.0\n"))
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(v1Response))
@@ -127,10 +135,10 @@ var _ = Describe("Protocol Version Detection", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
 					// v2 response with version announcement
-					v2Response := "001e# service=git-upload-pack\n" +
-						"0000" +
-						"000eversion 2\n" +
-						"0000"
+					v2Response := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("version 2\n"))
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(v2Response))
@@ -139,7 +147,7 @@ var _ = Describe("Protocol Version Detection", func() {
 				if r.URL.Path == "/repo.git/git-upload-pack" {
 					// Minimal v2 ls-refs response
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte("0000")) // Empty refs for simplicity
+					_, _ = w.Write([]byte(string(protocol.FlushPacket)))
 					return
 				}
 				w.WriteHeader(http.StatusNotFound)
@@ -163,11 +171,11 @@ var _ = Describe("Protocol Version Detection", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
 					// v2 response with capability lines (start with =)
-					v2Response := "001e# service=git-upload-pack\n" +
-						"0000" +
-						"0014=ls-refs=unborn\n" +
-						"0012=fetch=shallow\n" +
-						"0000"
+					v2Response := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("=ls-refs=unborn\n"),
+						protocol.PackLine("=fetch=shallow\n"))
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(v2Response))
@@ -175,7 +183,7 @@ var _ = Describe("Protocol Version Detection", func() {
 				}
 				if r.URL.Path == "/repo.git/git-upload-pack" {
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte("0000"))
+					_, _ = w.Write([]byte(string(protocol.FlushPacket)))
 					return
 				}
 				w.WriteHeader(http.StatusNotFound)
@@ -214,7 +222,7 @@ var _ = Describe("Protocol Version Detection", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte("0000")) // Just flush packet
+					_, _ = w.Write([]byte(string(protocol.FlushPacket))) // Just flush packet
 					return
 				}
 				w.WriteHeader(http.StatusNotFound)
@@ -239,11 +247,11 @@ var _ = Describe("Protocol Version Detection", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
 					// Mixed response: v2 version announcement + v1 refs
-					mixedResponse := "001e# service=git-upload-pack\n" +
-						"0000" +
-						"000eversion 2\n" + // v2 indicator
-						"003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\n" + // v1-style ref
-						"0000"
+					mixedResponse := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("version 2\n"), // v2 indicator
+						protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\n")) // v1-style ref
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(mixedResponse))
@@ -251,7 +259,7 @@ var _ = Describe("Protocol Version Detection", func() {
 				}
 				if r.URL.Path == "/repo.git/git-upload-pack" {
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte("0000"))
+					_, _ = w.Write([]byte(string(protocol.FlushPacket)))
 					return
 				}
 				w.WriteHeader(http.StatusNotFound)
@@ -300,10 +308,10 @@ var _ = Describe("Protocol Version Detection", func() {
 			By("Creating v1-only server")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
-					v1Response := "001e# service=git-upload-pack\n" +
-						"0000" +
-						"003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\000caps\n" +
-						"0000"
+					v1Response := formatPacks(
+						protocol.PackLine("# service=git-upload-pack\n"),
+						protocol.FlushPacket,
+						protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000caps\n"))
 					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte(v1Response))
