@@ -264,10 +264,6 @@ func CheckHTTPClientError(res *http.Response) error {
 	}
 }
 
-// ErrProtocolV1NotSupported is returned when a Git server only supports protocol v1.
-// This error should only be used with errors.Is() for comparison, not for type assertions.
-var ErrProtocolV1NotSupported = errors.New("git protocol v1 is not supported; nanogit requires protocol v2")
-
 // ProtocolVersion represents the detected Git protocol version.
 type ProtocolVersion int
 

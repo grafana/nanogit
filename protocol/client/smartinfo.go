@@ -81,16 +81,14 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	return nil
 }
 
-// CheckProtocolVersion checks if the Git server supports protocol v2.
-// It returns an error if the server only supports protocol v1.
+// CheckProtocolVersion detects which Git protocol version the server supports.
 //
-// This method makes a single request to the /info/refs endpoint to detect the protocol version
-// and returns ErrProtocolV1NotSupported if the server only supports v1.
+// This method makes a single request to the /info/refs endpoint to detect the protocol version.
 //
 // Protocol Detection:
 //   - Protocol v2: Response contains "version 2" announcement or capability lines starting with '='
 //   - Protocol v1: Response contains ref advertisements (hash + space + refname) without v2 indicators
-//   - Unknown: No clear indicators (allows operations to proceed)
+//   - Unknown: No clear indicators
 //
 // Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
 //
@@ -101,7 +99,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 //
 // Returns:
 //
-//	The detected ProtocolVersion and an error if v1-only server is detected.
+//	The detected ProtocolVersion and an error only for connection/network issues.
 func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (version ProtocolVersion, err error) {
 	u := c.base.JoinPath("info/refs")
 
@@ -143,12 +141,6 @@ func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (v
 
 	// Parse the response to detect protocol version
 	version = detectProtocolVersionFromReader(res.Body)
-
-	if version == ProtocolVersionV1 {
-		return version, fmt.Errorf("%w: server at %s only supports Git protocol v1. "+
-			"Please upgrade your Git server to a version that supports protocol v2 (Git 2.18+)",
-			ErrProtocolV1NotSupported, c.base.Host)
-	}
 
 	logger.Debug("Protocol version detected", "version", version)
 	return version, nil

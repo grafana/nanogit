@@ -175,23 +175,19 @@ func TestSmartInfo(t *testing.T) {
 
 func TestCheckProtocolVersion(t *testing.T) {
 	tests := []struct {
-		name             string
-		responseBody     string
-		expectedVersion  ProtocolVersion
-		expectError      bool
-		expectedErrorMsg string
+		name            string
+		responseBody    string
+		expectedVersion ProtocolVersion
 	}{
 		{
 			name:            "protocol v2 - version announcement",
 			responseBody:    formatTestResponse(t, protocol.PackLine("version 2\n")),
 			expectedVersion: ProtocolVersionV2,
-			expectError:     false,
 		},
 		{
 			name:            "protocol v2 - capability line",
 			responseBody:    formatTestResponse(t, protocol.PackLine("=capability1\n")),
 			expectedVersion: ProtocolVersionV2,
-			expectError:     false,
 		},
 		{
 			name: "protocol v2 - mixed content",
@@ -199,37 +195,30 @@ func TestCheckProtocolVersion(t *testing.T) {
 				protocol.PackLine("version 2\n"),
 				protocol.PackLine("=capability1\n")),
 			expectedVersion: ProtocolVersionV2,
-			expectError:     false,
 		},
 		{
 			name: "protocol v1 - ref advertisement",
 			// Typical v1 response with ref + capabilities
 			responseBody: formatTestResponse(t,
 				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1 cap2\n")),
-			expectedVersion:  ProtocolVersionV1,
-			expectError:      true,
-			expectedErrorMsg: "git protocol v1 is not supported",
+			expectedVersion: ProtocolVersionV1,
 		},
 		{
 			name: "protocol v1 - multiple refs",
 			responseBody: formatTestResponse(t,
 				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1\n"),
 				protocol.PackLine("abcdef1234567890abcdef1234567890abcdef12 refs/heads/dev\n")),
-			expectedVersion:  ProtocolVersionV1,
-			expectError:      true,
-			expectedErrorMsg: "git protocol v1 is not supported",
+			expectedVersion: ProtocolVersionV1,
 		},
 		{
 			name:            "unknown - empty response",
 			responseBody:    string(protocol.FlushPacket),
 			expectedVersion: ProtocolVersionUnknown,
-			expectError:     false,
 		},
 		{
 			name:            "unknown - invalid format",
 			responseBody:    "invalid data",
 			expectedVersion: ProtocolVersionUnknown,
-			expectError:     false,
 		},
 	}
 
@@ -256,15 +245,8 @@ func TestCheckProtocolVersion(t *testing.T) {
 			require.NoError(t, err)
 
 			version, err = client.CheckProtocolVersion(context.Background(), "git-upload-pack")
-			if tt.expectError {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedErrorMsg)
-				require.ErrorIs(t, err, ErrProtocolV1NotSupported)
-				require.Equal(t, tt.expectedVersion, version)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedVersion, version)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedVersion, version)
 		})
 	}
 }

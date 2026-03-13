@@ -1,8 +1,6 @@
 package integration_test
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 
@@ -24,7 +22,7 @@ func formatPacks(packs ...protocol.Pack) string {
 
 var _ = Describe("Protocol Version Detection", func() {
 	Context("Protocol v1 Detection", func() {
-		It("should detect and reject v1-only servers with clear error message", func() {
+		It("should detect v1-only servers", func() {
 			By("Creating a mock Git server that only supports protocol v1")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Simulate Git protocol v1 info/refs response
@@ -45,27 +43,19 @@ var _ = Describe("Protocol Version Detection", func() {
 			}))
 			defer server.Close()
 
-			By("Attempting to create a nanogit client for the v1-only server")
+			By("Creating a nanogit client for the v1-only server")
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git",
 				options.WithBasicAuth("test", "test"))
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking protocol compatibility - should fail with protocol v1 error")
-			compatible, err := client.IsProtocolCompatible(ctx)
-			Expect(err).To(HaveOccurred(), "Should fail when connecting to v1-only server")
-			Expect(compatible).To(BeFalse())
-
-			By("Verifying error is ErrProtocolV1NotSupported")
-			Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeTrue(),
-				"Error should be ErrProtocolV1NotSupported")
-			logger.Info("Protocol v1 detected and rejected as expected", "error", err.Error())
-
-			By("Verifying error message is informative")
-			Expect(err.Error()).To(ContainSubstring("git protocol v1 is not supported"))
-			Expect(err.Error()).To(ContainSubstring("protocol v2"))
+			By("Detecting protocol version - should return v1")
+			version, err := client.ProtocolVersion(ctx)
+			Expect(err).NotTo(HaveOccurred(), "Should successfully detect protocol version")
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV1), "Should detect v1")
+			logger.Info("Protocol v1 detected as expected", "version", version)
 		})
 
-		It("should detect v1 when attempting to get ref from v1-only server", func() {
+		It("should detect v1 with single ref advertisement", func() {
 			By("Creating a mock Git server that only supports protocol v1")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
@@ -88,13 +78,11 @@ var _ = Describe("Protocol Version Detection", func() {
 				options.WithBasicAuth("test", "test"))
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking protocol compatibility - should fail with protocol v1 error")
-			_, err = client.IsProtocolCompatible(ctx)
-			Expect(err).To(HaveOccurred())
-
-			By("Verifying protocol v1 error")
-			Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeTrue())
-			logger.Info("GetRef failed with protocol v1 error as expected")
+			By("Detecting protocol version - should return v1")
+			version, err := client.ProtocolVersion(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV1))
+			logger.Info("Protocol v1 detected with single ref")
 		})
 
 		It("should detect v1 when multiple refs are advertised without v2 indicators", func() {
@@ -118,14 +106,14 @@ var _ = Describe("Protocol Version Detection", func() {
 			}))
 			defer server.Close()
 
-			By("Creating client and attempting operation")
+			By("Creating client")
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking protocol compatibility should fail with v1 error")
-			_, err = client.IsProtocolCompatible(ctx)
-			Expect(err).To(HaveOccurred())
-			Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeTrue())
+			By("Detecting protocol version - should return v1")
+			version, err := client.ProtocolVersion(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV1))
 		})
 	})
 
@@ -159,14 +147,14 @@ var _ = Describe("Protocol Version Detection", func() {
 				options.WithBasicAuth("test", "test"))
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking protocol compatibility should succeed")
-			compatible, err := client.IsProtocolCompatible(ctx)
+			By("Detecting protocol version - should return v2")
+			version, err := client.ProtocolVersion(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(compatible).To(BeTrue())
-			logger.Info("Successfully connected to v2 server")
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV2))
+			logger.Info("Successfully detected v2 server")
 		})
 
-		It("should successfully connect to v2 servers with capability lines", func() {
+		It("should successfully detect v2 servers with capability lines", func() {
 			By("Creating a mock Git server with v2 capability lines")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/repo.git/info/refs" {
@@ -194,11 +182,11 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking protocol compatibility should succeed")
-			compatible, err := client.IsProtocolCompatible(ctx)
+			By("Detecting protocol version - should return v2")
+			version, err := client.ProtocolVersion(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(compatible).To(BeTrue())
-			logger.Info("Successfully connected to v2 server with capability lines")
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV2))
+			logger.Info("Successfully detected v2 server with capability lines")
 		})
 
 		It("should work with real Gitea server (v2 compatible)", func() {
@@ -211,8 +199,11 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(len(refs)).To(BeNumerically(">", 0))
 			logger.Info("Successfully connected to Gitea server with v2 protocol", "refs_count", len(refs))
 
-			By("Verifying Gitea supports v2 (implicit - no error)")
-			// If we got this far without ErrProtocolV1NotSupported, Gitea is using v2
+			By("Verifying Gitea supports v2")
+			version, err := client.ProtocolVersion(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV2))
+			logger.Info("Gitea server uses protocol v2")
 		})
 	})
 
@@ -229,17 +220,15 @@ var _ = Describe("Protocol Version Detection", func() {
 			}))
 			defer server.Close()
 
-			By("Creating client - should not fail on protocol detection")
+			By("Creating client")
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Operations may fail later, but not due to protocol v1 detection")
-			_, err = client.IsProtocolCompatible(ctx)
-			// It's OK if this fails, but it should NOT be a protocol v1 error
-			if err != nil {
-				Expect(errors.Is(err, protocolclient.ErrProtocolV1NotSupported)).To(BeFalse(),
-					"Empty response should not be detected as v1")
-			}
+			By("Detecting protocol version - should return Unknown")
+			version, err := client.ProtocolVersion(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(version).To(Equal(protocolclient.ProtocolVersionUnknown))
+			logger.Info("Empty response detected as Unknown")
 		})
 
 		It("should prioritize v2 when both v1 and v2 indicators are present", func() {
@@ -271,9 +260,9 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Should be detected as v2, not v1")
-			compatible, err := client.IsProtocolCompatible(ctx)
-			Expect(err).NotTo(HaveOccurred(), "Should succeed when v2 indicator is present")
-			Expect(compatible).To(BeTrue())
+			version, err := client.ProtocolVersion(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(version).To(Equal(protocolclient.ProtocolVersionV2))
 			logger.Info("Mixed v1/v2 response correctly prioritized v2")
 		})
 
@@ -294,58 +283,11 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Should handle gracefully without panic")
-			_, err = client.IsProtocolCompatible(ctx)
-			// Operation will likely fail, but should not crash
-			if err != nil {
-				logger.Info("Malformed response handled gracefully", "error", err.Error())
-			}
-		})
-	})
-
-	Context("Error Message Quality", func() {
-		It("should provide helpful error messages for v1-only servers", func() {
-			By("Creating v1-only server")
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/repo.git/info/refs" {
-					v1Response := formatPacks(
-						protocol.PackLine("# service=git-upload-pack\n"),
-						protocol.FlushPacket,
-						protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000caps\n"))
-					w.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
-					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(v1Response))
-					return
-				}
-				w.WriteHeader(http.StatusNotFound)
-			}))
-			defer server.Close()
-
-			By("Attempting to connect")
-			client, err := nanogit.NewHTTPClient(server.URL+"/repo.git")
+			By("Should handle gracefully without panic - returns Unknown")
+			version, err := client.ProtocolVersion(ctx)
 			Expect(err).NotTo(HaveOccurred())
-
-			_, err = client.IsProtocolCompatible(context.Background())
-			Expect(err).To(HaveOccurred())
-
-			By("Checking error message quality")
-			errMsg := err.Error()
-
-			// Should mention protocol v1
-			Expect(errMsg).To(ContainSubstring("protocol v1"))
-
-			// Should mention that v2 is required
-			Expect(errMsg).To(ContainSubstring("protocol v2"))
-
-			// Should provide actionable guidance
-			Expect(errMsg).To(Or(
-				ContainSubstring("upgrade"),
-				ContainSubstring("GitHub"),
-				ContainSubstring("GitLab"),
-				ContainSubstring("Bitbucket"),
-			))
-
-			logger.Info("Error message provides helpful context", "message", errMsg)
+			Expect(version).To(Equal(protocolclient.ProtocolVersionUnknown))
+			logger.Info("Malformed response handled gracefully", "version", version)
 		})
 	})
 })

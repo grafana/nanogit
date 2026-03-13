@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -204,19 +205,6 @@ type FakeClient struct {
 		result1 bool
 		result2 error
 	}
-	IsProtocolCompatibleStub        func(context.Context) (bool, error)
-	isProtocolCompatibleMutex       sync.RWMutex
-	isProtocolCompatibleArgsForCall []struct {
-		arg1 context.Context
-	}
-	isProtocolCompatibleReturns struct {
-		result1 bool
-		result2 error
-	}
-	isProtocolCompatibleReturnsOnCall map[int]struct {
-		result1 bool
-		result2 error
-	}
 	ListCommitsStub        func(context.Context, hash.Hash, nanogit.ListCommitsOptions) ([]nanogit.Commit, error)
 	listCommitsMutex       sync.RWMutex
 	listCommitsArgsForCall []struct {
@@ -258,6 +246,19 @@ type FakeClient struct {
 	}
 	newStagedWriterReturnsOnCall map[int]struct {
 		result1 nanogit.StagedWriter
+		result2 error
+	}
+	ProtocolVersionStub        func(context.Context) (client.ProtocolVersion, error)
+	protocolVersionMutex       sync.RWMutex
+	protocolVersionArgsForCall []struct {
+		arg1 context.Context
+	}
+	protocolVersionReturns struct {
+		result1 client.ProtocolVersion
+		result2 error
+	}
+	protocolVersionReturnsOnCall map[int]struct {
+		result1 client.ProtocolVersion
 		result2 error
 	}
 	RepoExistsStub        func(context.Context) (bool, error)
@@ -1193,70 +1194,6 @@ func (fake *FakeClient) IsAuthorizedReturnsOnCall(i int, result1 bool, result2 e
 	}{result1, result2}
 }
 
-func (fake *FakeClient) IsProtocolCompatible(arg1 context.Context) (bool, error) {
-	fake.isProtocolCompatibleMutex.Lock()
-	ret, specificReturn := fake.isProtocolCompatibleReturnsOnCall[len(fake.isProtocolCompatibleArgsForCall)]
-	fake.isProtocolCompatibleArgsForCall = append(fake.isProtocolCompatibleArgsForCall, struct {
-		arg1 context.Context
-	}{arg1})
-	stub := fake.IsProtocolCompatibleStub
-	fakeReturns := fake.isProtocolCompatibleReturns
-	fake.recordInvocation("IsProtocolCompatible", []interface{}{arg1})
-	fake.isProtocolCompatibleMutex.Unlock()
-	if stub != nil {
-		return stub(arg1)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	return fakeReturns.result1, fakeReturns.result2
-}
-
-func (fake *FakeClient) IsProtocolCompatibleCallCount() int {
-	fake.isProtocolCompatibleMutex.RLock()
-	defer fake.isProtocolCompatibleMutex.RUnlock()
-	return len(fake.isProtocolCompatibleArgsForCall)
-}
-
-func (fake *FakeClient) IsProtocolCompatibleCalls(stub func(context.Context) (bool, error)) {
-	fake.isProtocolCompatibleMutex.Lock()
-	defer fake.isProtocolCompatibleMutex.Unlock()
-	fake.IsProtocolCompatibleStub = stub
-}
-
-func (fake *FakeClient) IsProtocolCompatibleArgsForCall(i int) context.Context {
-	fake.isProtocolCompatibleMutex.RLock()
-	defer fake.isProtocolCompatibleMutex.RUnlock()
-	argsForCall := fake.isProtocolCompatibleArgsForCall[i]
-	return argsForCall.arg1
-}
-
-func (fake *FakeClient) IsProtocolCompatibleReturns(result1 bool, result2 error) {
-	fake.isProtocolCompatibleMutex.Lock()
-	defer fake.isProtocolCompatibleMutex.Unlock()
-	fake.IsProtocolCompatibleStub = nil
-	fake.isProtocolCompatibleReturns = struct {
-		result1 bool
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeClient) IsProtocolCompatibleReturnsOnCall(i int, result1 bool, result2 error) {
-	fake.isProtocolCompatibleMutex.Lock()
-	defer fake.isProtocolCompatibleMutex.Unlock()
-	fake.IsProtocolCompatibleStub = nil
-	if fake.isProtocolCompatibleReturnsOnCall == nil {
-		fake.isProtocolCompatibleReturnsOnCall = make(map[int]struct {
-			result1 bool
-			result2 error
-		})
-	}
-	fake.isProtocolCompatibleReturnsOnCall[i] = struct {
-		result1 bool
-		result2 error
-	}{result1, result2}
-}
-
 func (fake *FakeClient) ListCommits(arg1 context.Context, arg2 hash.Hash, arg3 nanogit.ListCommitsOptions) ([]nanogit.Commit, error) {
 	fake.listCommitsMutex.Lock()
 	ret, specificReturn := fake.listCommitsReturnsOnCall[len(fake.listCommitsArgsForCall)]
@@ -1449,6 +1386,70 @@ func (fake *FakeClient) NewStagedWriterReturnsOnCall(i int, result1 nanogit.Stag
 	}
 	fake.newStagedWriterReturnsOnCall[i] = struct {
 		result1 nanogit.StagedWriter
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) ProtocolVersion(arg1 context.Context) (client.ProtocolVersion, error) {
+	fake.protocolVersionMutex.Lock()
+	ret, specificReturn := fake.protocolVersionReturnsOnCall[len(fake.protocolVersionArgsForCall)]
+	fake.protocolVersionArgsForCall = append(fake.protocolVersionArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.ProtocolVersionStub
+	fakeReturns := fake.protocolVersionReturns
+	fake.recordInvocation("ProtocolVersion", []interface{}{arg1})
+	fake.protocolVersionMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeClient) ProtocolVersionCallCount() int {
+	fake.protocolVersionMutex.RLock()
+	defer fake.protocolVersionMutex.RUnlock()
+	return len(fake.protocolVersionArgsForCall)
+}
+
+func (fake *FakeClient) ProtocolVersionCalls(stub func(context.Context) (client.ProtocolVersion, error)) {
+	fake.protocolVersionMutex.Lock()
+	defer fake.protocolVersionMutex.Unlock()
+	fake.ProtocolVersionStub = stub
+}
+
+func (fake *FakeClient) ProtocolVersionArgsForCall(i int) context.Context {
+	fake.protocolVersionMutex.RLock()
+	defer fake.protocolVersionMutex.RUnlock()
+	argsForCall := fake.protocolVersionArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeClient) ProtocolVersionReturns(result1 client.ProtocolVersion, result2 error) {
+	fake.protocolVersionMutex.Lock()
+	defer fake.protocolVersionMutex.Unlock()
+	fake.ProtocolVersionStub = nil
+	fake.protocolVersionReturns = struct {
+		result1 client.ProtocolVersion
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) ProtocolVersionReturnsOnCall(i int, result1 client.ProtocolVersion, result2 error) {
+	fake.protocolVersionMutex.Lock()
+	defer fake.protocolVersionMutex.Unlock()
+	fake.ProtocolVersionStub = nil
+	if fake.protocolVersionReturnsOnCall == nil {
+		fake.protocolVersionReturnsOnCall = make(map[int]struct {
+			result1 client.ProtocolVersion
+			result2 error
+		})
+	}
+	fake.protocolVersionReturnsOnCall[i] = struct {
+		result1 client.ProtocolVersion
 		result2 error
 	}{result1, result2}
 }

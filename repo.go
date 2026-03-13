@@ -33,31 +33,29 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// IsProtocolCompatible checks if the Git server supports protocol v2.
-// This method can be called before performing Git operations to ensure
-// the server is compatible with nanogit.
+// ProtocolVersion detects which Git protocol version the server supports.
+// This method can be called before performing Git operations to check
+// server capabilities.
 //
 // Returns:
-//   - (true, nil) if the server supports protocol v2 or if version cannot be determined (unknown)
-//   - (false, ErrProtocolV1NotSupported) if the server only supports protocol v1
-//   - (false, error) if there are connection issues or other problems
-//
-// Protocol v1-only servers will fail with ErrProtocolV1NotSupported.
-// Unknown protocol versions are treated as compatible to allow operations to proceed.
+//   - ProtocolVersionV2: Server supports protocol v2 (modern servers)
+//   - ProtocolVersionV1: Server only supports protocol v1 (legacy servers)
+//   - ProtocolVersionUnknown: Version could not be determined
+//   - error: Connection issues or other problems
 //
 // Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
-func (c *httpClient) IsProtocolCompatible(ctx context.Context) (bool, error) {
+// Nanogit requires protocol v2 for full functionality. Callers should check
+// the returned version and decide how to handle v1 or unknown servers.
+func (c *httpClient) ProtocolVersion(ctx context.Context) (client.ProtocolVersion, error) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Check protocol compatibility")
+	logger.Debug("Detecting protocol version")
 
 	version, err := c.CheckProtocolVersion(ctx, "git-upload-pack")
 	if err != nil {
-		logger.Debug("Protocol check failed", "error", err)
-		return false, err
+		logger.Debug("Protocol detection failed", "error", err)
+		return client.ProtocolVersionUnknown, err
 	}
 
 	logger.Debug("Protocol version detected", "version", version)
-	// v2 is compatible, Unknown is treated as compatible (allow operations to proceed)
-	// Only v1 is incompatible (would have returned an error above)
-	return version != client.ProtocolVersionV1, nil
+	return version, nil
 }
