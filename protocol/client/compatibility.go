@@ -83,36 +83,34 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 }
 
 // detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response
-// to determine the protocol version.
+// to determine the protocol version. It uses streaming parsing with early-exit
+// to minimize memory usage and improve performance.
 func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 	// Limit read to 1MB to prevent memory exhaustion from malicious servers
 	const maxResponseSize = 1024 * 1024 // 1MB
 	limitedReader := io.LimitReader(body, maxResponseSize)
 
-	// Read all content from body first
-	content, err := io.ReadAll(limitedReader)
-	if err != nil {
+	// Buffer the first chunk for flush packet handling
+	// Protocol v2 indicators typically appear in the first few packets
+	const bufferSize = 4096
+	buffer := make([]byte, bufferSize)
+	n, err := io.ReadFull(limitedReader, buffer)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return protocolVersionUnknown
 	}
+	buffer = buffer[:n]
 
-	// Create a buffer reader that we can restart after flush packets
-	reader := bytes.NewReader(content)
-	parser := protocol.NewParser(reader)
+	// Create a multi-reader that combines our buffer with the rest of the stream
+	combinedReader := io.MultiReader(bytes.NewReader(buffer), limitedReader)
+	parser := protocol.NewParser(combinedReader)
 
-	hasV2Indicator := false
 	hasRefLine := false
 
-	// Parse packets - continue past flush packets to read all refs
+	// Parse packets with early-exit for v2 detection
 	for {
 		line, err := parser.Next()
 		if err != nil {
-			// EOF can mean either end of stream or flush packet - check if more data remains
-			if err == io.EOF && reader.Len() > 0 {
-				// More data after flush packet - recreate parser to continue
-				parser = protocol.NewParser(reader)
-				continue
-			}
-			// End of stream or other error - stop parsing
+			// End of stream - stop parsing
 			break
 		}
 
@@ -121,17 +119,16 @@ func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 			continue
 		}
 
-		// Check for protocol v2 indicators
-		// 1. Version announcement: "version 2" or "version 2\n"
-		if bytes.Contains(line, []byte("version 2")) {
-			hasV2Indicator = true
-			continue
+		// Check for protocol v2 indicators (early-exit optimization)
+		// 1. Version announcement: "version 2"
+		trimmed := bytes.TrimSpace(line)
+		if bytes.Equal(trimmed, []byte("version 2")) {
+			return protocolVersionV2 // Early exit for v2
 		}
 
 		// 2. Capability lines in v2 start with '='
 		if line[0] == '=' {
-			hasV2Indicator = true
-			continue
+			return protocolVersionV2 // Early exit for v2
 		}
 
 		// Check for protocol v1 ref advertisement format
@@ -142,14 +139,12 @@ func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 			// Validate it's actually a hex hash
 			if isHexHash(line[:40]) {
 				hasRefLine = true
+				// Don't exit early - continue scanning for v2 indicators
 			}
 		}
 	}
 
 	// Determine version based on indicators found
-	if hasV2Indicator {
-		return protocolVersionV2
-	}
 	if hasRefLine {
 		return protocolVersionV1
 	}
