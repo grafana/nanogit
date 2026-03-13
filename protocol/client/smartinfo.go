@@ -102,7 +102,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 // Returns:
 //
 //	The detected ProtocolVersion and an error if v1-only server is detected.
-func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (ProtocolVersion, error) {
+func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (version ProtocolVersion, err error) {
 	u := c.base.JoinPath("info/refs")
 
 	query := make(url.Values)
@@ -142,7 +142,7 @@ func (c *rawClient) CheckProtocolVersion(ctx context.Context, service string) (P
 	}
 
 	// Parse the response to detect protocol version
-	version := detectProtocolVersionFromReader(res.Body)
+	version = detectProtocolVersionFromReader(res.Body)
 
 	if version == ProtocolVersionV1 {
 		return version, fmt.Errorf("%w: server at %s only supports Git protocol v1. "+

@@ -38,12 +38,14 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 // the server is compatible with nanogit.
 //
 // Returns:
-//   - true if the server supports protocol v2
-//   - false if the server only supports protocol v1
-//   - error if there are connection issues or other problems
+//   - (true, nil) if the server supports protocol v2 or if version cannot be determined (unknown)
+//   - (false, ErrProtocolV1NotSupported) if the server only supports protocol v1
+//   - (false, error) if there are connection issues or other problems
+//
+// Protocol v1-only servers will fail with ErrProtocolV1NotSupported.
+// Unknown protocol versions are treated as compatible to allow operations to proceed.
 //
 // Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
-// If this method returns false, operations will fail with ErrProtocolV1NotSupported.
 func (c *httpClient) IsProtocolCompatible(ctx context.Context) (bool, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Check protocol compatibility")
@@ -55,5 +57,7 @@ func (c *httpClient) IsProtocolCompatible(ctx context.Context) (bool, error) {
 	}
 
 	logger.Debug("Protocol version detected", "version", version)
-	return version == client.ProtocolVersionV2, nil
+	// v2 is compatible, Unknown is treated as compatible (allow operations to proceed)
+	// Only v1 is incompatible (would have returned an error above)
+	return version != client.ProtocolVersionV1, nil
 }
