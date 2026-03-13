@@ -36,9 +36,9 @@ func (c *httpClient) RepoExists(ctx context.Context) (bool, error) {
 // This method can be called before performing Git operations to verify server compatibility.
 //
 // Returns:
-//   - true: Server supports protocol v2 (nanogit can work with this server)
-//   - false: Server only supports protocol v1 or version could not be determined
-//   - error: Connection issues or other problems
+//   - true, nil: Server supports protocol v2 (nanogit can work with this server)
+//   - false, nil: Server only supports protocol v1 (nanogit cannot work with this server)
+//   - false, error: Connection issues, authentication problems, or protocol version could not be determined
 //
 // Most modern Git servers support protocol v2 (introduced in Git 2.18, 2018).
 // Nanogit requires protocol v2 for full functionality.

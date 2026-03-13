@@ -98,8 +98,11 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 //	service - The Git service to query ("git-upload-pack" or "git-receive-pack").
 //
 // IsServerCompatible checks if the server supports Git protocol v2, which is required by nanogit.
-// Returns true if the server supports protocol v2, false otherwise.
-// Returns an error only for connection/network issues.
+//
+// Returns:
+//   - true, nil: Server supports protocol v2
+//   - false, nil: Server only supports protocol v1
+//   - false, error: Connection issues, authentication problems, or protocol version could not be determined
 func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, err error) {
 	u := c.base.JoinPath("info/refs")
 
@@ -141,10 +144,17 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 
 	// Parse the response to detect protocol version
 	version := detectProtocolVersionFromReader(res.Body)
-	compatible = version == ProtocolVersionV2
 
-	logger.Debug("Protocol compatibility checked", "version", version, "compatible", compatible)
-	return compatible, nil
+	switch version {
+	case ProtocolVersionV2:
+		logger.Debug("Protocol compatibility checked", "version", "v2", "compatible", true)
+		return true, nil
+	case ProtocolVersionV1:
+		logger.Debug("Protocol compatibility checked", "version", "v1", "compatible", false)
+		return false, nil
+	default: // ProtocolVersionUnknown
+		return false, fmt.Errorf("could not determine protocol version from server response")
+	}
 }
 
 // detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response

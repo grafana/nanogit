@@ -178,16 +178,19 @@ func TestIsServerCompatible(t *testing.T) {
 		name               string
 		responseBody       string
 		expectedCompatible bool
+		expectError        bool
 	}{
 		{
 			name:               "protocol v2 - version announcement",
 			responseBody:       formatTestResponse(t, protocol.PackLine("version 2\n")),
 			expectedCompatible: true,
+			expectError:        false,
 		},
 		{
 			name:               "protocol v2 - capability line",
 			responseBody:       formatTestResponse(t, protocol.PackLine("=capability1\n")),
 			expectedCompatible: true,
+			expectError:        false,
 		},
 		{
 			name: "protocol v2 - mixed content",
@@ -195,6 +198,7 @@ func TestIsServerCompatible(t *testing.T) {
 				protocol.PackLine("version 2\n"),
 				protocol.PackLine("=capability1\n")),
 			expectedCompatible: true,
+			expectError:        false,
 		},
 		{
 			name: "protocol v1 - ref advertisement",
@@ -202,6 +206,7 @@ func TestIsServerCompatible(t *testing.T) {
 			responseBody: formatTestResponse(t,
 				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1 cap2\n")),
 			expectedCompatible: false,
+			expectError:        false,
 		},
 		{
 			name: "protocol v1 - multiple refs",
@@ -209,16 +214,19 @@ func TestIsServerCompatible(t *testing.T) {
 				protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1\n"),
 				protocol.PackLine("abcdef1234567890abcdef1234567890abcdef12 refs/heads/dev\n")),
 			expectedCompatible: false,
+			expectError:        false,
 		},
 		{
 			name:               "unknown - empty response",
 			responseBody:       string(protocol.FlushPacket),
 			expectedCompatible: false,
+			expectError:        true,
 		},
 		{
 			name:               "unknown - invalid format",
 			responseBody:       "invalid data",
 			expectedCompatible: false,
+			expectError:        true,
 		},
 	}
 
@@ -251,7 +259,12 @@ func TestIsServerCompatible(t *testing.T) {
 			require.NoError(t, err)
 
 			compatible, err := client.IsServerCompatible(context.Background())
-			require.NoError(t, err)
+			if tt.expectError {
+				require.Error(t, err, "should return error for unknown protocol")
+				require.Contains(t, err.Error(), "could not determine protocol version")
+			} else {
+				require.NoError(t, err)
+			}
 			require.Equal(t, tt.expectedCompatible, compatible)
 		})
 	}

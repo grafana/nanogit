@@ -223,11 +223,12 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL + "/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking protocol compatibility - should return false for unknown")
+			By("Checking protocol compatibility - should return error for unknown")
 			compatible, err := client.IsServerCompatible(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred(), "Should error when protocol version is unknown")
+			Expect(err.Error()).To(ContainSubstring("could not determine protocol version"))
 			Expect(compatible).To(BeFalse())
-			logger.Info("Empty response detected as incompatible")
+			logger.Info("Empty response correctly returned error")
 		})
 
 		It("should prioritize v2 when both v1 and v2 indicators are present", func() {
@@ -282,11 +283,12 @@ var _ = Describe("Protocol Version Detection", func() {
 			client, err := nanogit.NewHTTPClient(server.URL + "/repo.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Should handle gracefully without panic - returns Unknown")
+			By("Should handle gracefully without panic - returns error")
 			compatible, err := client.IsServerCompatible(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred(), "Should error when response is malformed")
+			Expect(err.Error()).To(ContainSubstring("could not determine protocol version"))
 			Expect(compatible).To(BeFalse())
-			logger.Info("Malformed response handled gracefully - incompatible")
+			logger.Info("Malformed response correctly returned error")
 		})
 	})
 })
