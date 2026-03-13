@@ -110,14 +110,16 @@ type Config struct {
 	StartTimeout  time.Duration
 	GiteaImage    string
 	GiteaVersion  string
+	ProtocolV1Only bool // When true, force server to use Git protocol v1 only
 }
 
 // defaultConfig returns a Config with sensible defaults.
 func defaultConfig() *Config {
 	return &Config{
-		Logger:       NoopLogger(),
-		StartTimeout: 30 * time.Second,
-		GiteaImage:   "gitea/gitea",
-		GiteaVersion: "1.22", // Pinned to stable version to prevent supply chain attacks
+		Logger:         NoopLogger(),
+		StartTimeout:   30 * time.Second,
+		GiteaImage:     "gitea/gitea",
+		GiteaVersion:   "1.22", // Pinned to stable version to prevent supply chain attacks
+		ProtocolV1Only: false,  // Default to v2 support
 	}
 }

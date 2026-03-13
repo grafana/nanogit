@@ -3,8 +3,10 @@ package integration_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 
@@ -203,6 +205,53 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(compatible).To(BeTrue())
 			logger.Info("Gitea server is compatible (v2)")
+		})
+
+		It("should detect v1-only real Gitea server as incompatible", func() {
+			By("Creating a real Gitea server with protocol v1 only")
+			v1Server, err := gittest.NewServer(ctx,
+				gittest.WithLogger(gittest.NewStructuredLogger(logger)),
+				gittest.WithProtocolV1Only(),
+				gittest.WithTimeout(60*time.Second))
+			Expect(err).NotTo(HaveOccurred())
+			defer v1Server.Cleanup()
+
+			By("Creating a test user")
+			user, err := v1Server.CreateUser(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Generating access token")
+			token, err := v1Server.CreateToken(ctx, user.Username)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating a test repository")
+			repo, err := v1Server.CreateRepo(ctx, "test-v1-repo", user)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Initializing repository with a commit")
+			localRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(gittest.NewStructuredLogger(logger)))
+			Expect(err).NotTo(HaveOccurred())
+			defer localRepo.Cleanup()
+
+			connInfo, err := localRepo.InitWithRemote(user, repo)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating nanogit client")
+			client, err := nanogit.NewHTTPClient(connInfo.URL,
+				options.WithTokenAuth(token))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking protocol compatibility - should return false for v1")
+			compatible, err := client.IsServerCompatible(ctx)
+			Expect(err).NotTo(HaveOccurred(), "Should successfully check compatibility")
+			Expect(compatible).To(BeFalse(), "Should be incompatible with v1-only server")
+			logger.Info("Real Gitea v1-only server correctly detected as incompatible")
+
+			By("Verifying ListRefs still works (uses v1 protocol)")
+			refs, err := client.ListRefs(ctx)
+			Expect(err).NotTo(HaveOccurred(), "ListRefs should work even on v1 servers")
+			Expect(len(refs)).To(BeNumerically(">", 0))
+			logger.Info("ListRefs still works on v1 server", "refs_count", len(refs))
 		})
 	})
 
