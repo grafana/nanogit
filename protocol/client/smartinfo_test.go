@@ -164,6 +164,122 @@ func TestSmartInfo(t *testing.T) {
 	}
 }
 
+func TestProtocolVersionDetection(t *testing.T) {
+	tests := []struct {
+		name             string
+		responseBody     string
+		expectedVersion  ProtocolVersion
+		expectError      bool
+		expectedErrorMsg string
+	}{
+		{
+			name:            "protocol v2 - version announcement",
+			responseBody:    "000eversion 2\n0000",
+			expectedVersion: ProtocolVersionV2,
+			expectError:     false,
+		},
+		{
+			name:            "protocol v2 - capability line",
+			responseBody:    "0010=capability1\n0000",
+			expectedVersion: ProtocolVersionV2,
+			expectError:     false,
+		},
+		{
+			name:            "protocol v2 - mixed content",
+			responseBody:    "000eversion 2\n0010=capability1\n0000",
+			expectedVersion: ProtocolVersionV2,
+			expectError:     false,
+		},
+		{
+			name: "protocol v1 - ref advertisement",
+			// Typical v1 response with ref + capabilities
+			responseBody:     "003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1 cap2\n0000",
+			expectedVersion:  ProtocolVersionV1,
+			expectError:      true,
+			expectedErrorMsg: "git protocol v1 is not supported",
+		},
+		{
+			name: "protocol v1 - multiple refs",
+			responseBody: "003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\000cap1\n" +
+				"0035abcdef1234567890abcdef1234567890abcdef12 refs/heads/dev\n0000",
+			expectedVersion:  ProtocolVersionV1,
+			expectError:      true,
+			expectedErrorMsg: "git protocol v1 is not supported",
+		},
+		{
+			name:            "unknown - empty response",
+			responseBody:    "0000",
+			expectedVersion: ProtocolVersionUnknown,
+			expectError:     false,
+		},
+		{
+			name:            "unknown - invalid format",
+			responseBody:    "invalid data",
+			expectedVersion: ProtocolVersionUnknown,
+			expectError:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Test the detection function directly
+			version := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody))
+			require.Equal(t, tt.expectedVersion, version, "protocol version detection mismatch")
+
+			// Test via SmartInfo
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				if _, err := w.Write([]byte(tt.responseBody)); err != nil {
+					t.Errorf("failed to write response: %v", err)
+					return
+				}
+			}))
+			defer server.Close()
+
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			err = client.SmartInfo(context.Background(), "git-upload-pack")
+			if tt.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedErrorMsg)
+				require.ErrorIs(t, err, ErrProtocolV1NotSupported)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestProtocolVersionDetection_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("hash validation - valid hex", func(t *testing.T) {
+		require.True(t, isHexHash([]byte("1234567890abcdefABCDEF1234567890abcdef12")))
+	})
+
+	t.Run("hash validation - invalid length", func(t *testing.T) {
+		require.False(t, isHexHash([]byte("1234567890abcdef")))                               // too short
+		require.False(t, isHexHash([]byte("1234567890abcdef1234567890abcdef12345678901234"))) // too long
+	})
+
+	t.Run("hash validation - invalid characters", func(t *testing.T) {
+		require.False(t, isHexHash([]byte("1234567890abcdef1234567890abcdef1234567g"))) // 'g' is invalid
+		require.False(t, isHexHash([]byte("1234567890abcdef1234567890abcdef1234567 "))) // space is invalid
+		require.False(t, isHexHash([]byte("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"))) // all invalid
+	})
+
+	t.Run("mixed v1 and v2 indicators - v2 wins", func(t *testing.T) {
+		// If a server sends both v1 refs AND v2 indicators, treat as v2
+		responseBody := "000eversion 2\n003f1234567890abcdef1234567890abcdef12345678 refs/heads/main\n0000"
+		version := detectProtocolVersionFromReader(strings.NewReader(responseBody))
+		require.Equal(t, ProtocolVersionV2, version, "should detect v2 when both indicators present")
+	})
+}
+
 func TestSmartInfo_Retry(t *testing.T) {
 	t.Parallel()
 

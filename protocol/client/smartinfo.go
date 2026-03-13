@@ -1,12 +1,16 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
 )
 
 // SmartInfo retrieves reference and capability information from the remote Git repository
@@ -75,8 +79,135 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	// For SmartInfo, we just need to validate that we got a successful HTTP response
-	// The actual content parsing is not needed since callers only care about authorization/existence
+	// Parse the response to detect protocol version
+	// Protocol v1 servers are not supported, so we need to detect and fail with a clear error
+	if err := c.detectProtocolVersion(res.Body); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+// ErrProtocolV1NotSupported is returned when a Git server only supports protocol v1.
+var ErrProtocolV1NotSupported = errors.New("git protocol v1 is not supported; nanogit requires protocol v2")
+
+// ProtocolVersion represents the detected Git protocol version.
+type ProtocolVersion int
+
+const (
+	// ProtocolVersionUnknown indicates the protocol version could not be determined.
+	ProtocolVersionUnknown ProtocolVersion = iota
+	// ProtocolVersionV1 indicates Git protocol v1.
+	ProtocolVersionV1
+	// ProtocolVersionV2 indicates Git protocol v2.
+	ProtocolVersionV2
+)
+
+// detectProtocolVersion parses the SmartInfo response to detect the Git protocol version.
+// It returns an error if the server only supports protocol v1.
+//
+// Protocol Detection:
+//   - Protocol v2: Response contains "version 2" announcement or capability lines starting with '='
+//   - Protocol v1: Response contains ref advertisements (hash + space + refname) without v2 indicators
+//
+// Most modern Git servers (GitHub, GitLab, Bitbucket, etc.) support protocol v2 since ~2018.
+func (c *rawClient) detectProtocolVersion(body io.Reader) error {
+	version := detectProtocolVersionFromReader(body)
+
+	if version == ProtocolVersionV1 {
+		return fmt.Errorf("%w: server at %s only supports Git protocol v1. "+
+			"Please upgrade your Git server or use a service that supports protocol v2 "+
+			"(GitHub, GitLab, Bitbucket, and most modern Git servers support v2)",
+			ErrProtocolV1NotSupported, c.base.Host)
+	}
+
+	return nil
+}
+
+// detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response
+// to determine the protocol version.
+func detectProtocolVersionFromReader(body io.Reader) ProtocolVersion {
+	// Read all content from body first
+	content, err := io.ReadAll(body)
+	if err != nil {
+		return ProtocolVersionUnknown
+	}
+
+	// Create a buffer reader that we can restart after flush packets
+	reader := bytes.NewReader(content)
+	parser := protocol.NewParser(reader)
+
+	hasV2Indicator := false
+	hasRefLine := false
+
+	// Parse packets - continue past flush packets to read all refs
+	for {
+		line, err := parser.Next()
+		if err != nil {
+			// Check if there's more data after this position
+			if err == io.EOF {
+				// If we hit EOF, check if we've read all the content
+				// If not, there might be more packets after a flush
+				if reader.Len() > 0 {
+					// Reset parser to continue reading
+					parser = protocol.NewParser(reader)
+					continue
+				}
+				break
+			}
+			// Ignore other parse errors - we're just doing detection
+			break
+		}
+
+		// Skip empty lines
+		if len(line) == 0 {
+			continue
+		}
+
+		// Check for protocol v2 indicators
+		// 1. Version announcement: "version 2" or "version 2\n"
+		if bytes.Contains(line, []byte("version 2")) {
+			hasV2Indicator = true
+			continue
+		}
+
+		// 2. Capability lines in v2 start with '='
+		if line[0] == '=' {
+			hasV2Indicator = true
+			continue
+		}
+
+		// Check for protocol v1 ref advertisement format
+		// Format: <40-char-hex-hash> <space> <refname> [NUL capabilities]
+		// Example: "1234567890abcdef... refs/heads/main\000capability1 capability2"
+		if len(line) > 41 && line[40] == ' ' {
+			// This looks like a ref line (hash + space + refname)
+			// Validate it's actually a hex hash
+			if isHexHash(line[:40]) {
+				hasRefLine = true
+			}
+		}
+	}
+
+	// Determine version based on indicators found
+	if hasV2Indicator {
+		return ProtocolVersionV2
+	}
+	if hasRefLine {
+		return ProtocolVersionV1
+	}
+	return ProtocolVersionUnknown
+}
+
+// isHexHash checks if a byte slice contains a valid 40-character hexadecimal hash
+func isHexHash(b []byte) bool {
+	if len(b) != 40 {
+		return false
+	}
+	for _, c := range b {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
 }
