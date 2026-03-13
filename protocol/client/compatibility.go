@@ -120,37 +120,14 @@ func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 			continue
 		}
 
-		// Check for protocol v2 indicators
-		// 1. Version announcement: "version 2"
-		// Use exact match after trimming whitespace to avoid false positives
-		trimmed := bytes.TrimSpace(line)
-		if bytes.Equal(trimmed, []byte("version 2")) {
-			return protocolVersionV2 // Early exit for v2
-		}
-		// Git protocol spec allows for "version 2" followed by capabilities on the same line
-		// Check if line starts with "version 2" followed by whitespace or NUL byte
-		if bytes.HasPrefix(line, []byte("version 2")) && len(line) > 9 {
-			// Check what follows "version 2" - must be whitespace or NUL
-			next := line[9]
-			if next == ' ' || next == '\t' || next == '\n' || next == '\r' || next == 0 {
-				return protocolVersionV2 // Early exit for v2
-			}
-		}
-
-		// 2. Capability lines in v2 start with '='
-		if line[0] == '=' {
-			return protocolVersionV2 // Early exit for v2
+		// Check for protocol v2 indicators (early exit)
+		if isProtocolV2Line(line) {
+			return protocolVersionV2
 		}
 
 		// Check for protocol v1 ref advertisement format
-		// Format: <40-char-hex-hash> <space> <refname> [NUL capabilities]
-		// Example: "1234567890abcdef... refs/heads/main\000capability1 capability2"
-		if len(line) > 41 && line[40] == ' ' {
-			// This looks like a ref line (hash + space + refname)
-			// Validate it's actually a hex hash
-			if isHexHash(line[:40]) {
-				hasRefLine = true
-			}
+		if isProtocolV1RefLine(line) {
+			hasRefLine = true
 		}
 	}
 
@@ -159,6 +136,44 @@ func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 		return protocolVersionV1
 	}
 	return protocolVersionUnknown
+}
+
+// isProtocolV2Line checks if a line indicates Git protocol v2.
+// Returns true for version announcements ("version 2") or capability lines (starting with '=').
+func isProtocolV2Line(line []byte) bool {
+	// Check for capability lines in v2 (start with '=')
+	if line[0] == '=' {
+		return true
+	}
+
+	// Check for version announcement: "version 2"
+	// Use exact match after trimming whitespace to avoid false positives
+	trimmed := bytes.TrimSpace(line)
+	if bytes.Equal(trimmed, []byte("version 2")) {
+		return true
+	}
+
+	// Git protocol spec allows for "version 2" followed by capabilities on the same line
+	// Check if line starts with "version 2" followed by whitespace or NUL byte
+	if bytes.HasPrefix(line, []byte("version 2")) && len(line) > 9 {
+		// Check what follows "version 2" - must be whitespace or NUL
+		next := line[9]
+		if next == ' ' || next == '\t' || next == '\n' || next == '\r' || next == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isProtocolV1RefLine checks if a line is a protocol v1 ref advertisement.
+// Format: <40-char-hex-hash> <space> <refname> [NUL capabilities]
+// Example: "1234567890abcdef... refs/heads/main\000capability1 capability2"
+func isProtocolV1RefLine(line []byte) bool {
+	if len(line) <= 41 || line[40] != ' ' {
+		return false
+	}
+	return isHexHash(line[:40])
 }
 
 // isHexHash checks if a byte slice contains a valid 40-character hexadecimal hash
