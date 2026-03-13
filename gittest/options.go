@@ -36,6 +36,10 @@ func WithGiteaVersion(version string) ServerOption {
 // WithProtocolV1Only configures the Gitea server to only support Git protocol v1.
 // This is useful for testing protocol detection and ensuring compatibility checks work correctly.
 // When enabled, the server will disable Git wire protocol v2 auto-negotiation.
+//
+// Note: This setting (ENABLE_AUTO_GIT_WIRE_PROTOCOL=false) only fully works with older
+// Gitea versions (< 1.17). Newer versions may still advertise v2 capabilities.
+// For true v1-only testing, combine with WithGiteaVersion("1.16") or earlier.
 func WithProtocolV1Only() ServerOption {
 	return func(c *Config) {
 		c.ProtocolV1Only = true

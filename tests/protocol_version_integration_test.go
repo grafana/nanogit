@@ -209,8 +209,11 @@ var _ = Describe("Protocol Version Detection", func() {
 
 		It("should detect v1-only real Gitea server as incompatible", func() {
 			By("Creating a real Gitea server with protocol v1 only")
+			// Use Gitea 1.16 which uses Git 2.31 - before full v2 support was standard
+			// Gitea 1.22 always advertises v2 capabilities regardless of ENABLE_AUTO_GIT_WIRE_PROTOCOL
 			v1Server, err := gittest.NewServer(ctx,
 				gittest.WithLogger(gittest.NewStructuredLogger(logger)),
+				gittest.WithGiteaVersion("1.16"),
 				gittest.WithProtocolV1Only(),
 				gittest.WithTimeout(60*time.Second))
 			Expect(err).NotTo(HaveOccurred())
