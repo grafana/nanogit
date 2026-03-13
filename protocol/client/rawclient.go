@@ -80,11 +80,7 @@ func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 		return nil, errors.New("only HTTP and HTTPS URLs are supported")
 	}
 
-	u.Path = strings.TrimRight(u.Path, "/")
-	if u.Path != "" && !strings.HasSuffix(u.Path, ".git") {
-		u.Path += ".git"
-	}
-
+	// Process options first so they can influence URL manipulation
 	options := &options.Options{
 		HTTPClient: &http.Client{},
 	}
@@ -97,6 +93,11 @@ func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 		if err := opt(options); err != nil {
 			return nil, err
 		}
+	}
+
+	u.Path = strings.TrimRight(u.Path, "/")
+	if u.Path != "" && !strings.HasSuffix(u.Path, ".git") && !options.SkipGitSuffix {
+		u.Path += ".git"
 	}
 
 	var basicAuth *struct{ Username, Password string }
