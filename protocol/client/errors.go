@@ -264,17 +264,6 @@ func CheckHTTPClientError(res *http.Response) error {
 	}
 }
 
-// ProtocolVersion represents the detected Git protocol version.
-type ProtocolVersion int
-
-const (
-	// ProtocolVersionUnknown indicates the protocol version could not be determined.
-	ProtocolVersionUnknown ProtocolVersion = iota
-	// ProtocolVersionV1 indicates Git protocol v1.
-	ProtocolVersionV1
-	// ProtocolVersionV2 indicates Git protocol v2.
-	ProtocolVersionV2
-)
 
 // extractEndpoint extracts the Git protocol endpoint from a URL path.
 // Returns "git-upload-pack", "git-receive-pack", "info/refs", or "unknown".
