@@ -11,9 +11,18 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
 )
+
+// formatTestResponse is a helper to create properly formatted pkt-line responses for tests
+func formatTestResponse(t *testing.T, packs ...protocol.Pack) string {
+	t.Helper()
+	data, err := protocol.FormatPacks(packs...)
+	require.NoError(t, err)
+	return string(data)
+}
 
 func TestSmartInfo(t *testing.T) {
 	tests := []struct {
@@ -26,7 +35,7 @@ func TestSmartInfo(t *testing.T) {
 		{
 			name:          "successful response",
 			statusCode:    http.StatusOK,
-			responseBody:  "000eversion 2\n0000", // Valid Git protocol response
+			responseBody:  formatTestResponse(t, protocol.PackLine("version 2\n")),
 			expectedError: "",
 			setupClient:   nil,
 		},
@@ -169,6 +178,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 
 	t.Run("retries on 5xx errors", func(t *testing.T) {
 		attemptCount := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attemptCount++
 			if attemptCount < 3 {
@@ -176,7 +186,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("000eversion 2\n0000"))
+			_, _ = w.Write([]byte(successResponse))
 		}))
 		defer server.Close()
 
@@ -226,6 +236,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 
 	t.Run("retries on network errors", func(t *testing.T) {
 		attemptCount := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attemptCount++
 			if attemptCount < 2 {
@@ -239,7 +250,7 @@ func TestSmartInfo_Retry(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("000eversion 2\n0000"))
+			_, _ = w.Write([]byte(successResponse))
 		}))
 		defer server.Close()
 

@@ -72,6 +72,7 @@ type Client interface {
 	CanWrite(ctx context.Context) (bool, error)
 	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
 	RepoExists(ctx context.Context) (bool, error)
+	IsServerCompatible(ctx context.Context) (bool, error)
 	// Ref operations
 	ListRefs(ctx context.Context) ([]Ref, error)
 	GetRef(ctx context.Context, refName string) (Ref, error)
