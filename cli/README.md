@@ -109,8 +109,8 @@ nanogit ls-tree https://github.com/grafana/nanogit.git main --path docs
 # List all files recursively
 nanogit ls-tree https://github.com/grafana/nanogit.git main --recursive
 
-# Show detailed information
-nanogit ls-tree https://github.com/grafana/nanogit.git main --long
+# Show only file names
+nanogit ls-tree https://github.com/grafana/nanogit.git main --name-only
 
 # Output as JSON
 nanogit --json ls-tree https://github.com/grafana/nanogit.git main
