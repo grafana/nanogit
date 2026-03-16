@@ -114,7 +114,7 @@ docs: docs-serve
 cli-build:
 	@echo "Building nanogit CLI..."
 	@mkdir -p bin
-	cd cli && go build -o ../bin/nanogit .
+	cd cli && go build -o ../bin/nanogit ./cmd/nanogit
 
 .PHONY: cli-fmt
 cli-fmt:

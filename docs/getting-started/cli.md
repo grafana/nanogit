@@ -21,7 +21,7 @@ The binary will be available at `bin/nanogit`.
 Install directly using Go:
 
 ```bash
-go install github.com/grafana/nanogit/cli@latest
+go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
 ```
 
 ## Basic Usage
@@ -62,12 +62,14 @@ The CLI is implemented as a separate Go module in the `cli/` directory. This des
 
 ```
 cli/
+├── cmd/
+│   └── nanogit/
+│       └── main.go # CLI entry point
 ├── go.mod          # Separate module for CLI dependencies
-├── main.go         # CLI entry point
 └── README.md       # CLI-specific documentation
 ```
 
-The CLI uses a `replace` directive in `go.work` to reference the main nanogit library during development.
+For local development, the workspace (`go.work`) automatically resolves the main nanogit library from the repository root.
 
 ## Development
 

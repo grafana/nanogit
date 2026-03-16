@@ -21,7 +21,7 @@ make cli-build
 ### Using Go Install
 
 ```bash
-go install github.com/grafana/nanogit/cli@latest
+go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
 ```
 
 ## Usage
@@ -43,8 +43,10 @@ The CLI is a separate Go module located in the `cli/` directory. This keeps CLI-
 
 ```
 cli/
+├── cmd/
+│   └── nanogit/
+│       └── main.go # CLI entry point
 ├── go.mod          # Separate module for CLI dependencies
-├── main.go         # CLI entry point
 └── README.md       # This file
 ```
 
@@ -69,7 +71,7 @@ make cli-lint
 The CLI is designed as a separate Go module to avoid polluting the main library with CLI-specific dependencies. It uses:
 
 - **cobra** - Command-line interface framework
-- **replace directive** - References the main nanogit library via `go.work`
+- **go.work** - Workspace configuration for local development (automatically resolves the main library)
 
 ## Contributing
 

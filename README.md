@@ -109,7 +109,7 @@ nanogit also provides a CLI for terminal-based Git operations:
 make cli-build
 
 # Or install using Go
-go install github.com/grafana/nanogit/cli@latest
+go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
 ```
 
 See the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/) for more details.

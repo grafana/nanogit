@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	// Version is set during build
+	// Version can be set during build via: go build -ldflags "-X main.Version=v1.0.0"
 	Version = "dev"
 )
 
