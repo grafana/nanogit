@@ -106,7 +106,8 @@ nanogit ls-remote <repository> [flags]
 - `--heads` - Show only branch references (refs/heads/*)
 - `--tags` - Show only tag references (refs/tags/*)
 - `--json` - Output results in JSON format
-- `--token` - Authentication token (or use environment variables)
+- `--username` - Authentication username (defaults to 'git')
+- `--token` - Authentication token
 
 **Examples**:
 
@@ -132,12 +133,22 @@ nanogit ls-remote https://github.com/grafana/nanogit --json
 
 With authentication (for private repositories):
 ```bash
-# Using flag
+# Using token (username defaults to 'git')
 nanogit ls-remote https://github.com/user/private-repo --token YOUR_TOKEN
 
 # Using environment variable
 NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo
+
+# With custom username
+nanogit ls-remote https://github.com/user/private-repo --username myuser --token YOUR_TOKEN
+
+# Using environment variables for both
+NANOGIT_USERNAME=myuser NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo
 ```
+
+**Environment Variables**:
+- `NANOGIT_TOKEN` - Authentication token
+- `NANOGIT_USERNAME` - Authentication username (defaults to 'git' if not set)
 
 ## Future Commands
 

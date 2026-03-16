@@ -72,8 +72,11 @@ nanogit ls-remote https://github.com/grafana/nanogit --tags
 # Output as JSON
 nanogit ls-remote https://github.com/grafana/nanogit --json
 
-# With authentication
+# With authentication (username defaults to 'git')
 NANOGIT_TOKEN=token nanogit ls-remote https://github.com/user/private-repo
+
+# With custom username
+nanogit ls-remote https://github.com/user/private-repo --username myuser --token token
 ```
 
 For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).

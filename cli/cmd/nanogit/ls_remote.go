@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	lsRemoteHeads bool
-	lsRemoteTags  bool
-	lsRemoteJSON  bool
-	lsRemoteToken string
+	lsRemoteHeads    bool
+	lsRemoteTags     bool
+	lsRemoteJSON     bool
+	lsRemoteToken    string
+	lsRemoteUsername string
 )
 
 func init() {
@@ -25,6 +26,7 @@ func init() {
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteHeads, "heads", false, "Show only branch references (refs/heads/*)")
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteTags, "tags", false, "Show only tag references (refs/tags/*)")
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteJSON, "json", false, "Output results in JSON format")
+	lsRemoteCmd.Flags().StringVar(&lsRemoteUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
 	lsRemoteCmd.Flags().StringVar(&lsRemoteToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 }
 
@@ -46,9 +48,13 @@ Examples:
   # Output as JSON
   nanogit ls-remote https://github.com/grafana/nanogit --json
 
-  # With authentication
+  # With authentication (using default username 'git')
   nanogit ls-remote https://github.com/user/private-repo --token <token>
-  NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo`,
+  NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo
+
+  # With custom username
+  nanogit ls-remote https://github.com/user/private-repo --username myuser --token <token>
+  NANOGIT_USERNAME=myuser NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo`,
 	Args: cobra.ExactArgs(1),
 	RunE: runLsRemote,
 }
@@ -57,19 +63,26 @@ func runLsRemote(cmd *cobra.Command, args []string) error {
 	repoURL := args[0]
 	ctx := context.Background()
 
-	// Get authentication token from flag or environment
+	// Get authentication credentials from flags or environment
 	token := lsRemoteToken
 	if token == "" {
 		token = os.Getenv("NANOGIT_TOKEN")
+	}
+
+	username := lsRemoteUsername
+	if username == "" {
+		username = os.Getenv("NANOGIT_USERNAME")
+	}
+	if username == "" {
+		// Default to "git" as username
+		username = "git"
 	}
 
 	// Create client with optional authentication
 	var client nanogit.Client
 	var err error
 	if token != "" {
-		// Use "token" as username when authenticating with a token
-		// This is the standard convention for Git providers like GitHub
-		client, err = nanogit.NewHTTPClient(repoURL, options.WithBasicAuth("token", token))
+		client, err = nanogit.NewHTTPClient(repoURL, options.WithBasicAuth(username, token))
 	} else {
 		client, err = nanogit.NewHTTPClient(repoURL)
 	}
