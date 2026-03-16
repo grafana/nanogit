@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1](https://github.com/grafana/nanogit/compare/v0.8.0...v0.8.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* add manual trigger support to GoReleaser workflow ([#220](https://github.com/grafana/nanogit/issues/220)) ([393fc70](https://github.com/grafana/nanogit/commit/393fc70ddf32cf3a96cd76c319ebe3efbcb54276))
+
+
+### Documentation
+
+* prioritize pre-built binary installation for CLI ([#218](https://github.com/grafana/nanogit/issues/218)) ([e167ef9](https://github.com/grafana/nanogit/commit/e167ef9d0d24fc8e243fb58507de80b7b64f6d21))
+
 ## [0.7.0](https://github.com/grafana/nanogit/compare/v0.6.0...v0.7.0) (2026-03-13)
 
 
