@@ -126,3 +126,10 @@ cli-fmt:
 cli-lint:
 	@echo "Linting CLI code..."
 	cd cli && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run
+
+# Release
+.PHONY: release-snapshot
+release-snapshot:
+	@echo "Building snapshot release with GoReleaser..."
+	@command -v goreleaser >/dev/null 2>&1 || (echo "Error: goreleaser is not installed. Install it from https://goreleaser.com/install/" && exit 1)
+	goreleaser release --snapshot --clean

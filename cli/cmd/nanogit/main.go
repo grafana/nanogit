@@ -10,6 +10,10 @@ import (
 var (
 	// Version can be set during build via: go build -ldflags "-X main.Version=v1.0.0"
 	Version = "dev"
+	// Commit is the git commit hash (set by GoReleaser)
+	Commit = "unknown"
+	// Date is the build date (set by GoReleaser)
+	Date = "unknown"
 )
 
 func main() {
@@ -27,10 +31,17 @@ designed for cloud-native environments. It provides essential Git operations
 optimized for server-side usage with pluggable storage backends.
 
 For more information, visit: https://github.com/grafana/nanogit`,
-	Version: Version,
+	Version: buildVersion(),
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := cmd.Help(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error displaying help: %v\n", err)
 		}
 	},
+}
+
+func buildVersion() string {
+	if Commit != "unknown" && Date != "unknown" {
+		return fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, Date)
+	}
+	return Version
 }

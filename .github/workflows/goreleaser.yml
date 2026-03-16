@@ -1,0 +1,50 @@
+name: Build Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    name: Build and Upload Binaries
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+    steps:
+      - name: Install dependencies
+        run: |
+          apk add --no-cache git make bash curl
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --force --tags
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## 📦 Binaries Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Binaries have been built and uploaded to the release:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** [${GITHUB_REF_NAME}](https://github.com/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Platforms" >> $GITHUB_STEP_SUMMARY
+          echo "- Linux (amd64, arm64, armv7)" >> $GITHUB_STEP_SUMMARY
+          echo "- macOS (amd64, arm64)" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows (amd64)" >> $GITHUB_STEP_SUMMARY
