@@ -54,65 +54,13 @@ Flags:
 nanogit --version
 ```
 
-## Architecture
+## Future Commands
 
-The CLI is implemented as a separate Go module in the `cli/` directory. This design keeps CLI-specific dependencies (like cobra) isolated from the main nanogit library, ensuring the library remains lightweight and focused.
+The CLI is currently in its initial state. Future versions will include:
 
-### Module Structure
-
-```
-cli/
-├── cmd/
-│   └── nanogit/
-│       └── main.go # CLI entry point
-├── go.mod          # Separate module for CLI dependencies
-└── README.md       # CLI-specific documentation
-```
-
-For local development, the workspace (`go.work`) automatically resolves the main nanogit library from the repository root.
-
-## Development
-
-### Building
-
-Build the CLI binary:
-
-```bash
-make cli-build
-```
-
-### Code Quality
-
-Format the code:
-
-```bash
-make cli-fmt
-```
-
-Run linters:
-
-```bash
-make cli-lint
-```
-
-## Future Enhancements
-
-The CLI is currently in its initial state, providing basic help and version information. Future versions will include commands for:
-
-- **Repository inspection**: List remote references, browse tree contents
-- **File operations**: Read file contents from repositories
-- **Cloning**: Clone repositories with path filtering support
-- **Advanced features**: Authentication, JSON output, performance tuning
-
-For the latest updates and planned features, see the [project roadmap](https://github.com/grafana/nanogit/issues).
-
-## Contributing
-
-Contributions to the CLI are welcome! When adding new commands or features:
-
-1. Follow the existing code structure
-2. Ensure all code is properly formatted (`make cli-fmt`)
-3. Run linters and fix any issues (`make cli-lint`)
-4. Test the binary builds successfully (`make cli-build`)
-
-See the main [Contributing Guide](https://github.com/grafana/nanogit/blob/main/CONTRIBUTING.md) for more details.
+- List remote references (branches, tags)
+- Browse repository tree contents
+- Read file contents from repositories
+- Clone repositories with path filtering
+- Authentication support
+- JSON output for automation
