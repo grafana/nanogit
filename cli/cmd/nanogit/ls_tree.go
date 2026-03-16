@@ -16,7 +16,7 @@ import (
 
 var (
 	lsTreeRecursive bool
-	lsTreeLong      bool
+	lsTreeNameOnly  bool
 	lsTreePath      string
 )
 
@@ -24,7 +24,7 @@ func init() {
 	rootCmd.AddCommand(lsTreeCmd)
 
 	lsTreeCmd.Flags().BoolVarP(&lsTreeRecursive, "recursive", "r", false, "List tree contents recursively")
-	lsTreeCmd.Flags().BoolVarP(&lsTreeLong, "long", "l", false, "Show detailed information (mode, type, hash)")
+	lsTreeCmd.Flags().BoolVar(&lsTreeNameOnly, "name-only", false, "Show only file names")
 	lsTreeCmd.Flags().StringVar(&lsTreePath, "path", "", "Path within the tree to list (defaults to root)")
 }
 
@@ -34,9 +34,10 @@ var lsTreeCmd = &cobra.Command{
 	Long: `List the contents of a tree object from a Git repository at a specific reference.
 
 The ref can be a branch name, tag name, or commit hash.
+By default, shows mode, type, hash, and name for each entry (like git ls-tree).
 
 Examples:
-  # List files at root of main branch
+  # List files at root (shows mode, type, hash, name)
   nanogit ls-tree https://github.com/grafana/nanogit.git main
 
   # List files in a specific directory
@@ -45,15 +46,11 @@ Examples:
   # List all files recursively
   nanogit ls-tree https://github.com/grafana/nanogit.git main --recursive
 
-  # Show detailed information
-  nanogit ls-tree https://github.com/grafana/nanogit.git v1.0.0 --long
+  # Show only file names
+  nanogit ls-tree https://github.com/grafana/nanogit.git main --name-only
 
   # Output as JSON
-  nanogit ls-tree https://github.com/grafana/nanogit.git main --json
-
-  # With authentication
-  nanogit ls-tree https://github.com/user/private-repo.git main --token <token>
-  NANOGIT_TOKEN=<token> nanogit ls-tree https://github.com/user/private-repo.git main`,
+  nanogit --json ls-tree https://github.com/grafana/nanogit.git main`,
 	Args: cobra.ExactArgs(2),
 	RunE: runLsTree,
 }
@@ -218,14 +215,15 @@ func outputFlatTreeJSON(entries []nanogit.FlatTreeEntry) error {
 
 func outputTreeHuman(entries []nanogit.TreeEntry) error {
 	for _, entry := range entries {
-		if lsTreeLong {
+		if lsTreeNameOnly {
+			fmt.Printf("%s\n", entry.Name)
+		} else {
+			// Default: show mode, type, hash, and name (like git ls-tree)
 			fmt.Printf("%06o %s %s\t%s\n",
 				entry.Mode,
 				objectTypeToString(entry.Type),
 				entry.Hash.String(),
 				entry.Name)
-		} else {
-			fmt.Printf("%s\n", entry.Name)
 		}
 	}
 	return nil
@@ -233,14 +231,15 @@ func outputTreeHuman(entries []nanogit.TreeEntry) error {
 
 func outputFlatTreeHuman(entries []nanogit.FlatTreeEntry) error {
 	for _, entry := range entries {
-		if lsTreeLong {
+		if lsTreeNameOnly {
+			fmt.Printf("%s\n", entry.Path)
+		} else {
+			// Default: show mode, type, hash, and path (like git ls-tree -r)
 			fmt.Printf("%06o %s %s\t%s\n",
 				entry.Mode,
 				objectTypeToString(entry.Type),
 				entry.Hash.String(),
 				entry.Path)
-		} else {
-			fmt.Printf("%s\n", entry.Path)
 		}
 	}
 	return nil
