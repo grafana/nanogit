@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/grafana/nanogit/compare/v0.7.0...v0.8.0) (2026-03-16)
+
+
+### Features
+
+* add Git protocol v1 detection with explicit error handling ([#208](https://github.com/grafana/nanogit/issues/208)) ([25127d8](https://github.com/grafana/nanogit/commit/25127d82690441c5cd87b2f1ecae58849a6e6e03)), closes [/github.com/grafana/nanogit/pull/208/changes#r2932449765](https://github.com/grafana//github.com/grafana/nanogit/pull/208/changes/issues/r2932449765) [/github.com/grafana/nanogit/pull/208/changes#r2932449792](https://github.com/grafana//github.com/grafana/nanogit/pull/208/changes/issues/r2932449792)
+* add GoReleaser for multi-platform CLI binaries ([#216](https://github.com/grafana/nanogit/issues/216)) ([f8fd097](https://github.com/grafana/nanogit/commit/f8fd097adc5d4199e453ff6b95aa12fe83f0f85c))
+* add nanogit CLI foundation ([#214](https://github.com/grafana/nanogit/issues/214)) ([39dfbe1](https://github.com/grafana/nanogit/commit/39dfbe176b91e3078e1fb71356b94ce4f2c09fc0))
+
+
+### Bug Fixes
+
+* **deps:** override esbuild to fix CORS vulnerability (GHSA-67mh-4wv8-2f99) ([#217](https://github.com/grafana/nanogit/issues/217)) ([f457151](https://github.com/grafana/nanogit/commit/f457151940f18519621053c4faf2c04862bb16c4)), closes [#4](https://github.com/grafana/nanogit/issues/4) [#4](https://github.com/grafana/nanogit/issues/4)
+
 ## [0.7.0](https://github.com/grafana/nanogit/compare/v0.6.0...v0.7.0) (2026-03-13)
 
 
