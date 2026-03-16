@@ -203,9 +203,53 @@ nanogit ls-tree https://github.com/user/private-repo.git main --token YOUR_TOKEN
 NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-tree https://github.com/user/private-repo.git main
 ```
 
+### cat-file
+
+Display the contents of a file from a repository.
+
+**Usage**:
+```bash
+nanogit cat-file <repository> <ref> <path> [flags]
+```
+
+**Flags**:
+- `--json` - Output file metadata in JSON format
+- `--username` - Authentication username (defaults to 'git')
+- `--token` - Authentication token
+
+**Examples**:
+
+Display file contents:
+```bash
+nanogit cat-file https://github.com/grafana/nanogit.git main README.md
+```
+
+Display file from a specific tag:
+```bash
+nanogit cat-file https://github.com/grafana/nanogit.git v1.0.0 docs/api.md
+```
+
+Display file from a commit hash:
+```bash
+nanogit cat-file https://github.com/grafana/nanogit.git abc123def456 src/main.go
+```
+
+Output with metadata in JSON format:
+```bash
+nanogit cat-file https://github.com/grafana/nanogit.git main README.md --json
+```
+
+With authentication:
+```bash
+# Using token (username defaults to 'git')
+nanogit cat-file https://github.com/user/private-repo.git main file.txt --token YOUR_TOKEN
+
+# Using environment variables
+NANOGIT_TOKEN=YOUR_TOKEN nanogit cat-file https://github.com/user/private-repo.git main file.txt
+```
+
 ## Future Commands
 
 Future versions will include:
 
-- Read file contents from repositories
 - Clone repositories with path filtering

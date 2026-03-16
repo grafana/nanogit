@@ -103,6 +103,24 @@ nanogit ls-tree https://github.com/grafana/nanogit.git main --json
 NANOGIT_TOKEN=token nanogit ls-tree https://github.com/user/private-repo.git main
 ```
 
+#### cat-file
+
+Display the contents of a file.
+
+```bash
+# Display file contents
+nanogit cat-file https://github.com/grafana/nanogit.git main README.md
+
+# Display file from a tag
+nanogit cat-file https://github.com/grafana/nanogit.git v1.0.0 docs/api.md
+
+# Output as JSON with metadata
+nanogit cat-file https://github.com/grafana/nanogit.git main README.md --json
+
+# With authentication
+NANOGIT_TOKEN=token nanogit cat-file https://github.com/user/private-repo.git main file.txt
+```
+
 For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).
 
 ## Development
