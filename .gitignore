@@ -11,6 +11,7 @@ perf.test
 *.test
 bin/
 go.work.sum
+dist/
 
 # VitePress
 docs/.vitepress/dist
