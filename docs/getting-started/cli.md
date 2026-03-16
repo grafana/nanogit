@@ -248,8 +248,61 @@ nanogit cat-file https://github.com/user/private-repo.git main file.txt --token 
 NANOGIT_TOKEN=YOUR_TOKEN nanogit cat-file https://github.com/user/private-repo.git main file.txt
 ```
 
-## Future Commands
+### clone
 
-Future versions will include:
+Clone a repository to a local directory with optional path filtering.
 
-- Clone repositories with path filtering
+**Usage**:
+```bash
+nanogit clone <repository> <ref> <destination> [flags]
+```
+
+**Flags**:
+- `--include` - Include paths (glob patterns, can be specified multiple times)
+- `--exclude` - Exclude paths (glob patterns, can be specified multiple times)
+- `--username` - Authentication username (defaults to 'git')
+- `--token` - Authentication token
+
+**Examples**:
+
+Clone entire repository:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo
+```
+
+Clone only specific directories:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 'src/**' --include 'docs/**'
+```
+
+Clone excluding certain paths:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --exclude 'node_modules/**' --exclude '*.tmp'
+```
+
+Clone with both include and exclude patterns:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 'src/**' --exclude '*.test.go'
+```
+
+Clone from a specific tag:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
+```
+
+With authentication:
+```bash
+# Using token (username defaults to 'git')
+nanogit clone https://github.com/user/private-repo.git main ./my-repo --token YOUR_TOKEN
+
+# Using environment variables
+NANOGIT_TOKEN=YOUR_TOKEN nanogit clone https://github.com/user/private-repo.git main ./my-repo
+```
+
+**Path Filtering**:
+
+Path filtering uses glob patterns to include or exclude specific files and directories:
+- `**` matches any number of directories
+- `*` matches any characters within a directory
+- `?` matches a single character
+- Exclude patterns take precedence over include patterns
