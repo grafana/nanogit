@@ -150,10 +150,62 @@ NANOGIT_USERNAME=myuser NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://githu
 - `NANOGIT_TOKEN` - Authentication token
 - `NANOGIT_USERNAME` - Authentication username (defaults to 'git' if not set)
 
+### ls-tree
+
+List the contents of a tree object at a specific reference.
+
+**Usage**:
+```bash
+nanogit ls-tree <repository> <ref> [flags]
+```
+
+**Flags**:
+- `-r, --recursive` - List tree contents recursively
+- `-l, --long` - Show detailed information (mode, type, hash)
+- `--json` - Output results in JSON format
+- `--path` - Path within the tree to list (defaults to root)
+- `--username` - Authentication username (defaults to 'git')
+- `--token` - Authentication token
+
+**Examples**:
+
+List files at root:
+```bash
+nanogit ls-tree https://github.com/grafana/nanogit.git main
+```
+
+List files in a specific directory:
+```bash
+nanogit ls-tree https://github.com/grafana/nanogit.git main --path docs
+```
+
+List all files recursively:
+```bash
+nanogit ls-tree https://github.com/grafana/nanogit.git main --recursive
+```
+
+Show detailed information:
+```bash
+nanogit ls-tree https://github.com/grafana/nanogit.git v1.0.0 --long
+```
+
+Output as JSON:
+```bash
+nanogit ls-tree https://github.com/grafana/nanogit.git main --json
+```
+
+With authentication:
+```bash
+# Using token (username defaults to 'git')
+nanogit ls-tree https://github.com/user/private-repo.git main --token YOUR_TOKEN
+
+# Using environment variables
+NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-tree https://github.com/user/private-repo.git main
+```
+
 ## Future Commands
 
 Future versions will include:
 
-- Browse repository tree contents
 - Read file contents from repositories
 - Clone repositories with path filtering
