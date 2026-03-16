@@ -11,10 +11,12 @@ import (
 )
 
 var (
-	cloneInclude  []string
-	cloneExclude  []string
-	cloneUsername string
-	cloneToken    string
+	cloneInclude     []string
+	cloneExclude     []string
+	cloneUsername    string
+	cloneToken       string
+	cloneBatchSize   int
+	cloneConcurrency int
 )
 
 func init() {
@@ -24,6 +26,8 @@ func init() {
 	cloneCmd.Flags().StringSliceVar(&cloneExclude, "exclude", nil, "Exclude paths (glob patterns, e.g., 'node_modules/**', '*.tmp')")
 	cloneCmd.Flags().StringVar(&cloneUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
 	cloneCmd.Flags().StringVar(&cloneToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
+	cloneCmd.Flags().IntVar(&cloneBatchSize, "batch-size", 50, "Number of blobs to fetch per request (default 50)")
+	cloneCmd.Flags().IntVar(&cloneConcurrency, "concurrency", 10, "Number of parallel blob fetches (default 10)")
 }
 
 var cloneCmd = &cobra.Command{
@@ -49,6 +53,9 @@ Examples:
 
   # Clone from a specific tag
   nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
+
+  # With batching and concurrency for better performance
+  nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 50 --concurrency 10
 
   # With authentication
   nanogit clone https://github.com/user/private-repo.git main ./my-repo --token <token>
@@ -105,6 +112,8 @@ func runClone(cmd *cobra.Command, args []string) error {
 		Hash:         commitHash,
 		IncludePaths: cloneInclude,
 		ExcludePaths: cloneExclude,
+		BatchSize:    cloneBatchSize,
+		Concurrency:  cloneConcurrency,
 	}
 
 	// Clone the repository
@@ -115,10 +124,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	// Display results
 	fmt.Printf("\nClone complete!\n")
-	fmt.Printf("  Commit:   %s\n", result.Commit.Hash.String()[:8])
-	fmt.Printf("  Message:  %s\n", firstLine(result.Commit.Message))
-	fmt.Printf("  Author:   %s <%s>\n", result.Commit.Author.Name, result.Commit.Author.Email)
-	fmt.Printf("  Files:    %d of %d cloned to %s\n", result.FilteredFiles, result.TotalFiles, result.Path)
+	fmt.Printf("  Commit:      %s\n", result.Commit.Hash.String()[:8])
+	fmt.Printf("  Message:     %s\n", firstLine(result.Commit.Message))
+	fmt.Printf("  Author:      %s <%s>\n", result.Commit.Author.Name, result.Commit.Author.Email)
+	fmt.Printf("  Files:       %d of %d cloned to %s\n", result.FilteredFiles, result.TotalFiles, result.Path)
+	fmt.Printf("  Batch size:  %d\n", cloneBatchSize)
+	fmt.Printf("  Concurrency: %d\n", cloneConcurrency)
 
 	if len(cloneInclude) > 0 || len(cloneExclude) > 0 {
 		fmt.Printf("\nPath filtering applied:\n")

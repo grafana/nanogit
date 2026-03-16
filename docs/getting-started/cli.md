@@ -260,6 +260,8 @@ nanogit clone <repository> <ref> <destination> [flags]
 **Flags**:
 - `--include` - Include paths (glob patterns, can be specified multiple times)
 - `--exclude` - Exclude paths (glob patterns, can be specified multiple times)
+- `--batch-size` - Number of blobs to fetch per request (default: 50)
+- `--concurrency` - Number of parallel blob fetches (default: 10)
 - `--username` - Authentication username (defaults to 'git')
 - `--token` - Authentication token
 
@@ -290,6 +292,15 @@ Clone from a specific tag:
 nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
 ```
 
+Adjust performance settings (defaults are batch-size=50, concurrency=10):
+```bash
+# Increase for better performance with large repositories
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 100 --concurrency 20
+
+# Sequential mode for constrained environments
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 1 --concurrency 1
+```
+
 With authentication:
 ```bash
 # Using token (username defaults to 'git')
@@ -306,3 +317,14 @@ Path filtering uses glob patterns to include or exclude specific files and direc
 - `*` matches any characters within a directory
 - `?` matches a single character
 - Exclude patterns take precedence over include patterns
+
+**Performance Tuning**:
+
+The clone command uses batching and concurrency to optimize performance:
+- **Batch size** (default: 50) - Number of blobs to fetch in a single request. Higher values reduce network round-trips for repositories with many small files.
+- **Concurrency** (default: 10) - Number of parallel fetch operations. Higher values improve throughput by utilizing network bandwidth more effectively.
+
+Recommended settings:
+- Large repositories: `--batch-size 100 --concurrency 20`
+- Default (balanced): `--batch-size 50 --concurrency 10` (automatic)
+- Constrained environments: `--batch-size 1 --concurrency 1` (sequential)

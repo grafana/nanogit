@@ -141,6 +141,9 @@ nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 's
 # Clone from a tag
 nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
 
+# Adjust performance (defaults: batch-size=50, concurrency=10)
+nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 100 --concurrency 20
+
 # With authentication
 NANOGIT_TOKEN=token nanogit clone https://github.com/user/private-repo.git main ./my-repo
 ```

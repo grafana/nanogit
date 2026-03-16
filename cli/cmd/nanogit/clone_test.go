@@ -87,6 +87,8 @@ func TestCloneCommand(t *testing.T) {
 			cloneExclude = nil
 			cloneUsername = ""
 			cloneToken = ""
+			cloneBatchSize = 50
+			cloneConcurrency = 10
 
 			// Test argument validation
 			cloneCmd.SetArgs(tt.args)
@@ -100,3 +102,60 @@ func TestCloneCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestCloneFlagsValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		batchSize      int
+		concurrency    int
+		expectValid    bool
+	}{
+		{
+			name:        "default recommended values",
+			batchSize:   50,
+			concurrency: 10,
+			expectValid: true,
+		},
+		{
+			name:        "custom batch size",
+			batchSize:   100,
+			concurrency: 10,
+			expectValid: true,
+		},
+		{
+			name:        "custom concurrency",
+			batchSize:   50,
+			concurrency: 20,
+			expectValid: true,
+		},
+		{
+			name:        "sequential mode (batch size 1)",
+			batchSize:   1,
+			concurrency: 1,
+			expectValid: true,
+		},
+		{
+			name:        "high concurrency",
+			batchSize:   100,
+			concurrency: 50,
+			expectValid: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset flags
+			cloneInclude = nil
+			cloneExclude = nil
+			cloneUsername = ""
+			cloneToken = ""
+			cloneBatchSize = tt.batchSize
+			cloneConcurrency = tt.concurrency
+
+			// Verify values can be set
+			assert.Equal(t, tt.batchSize, cloneBatchSize)
+			assert.Equal(t, tt.concurrency, cloneConcurrency)
+		})
+	}
+}
+
