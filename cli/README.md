@@ -79,6 +79,30 @@ NANOGIT_TOKEN=token nanogit ls-remote https://github.com/user/private-repo.git
 nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token token
 ```
 
+#### ls-tree
+
+List the contents of a tree object.
+
+```bash
+# List files at root
+nanogit ls-tree https://github.com/grafana/nanogit.git main
+
+# List files in a directory
+nanogit ls-tree https://github.com/grafana/nanogit.git main --path docs
+
+# List all files recursively
+nanogit ls-tree https://github.com/grafana/nanogit.git main --recursive
+
+# Show detailed information
+nanogit ls-tree https://github.com/grafana/nanogit.git main --long
+
+# Output as JSON
+nanogit ls-tree https://github.com/grafana/nanogit.git main --json
+
+# With authentication
+NANOGIT_TOKEN=token nanogit ls-tree https://github.com/user/private-repo.git main
+```
+
 For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).
 
 ## Development
