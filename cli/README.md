@@ -2,6 +2,8 @@
 
 A command-line interface for [nanogit](https://github.com/grafana/nanogit), a lightweight, HTTPS-only Git implementation designed for cloud-native environments.
 
+**Purpose**: This CLI is primarily a **testing and demonstration tool** for the nanogit library. It provides a git-compatible command-line interface that can serve as a swap-in replacement for basic git operations, making it useful for testing the library and demonstrating its capabilities.
+
 ## Installation
 
 ### Download Pre-built Binary (Recommended)
@@ -134,23 +136,26 @@ nanogit --json cat-file https://github.com/grafana/nanogit.git main README.md
 Clone a repository to a local directory with optional path filtering.
 
 ```bash
-# Clone entire repository
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo
+# Clone default branch (HEAD) to current directory
+nanogit clone https://github.com/grafana/nanogit.git
+
+# Clone to specific directory
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo
+
+# Clone specific branch
+nanogit clone https://github.com/grafana/nanogit.git --ref main ./my-repo
+
+# Clone specific tag
+nanogit clone https://github.com/grafana/nanogit.git --ref v1.0.0 ./my-repo
 
 # Clone only specific directories
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 'src/**' --include 'docs/**'
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --include 'src/**' --include 'docs/**'
 
 # Clone excluding certain paths
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --exclude 'node_modules/**' --exclude '*.tmp'
-
-# Clone with include and exclude patterns
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 'src/**' --exclude '*.test.go'
-
-# Clone from a tag
-nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --exclude 'node_modules/**'
 
 # Adjust performance (defaults: batch-size=50, concurrency=10)
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 100 --concurrency 20
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --batch-size 100 --concurrency 20
 ```
 
 For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).

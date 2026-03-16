@@ -2,6 +2,8 @@
 
 nanogit provides a command-line interface for interacting with Git repositories from the terminal. The CLI is designed for cloud-native environments and supports essential Git operations over HTTPS.
 
+**Purpose**: This CLI is primarily a **testing and demonstration tool** for the nanogit library. It provides a git-compatible command-line interface that can serve as a swap-in replacement for basic git operations, making it useful for testing the library and demonstrating its capabilities.
+
 ## Installation
 
 ### Download Pre-built Binary (Recommended)
@@ -170,12 +172,12 @@ nanogit ls-tree <repository> <ref> [flags]
 
 **Flags**:
 - `-r, --recursive` - List tree contents recursively
-- `-l, --long` - Show detailed information (mode, type, hash)
+- `--name-only` - Show only file names (default shows mode, type, hash, and name)
 - `--path` - Path within the tree to list (defaults to root)
 
 **Examples**:
 
-List files at root:
+List files at root (shows mode, type, hash, and name by default):
 ```bash
 nanogit ls-tree https://github.com/grafana/nanogit.git main
 ```
@@ -190,9 +192,9 @@ List all files recursively:
 nanogit ls-tree https://github.com/grafana/nanogit.git main --recursive
 ```
 
-Show detailed information:
+Show only file names:
 ```bash
-nanogit ls-tree https://github.com/grafana/nanogit.git v1.0.0 --long
+nanogit ls-tree https://github.com/grafana/nanogit.git main --name-only
 ```
 
 Output as JSON:
@@ -250,29 +252,34 @@ nanogit clone <repository> <ref> <destination> [flags]
 
 **Examples**:
 
-Clone entire repository:
+Clone default branch (HEAD) to current directory:
 ```bash
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo
+nanogit clone https://github.com/grafana/nanogit.git
+```
+
+Clone to specific directory:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo
+```
+
+Clone specific branch:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git --ref main ./my-repo
+```
+
+Clone specific tag:
+```bash
+nanogit clone https://github.com/grafana/nanogit.git --ref v1.0.0 ./my-repo
 ```
 
 Clone only specific directories:
 ```bash
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 'src/**' --include 'docs/**'
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --include 'src/**' --include 'docs/**'
 ```
 
 Clone excluding certain paths:
 ```bash
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --exclude 'node_modules/**' --exclude '*.tmp'
-```
-
-Clone with both include and exclude patterns:
-```bash
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --include 'src/**' --exclude '*.test.go'
-```
-
-Clone from a specific tag:
-```bash
-nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --exclude 'node_modules/**'
 ```
 
 Adjust performance settings (defaults are batch-size=50, concurrency=10):
