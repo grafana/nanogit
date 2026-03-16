@@ -95,14 +95,14 @@ func runLsTree(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	// Resolve ref to get the commit
-	refObj, err := client.GetRef(ctx, ref)
+	// Resolve ref to get the commit hash
+	commitHash, err := resolveRef(ctx, client, ref)
 	if err != nil {
-		return fmt.Errorf("failed to get ref %q: %w", ref, err)
+		return fmt.Errorf("failed to resolve ref %q: %w", ref, err)
 	}
 
 	// Get the commit to find the tree hash
-	commit, err := client.GetCommit(ctx, refObj.Hash)
+	commit, err := client.GetCommit(ctx, commitHash)
 	if err != nil {
 		return fmt.Errorf("failed to get commit: %w", err)
 	}
@@ -248,6 +248,46 @@ func outputFlatTreeHuman(entries []nanogit.FlatTreeEntry) error {
 		}
 	}
 	return nil
+}
+
+// resolveRef resolves a ref name to a commit hash.
+// It tries multiple strategies:
+// 1. Try as full ref name (refs/heads/main, refs/tags/v1.0.0)
+// 2. Try as branch name (main -> refs/heads/main)
+// 3. Try as tag name (v1.0.0 -> refs/tags/v1.0.0)
+// 4. Try as commit hash directly
+func resolveRef(ctx context.Context, client nanogit.Client, ref string) (hash.Hash, error) {
+	// Try as-is first (might already be a full ref or commit hash)
+	if strings.HasPrefix(ref, "refs/") {
+		refObj, err := client.GetRef(ctx, ref)
+		if err == nil {
+			return refObj.Hash, nil
+		}
+	}
+
+	// Try as branch name
+	refObj, err := client.GetRef(ctx, "refs/heads/"+ref)
+	if err == nil {
+		return refObj.Hash, nil
+	}
+
+	// Try as tag name
+	refObj, err = client.GetRef(ctx, "refs/tags/"+ref)
+	if err == nil {
+		return refObj.Hash, nil
+	}
+
+	// Try as commit hash directly
+	h, err := hash.FromHex(ref)
+	if err == nil {
+		// Verify the commit exists
+		_, err = client.GetCommit(ctx, h)
+		if err == nil {
+			return h, nil
+		}
+	}
+
+	return hash.Hash{}, fmt.Errorf("reference not found: %s", ref)
 }
 
 func objectTypeToString(objType protocol.ObjectType) string {
