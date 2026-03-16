@@ -25,7 +25,7 @@ func init() {
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteHeads, "heads", false, "Show only branch references (refs/heads/*)")
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteTags, "tags", false, "Show only tag references (refs/tags/*)")
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteJSON, "json", false, "Output results in JSON format")
-	lsRemoteCmd.Flags().StringVar(&lsRemoteToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN, GITHUB_TOKEN, or GITLAB_TOKEN env vars)")
+	lsRemoteCmd.Flags().StringVar(&lsRemoteToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 }
 
 var lsRemoteCmd = &cobra.Command{
@@ -48,7 +48,7 @@ Examples:
 
   # With authentication
   nanogit ls-remote https://github.com/user/private-repo --token <token>
-  GITHUB_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo`,
+  NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo`,
 	Args: cobra.ExactArgs(1),
 	RunE: runLsRemote,
 }
@@ -60,14 +60,7 @@ func runLsRemote(cmd *cobra.Command, args []string) error {
 	// Get authentication token from flag or environment
 	token := lsRemoteToken
 	if token == "" {
-		// Try common environment variables
 		token = os.Getenv("NANOGIT_TOKEN")
-		if token == "" {
-			token = os.Getenv("GITHUB_TOKEN")
-		}
-		if token == "" {
-			token = os.Getenv("GITLAB_TOKEN")
-		}
 	}
 
 	// Create client with optional authentication

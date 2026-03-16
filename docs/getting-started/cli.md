@@ -136,13 +136,8 @@ With authentication (for private repositories):
 nanogit ls-remote https://github.com/user/private-repo --token YOUR_TOKEN
 
 # Using environment variable
-GITHUB_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo
+NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo
 ```
-
-**Supported authentication environment variables**:
-- `NANOGIT_TOKEN` - Generic token for any Git provider
-- `GITHUB_TOKEN` - GitHub personal access token
-- `GITLAB_TOKEN` - GitLab personal access token
 
 ## Future Commands
 
