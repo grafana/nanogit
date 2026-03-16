@@ -67,7 +67,9 @@ func runLsRemote(cmd *cobra.Command, args []string) error {
 	var client nanogit.Client
 	var err error
 	if token != "" {
-		client, err = nanogit.NewHTTPClient(repoURL, options.WithBasicAuth("", token))
+		// Use "token" as username when authenticating with a token
+		// This is the standard convention for Git providers like GitHub
+		client, err = nanogit.NewHTTPClient(repoURL, options.WithBasicAuth("token", token))
 	} else {
 		client, err = nanogit.NewHTTPClient(repoURL)
 	}
