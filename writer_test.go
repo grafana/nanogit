@@ -56,6 +56,10 @@ func (m *mockRawClient) SmartInfo(ctx context.Context, service string) error {
 	return nil
 }
 
+func (m *mockRawClient) IsServerCompatible(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
 func (m *mockRawClient) UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }

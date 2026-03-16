@@ -114,24 +114,27 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 		image = fmt.Sprintf("%s:%s", cfg.GiteaImage, cfg.GiteaVersion)
 	}
 
+	// Build environment variables
+	env := map[string]string{
+		"GITEA__database__DB_TYPE":                "sqlite3",
+		"GITEA__server__ROOT_URL":                 "http://localhost:3000/",
+		"GITEA__server__HTTP_PORT":                "3000",
+		"GITEA__service__DISABLE_REGISTRATION":    "true",
+		"GITEA__security__INSTALL_LOCK":           "true",
+		"GITEA__security__DEFAULT_ADMIN_NAME":     "giteaadmin",
+		"GITEA__security__DEFAULT_ADMIN_PASSWORD": "admin123",
+		"GITEA__security__SECRET_KEY":             "supersecretkey",
+		"GITEA__security__INTERNAL_TOKEN":         "internal",
+		"GITEA__security__DISABLE_GITEA_SSH":      "true",
+		"GITEA__mailer__ENABLED":                  "false",
+	}
+
 	// Start Gitea container
 	req := testcontainers.ContainerRequest{
 		Image:        image,
 		ExposedPorts: []string{"3000/tcp"},
-		Env: map[string]string{
-			"GITEA__database__DB_TYPE":                "sqlite3",
-			"GITEA__server__ROOT_URL":                 "http://localhost:3000/",
-			"GITEA__server__HTTP_PORT":                "3000",
-			"GITEA__service__DISABLE_REGISTRATION":    "true",
-			"GITEA__security__INSTALL_LOCK":           "true",
-			"GITEA__security__DEFAULT_ADMIN_NAME":     "giteaadmin",
-			"GITEA__security__DEFAULT_ADMIN_PASSWORD": "admin123",
-			"GITEA__security__SECRET_KEY":             "supersecretkey",
-			"GITEA__security__INTERNAL_TOKEN":         "internal",
-			"GITEA__security__DISABLE_GITEA_SSH":      "true",
-			"GITEA__mailer__ENABLED":                  "false",
-		},
-		WaitingFor: wait.ForHTTP("/api/v1/version").WithPort("3000").WithStartupTimeout(cfg.StartTimeout),
+		Env:          env,
+		WaitingFor:   wait.ForHTTP("/api/v1/version").WithPort("3000").WithStartupTimeout(cfg.StartTimeout),
 		LogConsumerCfg: &testcontainers.LogConsumerConfig{
 			Opts:      []testcontainers.LogProductionOption{testcontainers.WithLogProductionTimeout(10 * time.Second)},
 			Consumers: []testcontainers.LogConsumer{containerLog},

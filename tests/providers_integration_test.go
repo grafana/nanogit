@@ -720,3 +720,30 @@ func TestProvidersClone(t *testing.T) {
 
 	t.Logf("Successfully completed comprehensive Clone operation testing with %d test files", len(testFiles))
 }
+
+func TestProvidersCompatibility(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping testproviders suite in short mode")
+		return
+	}
+
+	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" || os.Getenv("TEST_USER") == "" {
+		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN or TEST_USER not set")
+		return
+	}
+
+	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
+	client, err := nanogit.NewHTTPClient(
+		os.Getenv("TEST_REPO"),
+		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
+	)
+	require.NoError(t, err)
+
+	t.Log("Testing IsServerCompatible against real Git provider...")
+
+	compatible, err := client.IsServerCompatible(ctx)
+	require.NoError(t, err, "IsServerCompatible should not return error for accessible repository")
+	require.True(t, compatible, "Provider should support protocol v2")
+
+	t.Logf("Provider confirmed to support Git protocol v2")
+}
