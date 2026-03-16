@@ -4,7 +4,7 @@ go 1.25.8
 
 require (
 	github.com/grafana/nanogit v0.0.0
-	github.com/grafana/nanogit/gittest v0.0.0
+	github.com/grafana/nanogit/gittest v0.7.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/stretchr/testify v1.11.1
