@@ -109,7 +109,7 @@ func runLsTree(cmd *cobra.Command, args []string) error {
 
 	// Get tree contents based on flags
 	if lsTreeRecursive {
-		return listRecursiveTree(ctx, client, commit.Tree, lsTreePath)
+		return listRecursiveTree(ctx, client, commitHash, lsTreePath)
 	}
 	return listTree(ctx, client, commit.Tree, lsTreePath)
 }
@@ -138,8 +138,8 @@ func listTree(ctx context.Context, client nanogit.Client, treeHash hash.Hash, pa
 	return outputTreeHuman(tree.Entries)
 }
 
-func listRecursiveTree(ctx context.Context, client nanogit.Client, treeHash hash.Hash, path string) error {
-	flatTree, err := client.GetFlatTree(ctx, treeHash)
+func listRecursiveTree(ctx context.Context, client nanogit.Client, commitHash hash.Hash, path string) error {
+	flatTree, err := client.GetFlatTree(ctx, commitHash)
 	if err != nil {
 		return fmt.Errorf("failed to get flat tree: %w", err)
 	}
