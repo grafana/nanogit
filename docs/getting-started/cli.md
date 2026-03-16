@@ -113,37 +113,37 @@ nanogit ls-remote <repository> [flags]
 
 List all references:
 ```bash
-nanogit ls-remote https://github.com/grafana/nanogit
+nanogit ls-remote https://github.com/grafana/nanogit.git
 ```
 
 List only branches:
 ```bash
-nanogit ls-remote https://github.com/grafana/nanogit --heads
+nanogit ls-remote https://github.com/grafana/nanogit.git --heads
 ```
 
 List only tags:
 ```bash
-nanogit ls-remote https://github.com/grafana/nanogit --tags
+nanogit ls-remote https://github.com/grafana/nanogit.git --tags
 ```
 
 Output as JSON:
 ```bash
-nanogit ls-remote https://github.com/grafana/nanogit --json
+nanogit ls-remote https://github.com/grafana/nanogit.git --json
 ```
 
 With authentication (for private repositories):
 ```bash
 # Using token (username defaults to 'git')
-nanogit ls-remote https://github.com/user/private-repo --token YOUR_TOKEN
+nanogit ls-remote https://github.com/user/private-repo.git --token YOUR_TOKEN
 
 # Using environment variable
-NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo
+NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo.git
 
 # With custom username
-nanogit ls-remote https://github.com/user/private-repo --username myuser --token YOUR_TOKEN
+nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token YOUR_TOKEN
 
 # Using environment variables for both
-NANOGIT_USERNAME=myuser NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo
+NANOGIT_USERNAME=myuser NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo.git
 ```
 
 **Environment Variables**:

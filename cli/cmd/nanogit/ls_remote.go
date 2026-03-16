@@ -37,24 +37,24 @@ var lsRemoteCmd = &cobra.Command{
 
 Examples:
   # List all references
-  nanogit ls-remote https://github.com/grafana/nanogit
+  nanogit ls-remote https://github.com/grafana/nanogit.git
 
   # List only branches
-  nanogit ls-remote https://github.com/grafana/nanogit --heads
+  nanogit ls-remote https://github.com/grafana/nanogit.git --heads
 
   # List only tags
-  nanogit ls-remote https://github.com/grafana/nanogit --tags
+  nanogit ls-remote https://github.com/grafana/nanogit.git --tags
 
   # Output as JSON
-  nanogit ls-remote https://github.com/grafana/nanogit --json
+  nanogit ls-remote https://github.com/grafana/nanogit.git --json
 
   # With authentication (using default username 'git')
-  nanogit ls-remote https://github.com/user/private-repo --token <token>
-  NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo
+  nanogit ls-remote https://github.com/user/private-repo.git --token <token>
+  NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo.git
 
   # With custom username
-  nanogit ls-remote https://github.com/user/private-repo --username myuser --token <token>
-  NANOGIT_USERNAME=myuser NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo`,
+  nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token <token>
+  NANOGIT_USERNAME=myuser NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo.git`,
 	Args: cobra.ExactArgs(1),
 	RunE: runLsRemote,
 }
