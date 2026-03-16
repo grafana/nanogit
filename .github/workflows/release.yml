@@ -112,14 +112,19 @@ jobs:
           # Disable cache to prevent cache poisoning attacks
           cache: false
 
-      - name: Build CLI binaries with GoReleaser
+      - name: Install GoReleaser
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
-        uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6
-        with:
-          distribution: goreleaser
-          # Pin to specific version to prevent runtime artifact poisoning
-          version: 'v2.6.1'
-          args: release --clean
+        run: |
+          # Download and install GoReleaser v2.6.1 to avoid cache poisoning
+          GORELEASER_VERSION=2.6.1
+          curl -sL "https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/goreleaser_Linux_x86_64.tar.gz" -o goreleaser.tar.gz
+          tar -xzf goreleaser.tar.gz goreleaser
+          sudo mv goreleaser /usr/local/bin/
+          goreleaser --version
+
+      - name: Build CLI binaries with GoReleaser
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.new_tag
+        run: goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
