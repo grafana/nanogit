@@ -53,6 +53,8 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 'lts/*'
+          # Disable npm cache to prevent cache poisoning attacks
+          cache: ''
 
       - name: Install semantic-release
         run: |
@@ -115,7 +117,8 @@ jobs:
         uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6
         with:
           distribution: goreleaser
-          version: '~> v2'
+          # Pin to specific version to prevent runtime artifact poisoning
+          version: 'v2.6.1'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
