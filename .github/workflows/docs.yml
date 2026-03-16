@@ -45,6 +45,8 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          # Only save cache on main branch to prevent poisoning from PRs
+          cache-dependency-path: ${{ github.ref == 'refs/heads/main' && 'package-lock.json' || '' }}
 
       - name: Install dependencies
         run: npm ci

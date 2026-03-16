@@ -1,0 +1,66 @@
+services:
+  # Gitea server configured to use Git protocol v1 only
+  gitea-v1:
+    image: gitea/gitea:1.22
+    container_name: nanogit-gitea-v1
+    environment:
+      # Database configuration
+      - GITEA__database__DB_TYPE=sqlite3
+
+      # Server configuration
+      - GITEA__server__ROOT_URL=http://localhost:3000/
+      - GITEA__server__HTTP_PORT=3000
+
+      # Service configuration
+      - GITEA__service__DISABLE_REGISTRATION=true
+
+      # Security configuration
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__security__DEFAULT_ADMIN_NAME=giteaadmin
+      - GITEA__security__DEFAULT_ADMIN_PASSWORD=admin123
+      - GITEA__security__SECRET_KEY=supersecretkey
+      - GITEA__security__INTERNAL_TOKEN=internal
+      - GITEA__security__DISABLE_GITEA_SSH=true
+
+      # Mailer configuration
+      - GITEA__mailer__ENABLED=false
+
+      # Repository configuration - FORCE Git protocol v1
+      - GITEA__repository__ENABLE_AUTO_GIT_WIRE_PROTOCOL=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - gitea-data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - nanogit-test
+
+  # Git client with old Git version (2.15) that only supports protocol v1
+  git-client-v1:
+    image: alpine:3.7
+    container_name: nanogit-git-client-v1
+    command: tail -f /dev/null
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+    depends_on:
+      gitea-v1:
+        condition: service_healthy
+    networks:
+      - nanogit-test
+    entrypoint: /bin/sh -c "apk add --no-cache git curl && tail -f /dev/null"
+
+volumes:
+  gitea-data:
+    driver: local
+
+networks:
+  nanogit-test:
+    driver: bridge

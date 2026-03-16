@@ -53,6 +53,9 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 'lts/*'
+          # Disable npm cache to prevent cache poisoning attacks
+          # Note: This workflow only runs on main branch, but being explicit
+          cache: ''
 
       - name: Install semantic-release
         run: |

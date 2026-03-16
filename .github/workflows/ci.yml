@@ -82,6 +82,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Sync vendor directory
         run: go work vendor
       - name: Run unit tests
@@ -118,6 +120,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Sync vendor directory
         run: go work vendor
       - name: Run tests with coverage
@@ -150,6 +154,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Sync vendor directory
         run: go work vendor
       - name: Run integration tests
@@ -188,6 +194,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Sync vendor directory
         run: go work vendor
       - name: Run provider tests
@@ -234,6 +242,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Sync vendor directory
         run: go work vendor
       - name: Run provider tests
@@ -279,6 +289,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Sync vendor directory
         run: go work vendor
       - name: Run provider tests
@@ -375,6 +387,8 @@ jobs:
           key: ${{ runner.os }}-go-perf-${{ hashFiles('perf/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-perf-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Run clone performance tests
         env:
           CGO_ENABLED: 1
@@ -401,6 +415,8 @@ jobs:
           key: ${{ runner.os }}-go-perf-${{ hashFiles('perf/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-perf-
+          # Only save cache on main branch to prevent poisoning from PRs
+          save-always: ${{ github.ref == 'refs/heads/main' }}
       - name: Run full clone performance test with 1 minute timeout
         env:
           CGO_ENABLED: 1
