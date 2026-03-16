@@ -108,3 +108,21 @@ docs-preview: docs-build
 
 .PHONY: docs
 docs: docs-serve
+
+# CLI
+.PHONY: cli-build
+cli-build:
+	@echo "Building nanogit CLI..."
+	@mkdir -p bin
+	cd cli && go build -o ../bin/nanogit .
+
+.PHONY: cli-fmt
+cli-fmt:
+	@echo "Formatting CLI code..."
+	cd cli && go run golang.org/x/tools/cmd/goimports@v0.27.0 -w .
+	cd cli && go fmt ./...
+
+.PHONY: cli-lint
+cli-lint:
+	@echo "Linting CLI code..."
+	cd cli && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run

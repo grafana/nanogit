@@ -411,3 +411,52 @@ jobs:
           echo "Running full repository clone test with 1 minute timeout..."
           echo "Test will FAIL if clone takes more than 60 seconds"
           go test -v -timeout 1m -run TestCloneGrafanaGrafanaFullRepository .
+
+  cli-build:
+    name: CLI Build
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Sync vendor directory
+        run: go work vendor
+      - name: Build CLI binary
+        run: make cli-build
+      - name: Verify binary exists and runs
+        run: |
+          test -f bin/nanogit || (echo "Binary not found" && exit 1)
+          ./bin/nanogit --version
+
+  cli-format:
+    name: CLI Format
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Check CLI formatting
+        run: make cli-fmt
+      - name: Verify formatting
+        run: |
+          if [ -n "$(git status --porcelain cli/)" ]; then
+            echo "::error::CLI code formatting issues found. Run 'make cli-fmt' to fix them."
+            git diff cli/
+            exit 1
+          fi
+
+  cli-lint:
+    name: CLI Lint
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install build dependencies
+        run: apk add --no-cache git make
+      - name: Run CLI linter
+        run: make cli-lint

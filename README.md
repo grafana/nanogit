@@ -84,6 +84,8 @@ For detailed performance metrics, see the [latest performance report](perf/LAST_
 
 ### Installation
 
+#### Go Library
+
 Install the latest version:
 
 ```bash
@@ -97,6 +99,20 @@ go get github.com/grafana/nanogit@v0.x.x # Replace v0.x.x with the latest releas
 ```
 
 See all available versions on the [releases page](https://github.com/grafana/nanogit/releases).
+
+#### Command-Line Interface
+
+nanogit also provides a CLI for terminal-based Git operations:
+
+```bash
+# Install from source
+make cli-build
+
+# Or install using Go
+go install github.com/grafana/nanogit/cli@latest
+```
+
+See the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/) for more details.
 
 ### Usage
 
