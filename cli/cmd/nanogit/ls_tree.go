@@ -87,9 +87,11 @@ func runLsTree(cmd *cobra.Command, args []string) error {
 	var client nanogit.Client
 	var err error
 	if token != "" {
-		client, err = nanogit.NewHTTPClient(repoURL, options.WithBasicAuth(username, token))
+		client, err = nanogit.NewHTTPClient(repoURL,
+			options.WithBasicAuth(username, token),
+			options.WithoutGitSuffix())
 	} else {
-		client, err = nanogit.NewHTTPClient(repoURL)
+		client, err = nanogit.NewHTTPClient(repoURL, options.WithoutGitSuffix())
 	}
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
