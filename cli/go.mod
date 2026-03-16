@@ -3,7 +3,7 @@ module github.com/grafana/nanogit/cli
 go 1.25.8
 
 require (
-	github.com/grafana/nanogit v1.0.0
+	github.com/grafana/nanogit v0.0.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.11.1
 )

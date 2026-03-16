@@ -1,8 +1,8 @@
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/grafana/nanogit v1.0.0 h1:q19appiMcyilAg3+brGqBSakZtYxD65l9W/BWVucXXQ=
-github.com/grafana/nanogit v1.0.0/go.mod h1:6s6CCTpyMOHPpcUZaLGI+rgBEKdmxVbhqSGgCK13j7Y=
+github.com/grafana/nanogit v0.0.0 h1:+kge1fDAIbiVDwLHndYoZlsd2DT6sRcnG0hh7x3Pv+o=
+github.com/grafana/nanogit v0.0.0/go.mod h1:6s6CCTpyMOHPpcUZaLGI+rgBEKdmxVbhqSGgCK13j7Y=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zttxdo=
