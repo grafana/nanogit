@@ -13,8 +13,6 @@ import (
 var (
 	cloneInclude     []string
 	cloneExclude     []string
-	cloneUsername    string
-	cloneToken       string
 	cloneBatchSize   int
 	cloneConcurrency int
 )
@@ -24,8 +22,6 @@ func init() {
 
 	cloneCmd.Flags().StringSliceVar(&cloneInclude, "include", nil, "Include paths (glob patterns, e.g., 'src/**', '*.go')")
 	cloneCmd.Flags().StringSliceVar(&cloneExclude, "exclude", nil, "Exclude paths (glob patterns, e.g., 'node_modules/**', '*.tmp')")
-	cloneCmd.Flags().StringVar(&cloneUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
-	cloneCmd.Flags().StringVar(&cloneToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 	cloneCmd.Flags().IntVar(&cloneBatchSize, "batch-size", 50, "Number of blobs to fetch per request (default 50)")
 	cloneCmd.Flags().IntVar(&cloneConcurrency, "concurrency", 10, "Number of parallel blob fetches (default 10)")
 }
@@ -71,12 +67,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get authentication credentials from flags or environment
-	token := cloneToken
+	token := globalToken
 	if token == "" {
 		token = os.Getenv("NANOGIT_TOKEN")
 	}
 
-	username := cloneUsername
+	username := globalUsername
 	if username == "" {
 		username = os.Getenv("NANOGIT_USERNAME")
 	}

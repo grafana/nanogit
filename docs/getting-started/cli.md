@@ -81,8 +81,39 @@ Usage:
   nanogit [flags]
 
 Flags:
-  -h, --help      help for nanogit
-  -v, --version   version for nanogit
+  -h, --help              help for nanogit
+  -v, --version           version for nanogit
+      --username string   Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')
+      --token string      Authentication token (can also use NANOGIT_TOKEN env var)
+      --json              Output results in JSON format
+```
+
+### Global Flags
+
+The following flags are available for all commands:
+
+- `--username` - Authentication username (defaults to 'git' if not specified)
+- `--token` - Authentication token for private repositories
+- `--json` - Output results in JSON format (where applicable)
+
+These flags can also be set via environment variables:
+- `NANOGIT_USERNAME` - Authentication username
+- `NANOGIT_TOKEN` - Authentication token
+
+## Authentication
+
+For private repositories, use the `--token` global flag or set the `NANOGIT_TOKEN` environment variable:
+
+```bash
+# Using global flag (can be placed before or after command)
+nanogit --token YOUR_TOKEN <command> [args...]
+
+# Using environment variable (recommended for repeated use)
+export NANOGIT_TOKEN=YOUR_TOKEN
+nanogit <command> [args...]
+
+# Custom username (defaults to 'git')
+nanogit --username myuser --token YOUR_TOKEN <command> [args...]
 ```
 
 ### Check Version
@@ -105,9 +136,6 @@ nanogit ls-remote <repository> [flags]
 **Flags**:
 - `--heads` - Show only branch references (refs/heads/*)
 - `--tags` - Show only tag references (refs/tags/*)
-- `--json` - Output results in JSON format
-- `--username` - Authentication username (defaults to 'git')
-- `--token` - Authentication token
 
 **Examples**:
 
@@ -128,27 +156,8 @@ nanogit ls-remote https://github.com/grafana/nanogit.git --tags
 
 Output as JSON:
 ```bash
-nanogit ls-remote https://github.com/grafana/nanogit.git --json
+nanogit --json ls-remote https://github.com/grafana/nanogit.git
 ```
-
-With authentication (for private repositories):
-```bash
-# Using token (username defaults to 'git')
-nanogit ls-remote https://github.com/user/private-repo.git --token YOUR_TOKEN
-
-# Using environment variable
-NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo.git
-
-# With custom username
-nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token YOUR_TOKEN
-
-# Using environment variables for both
-NANOGIT_USERNAME=myuser NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo.git
-```
-
-**Environment Variables**:
-- `NANOGIT_TOKEN` - Authentication token
-- `NANOGIT_USERNAME` - Authentication username (defaults to 'git' if not set)
 
 ### ls-tree
 
@@ -162,10 +171,7 @@ nanogit ls-tree <repository> <ref> [flags]
 **Flags**:
 - `-r, --recursive` - List tree contents recursively
 - `-l, --long` - Show detailed information (mode, type, hash)
-- `--json` - Output results in JSON format
 - `--path` - Path within the tree to list (defaults to root)
-- `--username` - Authentication username (defaults to 'git')
-- `--token` - Authentication token
 
 **Examples**:
 
@@ -191,16 +197,7 @@ nanogit ls-tree https://github.com/grafana/nanogit.git v1.0.0 --long
 
 Output as JSON:
 ```bash
-nanogit ls-tree https://github.com/grafana/nanogit.git main --json
-```
-
-With authentication:
-```bash
-# Using token (username defaults to 'git')
-nanogit ls-tree https://github.com/user/private-repo.git main --token YOUR_TOKEN
-
-# Using environment variables
-NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-tree https://github.com/user/private-repo.git main
+nanogit --json ls-tree https://github.com/grafana/nanogit.git main
 ```
 
 ### cat-file
@@ -212,10 +209,7 @@ Display the contents of a file from a repository.
 nanogit cat-file <repository> <ref> <path> [flags]
 ```
 
-**Flags**:
-- `--json` - Output file metadata in JSON format
-- `--username` - Authentication username (defaults to 'git')
-- `--token` - Authentication token
+No command-specific flags (uses global flags only).
 
 **Examples**:
 
@@ -236,16 +230,7 @@ nanogit cat-file https://github.com/grafana/nanogit.git abc123def456 src/main.go
 
 Output with metadata in JSON format:
 ```bash
-nanogit cat-file https://github.com/grafana/nanogit.git main README.md --json
-```
-
-With authentication:
-```bash
-# Using token (username defaults to 'git')
-nanogit cat-file https://github.com/user/private-repo.git main file.txt --token YOUR_TOKEN
-
-# Using environment variables
-NANOGIT_TOKEN=YOUR_TOKEN nanogit cat-file https://github.com/user/private-repo.git main file.txt
+nanogit --json cat-file https://github.com/grafana/nanogit.git main README.md
 ```
 
 ### clone
@@ -262,8 +247,6 @@ nanogit clone <repository> <ref> <destination> [flags]
 - `--exclude` - Exclude paths (glob patterns, can be specified multiple times)
 - `--batch-size` - Number of blobs to fetch per request (default: 50)
 - `--concurrency` - Number of parallel blob fetches (default: 10)
-- `--username` - Authentication username (defaults to 'git')
-- `--token` - Authentication token
 
 **Examples**:
 
@@ -299,15 +282,6 @@ nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size
 
 # Sequential mode for constrained environments
 nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 1 --concurrency 1
-```
-
-With authentication:
-```bash
-# Using token (username defaults to 'git')
-nanogit clone https://github.com/user/private-repo.git main ./my-repo --token YOUR_TOKEN
-
-# Using environment variables
-NANOGIT_TOKEN=YOUR_TOKEN nanogit clone https://github.com/user/private-repo.git main ./my-repo
 ```
 
 **Path Filtering**:

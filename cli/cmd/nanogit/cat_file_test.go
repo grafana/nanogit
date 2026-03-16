@@ -111,9 +111,9 @@ func TestCatFileCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset flags
-			catFileJSON = false
-			catFileUsername = ""
-			catFileToken = ""
+			globalJSON = false
+			globalUsername = ""
+			globalToken = ""
 
 			// Test argument validation
 			catFileCmd.SetArgs(tt.args)

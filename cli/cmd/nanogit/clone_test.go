@@ -85,8 +85,8 @@ func TestCloneCommand(t *testing.T) {
 			// Reset flags
 			cloneInclude = nil
 			cloneExclude = nil
-			cloneUsername = ""
-			cloneToken = ""
+			globalUsername = ""
+			globalToken = ""
 			cloneBatchSize = 50
 			cloneConcurrency = 10
 
@@ -147,8 +147,8 @@ func TestCloneFlagsValidation(t *testing.T) {
 			// Reset flags
 			cloneInclude = nil
 			cloneExclude = nil
-			cloneUsername = ""
-			cloneToken = ""
+			globalUsername = ""
+			globalToken = ""
 			cloneBatchSize = tt.batchSize
 			cloneConcurrency = tt.concurrency
 
