@@ -59,24 +59,19 @@ func TestCloneCommand(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "one argument returns error",
-			args:        []string{"url"},
-			expectError: true,
+			name:        "one argument accepted (uses current dir and HEAD)",
+			args:        []string{"https://github.com/grafana/nanogit.git"},
+			expectError: false,
 		},
 		{
-			name:        "two arguments returns error",
-			args:        []string{"url", "ref"},
-			expectError: true,
+			name:        "two arguments accepted (url and destination)",
+			args:        []string{"https://github.com/grafana/nanogit.git", "./my-repo"},
+			expectError: false,
 		},
 		{
 			name:        "too many arguments returns error",
-			args:        []string{"url", "ref", "dest", "extra"},
+			args:        []string{"url", "dest", "extra"},
 			expectError: true,
-		},
-		{
-			name:        "valid arguments accepted",
-			args:        []string{"https://github.com/grafana/nanogit.git", "main", "./my-repo"},
-			expectError: false,
 		},
 	}
 

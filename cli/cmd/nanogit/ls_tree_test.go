@@ -210,32 +210,9 @@ func TestOutputTreeHuman(t *testing.T) {
 		},
 	}
 
-	// Test simple output
-	t.Run("simple output", func(t *testing.T) {
-		lsTreeLong = false
-
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		err := outputTreeHuman(entries)
-		require.NoError(t, err)
-
-		require.NoError(t, w.Close())
-		os.Stdout = oldStdout
-
-		var buf bytes.Buffer
-		_, err = io.Copy(&buf, r)
-		require.NoError(t, err)
-
-		output := buf.String()
-		assert.Contains(t, output, "README.md")
-		assert.NotContains(t, output, "100644") // Should not show mode in simple output
-	})
-
-	// Test long output
-	t.Run("long output", func(t *testing.T) {
-		lsTreeLong = true
+	// Test default output (shows mode, type, hash, name like git ls-tree)
+	t.Run("default output", func(t *testing.T) {
+		lsTreeNameOnly = false
 
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
@@ -256,9 +233,32 @@ func TestOutputTreeHuman(t *testing.T) {
 		assert.Contains(t, output, "blob")
 		assert.Contains(t, output, "1234567890123456789012345678901234567890")
 		assert.Contains(t, output, "README.md")
+	})
+
+	// Test name-only output
+	t.Run("name-only output", func(t *testing.T) {
+		lsTreeNameOnly = true
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := outputTreeHuman(entries)
+		require.NoError(t, err)
+
+		require.NoError(t, w.Close())
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		_, err = io.Copy(&buf, r)
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "README.md")
+		assert.NotContains(t, output, "100644") // Should not show mode in name-only output
 
 		// Reset flag
-		lsTreeLong = false
+		lsTreeNameOnly = false
 	})
 }
 
@@ -294,7 +294,7 @@ func TestLsTreeCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset flags
 			lsTreeRecursive = false
-			lsTreeLong = false
+			lsTreeNameOnly = false
 			globalJSON = false
 			lsTreePath = ""
 			globalUsername = ""
