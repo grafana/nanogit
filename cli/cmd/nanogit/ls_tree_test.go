@@ -295,10 +295,10 @@ func TestLsTreeCommand(t *testing.T) {
 			// Reset flags
 			lsTreeRecursive = false
 			lsTreeLong = false
-			lsTreeJSON = false
+			globalJSON = false
 			lsTreePath = ""
-			lsTreeUsername = ""
-			lsTreeToken = ""
+			globalUsername = ""
+			globalToken = ""
 
 			// Test argument validation
 			lsTreeCmd.SetArgs(tt.args)

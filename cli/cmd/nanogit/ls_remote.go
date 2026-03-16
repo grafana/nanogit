@@ -13,11 +13,8 @@ import (
 )
 
 var (
-	lsRemoteHeads    bool
-	lsRemoteTags     bool
-	lsRemoteJSON     bool
-	lsRemoteToken    string
-	lsRemoteUsername string
+	lsRemoteHeads bool
+	lsRemoteTags  bool
 )
 
 func init() {
@@ -25,9 +22,6 @@ func init() {
 
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteHeads, "heads", false, "Show only branch references (refs/heads/*)")
 	lsRemoteCmd.Flags().BoolVar(&lsRemoteTags, "tags", false, "Show only tag references (refs/tags/*)")
-	lsRemoteCmd.Flags().BoolVar(&lsRemoteJSON, "json", false, "Output results in JSON format")
-	lsRemoteCmd.Flags().StringVar(&lsRemoteUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
-	lsRemoteCmd.Flags().StringVar(&lsRemoteToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 }
 
 var lsRemoteCmd = &cobra.Command{
@@ -64,12 +58,12 @@ func runLsRemote(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get authentication credentials from flags or environment
-	token := lsRemoteToken
+	token := globalToken
 	if token == "" {
 		token = os.Getenv("NANOGIT_TOKEN")
 	}
 
-	username := lsRemoteUsername
+	username := globalUsername
 	if username == "" {
 		username = os.Getenv("NANOGIT_USERNAME")
 	}
@@ -102,7 +96,7 @@ func runLsRemote(cmd *cobra.Command, args []string) error {
 	filteredRefs := filterRefs(refs)
 
 	// Output results
-	if lsRemoteJSON {
+	if globalJSON {
 		return outputJSON(filteredRefs)
 	}
 	return outputHuman(filteredRefs)

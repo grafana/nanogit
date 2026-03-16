@@ -182,8 +182,9 @@ func TestLsRemoteCommand(t *testing.T) {
 			// Reset flags
 			lsRemoteHeads = false
 			lsRemoteTags = false
-			lsRemoteJSON = false
-			lsRemoteToken = ""
+			globalJSON = false
+			globalToken = ""
+			globalUsername = ""
 
 			// Test argument validation
 			lsRemoteCmd.SetArgs(tt.args)

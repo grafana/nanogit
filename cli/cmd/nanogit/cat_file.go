@@ -11,18 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	catFileJSON     bool
-	catFileUsername string
-	catFileToken    string
-)
-
 func init() {
 	rootCmd.AddCommand(catFileCmd)
-
-	catFileCmd.Flags().BoolVar(&catFileJSON, "json", false, "Output file metadata in JSON format")
-	catFileCmd.Flags().StringVar(&catFileUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
-	catFileCmd.Flags().StringVar(&catFileToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 }
 
 var catFileCmd = &cobra.Command{
@@ -60,12 +50,12 @@ func runCatFile(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get authentication credentials from flags or environment
-	token := catFileToken
+	token := globalToken
 	if token == "" {
 		token = os.Getenv("NANOGIT_TOKEN")
 	}
 
-	username := catFileUsername
+	username := globalUsername
 	if username == "" {
 		username = os.Getenv("NANOGIT_USERNAME")
 	}
@@ -106,7 +96,7 @@ func runCatFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output the file contents
-	if catFileJSON {
+	if globalJSON {
 		return outputBlobJSON(blob, filePath)
 	}
 	return outputBlobRaw(blob)

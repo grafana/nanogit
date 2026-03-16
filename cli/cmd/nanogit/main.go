@@ -14,7 +14,19 @@ var (
 	Commit = "unknown"
 	// Date is the build date (set by GoReleaser)
 	Date = "unknown"
+
+	// Global flags available to all commands
+	globalUsername string
+	globalToken    string
+	globalJSON     bool
 )
+
+func init() {
+	// Add persistent flags that are available to all subcommands
+	rootCmd.PersistentFlags().StringVar(&globalUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
+	rootCmd.PersistentFlags().StringVar(&globalToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
+	rootCmd.PersistentFlags().BoolVar(&globalJSON, "json", false, "Output results in JSON format")
+}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {

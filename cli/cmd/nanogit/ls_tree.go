@@ -17,9 +17,6 @@ import (
 var (
 	lsTreeRecursive bool
 	lsTreeLong      bool
-	lsTreeJSON      bool
-	lsTreeUsername  string
-	lsTreeToken     string
 	lsTreePath      string
 )
 
@@ -28,10 +25,7 @@ func init() {
 
 	lsTreeCmd.Flags().BoolVarP(&lsTreeRecursive, "recursive", "r", false, "List tree contents recursively")
 	lsTreeCmd.Flags().BoolVarP(&lsTreeLong, "long", "l", false, "Show detailed information (mode, type, hash)")
-	lsTreeCmd.Flags().BoolVar(&lsTreeJSON, "json", false, "Output results in JSON format")
 	lsTreeCmd.Flags().StringVar(&lsTreePath, "path", "", "Path within the tree to list (defaults to root)")
-	lsTreeCmd.Flags().StringVar(&lsTreeUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
-	lsTreeCmd.Flags().StringVar(&lsTreeToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 }
 
 var lsTreeCmd = &cobra.Command{
@@ -70,12 +64,12 @@ func runLsTree(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get authentication credentials from flags or environment
-	token := lsTreeToken
+	token := globalToken
 	if token == "" {
 		token = os.Getenv("NANOGIT_TOKEN")
 	}
 
-	username := lsTreeUsername
+	username := globalUsername
 	if username == "" {
 		username = os.Getenv("NANOGIT_USERNAME")
 	}
@@ -134,7 +128,7 @@ func listTree(ctx context.Context, client nanogit.Client, treeHash hash.Hash, pa
 		}
 	}
 
-	if lsTreeJSON {
+	if globalJSON {
 		return outputTreeJSON(tree.Entries)
 	}
 	return outputTreeHuman(tree.Entries)
@@ -152,7 +146,7 @@ func listRecursiveTree(ctx context.Context, client nanogit.Client, commitHash ha
 		entries = filterEntriesByPath(entries, path)
 	}
 
-	if lsTreeJSON {
+	if globalJSON {
 		return outputFlatTreeJSON(entries)
 	}
 	return outputFlatTreeHuman(entries)

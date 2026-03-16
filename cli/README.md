@@ -44,14 +44,34 @@ make cli-build
 ## Usage
 
 ```bash
-nanogit [flags]
-nanogit [command]
+nanogit [global flags] <command> [command flags] [arguments]
 ```
 
 ### Global Flags
 
+Available for all commands:
+
 - `-h, --help` - Show help information
 - `-v, --version` - Show version information
+- `--username <string>` - Authentication username (defaults to 'git', can also use `NANOGIT_USERNAME` env var)
+- `--token <string>` - Authentication token (can also use `NANOGIT_TOKEN` env var)
+- `--json` - Output results in JSON format (where applicable)
+
+### Authentication
+
+For private repositories, use the `--token` flag or set the `NANOGIT_TOKEN` environment variable:
+
+```bash
+# Using global flag
+nanogit --token YOUR_TOKEN <command> [args...]
+
+# Using environment variable (recommended)
+export NANOGIT_TOKEN=YOUR_TOKEN
+nanogit <command> [args...]
+
+# Custom username (defaults to 'git')
+nanogit --username myuser --token YOUR_TOKEN <command> [args...]
+```
 
 ### Commands
 
@@ -70,13 +90,7 @@ nanogit ls-remote https://github.com/grafana/nanogit.git --heads
 nanogit ls-remote https://github.com/grafana/nanogit.git --tags
 
 # Output as JSON
-nanogit ls-remote https://github.com/grafana/nanogit.git --json
-
-# With authentication (username defaults to 'git')
-NANOGIT_TOKEN=token nanogit ls-remote https://github.com/user/private-repo.git
-
-# With custom username
-nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token token
+nanogit --json ls-remote https://github.com/grafana/nanogit.git
 ```
 
 #### ls-tree
@@ -97,10 +111,7 @@ nanogit ls-tree https://github.com/grafana/nanogit.git main --recursive
 nanogit ls-tree https://github.com/grafana/nanogit.git main --long
 
 # Output as JSON
-nanogit ls-tree https://github.com/grafana/nanogit.git main --json
-
-# With authentication
-NANOGIT_TOKEN=token nanogit ls-tree https://github.com/user/private-repo.git main
+nanogit --json ls-tree https://github.com/grafana/nanogit.git main
 ```
 
 #### cat-file
@@ -115,10 +126,7 @@ nanogit cat-file https://github.com/grafana/nanogit.git main README.md
 nanogit cat-file https://github.com/grafana/nanogit.git v1.0.0 docs/api.md
 
 # Output as JSON with metadata
-nanogit cat-file https://github.com/grafana/nanogit.git main README.md --json
-
-# With authentication
-NANOGIT_TOKEN=token nanogit cat-file https://github.com/user/private-repo.git main file.txt
+nanogit --json cat-file https://github.com/grafana/nanogit.git main README.md
 ```
 
 #### clone
@@ -143,9 +151,6 @@ nanogit clone https://github.com/grafana/nanogit.git v1.0.0 ./my-repo
 
 # Adjust performance (defaults: batch-size=50, concurrency=10)
 nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 100 --concurrency 20
-
-# With authentication
-NANOGIT_TOKEN=token nanogit clone https://github.com/user/private-repo.git main ./my-repo
 ```
 
 For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).
