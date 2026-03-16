@@ -45,12 +45,41 @@ make cli-build
 
 ```bash
 nanogit [flags]
+nanogit [command]
 ```
 
-### Flags
+### Global Flags
 
 - `-h, --help` - Show help information
 - `-v, --version` - Show version information
+
+### Commands
+
+#### ls-remote
+
+List references from a remote Git repository.
+
+```bash
+# List all references
+nanogit ls-remote https://github.com/grafana/nanogit.git
+
+# List only branches
+nanogit ls-remote https://github.com/grafana/nanogit.git --heads
+
+# List only tags
+nanogit ls-remote https://github.com/grafana/nanogit.git --tags
+
+# Output as JSON
+nanogit ls-remote https://github.com/grafana/nanogit.git --json
+
+# With authentication (username defaults to 'git')
+NANOGIT_TOKEN=token nanogit ls-remote https://github.com/user/private-repo.git
+
+# With custom username
+nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token token
+```
+
+For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).
 
 ## Development
 

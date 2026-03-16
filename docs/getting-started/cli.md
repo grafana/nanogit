@@ -91,13 +91,69 @@ Flags:
 nanogit --version
 ```
 
+## Commands
+
+### ls-remote
+
+List references (branches and tags) from a remote Git repository.
+
+**Usage**:
+```bash
+nanogit ls-remote <repository> [flags]
+```
+
+**Flags**:
+- `--heads` - Show only branch references (refs/heads/*)
+- `--tags` - Show only tag references (refs/tags/*)
+- `--json` - Output results in JSON format
+- `--username` - Authentication username (defaults to 'git')
+- `--token` - Authentication token
+
+**Examples**:
+
+List all references:
+```bash
+nanogit ls-remote https://github.com/grafana/nanogit.git
+```
+
+List only branches:
+```bash
+nanogit ls-remote https://github.com/grafana/nanogit.git --heads
+```
+
+List only tags:
+```bash
+nanogit ls-remote https://github.com/grafana/nanogit.git --tags
+```
+
+Output as JSON:
+```bash
+nanogit ls-remote https://github.com/grafana/nanogit.git --json
+```
+
+With authentication (for private repositories):
+```bash
+# Using token (username defaults to 'git')
+nanogit ls-remote https://github.com/user/private-repo.git --token YOUR_TOKEN
+
+# Using environment variable
+NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo.git
+
+# With custom username
+nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token YOUR_TOKEN
+
+# Using environment variables for both
+NANOGIT_USERNAME=myuser NANOGIT_TOKEN=YOUR_TOKEN nanogit ls-remote https://github.com/user/private-repo.git
+```
+
+**Environment Variables**:
+- `NANOGIT_TOKEN` - Authentication token
+- `NANOGIT_USERNAME` - Authentication username (defaults to 'git' if not set)
+
 ## Future Commands
 
-The CLI is currently in its initial state. Future versions will include:
+Future versions will include:
 
-- List remote references (branches, tags)
 - Browse repository tree contents
 - Read file contents from repositories
 - Clone repositories with path filtering
-- Authentication support
-- JSON output for automation
