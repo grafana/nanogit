@@ -102,6 +102,22 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "New release tag: $NEW_TAG"
 
+      - name: Setup Go
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973f74ed7 # v6
+        with:
+          go-version: '1.25.8'
+
+      - name: Build CLI binaries with GoReleaser
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create module tags
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
         env:
@@ -206,6 +222,9 @@ jobs:
           echo "- \`v${VERSION}\` - Main nanogit module" >> $GITHUB_STEP_SUMMARY
           echo "- \`gittest/v${VERSION}\` - Test utilities module (public)" >> $GITHUB_STEP_SUMMARY
           echo "- \`tests/\` - Internal tests only (no tag needed)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 CLI Binaries" >> $GITHUB_STEP_SUMMARY
+          echo "Pre-built binaries for Linux, macOS, and Windows have been uploaded to the release." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📚 Package Links" >> $GITHUB_STEP_SUMMARY
           echo "**nanogit (main):**" >> $GITHUB_STEP_SUMMARY
