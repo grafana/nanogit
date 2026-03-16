@@ -4,24 +4,41 @@ A command-line interface for [nanogit](https://github.com/grafana/nanogit), a li
 
 ## Installation
 
-### From Source
+### Download Pre-built Binary (Recommended)
 
+Download the latest release for your platform:
+
+**Linux / macOS**:
 ```bash
-# Clone the repository
-git clone https://github.com/grafana/nanogit.git
-cd nanogit
-
-# Build the CLI
-make cli-build
-
-# The binary will be available at bin/nanogit
-./bin/nanogit --version
+# Visit https://github.com/grafana/nanogit/releases/latest
+# Download the appropriate binary for your platform
+# Example for Linux AMD64:
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Linux_x86_64.tar.gz
+tar -xzf nanogit_Linux_x86_64.tar.gz
+sudo mv nanogit /usr/local/bin/
 ```
+
+**Windows**:
+```powershell
+# Download from https://github.com/grafana/nanogit/releases/latest
+# Extract nanogit.exe and add to PATH
+```
+
+See the [releases page](https://github.com/grafana/nanogit/releases/latest) for all available platforms.
 
 ### Using Go Install
 
 ```bash
 go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/grafana/nanogit.git
+cd nanogit
+make cli-build
+# Binary will be at bin/nanogit
 ```
 
 ## Usage

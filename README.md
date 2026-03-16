@@ -102,13 +102,35 @@ See all available versions on the [releases page](https://github.com/grafana/nan
 
 #### Command-Line Interface
 
-nanogit also provides a CLI for terminal-based Git operations:
+nanogit provides a CLI for terminal-based Git operations. Download pre-built binaries from the [releases page](https://github.com/grafana/nanogit/releases) or install using Go.
+
+**Download pre-built binary** (recommended):
 
 ```bash
-# Install from source
-make cli-build
+# Linux (amd64)
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Linux_x86_64.tar.gz
+tar -xzf nanogit_Linux_x86_64.tar.gz
+sudo mv nanogit /usr/local/bin/
 
-# Or install using Go
+# macOS (Apple Silicon)
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Darwin_arm64.tar.gz
+tar -xzf nanogit_Darwin_arm64.tar.gz
+sudo mv nanogit /usr/local/bin/
+
+# macOS (Intel)
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Darwin_x86_64.tar.gz
+tar -xzf nanogit_Darwin_x86_64.tar.gz
+sudo mv nanogit /usr/local/bin/
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/grafana/nanogit/releases/latest/download/nanogit_Windows_x86_64.zip" -OutFile "nanogit.zip"
+Expand-Archive nanogit.zip
+Move-Item nanogit\nanogit.exe C:\Windows\System32\
+```
+
+**Or install using Go**:
+
+```bash
 go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
 ```
 
