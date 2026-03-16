@@ -129,14 +129,6 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 		"GITEA__mailer__ENABLED":                  "false",
 	}
 
-	// Note: Protocol v1-only mode is requested but not achievable with modern Git (2.18+)
-	// Modern Git always advertises v2 capabilities regardless of configuration.
-	// This option is kept for documentation purposes.
-	if cfg.ProtocolV1Only {
-		env["GITEA__repository__ENABLE_AUTO_GIT_WIRE_PROTOCOL"] = "false"
-		cfg.Logger.Logf("⚠️  Protocol v1-only requested (note: modern Git 2.18+ always advertises v2)")
-	}
-
 	// Start Gitea container
 	req := testcontainers.ContainerRequest{
 		Image:        image,
@@ -182,10 +174,6 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 		ctx:           containerCtx,
 		cancelContext: cancel,
 	}
-
-	// Note: Despite various configuration attempts (uploadpack.advertisev2, protocol.version, etc.),
-	// modern Git (2.18+) always advertises v2 capabilities on the server side.
-	// The ProtocolV1Only option is kept for documentation but doesn't achieve true v1-only mode.
 
 	return server, nil
 }

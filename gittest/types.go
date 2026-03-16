@@ -106,20 +106,18 @@ func newRepo(repoName string, user *User, host, port string) *RemoteRepository {
 
 // Config holds configuration for test utilities.
 type Config struct {
-	Logger        Logger
-	StartTimeout  time.Duration
-	GiteaImage    string
-	GiteaVersion  string
-	ProtocolV1Only bool // When true, force server to use Git protocol v1 only
+	Logger       Logger
+	StartTimeout time.Duration
+	GiteaImage   string
+	GiteaVersion string
 }
 
 // defaultConfig returns a Config with sensible defaults.
 func defaultConfig() *Config {
 	return &Config{
-		Logger:         NoopLogger(),
-		StartTimeout:   30 * time.Second,
-		GiteaImage:     "gitea/gitea",
-		GiteaVersion:   "1.22", // Pinned to stable version to prevent supply chain attacks
-		ProtocolV1Only: false,  // Default to v2 support
+		Logger:       NoopLogger(),
+		StartTimeout: 30 * time.Second,
+		GiteaImage:   "gitea/gitea",
+		GiteaVersion: "1.22", // Pinned to stable version to prevent supply chain attacks
 	}
 }

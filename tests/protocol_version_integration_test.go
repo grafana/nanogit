@@ -3,10 +3,8 @@ package integration_test
 import (
 	"net/http"
 	"net/http/httptest"
-	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 
@@ -205,57 +203,6 @@ var _ = Describe("Protocol Version Detection", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(compatible).To(BeTrue())
 			logger.Info("Gitea server is compatible (v2)")
-		})
-
-		It("should detect v1-only real Gitea server as incompatible", func() {
-			Skip("Modern Git (2.18+) always advertises protocol v2 regardless of configuration settings. " +
-				"Tested uploadpack.advertisev2=false, protocol.version=0, and multiple config locations, " +
-				"but Git ignores these on the server side. Protocol v1-only detection is thoroughly tested " +
-				"via mock servers earlier in this file. Real Git providers (GitHub, GitLab, Bitbucket) all " +
-				"support v2 anyway, making this test impractical and unnecessary.")
-			By("Creating a real Gitea server with protocol v1 only")
-			// Use Gitea 1.16 which uses Git 2.31 - before full v2 support was standard
-			// Gitea 1.22 always advertises v2 capabilities regardless of ENABLE_AUTO_GIT_WIRE_PROTOCOL
-			v1Server, err := gittest.NewServer(ctx,
-				gittest.WithLogger(gittest.NewStructuredLogger(logger)),
-				gittest.WithGiteaVersion("1.16"),
-				gittest.WithProtocolV1Only(),
-				gittest.WithTimeout(60*time.Second))
-			Expect(err).NotTo(HaveOccurred())
-			defer v1Server.Cleanup()
-
-			By("Creating a test user")
-			user, err := v1Server.CreateUser(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Creating a test repository")
-			repo, err := v1Server.CreateRepo(ctx, "test-v1-repo", user)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Initializing repository with a commit")
-			localRepo, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(gittest.NewStructuredLogger(logger)))
-			Expect(err).NotTo(HaveOccurred())
-			defer localRepo.Cleanup()
-
-			connInfo, err := localRepo.InitWithRemote(user, repo)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Creating nanogit client with basic auth (no token needed for Gitea 1.16)")
-			client, err := nanogit.NewHTTPClient(connInfo.URL,
-				options.WithBasicAuth(user.Username, user.Password))
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking protocol compatibility - should return false for v1")
-			compatible, err := client.IsServerCompatible(ctx)
-			Expect(err).NotTo(HaveOccurred(), "Should successfully check compatibility")
-			Expect(compatible).To(BeFalse(), "Should be incompatible with v1-only server")
-			logger.Info("Real Gitea v1-only server correctly detected as incompatible")
-
-			By("Verifying ListRefs still works (uses v1 protocol)")
-			refs, err := client.ListRefs(ctx)
-			Expect(err).NotTo(HaveOccurred(), "ListRefs should work even on v1 servers")
-			Expect(len(refs)).To(BeNumerically(">", 0))
-			logger.Info("ListRefs still works on v1 server", "refs_count", len(refs))
 		})
 	})
 
