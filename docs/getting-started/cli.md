@@ -4,24 +4,61 @@ nanogit provides a command-line interface for interacting with Git repositories 
 
 ## Installation
 
-### From Source
+### Download Pre-built Binary (Recommended)
 
-Clone the repository and build the CLI:
+Download the latest release for your platform from the [releases page](https://github.com/grafana/nanogit/releases/latest).
+
+**Linux**:
+```bash
+# AMD64
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Linux_x86_64.tar.gz
+tar -xzf nanogit_Linux_x86_64.tar.gz
+sudo mv nanogit /usr/local/bin/
+
+# ARM64
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Linux_arm64.tar.gz
+tar -xzf nanogit_Linux_arm64.tar.gz
+sudo mv nanogit /usr/local/bin/
+```
+
+**macOS**:
+```bash
+# Apple Silicon (M1/M2/M3)
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Darwin_arm64.tar.gz
+tar -xzf nanogit_Darwin_arm64.tar.gz
+sudo mv nanogit /usr/local/bin/
+
+# Intel
+wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Darwin_x86_64.tar.gz
+tar -xzf nanogit_Darwin_x86_64.tar.gz
+sudo mv nanogit /usr/local/bin/
+```
+
+**Windows**:
+```powershell
+# Download and extract (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/grafana/nanogit/releases/latest/download/nanogit_Windows_x86_64.zip" -OutFile "nanogit.zip"
+Expand-Archive nanogit.zip -DestinationPath .
+Move-Item nanogit.exe C:\Windows\System32\
+```
+
+### Using Go Install
+
+If you have Go installed:
+
+```bash
+go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
+```
+
+### Build from Source
+
+For development:
 
 ```bash
 git clone https://github.com/grafana/nanogit.git
 cd nanogit
 make cli-build
-```
-
-The binary will be available at `bin/nanogit`.
-
-### Using Go Install
-
-Install directly using Go:
-
-```bash
-go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
+# Binary will be at bin/nanogit
 ```
 
 ## Basic Usage
