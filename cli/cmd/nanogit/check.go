@@ -23,21 +23,18 @@ var checkCmd = &cobra.Command{
 This command helps you determine if a Git repository URL is compatible with nanogit
 before attempting other operations. nanogit requires Git Smart HTTP Protocol v2.
 
-Supported providers: GitHub, GitLab, Bitbucket, and others with protocol v2 support.
-Not supported: Azure DevOps (protocol v1 only), older Git servers.
+Many modern Git hosting providers support protocol v2, but some older servers or
+certain cloud providers may only support protocol v1.
 
 Examples:
-  # Check GitHub repository
-  nanogit check https://github.com/grafana/nanogit.git
+  # Check repository compatibility
+  nanogit check https://example.com/repo.git
 
   # Check with authentication
-  nanogit check https://github.com/user/private-repo.git --token <token>
-
-  # Check Azure DevOps (will show as incompatible)
-  nanogit check https://dev.azure.com/org/project/_git/repo
+  nanogit check https://example.com/private-repo.git --token <token>
 
   # Output as JSON
-  nanogit --json check https://github.com/grafana/nanogit.git`,
+  nanogit --json check https://example.com/repo.git`,
 	Args: cobra.ExactArgs(1),
 	RunE: runCheck,
 }
@@ -105,7 +102,7 @@ func outputCheckJSON(repoURL string, compatible bool) error {
 		result.Message = "Server supports Git protocol v2 and is compatible with nanogit"
 	} else {
 		result.Protocol = "v1"
-		result.Message = "Server only supports Git protocol v1. nanogit requires protocol v2. Please use a different Git provider (GitHub, GitLab, Bitbucket) or standard git CLI for this repository."
+		result.Message = "Server only supports Git protocol v1. nanogit requires protocol v2. Please use a Git provider with v2 support or use standard git CLI for this repository."
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
@@ -129,15 +126,11 @@ func outputCheckHuman(repoURL string, compatible bool) error {
 	// Incompatible
 	fmt.Printf("❌ Not Compatible - Server only supports Git protocol v1\n\n")
 	fmt.Printf("nanogit requires Git Smart HTTP Protocol v2, which this server does not support.\n\n")
-	fmt.Printf("Supported providers:\n")
-	fmt.Printf("  ✅ GitHub\n")
-	fmt.Printf("  ✅ GitLab\n")
-	fmt.Printf("  ✅ Bitbucket\n")
-	fmt.Printf("  ✅ Gitea (recent versions)\n\n")
-	fmt.Printf("Not supported:\n")
-	fmt.Printf("  ❌ Azure DevOps (protocol v1 only)\n")
-	fmt.Printf("  ❌ Older Git servers without v2 support\n\n")
-	fmt.Printf("For this repository, please use standard git CLI instead.\n")
+	fmt.Printf("Options:\n")
+	fmt.Printf("  • Use a Git hosting provider with protocol v2 support\n")
+	fmt.Printf("  • Use standard git CLI for this repository\n\n")
+	fmt.Printf("Note: Most modern Git hosting providers support protocol v2.\n")
+	fmt.Printf("Older servers or certain cloud providers may only support v1.\n")
 
 	return nil
 }

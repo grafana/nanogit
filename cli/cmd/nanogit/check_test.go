@@ -67,7 +67,7 @@ func TestOutputCheckJSON(t *testing.T) {
 		},
 		{
 			name:       "incompatible server",
-			repoURL:    "https://dev.azure.com/org/project/_git/repo",
+			repoURL:    "https://example.com/repo.git",
 			compatible: false,
 		},
 	}
@@ -125,9 +125,9 @@ func TestOutputCheckHuman(t *testing.T) {
 		},
 		{
 			name:       "incompatible output",
-			repoURL:    "https://dev.azure.com/org/project/_git/repo",
+			repoURL:    "https://example.com/repo.git",
 			compatible: false,
-			contains:   []string{"❌", "Not Compatible", "protocol v1", "Azure DevOps", "git CLI"},
+			contains:   []string{"❌", "Not Compatible", "protocol v1", "git CLI", "protocol v2"},
 		},
 	}
 

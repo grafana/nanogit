@@ -126,15 +126,7 @@ nanogit --version
 
 ## Requirements
 
-nanogit requires **Git Smart HTTP Protocol v2**, which is supported by:
-- ✅ GitHub
-- ✅ GitLab
-- ✅ Bitbucket
-- ✅ Gitea (recent versions)
-
-**Not supported:**
-- ❌ Azure DevOps (only supports protocol v1)
-- ❌ Older Git servers without protocol v2
+nanogit requires **Git Smart HTTP Protocol v2**. Most modern Git hosting providers support protocol v2, but some older servers or certain cloud providers may only support protocol v1.
 
 Use the `check` command to verify if your Git server is compatible before attempting other operations.
 
@@ -153,24 +145,19 @@ No command-specific flags (uses global flags only).
 
 **Examples**:
 
-Check GitHub repository (compatible):
+Check repository compatibility:
 ```bash
-nanogit check https://github.com/grafana/nanogit.git
-```
-
-Check Azure DevOps repository (will show as incompatible):
-```bash
-nanogit check https://dev.azure.com/org/project/_git/repo
+nanogit check https://example.com/repo.git
 ```
 
 Output as JSON:
 ```bash
-nanogit --json check https://github.com/grafana/nanogit.git
+nanogit --json check https://example.com/repo.git
 ```
 
 Check with authentication:
 ```bash
-nanogit check https://github.com/user/private-repo.git --token <token>
+nanogit check https://example.com/private-repo.git --token <token>
 ```
 
 ### ls-remote
