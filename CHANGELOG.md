@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1](https://github.com/grafana/nanogit/compare/v0.10.0...v0.10.1) (2026-03-17)
+
+
+### Bug Fixes
+
+* **ci:** configure Renovate to ignore internal workspace modules ([#234](https://github.com/grafana/nanogit/issues/234)) ([ccc2260](https://github.com/grafana/nanogit/commit/ccc22604dabc3b18aab56d9edd3815cc4df976e1))
+* **deps:** update module golang.org/x/sync to v0.20.0 ([#203](https://github.com/grafana/nanogit/issues/203)) ([5857213](https://github.com/grafana/nanogit/commit/58572136d273e44dffc29bb1554c3702beb3b87f))
+
 ## [0.10.0](https://github.com/grafana/nanogit/compare/v0.9.0...v0.10.0) (2026-03-17)
 
 
