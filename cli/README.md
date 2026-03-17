@@ -75,7 +75,30 @@ nanogit <command> [args...]
 nanogit --username myuser --token YOUR_TOKEN <command> [args...]
 ```
 
+### Requirements
+
+nanogit requires **Git Smart HTTP Protocol v2**. Supported providers:
+- ✅ GitHub, GitLab, Bitbucket, Gitea (recent versions)
+- ❌ Azure DevOps (protocol v1 only), older Git servers
+
+Use `nanogit check <repository>` to verify compatibility.
+
 ### Commands
+
+#### check
+
+Check if a Git server supports protocol v2 and is compatible with nanogit.
+
+```bash
+# Check compatibility
+nanogit check https://github.com/grafana/nanogit.git
+
+# Check with authentication
+nanogit check https://github.com/user/private-repo.git --token <token>
+
+# Output as JSON
+nanogit --json check https://dev.azure.com/org/project/_git/repo
+```
 
 #### ls-remote
 
