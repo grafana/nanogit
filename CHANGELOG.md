@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/grafana/nanogit/compare/v0.9.0...v0.10.0) (2026-03-17)
+
+
+### Features
+
+* **cli:** add check command to verify server protocol compatibility ([#232](https://github.com/grafana/nanogit/issues/232)) ([4a22c62](https://github.com/grafana/nanogit/commit/4a22c623e798350b4abf0e3012c5caebcb87ffc8))
+
+
+### Bug Fixes
+
+* **ci:** commit CHANGELOG before GoReleaser runs ([#231](https://github.com/grafana/nanogit/issues/231)) ([f9cfac0](https://github.com/grafana/nanogit/commit/f9cfac041ace758480654c572ebf066d0b1bcb43))
+
 ## [0.8.1](https://github.com/grafana/nanogit/compare/v0.8.0...v0.8.1) (2026-03-16)
 
 
