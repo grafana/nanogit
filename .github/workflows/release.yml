@@ -104,6 +104,35 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "New release tag: $NEW_TAG"
 
+      - name: Prepare CHANGELOG branch
+        id: changelog_branch
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        env:
+          NEW_VERSION: ${{ steps.new_release.outputs.new_tag }}
+        run: |
+          # Check if CHANGELOG.md was modified
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md not modified, skipping branch creation"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+          # Create and checkout branch for CHANGELOG
+          BRANCH_NAME="chore/changelog-${NEW_VERSION}"
+          echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+
+          git checkout -b "${BRANCH_NAME}"
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG for ${NEW_VERSION}"
+          git push origin "${BRANCH_NAME}"
+
+          # Return to main and reset CHANGELOG to clean state for GoReleaser
+          git checkout main
+          git checkout HEAD -- CHANGELOG.md
+          echo "✅ CHANGELOG saved to branch ${BRANCH_NAME}, main is now clean for GoReleaser"
+
       - name: Setup Go
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -114,7 +143,7 @@ jobs:
 
       - name: Build CLI binaries with GoReleaser
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
-        uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7
         with:
           distribution: goreleaser
           # Pin to specific version to prevent runtime artifact poisoning
@@ -159,33 +188,13 @@ jobs:
           echo "Module tags created successfully"
 
       - name: Create CHANGELOG PR
-        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag && steps.changelog_branch.outputs.has_changes == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_VERSION: ${{ steps.new_release.outputs.new_tag }}
+          BRANCH_NAME: ${{ steps.changelog_branch.outputs.branch_name }}
           REPO: ${{ github.repository }}
         run: |
-          # Check if CHANGELOG.md was modified
-          if git diff --quiet CHANGELOG.md; then
-            echo "CHANGELOG.md not modified, skipping PR creation"
-            exit 0
-          fi
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create and checkout new branch
-          BRANCH_NAME="chore/changelog-${NEW_VERSION}"
-          git checkout -b "${BRANCH_NAME}"
-
-          # Commit CHANGELOG
-          git add CHANGELOG.md
-          git commit -m "chore: update CHANGELOG for ${NEW_VERSION}"
-
-          # Push branch
-          git push origin "${BRANCH_NAME}"
-
           # Create PR with auto-merge
           PR_BODY="Automated CHANGELOG update for release ${NEW_VERSION}.
 
@@ -201,8 +210,11 @@ jobs:
             --base main \
             --head "${BRANCH_NAME}")
 
-          # Enable auto-merge on the PR (gh pr merge accepts URLs)
+          echo "✅ Created PR: ${PR_URL}"
+
+          # Enable auto-merge on the PR
           gh pr merge "${PR_URL}" --auto --squash
+          echo "✅ Auto-merge enabled"
 
       - name: Notify pkg.go.dev
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "ignoreDeps": [
+    "github.com/grafana/nanogit",
+    "github.com/grafana/nanogit/cli",
+    "github.com/grafana/nanogit/gittest",
+    "github.com/grafana/nanogit/tests",
+    "github.com/grafana/nanogit/perf"
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "go"
+      ],
+      "enabled": false,
+      "description": "Ignore internal workspace modules - these are managed via go.work and replace directives",
+      "matchPackageNames": [
+        "/^github\\.com/grafana/nanogit/"
+      ]
+    }
+  ]
+}

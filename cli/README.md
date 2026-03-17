@@ -75,7 +75,28 @@ nanogit <command> [args...]
 nanogit --username myuser --token YOUR_TOKEN <command> [args...]
 ```
 
+### Requirements
+
+nanogit requires **Git Smart HTTP Protocol v2**. Most modern Git hosting providers support protocol v2, but some older servers or certain cloud providers may only support protocol v1.
+
+Use `nanogit check <repository>` to verify compatibility.
+
 ### Commands
+
+#### check
+
+Check if a Git server supports protocol v2 and is compatible with nanogit.
+
+```bash
+# Check compatibility
+nanogit check https://example.com/repo.git
+
+# Check with authentication
+nanogit check https://example.com/private-repo.git --token <token>
+
+# Output as JSON
+nanogit --json check https://example.com/repo.git
+```
 
 #### ls-remote
 
