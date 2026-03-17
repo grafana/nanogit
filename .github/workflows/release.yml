@@ -143,7 +143,7 @@ jobs:
 
       - name: Build CLI binaries with GoReleaser
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
-        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7
         with:
           distribution: goreleaser
           # Pin to specific version to prevent runtime artifact poisoning
