@@ -12,10 +12,14 @@
   ],
   "packageRules": [
     {
-      "matchDatasources": ["go"],
-      "matchPackagePatterns": ["^github\\.com/grafana/nanogit"],
+      "matchDatasources": [
+        "go"
+      ],
       "enabled": false,
-      "description": "Ignore internal workspace modules - these are managed via go.work and replace directives"
+      "description": "Ignore internal workspace modules - these are managed via go.work and replace directives",
+      "matchPackageNames": [
+        "/^github\\.com/grafana/nanogit/"
+      ]
     }
   ]
 }
