@@ -158,6 +158,9 @@ func defaultCompareCommitsOptions() *CompareCommitsOptions {
 func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash, opts ...CompareCommitsOption) ([]CommitFile, error) {
 	options := defaultCompareCommitsOptions()
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(options)
 	}
 
