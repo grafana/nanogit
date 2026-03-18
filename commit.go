@@ -322,12 +322,6 @@ func detectRenames(changes []CommitFile) []CommitFile {
 	addedByHash := make(map[hash.Hash][]CommitFile)
 
 	for _, change := range changes {
-		// Skip tree entries (directories) - only match blob (file) entries
-		// Git tree mode is 0o40000 (16384 decimal)
-		if change.Mode == 0o40000 || (change.Status == protocol.FileStatusDeleted && change.OldMode == 0o40000) {
-			continue
-		}
-
 		switch change.Status {
 		case protocol.FileStatusDeleted:
 			deletedByHash[change.OldHash] = append(deletedByHash[change.OldHash], change)

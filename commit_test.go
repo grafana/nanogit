@@ -279,3 +279,172 @@ func TestDetectRenames_EmptyAndNilCases(t *testing.T) {
 		})
 	}
 }
+
+// TestDetectRenames_TreeEntries tests rename detection for tree (directory) entries
+func TestDetectRenames_TreeEntries(t *testing.T) {
+	treeHash, err := hash.FromHex("abcdef1234567890abcdef1234567890abcdef12")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		changes  []CommitFile
+		expected []CommitFile
+	}{
+		{
+			name: "simple directory rename",
+			changes: []CommitFile{
+				{Path: "old-dir", OldHash: treeHash, Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-dir", Hash: treeHash, Status: protocol.FileStatusAdded, Mode: 0o40000},
+			},
+			expected: []CommitFile{
+				{
+					Path:    "new-dir",
+					OldPath: "old-dir",
+					Hash:    treeHash,
+					OldHash: treeHash,
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+			},
+		},
+		{
+			name: "mixed file and directory renames",
+			changes: []CommitFile{
+				// File rename
+				{Path: "old-file.txt", OldHash: hash.MustFromHex("1111111111111111111111111111111111111111"), Status: protocol.FileStatusDeleted, Mode: 0o100644, OldMode: 0o100644},
+				{Path: "new-file.txt", Hash: hash.MustFromHex("1111111111111111111111111111111111111111"), Status: protocol.FileStatusAdded, Mode: 0o100644},
+				// Directory rename
+				{Path: "old-folder", OldHash: treeHash, Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-folder", Hash: treeHash, Status: protocol.FileStatusAdded, Mode: 0o40000},
+			},
+			expected: []CommitFile{
+				// File rename
+				{
+					Path:    "new-file.txt",
+					OldPath: "old-file.txt",
+					Hash:    hash.MustFromHex("1111111111111111111111111111111111111111"),
+					OldHash: hash.MustFromHex("1111111111111111111111111111111111111111"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o100644,
+					OldMode: 0o100644,
+				},
+				// Directory rename
+				{
+					Path:    "new-folder",
+					OldPath: "old-folder",
+					Hash:    treeHash,
+					OldHash: treeHash,
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+			},
+		},
+		{
+			name: "multiple directory renames with same hash",
+			changes: []CommitFile{
+				{Path: "dir1", OldHash: treeHash, Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "dir2", OldHash: treeHash, Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-dir-a", Hash: treeHash, Status: protocol.FileStatusAdded, Mode: 0o40000},
+			},
+			expected: []CommitFile{
+				// One paired as rename
+				{
+					Path:    "new-dir-a",
+					OldPath: "dir1", // First deleted dir (alphabetically)
+					Hash:    treeHash,
+					OldHash: treeHash,
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				// One remains as delete
+				{Path: "dir2", OldHash: treeHash, Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+			},
+		},
+		{
+			name: "nested directory structure renames",
+			changes: []CommitFile{
+				// Parent directory
+				{Path: "old-parent", OldHash: hash.MustFromHex("1111111111111111111111111111111111111111"), Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-parent", Hash: hash.MustFromHex("1111111111111111111111111111111111111111"), Status: protocol.FileStatusAdded, Mode: 0o40000},
+				// Nested child directory
+				{Path: "old-parent/child", OldHash: hash.MustFromHex("2222222222222222222222222222222222222222"), Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-parent/child", Hash: hash.MustFromHex("2222222222222222222222222222222222222222"), Status: protocol.FileStatusAdded, Mode: 0o40000},
+				// Deeply nested grandchild directory
+				{Path: "old-parent/child/grandchild", OldHash: hash.MustFromHex("3333333333333333333333333333333333333333"), Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-parent/child/grandchild", Hash: hash.MustFromHex("3333333333333333333333333333333333333333"), Status: protocol.FileStatusAdded, Mode: 0o40000},
+				// File at deepest level
+				{Path: "old-parent/child/grandchild/deep-file.txt", OldHash: hash.MustFromHex("4444444444444444444444444444444444444444"), Status: protocol.FileStatusDeleted, Mode: 0o100644, OldMode: 0o100644},
+				{Path: "new-parent/child/grandchild/deep-file.txt", Hash: hash.MustFromHex("4444444444444444444444444444444444444444"), Status: protocol.FileStatusAdded, Mode: 0o100644},
+			},
+			expected: []CommitFile{
+				// All should be detected as renames
+				{
+					Path:    "new-parent",
+					OldPath: "old-parent",
+					Hash:    hash.MustFromHex("1111111111111111111111111111111111111111"),
+					OldHash: hash.MustFromHex("1111111111111111111111111111111111111111"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				{
+					Path:    "new-parent/child",
+					OldPath: "old-parent/child",
+					Hash:    hash.MustFromHex("2222222222222222222222222222222222222222"),
+					OldHash: hash.MustFromHex("2222222222222222222222222222222222222222"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				{
+					Path:    "new-parent/child/grandchild",
+					OldPath: "old-parent/child/grandchild",
+					Hash:    hash.MustFromHex("3333333333333333333333333333333333333333"),
+					OldHash: hash.MustFromHex("3333333333333333333333333333333333333333"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				{
+					Path:    "new-parent/child/grandchild/deep-file.txt",
+					OldPath: "old-parent/child/grandchild/deep-file.txt",
+					Hash:    hash.MustFromHex("4444444444444444444444444444444444444444"),
+					OldHash: hash.MustFromHex("4444444444444444444444444444444444444444"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o100644,
+					OldMode: 0o100644,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detectRenames(tt.changes)
+
+			// Verify count
+			require.Len(t, result, len(tt.expected), "Result count mismatch")
+
+			// Verify each expected change is present
+			for _, expected := range tt.expected {
+				found := false
+				for _, actual := range result {
+					if actual.Status == expected.Status &&
+						actual.Path == expected.Path &&
+						actual.OldPath == expected.OldPath {
+						found = true
+						assert.Equal(t, expected.Hash, actual.Hash, "Hash mismatch for %s", actual.Path)
+						assert.Equal(t, expected.OldHash, actual.OldHash, "OldHash mismatch for %s", actual.Path)
+						assert.Equal(t, expected.Mode, actual.Mode, "Mode mismatch for %s", actual.Path)
+						assert.Equal(t, expected.OldMode, actual.OldMode, "OldMode mismatch for %s", actual.Path)
+						break
+					}
+				}
+				assert.True(t, found, "Expected change not found: %+v", expected)
+			}
+		})
+	}
+}

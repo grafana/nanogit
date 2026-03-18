@@ -489,6 +489,230 @@ var _ = Describe("Commits", func() {
 		})
 	})
 
+	Context("CompareCommits with tree/directory rename detection", func() {
+		var (
+			client nanogit.Client
+			local  *gittest.LocalRepo
+		)
+
+		BeforeEach(func() {
+			client, _, local, _ = QuickSetup()
+		})
+
+		It("should detect simple directory rename", func() {
+			By("Creating a directory with files")
+			Expect(local.CreateFile("old-dir/file1.txt", "content1")).To(Succeed())
+			Expect(local.CreateFile("old-dir/file2.txt", "content2")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add directory")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming the directory using git mv")
+			_, err = local.Git("mv", "old-dir", "new-dir")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename directory")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Comparing commits with rename detection")
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should detect renames for directory tree + 2 files = 3 total
+			Expect(changes).To(HaveLen(3))
+
+			var dirRenamed, file1Renamed, file2Renamed bool
+			for _, change := range changes {
+				Expect(change.Status).To(Equal(protocol.FileStatusRenamed))
+				if change.Path == "new-dir" && change.Mode == 0o40000 {
+					dirRenamed = true
+					Expect(change.OldPath).To(Equal("old-dir"))
+				} else if change.Path == "new-dir/file1.txt" {
+					file1Renamed = true
+					Expect(change.OldPath).To(Equal("old-dir/file1.txt"))
+				} else if change.Path == "new-dir/file2.txt" {
+					file2Renamed = true
+					Expect(change.OldPath).To(Equal("old-dir/file2.txt"))
+				}
+			}
+			Expect(dirRenamed).To(BeTrue(), "Directory tree rename should be detected")
+			Expect(file1Renamed).To(BeTrue(), "file1.txt rename should be detected")
+			Expect(file2Renamed).To(BeTrue(), "file2.txt rename should be detected")
+		})
+
+		It("should handle mixed file and directory renames", func() {
+			By("Creating both a file and a directory")
+			Expect(local.CreateFile("single-file.txt", "file content")).To(Succeed())
+			Expect(local.CreateFile("my-dir/nested-file.txt", "nested content")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add file and directory")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming both the file and directory")
+			_, err = local.Git("mv", "single-file.txt", "renamed-file.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("mv", "my-dir", "renamed-dir")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename file and directory")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying renames are detected (file + directory tree + nested file)")
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+			// Should have 3 renames: standalone file, directory tree, and nested file
+			Expect(changes).To(HaveLen(3))
+
+			var fileRenamed, dirRenamed, nestedRenamed bool
+			for _, change := range changes {
+				Expect(change.Status).To(Equal(protocol.FileStatusRenamed))
+				if change.Path == "renamed-file.txt" {
+					fileRenamed = true
+					Expect(change.OldPath).To(Equal("single-file.txt"))
+				}
+				if change.Path == "renamed-dir" && change.Mode == 0o40000 {
+					dirRenamed = true
+					Expect(change.OldPath).To(Equal("my-dir"))
+				}
+				if change.Path == "renamed-dir/nested-file.txt" {
+					nestedRenamed = true
+					Expect(change.OldPath).To(Equal("my-dir/nested-file.txt"))
+				}
+			}
+			Expect(fileRenamed).To(BeTrue(), "File rename should be detected")
+			Expect(dirRenamed).To(BeTrue(), "Directory tree rename should be detected")
+			Expect(nestedRenamed).To(BeTrue(), "Nested file rename should be detected")
+		})
+
+		It("should not detect rename without WithRenameDetection option", func() {
+			By("Creating a directory")
+			Expect(local.CreateFile("dir-a/file.txt", "content")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add directory")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming the directory")
+			_, err = local.Git("mv", "dir-a", "dir-b")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename directory")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Comparing without rename detection - should see deletes + adds")
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash)
+			Expect(err).NotTo(HaveOccurred())
+			// Will include: delete dir-a, delete dir-a/file.txt, add dir-b, add dir-b/file.txt
+			Expect(changes).To(HaveLen(4))
+
+			var hasDeletes, hasAdds bool
+			for _, change := range changes {
+				if change.Status == protocol.FileStatusDeleted {
+					hasDeletes = true
+				}
+				if change.Status == protocol.FileStatusAdded {
+					hasAdds = true
+				}
+				// Should NOT have any renames
+				Expect(change.Status).NotTo(Equal(protocol.FileStatusRenamed))
+			}
+			Expect(hasDeletes).To(BeTrue(), "Should have deletes without rename detection")
+			Expect(hasAdds).To(BeTrue(), "Should have adds without rename detection")
+		})
+
+		It("should detect nested directory structure renames", func() {
+			By("Creating deeply nested directory structure")
+			Expect(local.CreateFile("root/level1/level2/level3/deep-file.txt", "deep content")).To(Succeed())
+			Expect(local.CreateFile("root/level1/level2/sibling.txt", "sibling content")).To(Succeed())
+			Expect(local.CreateFile("root/level1/parent.txt", "parent content")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add nested structure")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming the entire nested structure")
+			_, err = local.Git("mv", "root", "renamed-root")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename nested structure")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying all levels of nesting are detected as renamed")
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Collect all renames by path
+			renames := make(map[string]string) // newPath -> oldPath
+			for _, change := range changes {
+				if change.Status == protocol.FileStatusRenamed {
+					renames[change.Path] = change.OldPath
+				}
+			}
+
+			// Verify directory renames at each level
+			Expect(renames["renamed-root"]).To(Equal("root"), "Root directory should be renamed")
+			Expect(renames["renamed-root/level1"]).To(Equal("root/level1"), "Level 1 directory should be renamed")
+			Expect(renames["renamed-root/level1/level2"]).To(Equal("root/level1/level2"), "Level 2 directory should be renamed")
+			Expect(renames["renamed-root/level1/level2/level3"]).To(Equal("root/level1/level2/level3"), "Level 3 directory should be renamed")
+
+			// Verify file renames at each level
+			Expect(renames["renamed-root/level1/parent.txt"]).To(Equal("root/level1/parent.txt"), "Parent file should be renamed")
+			Expect(renames["renamed-root/level1/level2/sibling.txt"]).To(Equal("root/level1/level2/sibling.txt"), "Sibling file should be renamed")
+			Expect(renames["renamed-root/level1/level2/level3/deep-file.txt"]).To(Equal("root/level1/level2/level3/deep-file.txt"), "Deep file should be renamed")
+
+			By("Verifying all changes are renames (no deletes/adds)")
+			for _, change := range changes {
+				Expect(change.Status).To(Equal(protocol.FileStatusRenamed), "All changes should be renames")
+			}
+		})
+	})
+
 	Context("ListCommits operations", func() {
 		Context("basic functionality", func() {
 			var (

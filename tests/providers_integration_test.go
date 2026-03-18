@@ -317,6 +317,52 @@ func TestProviders(t *testing.T) {
 	_, err = client.GetBlobByPath(ctx, moveTreeCommit.Tree, "tree-test/file3.txt")
 	require.Error(t, err)
 
+	// Test directory/tree rename detection with CompareCommits
+	t.Log("Testing directory rename detection with CompareCommits...")
+
+	// Without rename detection - should see deletes + adds for all files
+	treesWithoutRename, err := client.CompareCommits(ctx, createTreeCommit.Hash, moveTreeCommit.Hash)
+	require.NoError(t, err)
+	// Count deletes and adds (should have matching pairs for all moved files)
+	var deleteCount, addCount int
+	for _, change := range treesWithoutRename {
+		if change.Status == protocol.FileStatusDeleted {
+			deleteCount++
+		}
+		if change.Status == protocol.FileStatusAdded {
+			addCount++
+		}
+	}
+	require.Greater(t, deleteCount, 0, "Should have deletes without rename detection")
+	require.Greater(t, addCount, 0, "Should have adds without rename detection")
+
+	// With rename detection - should see renames for all moved files and directories
+	treesWithRename, err := client.CompareCommits(ctx, createTreeCommit.Hash, moveTreeCommit.Hash, nanogit.WithRenameDetection())
+	require.NoError(t, err)
+
+	// Collect all renamed paths (both files and directories)
+	renamedPaths := make(map[string]string) // new path -> old path
+	for _, change := range treesWithRename {
+		if change.Status == protocol.FileStatusRenamed {
+			renamedPaths[change.Path] = change.OldPath
+		}
+	}
+
+	// All three files should be detected as renames
+	require.Equal(t, "tree-test/subdir/file1.txt", renamedPaths["moved-tree/subdir/file1.txt"], "file1.txt should be detected as renamed")
+	require.Equal(t, "tree-test/subdir/file2.txt", renamedPaths["moved-tree/subdir/file2.txt"], "file2.txt should be detected as renamed")
+	require.Equal(t, "tree-test/file3.txt", renamedPaths["moved-tree/file3.txt"], "file3.txt should be detected as renamed")
+
+	// Verify directory renames are also detected
+	require.Equal(t, "tree-test", renamedPaths["moved-tree"], "root directory should be detected as renamed")
+	require.Equal(t, "tree-test/subdir", renamedPaths["moved-tree/subdir"], "subdirectory should be detected as renamed")
+
+	t.Logf("Successfully detected %d total renames (%d files + %d directories) in directory move",
+		len(renamedPaths),
+		3, // files
+		2, // directories
+	)
+
 	branchRef, err = client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)
 	require.Equal(t, moveTreeCommit.Hash, branchRef.Hash)
