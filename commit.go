@@ -76,6 +76,8 @@ func (c *Commit) Time() time.Time {
 type CommitFile struct {
 	// Path of the file in the head commit
 	Path string
+	// OldPath is the original path for renamed files (only set when Status is FileStatusRenamed)
+	OldPath string
 	// Mode is the file mode in the head commit (e.g., 100644 for regular files)
 	Mode uint32
 	// OldMode is the original file mode in the base commit (for modified files)
@@ -88,6 +90,30 @@ type CommitFile struct {
 	Status protocol.FileStatus
 }
 
+// CompareCommitsOptions configures the behavior of CompareCommits
+type CompareCommitsOptions struct {
+	detectRenames bool
+}
+
+// CompareCommitsOption configures CompareCommits behavior
+type CompareCommitsOption func(*CompareCommitsOptions)
+
+// WithRenameDetection enables rename detection in CompareCommits.
+// When enabled, deleted files with added files having identical content hashes
+// will be reported as a single renamed file (FileStatusRenamed) instead of
+// separate delete and add operations.
+func WithRenameDetection() CompareCommitsOption {
+	return func(opts *CompareCommitsOptions) {
+		opts.detectRenames = true
+	}
+}
+
+func defaultCompareCommitsOptions() *CompareCommitsOptions {
+	return &CompareCommitsOptions{
+		detectRenames: false,
+	}
+}
+
 // CompareCommits compares two commits and returns the differences between them.
 // This method performs a comprehensive diff between two commits, analyzing
 // all file changes that occurred between the base and head commits.
@@ -96,11 +122,13 @@ type CommitFile struct {
 //   - Added files (present in head but not in base)
 //   - Modified files (different content or mode between base and head)
 //   - Deleted files (present in base but not in head)
+//   - Renamed files (when WithRenameDetection option is enabled)
 //
 // Parameters:
 //   - ctx: Context for the operation
 //   - baseCommit: Hash of the base commit (older commit)
 //   - headCommit: Hash of the head commit (newer commit)
+//   - opts: Optional configuration options (e.g., WithRenameDetection)
 //
 // Returns:
 //   - []CommitFile: Sorted list of file changes between the commits
@@ -115,11 +143,29 @@ type CommitFile struct {
 //	for _, change := range changes {
 //	    fmt.Printf("%s: %s\n", change.Status, change.Path)
 //	}
-func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error) {
+//
+// Example with rename detection:
+//
+//	changes, err := client.CompareCommits(ctx, oldCommit, newCommit, nanogit.WithRenameDetection())
+//	if err != nil {
+//	    return err
+//	}
+//	for _, change := range changes {
+//	    if change.Status == protocol.FileStatusRenamed {
+//	        fmt.Printf("Renamed: %s -> %s\n", change.OldPath, change.Path)
+//	    }
+//	}
+func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash, opts ...CompareCommitsOption) ([]CommitFile, error) {
+	options := defaultCompareCommitsOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	logger := log.FromContext(ctx)
 	logger.Debug("Compare commits",
 		"base_hash", baseCommit.String(),
-		"head_hash", headCommit.String())
+		"head_hash", headCommit.String(),
+		"detect_renames", options.detectRenames)
 
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
@@ -155,7 +201,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 	baseTree := baseRes.tree
 	headTree := headRes.tree
 
-	changes := c.compareTrees(baseTree, headTree)
+	changes := c.compareTrees(baseTree, headTree, options)
 	logger.Debug("Commits compared",
 		"base_hash", baseCommit.String(),
 		"head_hash", headCommit.String(),
@@ -185,9 +231,12 @@ type entryInfo struct {
 //   - Files that exist in both trees but have different content or mode (modified)
 //   - Files that exist in the base tree but not in the head tree (deleted)
 //
+// If rename detection is enabled in options, deleted files with added files
+// having identical content hashes will be consolidated into rename operations.
+//
 // The function returns a sorted list of changes, with each change containing
 // the relevant file information and status.
-func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
+func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOptions) []CommitFile {
 	// Estimate capacity: assume 10-20% of files changed
 	estimatedChanges := (len(base.Entries) + len(head.Entries)) / 10
 	if estimatedChanges < 10 {
@@ -237,12 +286,18 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 		if _, exists := inHead[path]; !exists {
 			// File exists in base but not in head - it was deleted
 			changes = append(changes, CommitFile{
-				Path:   path,
-				Status: protocol.FileStatusDeleted,
-				Mode:   uint32(baseInfo.mode),
-				Hash:   baseInfo.hash,
+				Path:    path,
+				Status:  protocol.FileStatusDeleted,
+				Mode:    uint32(baseInfo.mode),
+				Hash:    baseInfo.hash,
+				OldHash: baseInfo.hash,
 			})
 		}
+	}
+
+	// Rename detection (if enabled)
+	if opts.detectRenames {
+		changes = detectRenames(changes)
 	}
 
 	// Sort changes by path for consistent ordering
@@ -251,6 +306,64 @@ func (c *httpClient) compareTrees(base, head *FlatTree) []CommitFile {
 	})
 
 	return changes
+}
+
+// detectRenames identifies renamed files by matching deleted files with added files
+// that have identical content hashes. Returns a new slice with renames consolidated.
+func detectRenames(changes []CommitFile) []CommitFile {
+	// Build maps of deleted and added files by hash
+	deletedByHash := make(map[string]CommitFile)
+	addedByHash := make(map[string]CommitFile)
+
+	for _, change := range changes {
+		switch change.Status {
+		case protocol.FileStatusDeleted:
+			deletedByHash[change.OldHash.String()] = change
+		case protocol.FileStatusAdded:
+			addedByHash[change.Hash.String()] = change
+		}
+	}
+
+	// Find matching pairs (same hash = rename)
+	renamedHashes := make(map[string]struct{})
+	result := make([]CommitFile, 0, len(changes))
+
+	for hashStr, deleted := range deletedByHash {
+		if added, exists := addedByHash[hashStr]; exists {
+			// Found a rename: deleted.Path -> added.Path
+			result = append(result, CommitFile{
+				Path:    added.Path,
+				OldPath: deleted.Path,
+				Mode:    added.Mode,
+				OldMode: deleted.Mode,
+				Hash:    added.Hash,
+				OldHash: deleted.OldHash,
+				Status:  protocol.FileStatusRenamed,
+			})
+			renamedHashes[hashStr] = struct{}{}
+		}
+	}
+
+	// Add back non-renamed changes
+	for _, change := range changes {
+		var relevantHash string
+		switch change.Status {
+		case protocol.FileStatusDeleted:
+			relevantHash = change.OldHash.String()
+		case protocol.FileStatusAdded:
+			relevantHash = change.Hash.String()
+		}
+
+		if relevantHash != "" {
+			if _, wasRenamed := renamedHashes[relevantHash]; wasRenamed {
+				continue
+			}
+		}
+
+		result = append(result, change)
+	}
+
+	return result
 }
 
 // GetCommit retrieves a specific commit object from the repository by its hash.

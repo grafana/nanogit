@@ -88,7 +88,7 @@ type Client interface {
 	GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error)
 	// Commit operations
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
-	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash) ([]CommitFile, error)
+	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash, opts ...CompareCommitsOption) ([]CommitFile, error)
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
 	// Clone operations
 	Clone(ctx context.Context, opts CloneOptions) (*CloneResult, error)

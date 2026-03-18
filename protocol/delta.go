@@ -11,8 +11,9 @@ type FileStatus string
 // - "A" (Added): A file was added.
 // - "D" (Deleted): A file was deleted.
 // - "T" (Type Changed): A file's type changed (e.g., from regular file to symlink).
+// - "R" (Renamed): A file was renamed (requires rename detection to be enabled).
 //
-// Other Git status codes, such as "R" (Renamed) and "C" (Copied), are not currently supported.
+// Other Git status codes, such as "C" (Copied), are not currently supported.
 const (
 	// FileStatusModified indicates a file was modified
 	FileStatusModified FileStatus = "M"
@@ -22,6 +23,8 @@ const (
 	FileStatusDeleted FileStatus = "D"
 	// FileStatusTypeChanged indicates a file's type changed (e.g., from regular file to symlink)
 	FileStatusTypeChanged FileStatus = "T"
+	// FileStatusRenamed indicates a file was renamed
+	FileStatusRenamed FileStatus = "R"
 )
 
 var (

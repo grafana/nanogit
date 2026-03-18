@@ -264,6 +264,174 @@ var _ = Describe("Commits", func() {
 		})
 	})
 
+	Context("CompareCommits with rename detection", func() {
+		var (
+			client            nanogit.Client
+			local             *gittest.LocalRepo
+			initialCommitHash hash.Hash
+			renamedCommitHash hash.Hash
+			fileHash          hash.Hash
+		)
+
+		BeforeEach(func() {
+			By("Setting up test repository")
+			client, _, local, _ = QuickSetup()
+
+			By("Creating initial commit with a file")
+			Expect(local.CreateFile("original.txt", "content")).To(Succeed())
+			_, err := local.Git("add", "original.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Initial commit")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			initialCommitHash, err = hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating second commit that renames the file")
+			_, err = local.Git("mv", "original.txt", "renamed.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename file")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			renamedCommitHash, err = hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Pushing commits")
+			_, err = local.Git("push", "origin", "main", "--force")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting file hash for verification")
+			output, err = local.Git("rev-parse", initialCommitHash.String()+":original.txt")
+			Expect(err).NotTo(HaveOccurred())
+			fileHash, err = hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should detect simple file rename with WithRenameDetection", func() {
+			changes, err := client.CompareCommits(ctx, initialCommitHash, renamedCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(1))
+
+			Expect(changes[0].Status).To(Equal(protocol.FileStatusRenamed))
+			Expect(changes[0].Path).To(Equal("renamed.txt"))
+			Expect(changes[0].OldPath).To(Equal("original.txt"))
+			Expect(changes[0].Hash).To(Equal(fileHash))
+			Expect(changes[0].OldHash).To(Equal(fileHash))
+		})
+
+		It("should report delete+add without WithRenameDetection", func() {
+			changes, err := client.CompareCommits(ctx, initialCommitHash, renamedCommitHash)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(2))
+
+			// Should see delete and add (order depends on sorting)
+			statuses := []protocol.FileStatus{changes[0].Status, changes[1].Status}
+			Expect(statuses).To(ContainElements(protocol.FileStatusDeleted, protocol.FileStatusAdded))
+		})
+
+		It("should handle multiple renames in single commit", func() {
+			By("Creating two more files")
+			Expect(local.CreateFile("file1.txt", "content1")).To(Succeed())
+			Expect(local.CreateFile("file2.txt", "content2")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add files")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming both files")
+			_, err = local.Git("mv", "file1.txt", "newname1.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("mv", "file2.txt", "newname2.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename multiple files")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(2))
+
+			for _, change := range changes {
+				Expect(change.Status).To(Equal(protocol.FileStatusRenamed))
+			}
+		})
+
+		It("should distinguish renames from delete+add with different content", func() {
+			By("Deleting renamed.txt and adding a different file")
+			_, err := local.Git("rm", "renamed.txt")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(local.CreateFile("different.txt", "different content")).To(Succeed())
+			_, err = local.Git("add", "different.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Delete and add different file")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			differentCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			changes, err := client.CompareCommits(ctx, renamedCommitHash, differentCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(2))
+
+			// Should be delete + add, not rename (different content)
+			statuses := []protocol.FileStatus{changes[0].Status, changes[1].Status}
+			Expect(statuses).To(ContainElements(protocol.FileStatusDeleted, protocol.FileStatusAdded))
+		})
+
+		It("should handle rename combined with other changes", func() {
+			By("Adding another file alongside the rename")
+			Expect(local.CreateFile("newfile.txt", "new content")).To(Succeed())
+			_, err := local.Git("mv", "renamed.txt", "renamed-again.txt")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename and add")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			mixedCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			changes, err := client.CompareCommits(ctx, renamedCommitHash, mixedCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(changes).To(HaveLen(2))
+
+			// Should have 1 rename + 1 add
+			var hasRenamed, hasAdded bool
+			for _, change := range changes {
+				if change.Status == protocol.FileStatusRenamed {
+					hasRenamed = true
+					Expect(change.OldPath).To(Equal("renamed.txt"))
+					Expect(change.Path).To(Equal("renamed-again.txt"))
+				}
+				if change.Status == protocol.FileStatusAdded {
+					hasAdded = true
+					Expect(change.Path).To(Equal("newfile.txt"))
+				}
+			}
+			Expect(hasRenamed).To(BeTrue())
+			Expect(hasAdded).To(BeTrue())
+		})
+	})
+
 	Context("ListCommits operations", func() {
 		Context("basic functionality", func() {
 			var (

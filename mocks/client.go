@@ -52,12 +52,13 @@ type FakeClient struct {
 		result1 *nanogit.CloneResult
 		result2 error
 	}
-	CompareCommitsStub        func(context.Context, hash.Hash, hash.Hash) ([]nanogit.CommitFile, error)
+	CompareCommitsStub        func(context.Context, hash.Hash, hash.Hash, ...nanogit.CompareCommitsOption) ([]nanogit.CommitFile, error)
 	compareCommitsMutex       sync.RWMutex
 	compareCommitsArgsForCall []struct {
 		arg1 context.Context
 		arg2 hash.Hash
 		arg3 hash.Hash
+		arg4 []nanogit.CompareCommitsOption
 	}
 	compareCommitsReturns struct {
 		result1 []nanogit.CommitFile
@@ -482,20 +483,21 @@ func (fake *FakeClient) CloneReturnsOnCall(i int, result1 *nanogit.CloneResult, 
 	}{result1, result2}
 }
 
-func (fake *FakeClient) CompareCommits(arg1 context.Context, arg2 hash.Hash, arg3 hash.Hash) ([]nanogit.CommitFile, error) {
+func (fake *FakeClient) CompareCommits(arg1 context.Context, arg2 hash.Hash, arg3 hash.Hash, arg4 ...nanogit.CompareCommitsOption) ([]nanogit.CommitFile, error) {
 	fake.compareCommitsMutex.Lock()
 	ret, specificReturn := fake.compareCommitsReturnsOnCall[len(fake.compareCommitsArgsForCall)]
 	fake.compareCommitsArgsForCall = append(fake.compareCommitsArgsForCall, struct {
 		arg1 context.Context
 		arg2 hash.Hash
 		arg3 hash.Hash
-	}{arg1, arg2, arg3})
+		arg4 []nanogit.CompareCommitsOption
+	}{arg1, arg2, arg3, arg4})
 	stub := fake.CompareCommitsStub
 	fakeReturns := fake.compareCommitsReturns
-	fake.recordInvocation("CompareCommits", []interface{}{arg1, arg2, arg3})
+	fake.recordInvocation("CompareCommits", []interface{}{arg1, arg2, arg3, arg4})
 	fake.compareCommitsMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2, arg3)
+		return stub(arg1, arg2, arg3, arg4...)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -509,17 +511,17 @@ func (fake *FakeClient) CompareCommitsCallCount() int {
 	return len(fake.compareCommitsArgsForCall)
 }
 
-func (fake *FakeClient) CompareCommitsCalls(stub func(context.Context, hash.Hash, hash.Hash) ([]nanogit.CommitFile, error)) {
+func (fake *FakeClient) CompareCommitsCalls(stub func(context.Context, hash.Hash, hash.Hash, ...nanogit.CompareCommitsOption) ([]nanogit.CommitFile, error)) {
 	fake.compareCommitsMutex.Lock()
 	defer fake.compareCommitsMutex.Unlock()
 	fake.CompareCommitsStub = stub
 }
 
-func (fake *FakeClient) CompareCommitsArgsForCall(i int) (context.Context, hash.Hash, hash.Hash) {
+func (fake *FakeClient) CompareCommitsArgsForCall(i int) (context.Context, hash.Hash, hash.Hash, []nanogit.CompareCommitsOption) {
 	fake.compareCommitsMutex.RLock()
 	defer fake.compareCommitsMutex.RUnlock()
 	argsForCall := fake.compareCommitsArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
 }
 
 func (fake *FakeClient) CompareCommitsReturns(result1 []nanogit.CommitFile, result2 error) {
