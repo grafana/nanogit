@@ -363,6 +363,62 @@ func TestDetectRenames_TreeEntries(t *testing.T) {
 				{Path: "dir2", OldHash: treeHash, Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
 			},
 		},
+		{
+			name: "nested directory structure renames",
+			changes: []CommitFile{
+				// Parent directory
+				{Path: "old-parent", OldHash: hash.MustFromHex("1111111111111111111111111111111111111111"), Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-parent", Hash: hash.MustFromHex("1111111111111111111111111111111111111111"), Status: protocol.FileStatusAdded, Mode: 0o40000},
+				// Nested child directory
+				{Path: "old-parent/child", OldHash: hash.MustFromHex("2222222222222222222222222222222222222222"), Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-parent/child", Hash: hash.MustFromHex("2222222222222222222222222222222222222222"), Status: protocol.FileStatusAdded, Mode: 0o40000},
+				// Deeply nested grandchild directory
+				{Path: "old-parent/child/grandchild", OldHash: hash.MustFromHex("3333333333333333333333333333333333333333"), Status: protocol.FileStatusDeleted, Mode: 0o40000, OldMode: 0o40000},
+				{Path: "new-parent/child/grandchild", Hash: hash.MustFromHex("3333333333333333333333333333333333333333"), Status: protocol.FileStatusAdded, Mode: 0o40000},
+				// File at deepest level
+				{Path: "old-parent/child/grandchild/deep-file.txt", OldHash: hash.MustFromHex("4444444444444444444444444444444444444444"), Status: protocol.FileStatusDeleted, Mode: 0o100644, OldMode: 0o100644},
+				{Path: "new-parent/child/grandchild/deep-file.txt", Hash: hash.MustFromHex("4444444444444444444444444444444444444444"), Status: protocol.FileStatusAdded, Mode: 0o100644},
+			},
+			expected: []CommitFile{
+				// All should be detected as renames
+				{
+					Path:    "new-parent",
+					OldPath: "old-parent",
+					Hash:    hash.MustFromHex("1111111111111111111111111111111111111111"),
+					OldHash: hash.MustFromHex("1111111111111111111111111111111111111111"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				{
+					Path:    "new-parent/child",
+					OldPath: "old-parent/child",
+					Hash:    hash.MustFromHex("2222222222222222222222222222222222222222"),
+					OldHash: hash.MustFromHex("2222222222222222222222222222222222222222"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				{
+					Path:    "new-parent/child/grandchild",
+					OldPath: "old-parent/child/grandchild",
+					Hash:    hash.MustFromHex("3333333333333333333333333333333333333333"),
+					OldHash: hash.MustFromHex("3333333333333333333333333333333333333333"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o40000,
+					OldMode: 0o40000,
+				},
+				{
+					Path:    "new-parent/child/grandchild/deep-file.txt",
+					OldPath: "old-parent/child/grandchild/deep-file.txt",
+					Hash:    hash.MustFromHex("4444444444444444444444444444444444444444"),
+					OldHash: hash.MustFromHex("4444444444444444444444444444444444444444"),
+					Status:  protocol.FileStatusRenamed,
+					Mode:    0o100644,
+					OldMode: 0o100644,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

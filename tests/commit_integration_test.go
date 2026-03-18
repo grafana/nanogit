@@ -654,6 +654,63 @@ var _ = Describe("Commits", func() {
 			Expect(hasDeletes).To(BeTrue(), "Should have deletes without rename detection")
 			Expect(hasAdds).To(BeTrue(), "Should have adds without rename detection")
 		})
+
+		It("should detect nested directory structure renames", func() {
+			By("Creating deeply nested directory structure")
+			Expect(local.CreateFile("root/level1/level2/level3/deep-file.txt", "deep content")).To(Succeed())
+			Expect(local.CreateFile("root/level1/level2/sibling.txt", "sibling content")).To(Succeed())
+			Expect(local.CreateFile("root/level1/parent.txt", "parent content")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add nested structure")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming the entire nested structure")
+			_, err = local.Git("mv", "root", "renamed-root")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename nested structure")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying all levels of nesting are detected as renamed")
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Collect all renames by path
+			renames := make(map[string]string) // newPath -> oldPath
+			for _, change := range changes {
+				if change.Status == protocol.FileStatusRenamed {
+					renames[change.Path] = change.OldPath
+				}
+			}
+
+			// Verify directory renames at each level
+			Expect(renames["renamed-root"]).To(Equal("root"), "Root directory should be renamed")
+			Expect(renames["renamed-root/level1"]).To(Equal("root/level1"), "Level 1 directory should be renamed")
+			Expect(renames["renamed-root/level1/level2"]).To(Equal("root/level1/level2"), "Level 2 directory should be renamed")
+			Expect(renames["renamed-root/level1/level2/level3"]).To(Equal("root/level1/level2/level3"), "Level 3 directory should be renamed")
+
+			// Verify file renames at each level
+			Expect(renames["renamed-root/level1/parent.txt"]).To(Equal("root/level1/parent.txt"), "Parent file should be renamed")
+			Expect(renames["renamed-root/level1/level2/sibling.txt"]).To(Equal("root/level1/level2/sibling.txt"), "Sibling file should be renamed")
+			Expect(renames["renamed-root/level1/level2/level3/deep-file.txt"]).To(Equal("root/level1/level2/level3/deep-file.txt"), "Deep file should be renamed")
+
+			By("Verifying all changes are renames (no deletes/adds)")
+			for _, change := range changes {
+				Expect(change.Status).To(Equal(protocol.FileStatusRenamed), "All changes should be renames")
+			}
+		})
 	})
 
 	Context("ListCommits operations", func() {
