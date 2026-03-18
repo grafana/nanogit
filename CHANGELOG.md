@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/grafana/nanogit/compare/v0.11.1...v0.12.0) (2026-03-18)
+
+
+### Features
+
+* add directory/tree rename detection support ([#245](https://github.com/grafana/nanogit/issues/245)) ([1b15b53](https://github.com/grafana/nanogit/commit/1b15b53e2c9ddf8fc1c75600abe213f9c230f084))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.41.0 ([#213](https://github.com/grafana/nanogit/issues/213)) ([20e54d6](https://github.com/grafana/nanogit/commit/20e54d632e5471158f291b3136a668536701f8e5))
+
 ## [0.11.1](https://github.com/grafana/nanogit/compare/v0.11.0...v0.11.1) (2026-03-18)
 
 
