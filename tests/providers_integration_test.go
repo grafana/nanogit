@@ -336,14 +336,14 @@ func TestProviders(t *testing.T) {
 	require.Greater(t, deleteCount, 0, "Should have deletes without rename detection")
 	require.Greater(t, addCount, 0, "Should have adds without rename detection")
 
-	// With rename detection - should see renames for all moved files
+	// With rename detection - should see renames for all moved files and directories
 	treesWithRename, err := client.CompareCommits(ctx, createTreeCommit.Hash, moveTreeCommit.Hash, nanogit.WithRenameDetection())
 	require.NoError(t, err)
 
-	// Verify all three files are detected as renames
+	// Collect renamed files (filter out tree/directory entries)
 	renamedFiles := make(map[string]string) // new path -> old path
 	for _, change := range treesWithRename {
-		if change.Status == protocol.FileStatusRenamed {
+		if change.Status == protocol.FileStatusRenamed && change.Mode != 0o40000 {
 			renamedFiles[change.Path] = change.OldPath
 		}
 	}
@@ -353,7 +353,7 @@ func TestProviders(t *testing.T) {
 	require.Equal(t, "tree-test/subdir/file2.txt", renamedFiles["moved-tree/subdir/file2.txt"], "file2.txt should be detected as renamed")
 	require.Equal(t, "tree-test/file3.txt", renamedFiles["moved-tree/file3.txt"], "file3.txt should be detected as renamed")
 
-	t.Logf("Successfully detected %d file renames in directory move", len(renamedFiles))
+	t.Logf("Successfully detected %d file renames (excluding directory entries) in directory move", len(renamedFiles))
 
 	branchRef, err = client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)

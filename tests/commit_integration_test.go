@@ -530,13 +530,26 @@ var _ = Describe("Commits", func() {
 			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Should detect renames for both files
-			Expect(changes).To(HaveLen(2))
+			// Should detect renames for directory tree + 2 files = 3 total
+			Expect(changes).To(HaveLen(3))
+
+			var dirRenamed, file1Renamed, file2Renamed bool
 			for _, change := range changes {
 				Expect(change.Status).To(Equal(protocol.FileStatusRenamed))
-				Expect(change.Path).To(HavePrefix("new-dir/"))
-				Expect(change.OldPath).To(HavePrefix("old-dir/"))
+				if change.Path == "new-dir" && change.Mode == 0o40000 {
+					dirRenamed = true
+					Expect(change.OldPath).To(Equal("old-dir"))
+				} else if change.Path == "new-dir/file1.txt" {
+					file1Renamed = true
+					Expect(change.OldPath).To(Equal("old-dir/file1.txt"))
+				} else if change.Path == "new-dir/file2.txt" {
+					file2Renamed = true
+					Expect(change.OldPath).To(Equal("old-dir/file2.txt"))
+				}
 			}
+			Expect(dirRenamed).To(BeTrue(), "Directory tree rename should be detected")
+			Expect(file1Renamed).To(BeTrue(), "file1.txt rename should be detected")
+			Expect(file2Renamed).To(BeTrue(), "file2.txt rename should be detected")
 		})
 
 		It("should handle mixed file and directory renames", func() {
@@ -621,13 +634,25 @@ var _ = Describe("Commits", func() {
 			headCommitHash, err := hash.FromHex(output)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Comparing without rename detection - should see delete + add")
+			By("Comparing without rename detection - should see deletes + adds")
 			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(changes).To(HaveLen(2))
+			// Will include: delete dir-a, delete dir-a/file.txt, add dir-b, add dir-b/file.txt
+			Expect(changes).To(HaveLen(4))
 
-			statuses := []protocol.FileStatus{changes[0].Status, changes[1].Status}
-			Expect(statuses).To(ContainElements(protocol.FileStatusDeleted, protocol.FileStatusAdded))
+			var hasDeletes, hasAdds bool
+			for _, change := range changes {
+				if change.Status == protocol.FileStatusDeleted {
+					hasDeletes = true
+				}
+				if change.Status == protocol.FileStatusAdded {
+					hasAdds = true
+				}
+				// Should NOT have any renames
+				Expect(change.Status).NotTo(Equal(protocol.FileStatusRenamed))
+			}
+			Expect(hasDeletes).To(BeTrue(), "Should have deletes without rename detection")
+			Expect(hasAdds).To(BeTrue(), "Should have adds without rename detection")
 		})
 	})
 
