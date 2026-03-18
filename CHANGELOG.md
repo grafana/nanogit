@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/grafana/nanogit/compare/v0.10.2...v0.11.0) (2026-03-18)
+
+
+### Features
+
+* add optional rename detection to CompareCommits ([#243](https://github.com/grafana/nanogit/issues/243)) ([806d935](https://github.com/grafana/nanogit/commit/806d93592070e984557f54728de980b517589d41)), closes [/github.com/grafana/nanogit/pull/243#discussion_r2952738499](https://github.com/grafana//github.com/grafana/nanogit/pull/243/issues/discussion_r2952738499) [/github.com/grafana/nanogit/pull/243#discussion_r2952738633](https://github.com/grafana//github.com/grafana/nanogit/pull/243/issues/discussion_r2952738633)
+
 ## [0.10.2](https://github.com/grafana/nanogit/compare/v0.10.1...v0.10.2) (2026-03-17)
 
 * **deps:** update module github.com/spf13/cobra to v1.10.2 ([#238](https://github.com/grafana/nanogit/issues/238)) ([faa6093](https://github.com/grafana/nanogit/commit/faa60932f212c3c0147b2704f693154baf3d25c6))
