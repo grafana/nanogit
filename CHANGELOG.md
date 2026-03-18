@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1](https://github.com/grafana/nanogit/compare/v0.12.0...v0.12.1) (2026-03-18)
+
+
+### Bug Fixes
+
+* **ci:** disable GoReleaser changelog to prevent duplicate release notes ([#248](https://github.com/grafana/nanogit/issues/248)) ([77b042b](https://github.com/grafana/nanogit/commit/77b042bf8ec05b56da309b6be86053d3f09eefa8))
+
 ## [0.12.0](https://github.com/grafana/nanogit/compare/v0.11.1...v0.12.0) (2026-03-18)
 
 
