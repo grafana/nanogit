@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.2](https://github.com/grafana/nanogit/compare/v0.10.1...v0.10.2) (2026-03-17)
 
+* **deps:** update module github.com/spf13/cobra to v1.10.2 ([#238](https://github.com/grafana/nanogit/issues/238)) ([faa6093](https://github.com/grafana/nanogit/commit/faa60932f212c3c0147b2704f693154baf3d25c6))
+
+## [0.10.1](https://github.com/grafana/nanogit/compare/v0.10.0...v0.10.1) (2026-03-17)
 
 ### Bug Fixes
 
-* **deps:** update module github.com/spf13/cobra to v1.10.2 ([#238](https://github.com/grafana/nanogit/issues/238)) ([faa6093](https://github.com/grafana/nanogit/commit/faa60932f212c3c0147b2704f693154baf3d25c6))
+* **ci:** configure Renovate to ignore internal workspace modules ([#234](https://github.com/grafana/nanogit/issues/234)) ([ccc2260](https://github.com/grafana/nanogit/commit/ccc22604dabc3b18aab56d9edd3815cc4df976e1))
+* **deps:** update module golang.org/x/sync to v0.20.0 ([#203](https://github.com/grafana/nanogit/issues/203)) ([5857213](https://github.com/grafana/nanogit/commit/58572136d273e44dffc29bb1554c3702beb3b87f))
 
 ## [0.10.0](https://github.com/grafana/nanogit/compare/v0.9.0...v0.10.0) (2026-03-17)
 
