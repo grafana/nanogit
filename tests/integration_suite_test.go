@@ -89,5 +89,3 @@ func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo
 
 	return client, repo, local, user
 }
-
-

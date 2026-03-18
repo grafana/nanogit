@@ -92,7 +92,7 @@ type CommitFile struct {
 
 // CompareCommitsOptions configures the behavior of CompareCommits
 type CompareCommitsOptions struct {
-	detectRenames bool
+	DetectRenames bool
 }
 
 // CompareCommitsOption configures CompareCommits behavior
@@ -104,13 +104,13 @@ type CompareCommitsOption func(*CompareCommitsOptions)
 // separate delete and add operations.
 func WithRenameDetection() CompareCommitsOption {
 	return func(opts *CompareCommitsOptions) {
-		opts.detectRenames = true
+		opts.DetectRenames = true
 	}
 }
 
 func defaultCompareCommitsOptions() *CompareCommitsOptions {
 	return &CompareCommitsOptions{
-		detectRenames: false,
+		DetectRenames: false,
 	}
 }
 
@@ -168,7 +168,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 	logger.Debug("Compare commits",
 		"base_hash", baseCommit.String(),
 		"head_hash", headCommit.String(),
-		"detect_renames", options.detectRenames)
+		"detect_renames", options.DetectRenames)
 
 	ctx, _ = storage.FromContextOrInMemory(ctx)
 
@@ -299,7 +299,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOpti
 	}
 
 	// Rename detection (if enabled)
-	if opts.detectRenames {
+	if opts.DetectRenames {
 		changes = detectRenames(changes)
 	}
 
@@ -322,6 +322,12 @@ func detectRenames(changes []CommitFile) []CommitFile {
 	addedByHash := make(map[hash.Hash][]CommitFile)
 
 	for _, change := range changes {
+		// Skip tree entries (directories) - only match blob (file) entries
+		// Git tree mode is 0o40000 (16384 decimal)
+		if change.Mode == 0o40000 || (change.Status == protocol.FileStatusDeleted && change.OldMode == 0o40000) {
+			continue
+		}
+
 		switch change.Status {
 		case protocol.FileStatusDeleted:
 			deletedByHash[change.OldHash] = append(deletedByHash[change.OldHash], change)

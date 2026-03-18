@@ -26,9 +26,9 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 		{
 			name: "two deletes and one add with same hash - one rename, one delete",
 			changes: []CommitFile{
-				{Path: "file1.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "file2.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "renamed.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+				{Path: "file1.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "file2.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "renamed.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
 			},
 			expected: []CommitFile{
 				// One file should be paired as a rename (file1 or file2 -> renamed)
@@ -38,19 +38,19 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    identicalHash,
 					OldHash: identicalHash,
 					Status:  protocol.FileStatusRenamed,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 				// One delete should remain unpaired
-				{Path: "file2.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
+				{Path: "file2.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
 			},
 		},
 		{
 			name: "one delete and two adds with same hash - one rename, one add",
 			changes: []CommitFile{
-				{Path: "original.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "copy1.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
-				{Path: "copy2.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+				{Path: "original.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "copy1.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
+				{Path: "copy2.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
 			},
 			expected: []CommitFile{
 				// One add should be paired as a rename
@@ -60,22 +60,22 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    identicalHash,
 					OldHash: identicalHash,
 					Status:  protocol.FileStatusRenamed,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 				// One add should remain unpaired
-				{Path: "copy2.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+				{Path: "copy2.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
 			},
 		},
 		{
 			name: "three deletes and three adds with same hash - three renames",
 			changes: []CommitFile{
-				{Path: "a.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "b.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "c.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "x.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
-				{Path: "y.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
-				{Path: "z.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+				{Path: "a.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "b.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "c.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "x.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
+				{Path: "y.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
+				{Path: "z.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
 			},
 			expected: []CommitFile{
 				// All three should be paired as renames (one-to-one)
@@ -85,8 +85,8 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    identicalHash,
 					OldHash: identicalHash,
 					Status:  protocol.FileStatusRenamed,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 				{
 					Path:    "y.txt",
@@ -94,8 +94,8 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    identicalHash,
 					OldHash: identicalHash,
 					Status:  protocol.FileStatusRenamed,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 				{
 					Path:    "z.txt",
@@ -103,8 +103,8 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    identicalHash,
 					OldHash: identicalHash,
 					Status:  protocol.FileStatusRenamed,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 			},
 		},
@@ -112,16 +112,16 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 			name: "mixed: identical content files with other changes",
 			changes: []CommitFile{
 				// Identical content files
-				{Path: "dup1.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-				{Path: "dup2.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+				{Path: "dup1.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+				{Path: "dup2.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
 				// Different content file (modified)
 				{
 					Path:    "different.txt",
 					Hash:    hash.MustFromHex("abcdef1234567890abcdef1234567890abcdef12"),
 					OldHash: hash.MustFromHex("fedcba0987654321fedcba0987654321fedcba09"),
 					Status:  protocol.FileStatusModified,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 			},
 			expected: []CommitFile{
@@ -132,8 +132,8 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    identicalHash,
 					OldHash: identicalHash,
 					Status:  protocol.FileStatusRenamed,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 				// Modified file should remain unchanged
 				{
@@ -141,8 +141,8 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 					Hash:    hash.MustFromHex("abcdef1234567890abcdef1234567890abcdef12"),
 					OldHash: hash.MustFromHex("fedcba0987654321fedcba0987654321fedcba09"),
 					Status:  protocol.FileStatusModified,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 			},
 		},
@@ -186,12 +186,12 @@ func TestDetectRenames_DeterministicPairing(t *testing.T) {
 	// Create scenario with multiple files having identical content
 	// The pairing should always be deterministic (sorted by path)
 	changes := []CommitFile{
-		{Path: "z-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-		{Path: "a-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-		{Path: "m-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
-		{Path: "z-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
-		{Path: "a-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
-		{Path: "m-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+		{Path: "z-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+		{Path: "a-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+		{Path: "m-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0o100644},
+		{Path: "z-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
+		{Path: "a-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
+		{Path: "m-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0o100644},
 	}
 
 	// Run detectRenames multiple times and verify output is always identical
@@ -255,8 +255,8 @@ func TestDetectRenames_EmptyAndNilCases(t *testing.T) {
 					Hash:    hash.MustFromHex("1111111111111111111111111111111111111111"),
 					OldHash: hash.MustFromHex("2222222222222222222222222222222222222222"),
 					Status:  protocol.FileStatusModified,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 			},
 			expected: []CommitFile{
@@ -265,8 +265,8 @@ func TestDetectRenames_EmptyAndNilCases(t *testing.T) {
 					Hash:    hash.MustFromHex("1111111111111111111111111111111111111111"),
 					OldHash: hash.MustFromHex("2222222222222222222222222222222222222222"),
 					Status:  protocol.FileStatusModified,
-					Mode:    0644,
-					OldMode: 0644,
+					Mode:    0o100644,
+					OldMode: 0o100644,
 				},
 			},
 		},

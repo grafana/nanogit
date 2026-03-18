@@ -264,7 +264,6 @@ func CheckHTTPClientError(res *http.Response) error {
 	}
 }
 
-
 // extractEndpoint extracts the Git protocol endpoint from a URL path.
 // Returns "git-upload-pack", "git-receive-pack", "info/refs", or "unknown".
 // Only examines the path component, ignoring query strings.

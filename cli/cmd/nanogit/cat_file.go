@@ -103,9 +103,9 @@ func runCatFile(cmd *cobra.Command, args []string) error {
 }
 
 type blobJSON struct {
-	Path string `json:"path"`
-	Hash string `json:"hash"`
-	Size int    `json:"size"`
+	Path    string `json:"path"`
+	Hash    string `json:"hash"`
+	Size    int    `json:"size"`
 	Content string `json:"content"`
 }
 
