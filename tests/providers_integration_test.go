@@ -340,20 +340,28 @@ func TestProviders(t *testing.T) {
 	treesWithRename, err := client.CompareCommits(ctx, createTreeCommit.Hash, moveTreeCommit.Hash, nanogit.WithRenameDetection())
 	require.NoError(t, err)
 
-	// Collect renamed files (filter out tree/directory entries)
-	renamedFiles := make(map[string]string) // new path -> old path
+	// Collect all renamed paths (both files and directories)
+	renamedPaths := make(map[string]string) // new path -> old path
 	for _, change := range treesWithRename {
-		if change.Status == protocol.FileStatusRenamed && change.Mode != 0o40000 {
-			renamedFiles[change.Path] = change.OldPath
+		if change.Status == protocol.FileStatusRenamed {
+			renamedPaths[change.Path] = change.OldPath
 		}
 	}
 
 	// All three files should be detected as renames
-	require.Equal(t, "tree-test/subdir/file1.txt", renamedFiles["moved-tree/subdir/file1.txt"], "file1.txt should be detected as renamed")
-	require.Equal(t, "tree-test/subdir/file2.txt", renamedFiles["moved-tree/subdir/file2.txt"], "file2.txt should be detected as renamed")
-	require.Equal(t, "tree-test/file3.txt", renamedFiles["moved-tree/file3.txt"], "file3.txt should be detected as renamed")
+	require.Equal(t, "tree-test/subdir/file1.txt", renamedPaths["moved-tree/subdir/file1.txt"], "file1.txt should be detected as renamed")
+	require.Equal(t, "tree-test/subdir/file2.txt", renamedPaths["moved-tree/subdir/file2.txt"], "file2.txt should be detected as renamed")
+	require.Equal(t, "tree-test/file3.txt", renamedPaths["moved-tree/file3.txt"], "file3.txt should be detected as renamed")
 
-	t.Logf("Successfully detected %d file renames (excluding directory entries) in directory move", len(renamedFiles))
+	// Verify directory renames are also detected
+	require.Equal(t, "tree-test", renamedPaths["moved-tree"], "root directory should be detected as renamed")
+	require.Equal(t, "tree-test/subdir", renamedPaths["moved-tree/subdir"], "subdirectory should be detected as renamed")
+
+	t.Logf("Successfully detected %d total renames (%d files + %d directories) in directory move",
+		len(renamedPaths),
+		3, // files
+		2, // directories
+	)
 
 	branchRef, err = client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)
