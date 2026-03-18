@@ -317,28 +317,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOpti
 // When multiple files share the same hash, they are paired one-to-one up to
 // min(deletions, additions). Unpaired changes remain as separate add/delete operations.
 func detectRenames(changes []CommitFile) []CommitFile {
-	// Build maps of deleted and added files by hash (using hash.Hash as key to avoid String() allocations)
-	// Store slices to handle multiple files with the same content hash
-	deletedByHash, addedByHash := groupChangesByHash(changes)
-
-	// Track which specific changes were paired as renames and collect results
-	pairedDeletes, pairedAdds := make(map[int]struct{}), make(map[int]struct{})
-	result := make([]CommitFile, 0, len(changes))
-
-	// Create index mapping for O(1) lookup of which changes were paired
-	deleteIndex, addIndex := buildIndexMaps(changes)
-
-	// Find matching pairs and create rename entries
-	pairRenames(deletedByHash, addedByHash, deleteIndex, addIndex, pairedDeletes, pairedAdds, &result)
-
-	// Add back unpaired changes
-	addUnpairedChanges(changes, pairedDeletes, pairedAdds, &result)
-
-	return result
-}
-
-// groupChangesByHash builds maps of deleted and added files grouped by their content hash
-func groupChangesByHash(changes []CommitFile) (map[hash.Hash][]CommitFile, map[hash.Hash][]CommitFile) {
+	// Group deleted and added files by their content hash
 	deletedByHash := make(map[hash.Hash][]CommitFile)
 	addedByHash := make(map[hash.Hash][]CommitFile)
 
@@ -351,42 +330,19 @@ func groupChangesByHash(changes []CommitFile) (map[hash.Hash][]CommitFile, map[h
 		}
 	}
 
-	return deletedByHash, addedByHash
-}
+	// Track which paths were paired (simpler than tracking indices)
+	pairedDeletePaths := make(map[string]bool)
+	pairedAddPaths := make(map[string]bool)
+	result := make([]CommitFile, 0, len(changes))
 
-// buildIndexMaps creates path-to-index mappings for deleted and added files
-func buildIndexMaps(changes []CommitFile) (map[string]int, map[string]int) {
-	deleteIndex := make(map[string]int)
-	addIndex := make(map[string]int)
-
-	for i, change := range changes {
-		switch change.Status {
-		case protocol.FileStatusDeleted:
-			deleteIndex[change.Path] = i
-		case protocol.FileStatusAdded:
-			addIndex[change.Path] = i
-		}
-	}
-
-	return deleteIndex, addIndex
-}
-
-// pairRenames finds matching delete/add pairs with the same hash and creates rename entries.
-// Files are sorted by path before pairing to ensure deterministic output.
-func pairRenames(
-	deletedByHash, addedByHash map[hash.Hash][]CommitFile,
-	deleteIndex, addIndex map[string]int,
-	pairedDeletes, pairedAdds map[int]struct{},
-	result *[]CommitFile,
-) {
+	// Find matching pairs and create rename entries
 	for h, deletedFiles := range deletedByHash {
 		addedFiles, exists := addedByHash[h]
 		if !exists {
 			continue
 		}
 
-		// Sort both slices by path to ensure deterministic pairing
-		// This prevents non-deterministic output when multiple files share the same hash
+		// Sort by path for deterministic pairing
 		sort.Slice(deletedFiles, func(i, j int) bool {
 			return deletedFiles[i].Path < deletedFiles[j].Path
 		})
@@ -394,23 +350,17 @@ func pairRenames(
 			return addedFiles[i].Path < addedFiles[j].Path
 		})
 
-		// Pair one-to-one up to min(len(deleted), len(added))
+		// Pair one-to-one up to min(deletions, additions)
 		pairCount := min(len(deletedFiles), len(addedFiles))
-
 		for i := 0; i < pairCount; i++ {
-			deleted := deletedFiles[i]
-			added := addedFiles[i]
+			deleted, added := deletedFiles[i], addedFiles[i]
 
-			// Mark these as paired
-			if idx, ok := deleteIndex[deleted.Path]; ok {
-				pairedDeletes[idx] = struct{}{}
-			}
-			if idx, ok := addIndex[added.Path]; ok {
-				pairedAdds[idx] = struct{}{}
-			}
+			// Mark as paired
+			pairedDeletePaths[deleted.Path] = true
+			pairedAddPaths[added.Path] = true
 
 			// Create rename entry
-			*result = append(*result, CommitFile{
+			result = append(result, CommitFile{
 				Path:    added.Path,
 				OldPath: deleted.Path,
 				Mode:    added.Mode,
@@ -421,25 +371,25 @@ func pairRenames(
 			})
 		}
 	}
-}
 
-// addUnpairedChanges adds back changes that weren't paired as renames
-func addUnpairedChanges(changes []CommitFile, pairedDeletes, pairedAdds map[int]struct{}, result *[]CommitFile) {
-	for i, change := range changes {
+	// Add back unpaired changes
+	for _, change := range changes {
 		switch change.Status {
 		case protocol.FileStatusDeleted:
-			if _, paired := pairedDeletes[i]; !paired {
-				*result = append(*result, change)
+			if !pairedDeletePaths[change.Path] {
+				result = append(result, change)
 			}
 		case protocol.FileStatusAdded:
-			if _, paired := pairedAdds[i]; !paired {
-				*result = append(*result, change)
+			if !pairedAddPaths[change.Path] {
+				result = append(result, change)
 			}
 		default:
-			// Other statuses (Modified, TypeChanged) always included
-			*result = append(*result, change)
+			// Modified, TypeChanged, etc. always included
+			result = append(result, change)
 		}
 	}
+
+	return result
 }
 
 // GetCommit retrieves a specific commit object from the repository by its hash.
