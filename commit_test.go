@@ -176,6 +176,60 @@ func TestDetectRenames_MultipleFilesWithSameHash(t *testing.T) {
 	}
 }
 
+// TestDetectRenames_DeterministicPairing verifies that rename pairing is deterministic
+// even when multiple files share the same hash. This is critical because Go map
+// iteration order is non-deterministic.
+func TestDetectRenames_DeterministicPairing(t *testing.T) {
+	identicalHash, err := hash.FromHex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	require.NoError(t, err)
+
+	// Create scenario with multiple files having identical content
+	// The pairing should always be deterministic (sorted by path)
+	changes := []CommitFile{
+		{Path: "z-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
+		{Path: "a-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
+		{Path: "m-deleted.txt", OldHash: identicalHash, Status: protocol.FileStatusDeleted, Mode: 0644},
+		{Path: "z-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+		{Path: "a-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+		{Path: "m-added.txt", Hash: identicalHash, Status: protocol.FileStatusAdded, Mode: 0644},
+	}
+
+	// Run detectRenames multiple times and verify output is always identical
+	var firstResult []CommitFile
+	for run := 0; run < 10; run++ {
+		result := detectRenames(changes)
+
+		if run == 0 {
+			firstResult = result
+		} else {
+			// Verify this run matches the first run exactly
+			require.Equal(t, len(firstResult), len(result), "Result length should be consistent across runs")
+
+			for i := range firstResult {
+				assert.Equal(t, firstResult[i].Path, result[i].Path, "Path should match at index %d", i)
+				assert.Equal(t, firstResult[i].OldPath, result[i].OldPath, "OldPath should match at index %d", i)
+				assert.Equal(t, firstResult[i].Status, result[i].Status, "Status should match at index %d", i)
+			}
+		}
+	}
+
+	// Verify the expected deterministic pairing (alphabetically sorted)
+	require.Len(t, firstResult, 3, "Should have 3 renames")
+
+	// Should pair alphabetically: a-deleted→a-added, m-deleted→m-added, z-deleted→z-added
+	expected := []struct{ oldPath, newPath string }{
+		{"a-deleted.txt", "a-added.txt"},
+		{"m-deleted.txt", "m-added.txt"},
+		{"z-deleted.txt", "z-added.txt"},
+	}
+
+	for i, exp := range expected {
+		assert.Equal(t, protocol.FileStatusRenamed, firstResult[i].Status)
+		assert.Equal(t, exp.oldPath, firstResult[i].OldPath, "OldPath mismatch at index %d", i)
+		assert.Equal(t, exp.newPath, firstResult[i].Path, "Path mismatch at index %d", i)
+	}
+}
+
 // TestDetectRenames_EmptyAndNilCases tests edge cases with empty inputs
 func TestDetectRenames_EmptyAndNilCases(t *testing.T) {
 	tests := []struct {

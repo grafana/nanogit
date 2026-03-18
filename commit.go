@@ -368,7 +368,8 @@ func buildIndexMaps(changes []CommitFile) (map[string]int, map[string]int) {
 	return deleteIndex, addIndex
 }
 
-// pairRenames finds matching delete/add pairs with the same hash and creates rename entries
+// pairRenames finds matching delete/add pairs with the same hash and creates rename entries.
+// Files are sorted by path before pairing to ensure deterministic output.
 func pairRenames(
 	deletedByHash, addedByHash map[hash.Hash][]CommitFile,
 	deleteIndex, addIndex map[string]int,
@@ -380,6 +381,15 @@ func pairRenames(
 		if !exists {
 			continue
 		}
+
+		// Sort both slices by path to ensure deterministic pairing
+		// This prevents non-deterministic output when multiple files share the same hash
+		sort.Slice(deletedFiles, func(i, j int) bool {
+			return deletedFiles[i].Path < deletedFiles[j].Path
+		})
+		sort.Slice(addedFiles, func(i, j int) bool {
+			return addedFiles[i].Path < addedFiles[j].Path
+		})
 
 		// Pair one-to-one up to min(len(deleted), len(added))
 		pairCount := min(len(deletedFiles), len(addedFiles))
