@@ -100,10 +100,10 @@ func TestCloneCommand(t *testing.T) {
 
 func TestCloneFlagsValidation(t *testing.T) {
 	tests := []struct {
-		name           string
-		batchSize      int
-		concurrency    int
-		expectValid    bool
+		name        string
+		batchSize   int
+		concurrency int
+		expectValid bool
 	}{
 		{
 			name:        "default recommended values",
@@ -153,4 +153,3 @@ func TestCloneFlagsValidation(t *testing.T) {
 		})
 	}
 }
-

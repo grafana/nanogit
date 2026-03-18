@@ -231,14 +231,14 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 // InitWithRemote configures the repository and connects it to a remote server.
 //
 // This convenience method performs a complete setup sequence:
-//   1. Configures git user.name and user.email from the User
-//   2. Adds the remote repository's AuthURL as origin
-//   3. Creates an initial test.txt file with content
-//   4. Commits the file ("Initial commit")
-//   5. Renames branch to main (if needed)
-//   6. Force pushes to origin/main
-//   7. Sets up branch tracking
-//   8. Returns ConnectionInfo with URL and credentials
+//  1. Configures git user.name and user.email from the User
+//  2. Adds the remote repository's AuthURL as origin
+//  3. Creates an initial test.txt file with content
+//  4. Commits the file ("Initial commit")
+//  5. Renames branch to main (if needed)
+//  6. Force pushes to origin/main
+//  7. Sets up branch tracking
+//  8. Returns ConnectionInfo with URL and credentials
 //
 // This is the fastest way to get a fully functional local + remote repository
 // setup for testing.

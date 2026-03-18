@@ -231,6 +231,43 @@ func TestProviders(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "content for move", string(retrievedMovedBlob.Content))
 
+	// Test rename detection with CompareCommits
+	t.Log("Testing rename detection with CompareCommits...")
+
+	// Without rename detection - should see delete + add
+	changesWithoutRename, err := client.CompareCommits(ctx, createAfterDeleteCommit.Hash, moveCommit.Hash)
+	require.NoError(t, err)
+	// Should have at least 2 changes: delete of old path, add of new path
+	// Note: May have more changes due to tree modifications
+	var hasDelete, hasAdd bool
+	for _, change := range changesWithoutRename {
+		if change.Path == "a/b/c/test.txt" && change.Status == protocol.FileStatusDeleted {
+			hasDelete = true
+		}
+		if change.Path == "a/moved-test.txt" && change.Status == protocol.FileStatusAdded {
+			hasAdd = true
+		}
+	}
+	require.True(t, hasDelete, "Should detect deletion of original file without rename detection")
+	require.True(t, hasAdd, "Should detect addition of moved file without rename detection")
+
+	// With rename detection - should see rename
+	changesWithRename, err := client.CompareCommits(ctx, createAfterDeleteCommit.Hash, moveCommit.Hash, nanogit.WithRenameDetection())
+	require.NoError(t, err)
+	// Should detect the rename
+	var foundRename bool
+	for _, change := range changesWithRename {
+		if change.Status == protocol.FileStatusRenamed &&
+			change.OldPath == "a/b/c/test.txt" &&
+			change.Path == "a/moved-test.txt" {
+			foundRename = true
+			require.Equal(t, movedBlobHash, change.Hash, "Renamed file should have correct hash")
+			require.Equal(t, movedBlobHash, change.OldHash, "Renamed file should have same hash before and after")
+			t.Logf("Successfully detected rename: %s -> %s", change.OldPath, change.Path)
+		}
+	}
+	require.True(t, foundRename, "Should detect file rename with rename detection enabled")
+
 	// Test MoveTree operation
 	_, err = writer.CreateBlob(ctx, "tree-test/subdir/file1.txt", []byte("tree file 1"))
 	require.NoError(t, err)
