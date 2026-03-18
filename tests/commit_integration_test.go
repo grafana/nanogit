@@ -430,6 +430,63 @@ var _ = Describe("Commits", func() {
 			Expect(hasRenamed).To(BeTrue())
 			Expect(hasAdded).To(BeTrue())
 		})
+
+		It("should handle multiple files with identical content", func() {
+			By("Creating multiple files with identical content")
+			// Create 3 files with identical content
+			identicalContent := "identical content"
+			Expect(local.CreateFile("file1.txt", identicalContent)).To(Succeed())
+			Expect(local.CreateFile("file2.txt", identicalContent)).To(Succeed())
+			Expect(local.CreateFile("file3.txt", identicalContent)).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add identical files")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err := local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			baseCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Renaming 2 files and deleting 1 (all with same content)")
+			// Delete file1.txt and file2.txt
+			_, err = local.Git("rm", "file1.txt", "file2.txt")
+			Expect(err).NotTo(HaveOccurred())
+			// Add renamed-file1.txt and keep file3.txt
+			Expect(local.CreateFile("renamed-file1.txt", identicalContent)).To(Succeed())
+			_, err = local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Rename one, delete one, keep one")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("push", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			output, err = local.Git("rev-parse", "HEAD")
+			Expect(err).NotTo(HaveOccurred())
+			headCommitHash, err := hash.FromHex(output)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying one-to-one pairing with rename detection")
+			changes, err := client.CompareCommits(ctx, baseCommitHash, headCommitHash, nanogit.WithRenameDetection())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should have: 1 rename (file1 or file2 -> renamed-file1) + 1 delete (the unpaired one)
+			// file3.txt should not appear as it didn't change
+			var renames, deletes int
+			for _, change := range changes {
+				if change.Status == protocol.FileStatusRenamed {
+					renames++
+					Expect(change.Path).To(Equal("renamed-file1.txt"))
+					Expect(change.OldPath).To(SatisfyAny(Equal("file1.txt"), Equal("file2.txt")))
+				}
+				if change.Status == protocol.FileStatusDeleted {
+					deletes++
+					Expect(change.Path).To(SatisfyAny(Equal("file1.txt"), Equal("file2.txt")))
+				}
+			}
+			Expect(renames).To(Equal(1), "Should have exactly 1 rename (one-to-one pairing)")
+			Expect(deletes).To(Equal(1), "Should have exactly 1 unpaired delete")
+		})
 	})
 
 	Context("ListCommits operations", func() {
