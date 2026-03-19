@@ -204,6 +204,8 @@ var _ = Describe("Commits", func() {
 			Expect(changes[0].Status).To(Equal(protocol.FileStatusModified))
 			Expect(changes[0].OldHash).To(Equal(initialFileHash))
 			Expect(changes[0].Hash).To(Equal(modifiedFileHash))
+			Expect(changes[0].Type).To(Equal(protocol.ObjectTypeBlob))
+			Expect(changes[0].OldType).To(Equal(protocol.ObjectTypeBlob))
 		})
 
 		It("should compare modified and renamed commits", func() {
@@ -213,12 +215,16 @@ var _ = Describe("Commits", func() {
 
 			Expect(changes[0].Path).To(Equal("new.txt"))
 			Expect(changes[0].Status).To(Equal(protocol.FileStatusAdded))
+			Expect(changes[0].Type).To(Equal(protocol.ObjectTypeBlob))
 
 			Expect(changes[1].Path).To(Equal("renamed.txt"))
 			Expect(changes[1].Status).To(Equal(protocol.FileStatusAdded))
+			Expect(changes[1].Type).To(Equal(protocol.ObjectTypeBlob))
 
 			Expect(changes[2].Path).To(Equal("test.txt"))
 			Expect(changes[2].Status).To(Equal(protocol.FileStatusDeleted))
+			Expect(changes[2].Type).To(Equal(protocol.ObjectTypeBlob))
+			Expect(changes[2].OldType).To(Equal(protocol.ObjectTypeBlob))
 		})
 
 		It("should compare renamed and modified commits in inverted direction", func() {
@@ -319,6 +325,8 @@ var _ = Describe("Commits", func() {
 			Expect(changes[0].OldPath).To(Equal("original.txt"))
 			Expect(changes[0].Hash).To(Equal(fileHash))
 			Expect(changes[0].OldHash).To(Equal(fileHash))
+			Expect(changes[0].Type).To(Equal(protocol.ObjectTypeBlob))
+			Expect(changes[0].OldType).To(Equal(protocol.ObjectTypeBlob))
 		})
 
 		It("should report delete+add without WithRenameDetection", func() {
@@ -539,12 +547,18 @@ var _ = Describe("Commits", func() {
 				if change.Path == "new-dir" && change.Mode == 0o40000 {
 					dirRenamed = true
 					Expect(change.OldPath).To(Equal("old-dir"))
+					Expect(change.Type).To(Equal(protocol.ObjectTypeTree))
+					Expect(change.OldType).To(Equal(protocol.ObjectTypeTree))
 				} else if change.Path == "new-dir/file1.txt" {
 					file1Renamed = true
 					Expect(change.OldPath).To(Equal("old-dir/file1.txt"))
+					Expect(change.Type).To(Equal(protocol.ObjectTypeBlob))
+					Expect(change.OldType).To(Equal(protocol.ObjectTypeBlob))
 				} else if change.Path == "new-dir/file2.txt" {
 					file2Renamed = true
 					Expect(change.OldPath).To(Equal("old-dir/file2.txt"))
+					Expect(change.Type).To(Equal(protocol.ObjectTypeBlob))
+					Expect(change.OldType).To(Equal(protocol.ObjectTypeBlob))
 				}
 			}
 			Expect(dirRenamed).To(BeTrue(), "Directory tree rename should be detected")
@@ -593,14 +607,20 @@ var _ = Describe("Commits", func() {
 				if change.Path == "renamed-file.txt" {
 					fileRenamed = true
 					Expect(change.OldPath).To(Equal("single-file.txt"))
+					Expect(change.Type).To(Equal(protocol.ObjectTypeBlob))
+					Expect(change.OldType).To(Equal(protocol.ObjectTypeBlob))
 				}
 				if change.Path == "renamed-dir" && change.Mode == 0o40000 {
 					dirRenamed = true
 					Expect(change.OldPath).To(Equal("my-dir"))
+					Expect(change.Type).To(Equal(protocol.ObjectTypeTree))
+					Expect(change.OldType).To(Equal(protocol.ObjectTypeTree))
 				}
 				if change.Path == "renamed-dir/nested-file.txt" {
 					nestedRenamed = true
 					Expect(change.OldPath).To(Equal("my-dir/nested-file.txt"))
+					Expect(change.Type).To(Equal(protocol.ObjectTypeBlob))
+					Expect(change.OldType).To(Equal(protocol.ObjectTypeBlob))
 				}
 			}
 			Expect(fileRenamed).To(BeTrue(), "File rename should be detected")

@@ -86,6 +86,10 @@ type CommitFile struct {
 	Hash hash.Hash
 	// OldHash is the original file hash in the base commit (for modified files)
 	OldHash hash.Hash
+	// Type is the Git object type in the head commit (blob for files, tree for directories)
+	Type protocol.ObjectType
+	// OldType is the Git object type in the base commit (for modified files)
+	OldType protocol.ObjectType
 	// Status indicates the type of file change (added, modified, deleted, etc.)
 	Status protocol.FileStatus
 }
@@ -212,7 +216,7 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 	return changes, nil
 }
 
-// Memory-efficient maps storing only hash+mode instead of full entries
+// Memory-efficient maps storing only hash+mode+type instead of full entries
 // This reduces memory overhead by ~60%
 //
 // Memory optimizations applied:
@@ -224,8 +228,9 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 // Additional optimizations considered:
 // - Could use byte enum for common modes (0o100644, 0o100755, 0o040000) + overflow field
 type entryInfo struct {
-	hash hash.Hash
-	mode uint16 // uint16 is sufficient for Git file modes (max 0o160000)
+	hash     hash.Hash
+	mode     uint16              // uint16 is sufficient for Git file modes (max 0o160000)
+	objType  protocol.ObjectType // Git object type (blob, tree, etc.)
 }
 
 // compareTrees recursively compares two trees and collects changes between them.
@@ -254,8 +259,9 @@ func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOpti
 	inBase := make(map[string]entryInfo, len(base.Entries))
 	for _, entry := range base.Entries {
 		inBase[entry.Path] = entryInfo{
-			hash: entry.Hash,
-			mode: uint16(entry.Mode),
+			hash:    entry.Hash,
+			mode:    uint16(entry.Mode),
+			objType: entry.Type,
 		}
 	}
 
@@ -270,6 +276,7 @@ func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOpti
 				Status: protocol.FileStatusAdded,
 				Mode:   entry.Mode,
 				Hash:   entry.Hash,
+				Type:   entry.Type,
 			})
 		} else if !baseInfo.hash.Is(entry.Hash) && entry.Type != protocol.ObjectTypeTree {
 			// File exists in both but has different content - it was modified
@@ -278,8 +285,10 @@ func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOpti
 				Status:  protocol.FileStatusModified,
 				Mode:    entry.Mode,
 				Hash:    entry.Hash,
+				Type:    entry.Type,
 				OldHash: baseInfo.hash,
 				OldMode: uint32(baseInfo.mode),
+				OldType: baseInfo.objType,
 			})
 		}
 	}
@@ -293,7 +302,9 @@ func (c *httpClient) compareTrees(base, head *FlatTree, opts *CompareCommitsOpti
 				Status:  protocol.FileStatusDeleted,
 				Mode:    uint32(baseInfo.mode),
 				Hash:    baseInfo.hash,
+				Type:    baseInfo.objType,
 				OldHash: baseInfo.hash,
+				OldType: baseInfo.objType,
 			})
 		}
 	}
@@ -367,6 +378,8 @@ func detectRenames(changes []CommitFile) []CommitFile {
 				OldMode: deleted.Mode,
 				Hash:    added.Hash,
 				OldHash: deleted.OldHash,
+				Type:    added.Type,
+				OldType: deleted.OldType,
 				Status:  protocol.FileStatusRenamed,
 			})
 		}
