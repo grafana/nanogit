@@ -12,7 +12,7 @@
     "vue": "3.5.30"
   },
   "overrides": {
-    "esbuild": "^0.27.0"
+    "esbuild": "^0.28.0"
   },
   "scripts": {
     "docs:dev": "vitepress dev docs",
