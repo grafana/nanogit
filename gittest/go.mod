@@ -4,7 +4,7 @@ go 1.25.8
 
 require (
 	github.com/grafana/nanogit v1.0.0
-	github.com/testcontainers/testcontainers-go v0.41.0
+	github.com/testcontainers/testcontainers-go v0.42.0
 )
 
 require (
