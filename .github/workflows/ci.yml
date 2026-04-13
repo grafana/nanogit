@@ -74,7 +74,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -110,7 +110,7 @@ jobs:
           repo_secrets: |
             CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -142,7 +142,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -180,7 +180,7 @@ jobs:
             GH_REPO_USER=github:GH_REPO_USER
             GH_REPO_TOKEN=github:GH_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -226,7 +226,7 @@ jobs:
             GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
             GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -271,7 +271,7 @@ jobs:
             BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
             BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -367,7 +367,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -393,7 +393,7 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
