@@ -316,7 +316,7 @@ jobs:
         with:
           fetch-depth: 0 # Required for scanning git history
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@afd5336caad0f61da51750ffe39869974b27b0db
+        uses: trufflesecurity/trufflehog@761be8877b62e68cd4ae2efbfc50f9c7721a8f4e
         with:
           extra_args: --results=verified,unknown
 
