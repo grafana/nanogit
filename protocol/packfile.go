@@ -793,6 +793,9 @@ type PackfileWriter struct {
 	isCleanedUp bool
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
+	// Capabilities advertised on the ref update command. Empty means
+	// DefaultPushCapabilities is used.
+	capabilities string
 }
 
 const (
@@ -810,6 +813,13 @@ func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *Packf
 		storageMode:   storageMode,
 		algo:          algo,
 	}
+}
+
+// SetCapabilities overrides the capability string advertised on the ref
+// update command written by WritePackfile. When unset (or empty),
+// DefaultPushCapabilities is used.
+func (w *PackfileWriter) SetCapabilities(capabilities string) {
+	w.capabilities = capabilities
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.
@@ -1074,10 +1084,15 @@ func (pw *PackfileWriter) validateWriteState() error {
 
 // writeRefUpdate writes the reference update command and flush packet
 func (pw *PackfileWriter) writeRefUpdate(writer io.Writer, refName string, oldRefHash hash.Hash) error {
-	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
+	capabilities := pw.capabilities
+	if capabilities == "" {
+		capabilities = DefaultPushCapabilities
+	}
+	refUpdate := fmt.Sprintf("%s %s %s\000%s\n",
 		oldRefHash.String(),
 		pw.lastCommitHash.String(),
-		refName)
+		refName,
+		capabilities)
 
 	refUpdateLen := len(refUpdate) + 4
 	refUpdateLine := fmt.Sprintf("%04x%s", refUpdateLen, refUpdate)

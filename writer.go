@@ -104,6 +104,7 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 	}
 
 	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode)
+	writer.SetCapabilities(c.pushCapabilities)
 	return &stagedWriter{
 		client:      c,
 		ref:         ref,
@@ -942,6 +943,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	// with the successful push that already happened on the server.
 	cleanupErr := w.writer.Cleanup()
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
+	w.writer.SetCapabilities(w.client.pushCapabilities)
 	w.ref.Hash = w.lastCommit.Hash
 
 	logger.Debug("Push completed",
@@ -1270,6 +1272,7 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 
 	// Reset writer state
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode)
+	w.writer.SetCapabilities(w.client.pushCapabilities)
 
 	// Mark as cleaned up to prevent further use
 	w.isCleanedUp = true

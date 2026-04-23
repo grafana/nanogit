@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"crypto"
 	"testing"
 
@@ -8,6 +9,39 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPackfileWriter_SetCapabilities(t *testing.T) {
+	writeWithCaps := func(caps string) []byte {
+		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory)
+		if caps != "" {
+			writer.SetCapabilities(caps)
+		}
+
+		// Add a tree and a commit so WritePackfile passes its validation.
+		treeHash, err := writer.AddBlob([]byte("placeholder"))
+		require.NoError(t, err)
+		author := &Identity{Name: "a", Email: "a@b", Timestamp: 0, Timezone: "+0000"}
+		_, err = writer.AddCommit(treeHash, hash.Zero, author, author, "msg")
+		require.NoError(t, err)
+
+		var buf bytes.Buffer
+		err = writer.WritePackfile(&buf, "refs/heads/main", hash.Zero)
+		require.NoError(t, err)
+		return buf.Bytes()
+	}
+
+	t.Run("default advertises side-band-64k", func(t *testing.T) {
+		out := writeWithCaps("")
+		assert.Contains(t, string(out), DefaultPushCapabilities)
+		assert.Contains(t, string(out), "side-band-64k")
+	})
+
+	t.Run("no-side-band capabilities drop side-band-64k", func(t *testing.T) {
+		out := writeWithCaps(PushCapabilitiesNoSideBand)
+		assert.Contains(t, string(out), PushCapabilitiesNoSideBand)
+		assert.NotContains(t, string(out), "side-band-64k")
+	})
+}
 
 func TestPackfileWriterCleanup(t *testing.T) {
 	t.Run("cleanup prevents further operations", func(t *testing.T) {

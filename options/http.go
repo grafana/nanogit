@@ -39,3 +39,25 @@ func WithoutGitSuffix() Option {
 		return nil
 	}
 }
+
+// WithoutPushSideBand disables the "side-band-64k" capability advertised on
+// push (receive-pack) requests. Without side-band, the server sends
+// report-status packets directly, which nanogit's parser can reliably
+// inspect for "ng <ref> <reason>" and "unpack <status>" failures.
+//
+// Some Git servers (notably certain GitLab configurations) wrap report-status
+// in side-band channel 1. nanogit's current error detection does not strip
+// the side-band channel byte before matching "ng"/"unpack" prefixes, so
+// rejections from push rules, pre-receive hooks, or branch protection can
+// be silently swallowed and appear as successful pushes that produce empty
+// branches (the ref points at its previous value, without the new commit).
+//
+// Use this option when talking to servers that surface push failures via
+// side-band and you observe silent push failures. GitHub does not require
+// this workaround.
+func WithoutPushSideBand() Option {
+	return func(o *Options) error {
+		o.DisablePushSideBand = true
+		return nil
+	}
+}

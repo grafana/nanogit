@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -100,6 +101,9 @@ type Client interface {
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
 	client.RawClient
+	// pushCapabilities is advertised on receive-pack ref update commands.
+	// When empty, protocol.DefaultPushCapabilities is used.
+	pushCapabilities string
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -126,13 +130,33 @@ type httpClient struct {
 //	if err != nil {
 //	    return err
 //	}
-func NewHTTPClient(repo string, options ...options.Option) (Client, error) {
-	rawClient, err := client.NewRawClient(repo, options...)
+func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
+	rawClient, err := client.NewRawClient(repo, opts...)
 	if err != nil {
 		return nil, err
 	}
 
+	// Re-resolve options locally to extract client-level configuration that
+	// does not affect the raw transport (e.g., push capability overrides).
+	// NewRawClient has already validated the options, so any error here is
+	// unreachable.
+	resolved := &options.Options{}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(resolved); err != nil {
+			return nil, err
+		}
+	}
+
+	pushCapabilities := ""
+	if resolved.DisablePushSideBand {
+		pushCapabilities = protocol.PushCapabilitiesNoSideBand
+	}
+
 	return &httpClient{
-		RawClient: rawClient,
+		RawClient:        rawClient,
+		pushCapabilities: pushCapabilities,
 	}, nil
 }

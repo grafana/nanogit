@@ -43,6 +43,21 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 }
 
+func TestWithoutPushSideBand(t *testing.T) {
+	t.Parallel()
+
+	t.Run("flag is off by default", func(t *testing.T) {
+		o := &Options{}
+		require.False(t, o.DisablePushSideBand)
+	})
+
+	t.Run("option sets the flag", func(t *testing.T) {
+		o := &Options{}
+		require.NoError(t, WithoutPushSideBand()(o))
+		require.True(t, o.DisablePushSideBand)
+	})
+}
+
 func TestWithUserAgent(t *testing.T) {
 	tests := []struct {
 		name      string

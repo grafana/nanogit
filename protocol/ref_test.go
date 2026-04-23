@@ -252,6 +252,35 @@ func TestRefUpdateRequest_Format(t *testing.T) {
 	}
 }
 
+func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
+	t.Parallel()
+
+	t.Run("custom capabilities are used verbatim", func(t *testing.T) {
+		req := protocol.RefUpdateRequest{
+			OldRef:       protocol.ZeroHash,
+			NewRef:       "1234567890123456789012345678901234567890",
+			RefName:      "refs/heads/main",
+			Capabilities: protocol.PushCapabilitiesNoSideBand,
+		}
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), protocol.PushCapabilitiesNoSideBand)
+		assert.NotContains(t, string(got), "side-band-64k")
+	})
+
+	t.Run("empty capabilities fall back to default", func(t *testing.T) {
+		req := protocol.RefUpdateRequest{
+			OldRef:  protocol.ZeroHash,
+			NewRef:  "1234567890123456789012345678901234567890",
+			RefName: "refs/heads/main",
+		}
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), protocol.DefaultPushCapabilities)
+		assert.Contains(t, string(got), "side-band-64k")
+	})
+}
+
 func TestNewCreateRefRequest(t *testing.T) {
 	tests := []struct {
 		name    string

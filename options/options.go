@@ -10,11 +10,12 @@ type BasicAuth struct {
 }
 
 type Options struct {
-	HTTPClient    *http.Client
-	UserAgent     string
-	BasicAuth     *BasicAuth
-	AuthToken     *string
-	SkipGitSuffix bool
+	HTTPClient          *http.Client
+	UserAgent           string
+	BasicAuth           *BasicAuth
+	AuthToken           *string
+	SkipGitSuffix       bool
+	DisablePushSideBand bool
 }
 
 type Option func(*Options) error

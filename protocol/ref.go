@@ -196,10 +196,25 @@ func validateSingleComponent(component string) error {
 // ZeroHash represents the all-zeros SHA-1 hash used in Git to represent a non-existent object
 const ZeroHash = "0000000000000000000000000000000000000000"
 
+// DefaultPushCapabilities is the capability string advertised on receive-pack
+// ref update commands. It includes side-band-64k so servers may multiplex
+// progress and report-status on side-band channels.
+const DefaultPushCapabilities = "report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit"
+
+// PushCapabilitiesNoSideBand is the capability string used when side-band
+// multiplexing is disabled. report-status packets are sent directly (no
+// channel prefix), which makes failure detection reliable on servers that
+// otherwise wrap them in side-band channel 1.
+const PushCapabilitiesNoSideBand = "report-status-v2 quiet object-format=sha1 agent=nanogit"
+
 type RefUpdateRequest struct {
 	OldRef  string
 	NewRef  string
 	RefName string
+	// Capabilities, if non-empty, overrides the default capability string
+	// advertised in the ref update command. When empty, DefaultPushCapabilities
+	// is used.
+	Capabilities string
 }
 
 func NewCreateRefRequest(refName string, newRef hash.Hash) RefUpdateRequest {
@@ -264,9 +279,14 @@ func (r RefUpdateRequest) Format() ([]byte, error) {
 		return nil, fmt.Errorf("invalid new ref hash length: got %d, want 40", len(r.NewRef))
 	}
 
+	capabilities := r.Capabilities
+	if capabilities == "" {
+		capabilities = DefaultPushCapabilities
+	}
+
 	// Create the ref using receive-pack
 	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
-	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", r.OldRef, r.NewRef, r.RefName)
+	refLine := fmt.Sprintf("%s %s %s\000%s\n", r.OldRef, r.NewRef, r.RefName, capabilities)
 
 	// Calculate the correct length (including the 4 bytes of the length field)
 	lineLen := len(refLine) + 4

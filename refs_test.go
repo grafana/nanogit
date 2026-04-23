@@ -447,6 +447,39 @@ func TestCreateRef(t *testing.T) {
 	}
 }
 
+func TestCreateRef_WithoutPushSideBand(t *testing.T) {
+	refHash, err := hash.FromHex("1234567890123456789012345678901234567890")
+	require.NoError(t, err)
+	refToCreate := Ref{Name: "refs/heads/main", Hash: refHash}
+
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/git-upload-pack":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("0000")) // ref not found
+		case "/git-receive-pack":
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewHTTPClient(server.URL, options.WithoutPushSideBand())
+	require.NoError(t, err)
+
+	require.NoError(t, client.CreateRef(context.Background(), refToCreate))
+
+	// Default: "report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit"
+	// Disabled: "report-status-v2 quiet object-format=sha1 agent=nanogit"
+	require.Contains(t, string(gotBody), protocol.PushCapabilitiesNoSideBand)
+	require.NotContains(t, string(gotBody), "side-band-64k")
+}
+
 func TestUpdateRef(t *testing.T) {
 	hashify := func(h string) hash.Hash {
 		parsedHex, err := hash.FromHex(h)
