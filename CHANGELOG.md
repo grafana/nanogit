@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/grafana/nanogit/compare/v0.14.0...v0.15.0) (2026-04-24)
+
+
+### Features
+
+* allow overriding receive-pack capabilities (library + CLI) ([#269](https://github.com/grafana/nanogit/issues/269)) ([aa2831f](https://github.com/grafana/nanogit/commit/aa2831f76a8f15c6f8755e192f2a4baab4950e86)), closes [#270](https://github.com/grafana/nanogit/issues/270) [#270](https://github.com/grafana/nanogit/issues/270)
+* **cli:** add NANOGIT_REPO env var for default repository URL ([#275](https://github.com/grafana/nanogit/issues/275)) ([62c565d](https://github.com/grafana/nanogit/commit/62c565d80b3660fbed52c323d617a172afcbe0b8))
+
+
+### Documentation
+
+* add server compatibility check guide ([#274](https://github.com/grafana/nanogit/issues/274)) ([3463873](https://github.com/grafana/nanogit/commit/3463873aaa6d3ca54bb77b19fca6f5b2ec86fa37))
+
 ## [0.14.0](https://github.com/grafana/nanogit/compare/v0.13.1...v0.14.0) (2026-04-24)
 
 
