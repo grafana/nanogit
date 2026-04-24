@@ -89,11 +89,6 @@ func runPutFile(cmd *cobra.Command, args []string) error {
 		return errors.New("cannot combine --from-file with stdin marker \"-\"")
 	}
 
-	content, err := readPutFileContent(putFileFromFile)
-	if err != nil {
-		return err
-	}
-
 	author, err := resolveAuthor(putFileAuthor)
 	if err != nil {
 		return fmt.Errorf("author: %w", err)
@@ -101,6 +96,11 @@ func runPutFile(cmd *cobra.Command, args []string) error {
 	committer, err := resolveCommitter(putFileCommitter, author)
 	if err != nil {
 		return fmt.Errorf("committer: %w", err)
+	}
+
+	content, err := readPutFileContent(putFileFromFile)
+	if err != nil {
+		return err
 	}
 
 	ctx := context.Background()
@@ -252,7 +252,6 @@ func stageAndCommit(ctx context.Context, writer nanogit.StagedWriter, path strin
 
 type putFileJSON struct {
 	Commit string `json:"commit"`
-	Blob   string `json:"blob,omitempty"`
 	Path   string `json:"path"`
 }
 

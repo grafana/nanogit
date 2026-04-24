@@ -429,7 +429,7 @@ echo "hello" | nanogit -v put-file https://github.com/user/repo.git main docs/no
   -m "add note" --author "Jane Doe <jane@example.com>"
 
 # Full wire-level Debug output
-NANOGIT_TRACE=1 echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+echo "hello" | NANOGIT_TRACE=1 nanogit put-file https://github.com/user/repo.git main docs/note.md \
   -m "add note" --author "Jane Doe <jane@example.com>"
 ```
 

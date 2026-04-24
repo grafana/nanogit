@@ -234,7 +234,7 @@ nanogit put-file https://github.com/user/repo.git main docs/note.md \
 echo "hello" | nanogit -v put-file https://github.com/user/repo.git main docs/note.md \
   -m "add note" --author "Jane Doe <jane@example.com>"
 
-NANOGIT_TRACE=1 echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+echo "hello" | NANOGIT_TRACE=1 nanogit put-file https://github.com/user/repo.git main docs/note.md \
   -m "add note" --author "Jane Doe <jane@example.com>"
 
 # JSON output ({commit, path})
