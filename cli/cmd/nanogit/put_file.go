@@ -31,7 +31,7 @@ func init() {
 }
 
 var putFileCmd = &cobra.Command{
-	Use:   "put-file <repository> <ref> <path> [-|-]",
+	Use:   "put-file <repository> <ref> <path> [-]",
 	Short: "Create or update a file on a branch in a single commit",
 	Long: `Create or update a file on a branch by staging a blob, committing, and
 pushing in a single step. The ref must be a branch: the change is written on
@@ -56,21 +56,30 @@ Examples:
   # Verbose output and full wire trace
   nanogit -v put-file ...                  # Info-level
   NANOGIT_TRACE=1 nanogit -v put-file ...  # Debug-level`,
-	Args: cobra.RangeArgs(3, 4),
+	Args: putFileArgs,
 	RunE: runPutFile,
+}
+
+// putFileArgs validates positional arguments: three are required, and a
+// fourth optional argument must be the literal "-" meaning "read from stdin".
+func putFileArgs(_ *cobra.Command, args []string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("accepts at least 3 arg(s), received %d", len(args))
+	}
+	if len(args) > 4 {
+		return fmt.Errorf("accepts at most 4 arg(s), received %d", len(args))
+	}
+	if len(args) == 4 && args[3] != "-" {
+		return fmt.Errorf("fourth positional argument must be \"-\" (stdin) or omitted, got %q", args[3])
+	}
+	return nil
 }
 
 func runPutFile(cmd *cobra.Command, args []string) error {
 	repoURL := args[0]
 	refName := args[1]
 	filePath := args[2]
-	stdinMarker := false
-	if len(args) == 4 {
-		if args[3] != "-" {
-			return fmt.Errorf("fourth positional argument must be \"-\" (stdin) or omitted, got %q", args[3])
-		}
-		stdinMarker = true
-	}
+	stdinMarker := len(args) == 4
 
 	if putFileMessage == "" {
 		return errors.New("--message/-m is required")
@@ -109,15 +118,14 @@ func runPutFile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create staged writer: %w", err)
 	}
+	defer func() { _ = writer.Cleanup(ctx) }()
 
 	commit, err := stageAndCommit(ctx, writer, filePath, content, putFileMessage, author, committer)
 	if err != nil {
-		_ = writer.Cleanup(ctx)
 		return err
 	}
 
 	if err := writer.Push(ctx); err != nil {
-		_ = writer.Cleanup(ctx)
 		return fmt.Errorf("push: %w", err)
 	}
 
@@ -175,16 +183,24 @@ func resolveIdentity(flagValue, nameEnv, emailEnv string) (string, string, error
 	return name, email, nil
 }
 
-// parseIdentity reads the git-style "Name <email>" form.
+// parseIdentity reads the git-style "Name <email>" form. The input must
+// contain exactly one pair of angle brackets and end at the closing bracket
+// (after trimming outer whitespace); trailing junk is rejected.
 func parseIdentity(s string) (string, string, error) {
 	s = strings.TrimSpace(s)
-	open := strings.LastIndex(s, "<")
-	close := strings.LastIndex(s, ">")
-	if open < 0 || close < 0 || close < open {
+	open := strings.Index(s, "<")
+	closeIdx := strings.Index(s, ">")
+	if open < 0 || closeIdx < 0 || closeIdx < open {
 		return "", "", fmt.Errorf("expected \"Name <email>\", got %q", s)
 	}
+	if strings.Count(s, "<") != 1 || strings.Count(s, ">") != 1 {
+		return "", "", fmt.Errorf("expected exactly one <email> pair, got %q", s)
+	}
+	if closeIdx != len(s)-1 {
+		return "", "", fmt.Errorf("unexpected characters after '>' in %q", s)
+	}
 	name := strings.TrimSpace(s[:open])
-	email := strings.TrimSpace(s[open+1 : close])
+	email := strings.TrimSpace(s[open+1 : closeIdx])
 	if name == "" || email == "" {
 		return "", "", fmt.Errorf("expected \"Name <email>\", got %q", s)
 	}
@@ -246,7 +262,9 @@ func outputPutFileResult(commit *nanogit.Commit, path string) error {
 			Commit: commit.Hash.String(),
 			Path:   path,
 		}
-		return json.NewEncoder(os.Stdout).Encode(out)
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(out)
 	}
 	fmt.Println(commit.Hash.String())
 	return nil

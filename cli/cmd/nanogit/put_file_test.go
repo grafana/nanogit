@@ -24,6 +24,9 @@ func TestParseIdentity(t *testing.T) {
 		{"empty email", "Jane <>", "", "", true},
 		{"empty string", "", "", "", true},
 		{"reversed brackets", "Jane >jane@example.com<", "", "", true},
+		{"trailing junk", "Jane <jane@example.com> junk", "", "", true},
+		{"multiple open brackets", "Jane <x> <jane@example.com>", "", "", true},
+		{"multiple close brackets", "Jane <jane@example.com>>", "", "", true},
 	}
 
 	for _, tt := range tests {
@@ -141,7 +144,8 @@ func TestPutFileCommandArgs(t *testing.T) {
 		{"no arguments", []string{}, true},
 		{"two arguments", []string{"repo", "ref"}, true},
 		{"three arguments", []string{"repo", "ref", "path"}, false},
-		{"four arguments", []string{"repo", "ref", "path", "-"}, false},
+		{"four arguments with stdin marker", []string{"repo", "ref", "path", "-"}, false},
+		{"four arguments with invalid marker", []string{"repo", "ref", "path", "bad"}, true},
 		{"five arguments", []string{"repo", "ref", "path", "-", "extra"}, true},
 	}
 
