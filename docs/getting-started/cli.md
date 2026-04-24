@@ -151,7 +151,7 @@ nanogit --version
 
 nanogit requires **Git Smart HTTP Protocol v2**. Most modern Git hosting providers support protocol v2, but some older servers or certain cloud providers may only support protocol v1.
 
-Use the `check` command to verify if your Git server is compatible before attempting other operations.
+Use the `check` command to verify if your Git server is compatible before attempting other operations. For a complete round-trip that also exercises the read and write paths, see [Server Compatibility](server-compatibility.md).
 
 ## Commands
 

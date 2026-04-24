@@ -34,7 +34,8 @@ export default defineConfig({
         items: [
           { text: 'Installation', link: '/getting-started/installation' },
           { text: 'Quick Start', link: '/getting-started/quick-start' },
-          { text: 'CLI', link: '/getting-started/cli' }
+          { text: 'CLI', link: '/getting-started/cli' },
+          { text: 'Server Compatibility', link: '/getting-started/server-compatibility' }
         ]
       },
       {
