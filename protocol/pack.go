@@ -96,7 +96,6 @@ var (
 	ngPattern       = []byte("ng ")
 	unpackPattern   = []byte("unpack ")
 	unpackOkPattern = []byte("ok")
-	unpackOkFull    = []byte("unpack ok") // Most common success case
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -529,8 +528,25 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // detectError processes packet content to detect and handle various Git protocol error conditions.
 // It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
 // Returns an error if any error condition is detected, otherwise returns nil to continue processing.
+//
+// Side-band handling for report-status: some Git servers (notably some GitLab
+// configurations) wrap report-status packets in side-band channel 1 (0x01).
+// Per https://git-scm.com/docs/protocol-capabilities#_report_status and
+// https://git-scm.com/docs/gitprotocol-pack, when side-band-64k is active the
+// report-status payload ("unpack ...", "ok <ref>", "ng <ref> <reason>") may be
+// preceded by a single 0x01 byte that identifies the pack-data channel. We
+// unwrap that byte before pattern-matching so push failures wrapped in band 1
+// are not silently treated as regular data.
 func detectError(lengthBytes, packetData []byte) error {
 	// Avoid allocation by building fullPacket only when needed
+
+	// Unwrap side-band channel 1 (packfile data channel) for report-status
+	// content. Channels 2 (progress) and 3 (fatal) are handled by
+	// isErrorOrFatalMessageOptimized / handleErrorFatalMessage below.
+	reportData := packetData
+	if len(reportData) > 0 && reportData[0] == 0x01 {
+		reportData = reportData[1:]
+	}
 
 	switch {
 	case bytes.HasPrefix(packetData, errPattern):
@@ -541,24 +557,25 @@ func detectError(lengthBytes, packetData []byte) error {
 		fullPacket := append(lengthBytes, packetData...)
 		return handleErrorFatalMessage(fullPacket, packetData)
 
-	case bytes.HasPrefix(packetData, ngPattern):
+	case bytes.HasPrefix(reportData, ngPattern):
 		fullPacket := append(lengthBytes, packetData...)
-		return handleReferenceUpdateFailure(fullPacket, packetData)
+		return handleReferenceUpdateFailure(fullPacket, reportData)
 
-	case bytes.HasPrefix(packetData, unpackPattern):
-		// Fast path for most common case: "unpack ok"
-		if bytes.Equal(packetData, unpackOkFull) {
-			return nil // Success case, no error
+	case bytes.HasPrefix(reportData, unpackPattern):
+		// Extract the status string after "unpack " and trim any trailing
+		// whitespace (LF/CR/spaces). Per gitprotocol-common, non-binary
+		// pkt-lines may or may not include a trailing LF and receivers MUST
+		// tolerate either form. Gitea/GitHub send "unpack ok\n" when
+		// side-band is disabled; a byte-exact comparison to "ok" would
+		// otherwise misclassify that as a failure.
+		unpackData := reportData[len(unpackPattern):]
+		trimmed := bytes.TrimRight(unpackData, " \t\r\n")
+		if bytes.Equal(trimmed, unpackOkPattern) {
+			return nil // "unpack ok" success
 		}
+		fullPacket := append(lengthBytes, packetData...)
+		return NewGitUnpackError(fullPacket, string(unpackData))
 
-		// Optimize unpack handling with byte comparison instead of string conversion
-		unpackData := packetData[len(unpackPattern):]
-		if !bytes.Equal(unpackData, unpackOkPattern) {
-			fullPacket := append(lengthBytes, packetData...)
-			return NewGitUnpackError(fullPacket, string(unpackData))
-		}
-		// If unpack ok, continue processing
-		return nil
 	default:
 		// Regular data packet
 		return nil
@@ -622,10 +639,15 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 	return NewGitServerError(fullPacket, errorType, message)
 }
 
-// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets
+// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets.
+// The packetData argument is expected to have any side-band channel byte already
+// stripped by the caller, so it begins with the literal "ng " prefix.
 func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 	// Format: "ng <refname> <error-msg>"
-	parts := bytes.SplitN(packetData[3:], []byte(" "), 2) // Skip "ng "
+	// Trim any trailing whitespace (e.g. LF) before splitting, per
+	// gitprotocol-common non-binary pkt-line handling.
+	trimmed := bytes.TrimRight(packetData[3:], " \t\r\n") // Skip "ng "
+	parts := bytes.SplitN(trimmed, []byte(" "), 2)
 
 	var refName, reason string
 	if len(parts) >= 1 {

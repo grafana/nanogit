@@ -412,6 +412,10 @@ func TestCreateRef(t *testing.T) {
 							}
 						}
 						w.WriteHeader(http.StatusOK)
+						// Emit a minimal successful report-status so the
+						// client-side positive-validation check in
+						// ReceivePack is satisfied.
+						_, _ = w.Write(reportStatusUnpackOk())
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -463,6 +467,9 @@ func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
 			require.NoError(t, err)
 			gotBody = body
 			w.WriteHeader(http.StatusOK)
+			// Emit a minimal successful report-status so the client-side
+			// positive-validation check in ReceivePack is satisfied.
+			_, _ = w.Write(reportStatusUnpackOk())
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 		}
@@ -633,6 +640,18 @@ func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Reque
 		validateReceivePackBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
+	// Emit a minimal successful report-status ("unpack ok" + flush) so
+	// ReceivePack's positive-validation check is satisfied.
+	if _, err := w.Write(reportStatusUnpackOk()); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
+}
+
+// reportStatusUnpackOk builds a minimal valid receive-pack report-status
+// response consisting of a single "unpack ok" pkt-line followed by a flush.
+func reportStatusUnpackOk() []byte {
+	pkt, _ := protocol.FormatPacks(protocol.PackLine("unpack ok\n"))
+	return pkt
 }
 
 // validateReceivePackBody validates the request body for receive-pack requests
@@ -828,6 +847,11 @@ func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Req
 		validateDeleteRefBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
+	// Emit a minimal successful report-status so the client-side
+	// positive-validation check in ReceivePack is satisfied.
+	if _, err := w.Write(reportStatusUnpackOk()); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
 }
 
 // validateDeleteRefBody validates the request body for delete ref requests
