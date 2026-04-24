@@ -80,6 +80,20 @@ NANOGIT_TRACE=1 nanogit clone https://github.com/grafana/nanogit.git ./tmp
 nanogit -v --json ls-tree https://github.com/grafana/nanogit.git main
 ```
 
+### Default repository
+
+Set `NANOGIT_REPO` once to avoid repeating the repository URL on every command. When it is set, the `<repository>` positional argument becomes optional; pass an explicit URL to override.
+
+```bash
+export NANOGIT_REPO=https://github.com/user/repo.git
+nanogit check
+nanogit ls-tree main
+echo "hi" | nanogit put-file main note.md -m "add note"
+nanogit cat-file main note.md
+```
+
+For `clone`, a single positional argument is treated as the destination path unless it looks like a URL (contains `://`).
+
 ### Authentication
 
 For private repositories, use the `--token` flag or set the `NANOGIT_TOKEN` environment variable:

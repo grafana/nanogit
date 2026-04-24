@@ -139,18 +139,41 @@ func TestPutFileCommandArgs(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
+		envRepo     string
 		expectError bool
 	}{
-		{"no arguments", []string{}, true},
-		{"two arguments", []string{"repo", "ref"}, true},
-		{"three arguments", []string{"repo", "ref", "path"}, false},
-		{"four arguments with stdin marker", []string{"repo", "ref", "path", "-"}, false},
-		{"four arguments with invalid marker", []string{"repo", "ref", "path", "bad"}, true},
-		{"five arguments", []string{"repo", "ref", "path", "-", "extra"}, true},
+		{name: "no arguments", args: []string{}, expectError: true},
+		{name: "two arguments without env", args: []string{"repo", "ref"}, expectError: true},
+		{name: "three arguments", args: []string{"repo", "ref", "path"}, expectError: false},
+		{name: "four arguments with stdin marker", args: []string{"repo", "ref", "path", "-"}, expectError: false},
+		{name: "four arguments with invalid marker", args: []string{"repo", "ref", "path", "bad"}, expectError: true},
+		{name: "five arguments", args: []string{"repo", "ref", "path", "-", "extra"}, expectError: true},
+		{
+			name:    "two arguments accepted when NANOGIT_REPO is set",
+			args:    []string{"ref", "path"},
+			envRepo: "https://example.com/repo.git",
+		},
+		{
+			name:    "two arguments plus stdin marker when NANOGIT_REPO is set",
+			args:    []string{"ref", "path", "-"},
+			envRepo: "https://example.com/repo.git",
+		},
+		{
+			name:    "three arguments override env",
+			args:    []string{"repo", "ref", "path"},
+			envRepo: "https://example.com/repo.git",
+		},
+		{
+			name:        "dash in non-trailing position rejected",
+			args:        []string{"repo", "-", "path"},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("NANOGIT_REPO", tt.envRepo)
+
 			err := putFileCmd.Args(putFileCmd, tt.args)
 			if tt.expectError {
 				assert.Error(t, err)
@@ -159,4 +182,42 @@ func TestPutFileCommandArgs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolvePutFileArgs(t *testing.T) {
+	t.Run("explicit three args", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "")
+		repo, ref, path, stdin := resolvePutFileArgs([]string{"https://example.com/repo.git", "main", "note.md"})
+		assert.Equal(t, "https://example.com/repo.git", repo)
+		assert.Equal(t, "main", ref)
+		assert.Equal(t, "note.md", path)
+		assert.False(t, stdin)
+	})
+
+	t.Run("explicit with stdin marker", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "")
+		repo, ref, path, stdin := resolvePutFileArgs([]string{"https://example.com/repo.git", "main", "note.md", "-"})
+		assert.Equal(t, "https://example.com/repo.git", repo)
+		assert.Equal(t, "main", ref)
+		assert.Equal(t, "note.md", path)
+		assert.True(t, stdin)
+	})
+
+	t.Run("env fallback", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "https://env.example.com/repo.git")
+		repo, ref, path, stdin := resolvePutFileArgs([]string{"main", "note.md"})
+		assert.Equal(t, "https://env.example.com/repo.git", repo)
+		assert.Equal(t, "main", ref)
+		assert.Equal(t, "note.md", path)
+		assert.False(t, stdin)
+	})
+
+	t.Run("env fallback with stdin marker", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "https://env.example.com/repo.git")
+		repo, ref, path, stdin := resolvePutFileArgs([]string{"main", "note.md", "-"})
+		assert.Equal(t, "https://env.example.com/repo.git", repo)
+		assert.Equal(t, "main", ref)
+		assert.Equal(t, "note.md", path)
+		assert.True(t, stdin)
+	})
 }

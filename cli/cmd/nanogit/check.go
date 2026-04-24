@@ -14,7 +14,7 @@ func init() {
 }
 
 var checkCmd = &cobra.Command{
-	Use:   "check <repository>",
+	Use:   "check [<repository>]",
 	Short: "Check if a Git server is compatible with nanogit",
 	Long: `Check if a Git server supports Git protocol v2, which is required by nanogit.
 
@@ -24,21 +24,27 @@ before attempting other operations. nanogit requires Git Smart HTTP Protocol v2.
 Many modern Git hosting providers support protocol v2, but some older servers or
 certain cloud providers may only support protocol v1.
 
+The repository argument is optional when NANOGIT_REPO is set.
+
 Examples:
   # Check repository compatibility
   nanogit check https://example.com/repo.git
+
+  # Use NANOGIT_REPO env var instead of repeating the URL
+  export NANOGIT_REPO=https://example.com/repo.git
+  nanogit check
 
   # Check with authentication
   nanogit check https://example.com/private-repo.git --token <token>
 
   # Output as JSON
   nanogit --json check https://example.com/repo.git`,
-	Args: cobra.ExactArgs(1),
+	Args: repoArgs(1),
 	RunE: runCheck,
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
+	repoURL, _ := resolveRepoURL(args, 1)
 
 	ctx, client, err := setupClient(context.Background(), repoURL)
 	if err != nil {

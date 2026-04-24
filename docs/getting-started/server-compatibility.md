@@ -18,21 +18,20 @@ See [CLI Installation](cli.md#installation) for platform-specific binary downloa
 
 ## Configure credentials
 
-Export credentials once so the commands below stay readable. `NANOGIT_USERNAME` defaults to `git`, which is what most providers expect when authenticating with a token.
+Export credentials once so the commands below stay readable. `NANOGIT_USERNAME` defaults to `git`, which is what most providers expect when authenticating with a token. `NANOGIT_REPO` lets every command below omit the repository URL argument.
 
 ```bash
 export NANOGIT_USERNAME=git                       # default; override for providers that require a specific user
 export NANOGIT_TOKEN=ghp_xxx                      # required for private repos or write operations
 export NANOGIT_AUTHOR_NAME="You"
 export NANOGIT_AUTHOR_EMAIL="you@example.com"
-
-REPO=https://github.com/<you>/<scratch>.git
+export NANOGIT_REPO=https://github.com/<you>/<scratch>.git
 ```
 
 ## 1. Verify protocol v2
 
 ```bash
-./nanogit check "$REPO"
+./nanogit check
 ```
 
 Expected output on a compatible server:
@@ -54,7 +53,7 @@ If you see `❌ Not Compatible`, stop here — the server only speaks protocol v
 ## 2. List files (read path)
 
 ```bash
-./nanogit ls-tree "$REPO" main
+./nanogit ls-tree main
 ```
 
 This confirms authentication, branch resolution, and tree fetching all work against the server.
@@ -62,7 +61,7 @@ This confirms authentication, branch resolution, and tree fetching all work agai
 ## 3. Write a file (write path)
 
 ```bash
-echo "hi" | ./nanogit put-file "$REPO" main note.md -m "add note"
+echo "hi" | ./nanogit put-file main note.md -m "add note"
 ```
 
 `put-file` stages the blob, creates a commit, and pushes in a single step. It prints the new commit hash to stdout. If the push fails, the server has rejected the write path — check branch protection rules, token scopes, and server-side hooks.
@@ -70,7 +69,7 @@ echo "hi" | ./nanogit put-file "$REPO" main note.md -m "add note"
 ## 4. Verify (read-after-write)
 
 ```bash
-./nanogit cat-file "$REPO" main note.md
+./nanogit cat-file main note.md
 ```
 
 You should see `hi`. This closes the loop: if all four commands succeed, nanogit can read from and write to this server.
@@ -80,9 +79,11 @@ You should see `hi`. This closes the loop: if all four commands succeed, nanogit
 Add `-v` for progress on stderr, or `NANOGIT_TRACE=1` for full Git wire-level detail. Both leave stdout clean so commit hashes and file contents stay pipeable.
 
 ```bash
-./nanogit -v check "$REPO"
-NANOGIT_TRACE=1 ./nanogit ls-tree "$REPO" main
+./nanogit -v check
+NANOGIT_TRACE=1 ./nanogit ls-tree main
 ```
+
+Each command still accepts the repository URL as its first positional argument, so you can override `NANOGIT_REPO` inline — for example `./nanogit check https://other.example.com/repo.git`.
 
 See [Verbose mode](cli.md#verbose-mode) for details on the logging levels.
 

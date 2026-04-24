@@ -10,6 +10,42 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// cloneArgs validates the positional arguments for `clone`. It accepts 1 or 2
+// args when NANOGIT_REPO is unset (the original behaviour) and additionally
+// allows 0 args when NANOGIT_REPO supplies the URL.
+func cloneArgs(_ *cobra.Command, args []string) error {
+	envSet := os.Getenv(repoEnv) != ""
+	switch len(args) {
+	case 0:
+		if !envSet {
+			return fmt.Errorf("accepts 1-2 arg(s), received 0 (or set %s)", repoEnv)
+		}
+		return nil
+	case 1, 2:
+		return nil
+	default:
+		return fmt.Errorf("accepts at most 2 arg(s), received %d", len(args))
+	}
+}
+
+// resolveCloneArgs picks the repo URL and destination from positional args,
+// falling back to NANOGIT_REPO. With a single positional arg and env set, the
+// URL-vs-path disambiguation uses looksLikeRepoURL.
+func resolveCloneArgs(args []string) (repoURL, dest string) {
+	env := os.Getenv(repoEnv)
+	switch len(args) {
+	case 0:
+		return env, "."
+	case 1:
+		if env != "" && !looksLikeRepoURL(args[0]) {
+			return env, args[0]
+		}
+		return args[0], "."
+	default:
+		return args[0], args[1]
+	}
+}
+
 var (
 	cloneRef         string
 	cloneInclude     []string
@@ -29,7 +65,7 @@ func init() {
 }
 
 var cloneCmd = &cobra.Command{
-	Use:   "clone <repository> [<destination>]",
+	Use:   "clone [<repository>] [<destination>]",
 	Short: "Clone a repository to a local directory",
 	Long: `Clone a repository to a local directory.
 
@@ -38,9 +74,17 @@ using the --ref flag.
 
 Supports path filtering with glob patterns to clone only specific files or directories.
 
+The repository argument is optional when NANOGIT_REPO is set. When it is set
+and a single positional argument is passed, it is treated as the destination
+path unless it looks like a URL (contains "://").
+
 Examples:
   # Clone to current directory (uses HEAD/default branch)
   nanogit clone https://github.com/grafana/nanogit.git
+
+  # Use NANOGIT_REPO env var instead of passing the URL
+  export NANOGIT_REPO=https://github.com/grafana/nanogit.git
+  nanogit clone ./my-repo
 
   # Clone to specific directory
   nanogit clone https://github.com/grafana/nanogit.git ./my-repo
@@ -56,21 +100,12 @@ Examples:
 
   # Clone with batching and concurrency for better performance
   nanogit clone https://github.com/grafana/nanogit.git ./my-repo --batch-size 100 --concurrency 20`,
-	Args: cobra.RangeArgs(1, 2),
+	Args: cloneArgs,
 	RunE: runClone,
 }
 
 func runClone(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
-
-	// Determine destination path
-	var destPath string
-	if len(args) == 2 {
-		destPath = args[1]
-	} else {
-		// Default to current directory
-		destPath = "."
-	}
+	repoURL, destPath := resolveCloneArgs(args)
 
 	// Determine ref (default to HEAD)
 	ref := cloneRef
