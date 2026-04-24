@@ -805,21 +805,18 @@ const (
 	MemoryBytesThreshold = 5 * 1024 * 1024
 )
 
-// NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm and storage mode.
-func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *PackfileWriter {
+// NewPackfileWriter creates a new PackfileWriter with the specified hash
+// algorithm and storage mode. When caps is empty, WritePackfile uses
+// DefaultPushCapabilities() for the ref update command; otherwise the given
+// capabilities replace the default set.
+func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode, caps ...Capability) *PackfileWriter {
 	return &PackfileWriter{
 		objectHashes:  make(map[string]bool),
 		memoryObjects: make([]PackfileObject, 0),
 		storageMode:   storageMode,
 		algo:          algo,
+		capabilities:  caps,
 	}
-}
-
-// SetCapabilities overrides the capabilities advertised on the ref update
-// command written by WritePackfile. When unset or empty,
-// DefaultPushCapabilities() is used.
-func (w *PackfileWriter) SetCapabilities(capabilities []Capability) {
-	w.capabilities = capabilities
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.

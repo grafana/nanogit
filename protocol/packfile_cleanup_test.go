@@ -10,10 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPackfileWriter_SetCapabilities(t *testing.T) {
-	writeWithCaps := func(caps []Capability) []byte {
-		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory)
-		writer.SetCapabilities(caps)
+func TestNewPackfileWriter_Capabilities(t *testing.T) {
+	writeWithCaps := func(caps ...Capability) []byte {
+		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory, caps...)
 
 		// Add a tree and a commit so WritePackfile passes its validation.
 		treeHash, err := writer.AddBlob([]byte("placeholder"))
@@ -28,15 +27,15 @@ func TestPackfileWriter_SetCapabilities(t *testing.T) {
 		return buf.Bytes()
 	}
 
-	t.Run("default advertises side-band-64k", func(t *testing.T) {
-		out := writeWithCaps(nil)
+	t.Run("no caps advertises the default set including side-band-64k", func(t *testing.T) {
+		out := writeWithCaps()
 		assert.Contains(t, string(out), FormatCapabilities(DefaultPushCapabilities()))
 		assert.Contains(t, string(out), string(CapSideBand64k))
 	})
 
 	t.Run("caller-supplied set replaces the default and drops side-band-64k", func(t *testing.T) {
 		caps := []Capability{CapReportStatusV2, CapQuiet, CapObjectFormatSHA1, CapAgent("nanogit")}
-		out := writeWithCaps(caps)
+		out := writeWithCaps(caps...)
 		assert.Contains(t, string(out), FormatCapabilities(caps))
 		assert.NotContains(t, string(out), string(CapSideBand64k))
 	})
