@@ -447,7 +447,7 @@ func TestCreateRef(t *testing.T) {
 	}
 }
 
-func TestCreateRef_WithoutReceivePackSideBand(t *testing.T) {
+func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
 	refHash, err := hash.FromHex("1234567890123456789012345678901234567890")
 	require.NoError(t, err)
 	refToCreate := Ref{Name: "refs/heads/main", Hash: refHash}
@@ -469,21 +469,20 @@ func TestCreateRef_WithoutReceivePackSideBand(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewHTTPClient(server.URL, options.WithoutReceivePackSideBand())
+	// Override with a side-band-free set: callers must spell out every
+	// capability they want on the wire; there is no "subtract" sugar.
+	caps := []protocol.Capability{
+		protocol.CapReportStatusV2,
+		protocol.CapQuiet,
+		protocol.CapObjectFormatSHA1,
+		protocol.CapAgent("nanogit"),
+	}
+	client, err := NewHTTPClient(server.URL, options.WithReceivePackCapabilities(caps...))
 	require.NoError(t, err)
 
 	require.NoError(t, client.CreateRef(context.Background(), refToCreate))
 
-	// WithoutReceivePackSideBand should drop side-band-64k from the advertised
-	// capabilities but keep the rest of the default set.
-	defaults := protocol.DefaultReceivePackCapabilities()
-	expected := defaults[:0]
-	for _, c := range defaults {
-		if c != protocol.CapSideBand64k {
-			expected = append(expected, c)
-		}
-	}
-	require.Contains(t, string(gotBody), protocol.FormatCapabilities(expected))
+	require.Contains(t, string(gotBody), protocol.FormatCapabilities(caps))
 	require.NotContains(t, string(gotBody), string(protocol.CapSideBand64k))
 }
 

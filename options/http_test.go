@@ -3,7 +3,6 @@ package options
 import (
 	"errors"
 	"net/http"
-	"slices"
 	"testing"
 
 	"github.com/grafana/nanogit/protocol"
@@ -66,30 +65,6 @@ func TestWithReceivePackCapabilities(t *testing.T) {
 		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
 		caps[0] = protocol.CapQuiet
 		require.Equal(t, protocol.CapReportStatusV2, o.ReceivePackCapabilities[0])
-	})
-}
-
-func TestWithoutReceivePackSideBand(t *testing.T) {
-	t.Parallel()
-
-	t.Run("unset by default", func(t *testing.T) {
-		o := &Options{}
-		require.Nil(t, o.ReceivePackCapabilities)
-	})
-
-	t.Run("sets capabilities to default minus side-band-64k", func(t *testing.T) {
-		o := &Options{}
-		require.NoError(t, WithoutReceivePackSideBand()(o))
-		require.NotContains(t, o.ReceivePackCapabilities, protocol.CapSideBand64k)
-		// The rest of the default set is preserved (order matters for the
-		// on-wire pkt-line but is not load-bearing for servers).
-		for _, c := range protocol.DefaultReceivePackCapabilities() {
-			if c == protocol.CapSideBand64k {
-				continue
-			}
-			require.True(t, slices.Contains(o.ReceivePackCapabilities, c),
-				"default capability %q missing from WithoutReceivePackSideBand output", c)
-		}
 	})
 }
 
