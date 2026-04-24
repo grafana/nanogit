@@ -11,11 +11,9 @@ import (
 )
 
 func TestPackfileWriter_SetCapabilities(t *testing.T) {
-	writeWithCaps := func(caps string) []byte {
+	writeWithCaps := func(caps []Capability) []byte {
 		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory)
-		if caps != "" {
-			writer.SetCapabilities(caps)
-		}
+		writer.SetCapabilities(caps)
 
 		// Add a tree and a commit so WritePackfile passes its validation.
 		treeHash, err := writer.AddBlob([]byte("placeholder"))
@@ -31,15 +29,16 @@ func TestPackfileWriter_SetCapabilities(t *testing.T) {
 	}
 
 	t.Run("default advertises side-band-64k", func(t *testing.T) {
-		out := writeWithCaps("")
-		assert.Contains(t, string(out), DefaultPushCapabilities)
-		assert.Contains(t, string(out), "side-band-64k")
+		out := writeWithCaps(nil)
+		assert.Contains(t, string(out), FormatCapabilities(DefaultPushCapabilities()))
+		assert.Contains(t, string(out), string(CapSideBand64k))
 	})
 
-	t.Run("no-side-band capabilities drop side-band-64k", func(t *testing.T) {
-		out := writeWithCaps(PushCapabilitiesNoSideBand)
-		assert.Contains(t, string(out), PushCapabilitiesNoSideBand)
-		assert.NotContains(t, string(out), "side-band-64k")
+	t.Run("caller-supplied set replaces the default and drops side-band-64k", func(t *testing.T) {
+		caps := []Capability{CapReportStatusV2, CapQuiet, CapObjectFormatSHA1, CapAgent("nanogit")}
+		out := writeWithCaps(caps)
+		assert.Contains(t, string(out), FormatCapabilities(caps))
+		assert.NotContains(t, string(out), string(CapSideBand64k))
 	})
 }
 

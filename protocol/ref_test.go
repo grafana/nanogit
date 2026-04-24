@@ -255,20 +255,26 @@ func TestRefUpdateRequest_Format(t *testing.T) {
 func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
 	t.Parallel()
 
-	t.Run("custom capabilities are used verbatim", func(t *testing.T) {
+	t.Run("caller-supplied capabilities replace the default", func(t *testing.T) {
+		caps := []protocol.Capability{
+			protocol.CapReportStatusV2,
+			protocol.CapQuiet,
+			protocol.CapObjectFormatSHA1,
+			protocol.CapAgent("nanogit"),
+		}
 		req := protocol.RefUpdateRequest{
 			OldRef:       protocol.ZeroHash,
 			NewRef:       "1234567890123456789012345678901234567890",
 			RefName:      "refs/heads/main",
-			Capabilities: protocol.PushCapabilitiesNoSideBand,
+			Capabilities: caps,
 		}
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.PushCapabilitiesNoSideBand)
-		assert.NotContains(t, string(got), "side-band-64k")
+		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+		assert.NotContains(t, string(got), string(protocol.CapSideBand64k))
 	})
 
-	t.Run("empty capabilities fall back to default", func(t *testing.T) {
+	t.Run("nil capabilities fall back to default", func(t *testing.T) {
 		req := protocol.RefUpdateRequest{
 			OldRef:  protocol.ZeroHash,
 			NewRef:  "1234567890123456789012345678901234567890",
@@ -276,8 +282,8 @@ func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
 		}
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.DefaultPushCapabilities)
-		assert.Contains(t, string(got), "side-band-64k")
+		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultPushCapabilities()))
+		assert.Contains(t, string(got), string(protocol.CapSideBand64k))
 	})
 }
 

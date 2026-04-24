@@ -474,10 +474,17 @@ func TestCreateRef_WithoutPushSideBand(t *testing.T) {
 
 	require.NoError(t, client.CreateRef(context.Background(), refToCreate))
 
-	// Default: "report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit"
-	// Disabled: "report-status-v2 quiet object-format=sha1 agent=nanogit"
-	require.Contains(t, string(gotBody), protocol.PushCapabilitiesNoSideBand)
-	require.NotContains(t, string(gotBody), "side-band-64k")
+	// WithoutPushSideBand should drop side-band-64k from the advertised
+	// capabilities but keep the rest of the default set.
+	defaults := protocol.DefaultPushCapabilities()
+	expected := defaults[:0]
+	for _, c := range defaults {
+		if c != protocol.CapSideBand64k {
+			expected = append(expected, c)
+		}
+	}
+	require.Contains(t, string(gotBody), protocol.FormatCapabilities(expected))
+	require.NotContains(t, string(gotBody), string(protocol.CapSideBand64k))
 }
 
 func TestUpdateRef(t *testing.T) {

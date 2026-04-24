@@ -102,8 +102,8 @@ type Client interface {
 type httpClient struct {
 	client.RawClient
 	// pushCapabilities is advertised on receive-pack ref update commands.
-	// When empty, protocol.DefaultPushCapabilities is used.
-	pushCapabilities string
+	// When nil or empty, protocol.DefaultPushCapabilities() is used.
+	pushCapabilities []protocol.Capability
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -150,13 +150,8 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 		}
 	}
 
-	pushCapabilities := ""
-	if resolved.DisablePushSideBand {
-		pushCapabilities = protocol.PushCapabilitiesNoSideBand
-	}
-
 	return &httpClient{
 		RawClient:        rawClient,
-		pushCapabilities: pushCapabilities,
+		pushCapabilities: resolved.PushCapabilities,
 	}, nil
 }

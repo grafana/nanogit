@@ -3,8 +3,10 @@ package options
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
+	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,18 +45,51 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 }
 
+func TestWithPushCapabilities(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unset by default", func(t *testing.T) {
+		o := &Options{}
+		require.Nil(t, o.PushCapabilities)
+	})
+
+	t.Run("replaces the set with what the caller passes", func(t *testing.T) {
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("custom")}
+		require.NoError(t, WithPushCapabilities(caps...)(o))
+		require.Equal(t, caps, o.PushCapabilities)
+	})
+
+	t.Run("copies the slice so caller mutations don't leak", func(t *testing.T) {
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2}
+		require.NoError(t, WithPushCapabilities(caps...)(o))
+		caps[0] = protocol.CapQuiet
+		require.Equal(t, protocol.CapReportStatusV2, o.PushCapabilities[0])
+	})
+}
+
 func TestWithoutPushSideBand(t *testing.T) {
 	t.Parallel()
 
-	t.Run("flag is off by default", func(t *testing.T) {
+	t.Run("unset by default", func(t *testing.T) {
 		o := &Options{}
-		require.False(t, o.DisablePushSideBand)
+		require.Nil(t, o.PushCapabilities)
 	})
 
-	t.Run("option sets the flag", func(t *testing.T) {
+	t.Run("sets capabilities to default minus side-band-64k", func(t *testing.T) {
 		o := &Options{}
 		require.NoError(t, WithoutPushSideBand()(o))
-		require.True(t, o.DisablePushSideBand)
+		require.NotContains(t, o.PushCapabilities, protocol.CapSideBand64k)
+		// The rest of the default set is preserved (order matters for the
+		// on-wire pkt-line but is not load-bearing for servers).
+		for _, c := range protocol.DefaultPushCapabilities() {
+			if c == protocol.CapSideBand64k {
+				continue
+			}
+			require.True(t, slices.Contains(o.PushCapabilities, c),
+				"default capability %q missing from WithoutPushSideBand output", c)
+		}
 	})
 }
 

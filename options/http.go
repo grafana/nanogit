@@ -3,6 +3,8 @@ package options
 import (
 	"errors"
 	"net/http"
+
+	"github.com/grafana/nanogit/protocol"
 )
 
 // WithHTTPClient sets a custom HTTP client for making Git protocol requests.
@@ -40,24 +42,39 @@ func WithoutGitSuffix() Option {
 	}
 }
 
-// WithoutPushSideBand disables the "side-band-64k" capability advertised on
-// push (receive-pack) requests. Without side-band, the server sends
-// report-status packets directly, which nanogit's parser can reliably
-// inspect for "ng <ref> <reason>" and "unpack <status>" failures.
+// WithPushCapabilities overrides the capabilities nanogit advertises on
+// receive-pack ref update commands. When the caller passes any capabilities
+// (even a single one), the given set replaces the default entirely — nanogit
+// does not merge with protocol.DefaultPushCapabilities().
 //
-// Some Git servers (notably certain GitLab configurations) wrap report-status
-// in side-band channel 1. nanogit's current error detection does not strip
-// the side-band channel byte before matching "ng"/"unpack" prefixes, so
-// rejections from push rules, pre-receive hooks, or branch protection can
-// be silently swallowed and appear as successful pushes that produce empty
-// branches (the ref points at its previous value, without the new commit).
-//
-// Use this option when talking to servers that surface push failures via
-// side-band and you observe silent push failures. GitHub does not require
-// this workaround.
+// Use this when the default set is not appropriate for the target server.
+// A common case is omitting protocol.CapSideBand64k to work around servers
+// that wrap report-status in side-band channel 1; see WithoutPushSideBand
+// for that ergonomic shortcut.
+func WithPushCapabilities(caps ...protocol.Capability) Option {
+	return func(o *Options) error {
+		// Copy so subsequent mutations by the caller don't leak into Options.
+		o.PushCapabilities = append([]protocol.Capability(nil), caps...)
+		return nil
+	}
+}
+
+// WithoutPushSideBand is a convenience wrapper around WithPushCapabilities
+// that advertises nanogit's default push capabilities minus
+// protocol.CapSideBand64k. Without side-band, the server sends report-status
+// packets directly (no channel prefix), which makes failure detection
+// reliable on servers that otherwise wrap them in side-band channel 1
+// (notably some GitLab configurations — see the package docs).
 func WithoutPushSideBand() Option {
 	return func(o *Options) error {
-		o.DisablePushSideBand = true
+		defaults := protocol.DefaultPushCapabilities()
+		out := defaults[:0]
+		for _, c := range defaults {
+			if c != protocol.CapSideBand64k {
+				out = append(out, c)
+			}
+		}
+		o.PushCapabilities = out
 		return nil
 	}
 }
