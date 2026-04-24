@@ -409,6 +409,57 @@ func TestNewDeleteRefRequest(t *testing.T) {
 	}
 }
 
+func TestRefRequestConstructors_Capabilities(t *testing.T) {
+	t.Parallel()
+
+	someHash, err := hash.FromHex("1234567890123456789012345678901234567890")
+	require.NoError(t, err)
+	otherHash, err := hash.FromHex("0987654321098765432109876543210987654321")
+	require.NoError(t, err)
+	caps := []protocol.Capability{
+		protocol.CapReportStatusV2,
+		protocol.CapQuiet,
+		protocol.CapAgent("nanogit"),
+	}
+
+	t.Run("no caps produces a request that formats with the default set", func(t *testing.T) {
+		req := protocol.NewCreateRefRequest("refs/heads/main", someHash)
+		assert.Nil(t, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultPushCapabilities()))
+	})
+
+	t.Run("NewCreateRefRequest stores the caller-supplied caps", func(t *testing.T) {
+		req := protocol.NewCreateRefRequest("refs/heads/main", someHash, caps...)
+		assert.Equal(t, caps, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+		assert.NotContains(t, string(got), string(protocol.CapSideBand64k))
+	})
+
+	t.Run("NewUpdateRefRequest stores the caller-supplied caps", func(t *testing.T) {
+		req := protocol.NewUpdateRefRequest(someHash, otherHash, "refs/heads/main", caps...)
+		assert.Equal(t, caps, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+	})
+
+	t.Run("NewDeleteRefRequest stores the caller-supplied caps", func(t *testing.T) {
+		req := protocol.NewDeleteRefRequest(someHash, "refs/heads/main", caps...)
+		assert.Equal(t, caps, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+	})
+}
+
 func TestParseRefLine(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -205,27 +205,38 @@ type RefUpdateRequest struct {
 	Capabilities []Capability
 }
 
-func NewCreateRefRequest(refName string, newRef hash.Hash) RefUpdateRequest {
+// NewCreateRefRequest builds a ref update request that creates refName at
+// newRef. When caps is empty, DefaultPushCapabilities() is used at Format
+// time; otherwise the given capabilities replace the default set.
+func NewCreateRefRequest(refName string, newRef hash.Hash, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  ZeroHash,
-		NewRef:  newRef.String(),
-		RefName: refName,
+		OldRef:       ZeroHash,
+		NewRef:       newRef.String(),
+		RefName:      refName,
+		Capabilities: caps,
 	}
 }
 
-func NewUpdateRefRequest(oldRef, newRef hash.Hash, refName string) RefUpdateRequest {
+// NewUpdateRefRequest builds a ref update request that moves refName from
+// oldRef to newRef. Capabilities follow the same rules as NewCreateRefRequest.
+func NewUpdateRefRequest(oldRef, newRef hash.Hash, refName string, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  oldRef.String(),
-		NewRef:  newRef.String(),
-		RefName: refName,
+		OldRef:       oldRef.String(),
+		NewRef:       newRef.String(),
+		RefName:      refName,
+		Capabilities: caps,
 	}
 }
 
-func NewDeleteRefRequest(oldRef hash.Hash, refName string) RefUpdateRequest {
+// NewDeleteRefRequest builds a ref update request that deletes refName
+// currently pointing at oldRef. Capabilities follow the same rules as
+// NewCreateRefRequest.
+func NewDeleteRefRequest(oldRef hash.Hash, refName string, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  oldRef.String(),
-		NewRef:  ZeroHash,
-		RefName: refName,
+		OldRef:       oldRef.String(),
+		NewRef:       ZeroHash,
+		RefName:      refName,
+		Capabilities: caps,
 	}
 }
 
