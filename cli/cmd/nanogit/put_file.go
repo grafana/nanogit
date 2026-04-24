@@ -34,7 +34,8 @@ func init() {
 	putFileCmd.Flags().StringVar(&putFileCommitter, "committer", "", "Committer of the commit in \"Name <email>\" form (falls back to NANOGIT_COMMITTER_NAME/EMAIL, then author)")
 	putFileCmd.Flags().StringSliceVar(&putFileReceivePackCaps, "receive-pack-capability", nil,
 		"Advertised receive-pack capability (repeatable). When set, replaces the default set entirely. "+
-			"Values: report-status-v2, side-band-64k, quiet, object-format=sha1, agent=<name>. "+
+			"Common values include report-status-v2, side-band-64k, quiet, object-format=sha1, and agent=<name>. "+
+			"Arbitrary capability tokens are also accepted as an escape hatch for advanced use. "+
 			"Example: --receive-pack-capability=report-status-v2 --receive-pack-capability=quiet "+
 			"--receive-pack-capability=object-format=sha1 --receive-pack-capability=agent=nanogit "+
 			"(drops side-band-64k to work around servers that wrap report-status in side-band channel 1).")
