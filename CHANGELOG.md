@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/grafana/nanogit/compare/v0.13.1...v0.14.0) (2026-04-24)
+
+
+### Features
+
+* **cli:** add put-file write command and verbose/trace logging ([#271](https://github.com/grafana/nanogit/issues/271)) ([5ce8b23](https://github.com/grafana/nanogit/commit/5ce8b233cf2e09400a2b6c7d8041465638d54106))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-git/v5 to v5.18.0 [security] ([#268](https://github.com/grafana/nanogit/issues/268)) ([5deb68c](https://github.com/grafana/nanogit/commit/5deb68c20e20995725227e3c2369336b46f753b2))
+* **security:** upgrade to Go 1.25.9 to address stdlib vulnerabilities ([#272](https://github.com/grafana/nanogit/issues/272)) ([33be959](https://github.com/grafana/nanogit/commit/33be95986b8d5f31bb4935118d97aff5eb4c7471))
+
 ## [0.13.0](https://github.com/grafana/nanogit/compare/v0.12.1...v0.13.0) (2026-03-19)
 
 
