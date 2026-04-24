@@ -28,16 +28,21 @@ func init() {
 }
 
 var lsTreeCmd = &cobra.Command{
-	Use:   "ls-tree <repository> <ref>",
+	Use:   "ls-tree [<repository>] <ref>",
 	Short: "List the contents of a tree object",
 	Long: `List the contents of a tree object from a Git repository at a specific reference.
 
 The ref can be a branch name, tag name, or commit hash.
 By default, shows mode, type, hash, and name for each entry (like git ls-tree).
+The repository argument is optional when NANOGIT_REPO is set.
 
 Examples:
   # List files at root (shows mode, type, hash, name)
   nanogit ls-tree https://github.com/grafana/nanogit.git main
+
+  # Use NANOGIT_REPO env var instead of repeating the URL
+  export NANOGIT_REPO=https://github.com/grafana/nanogit.git
+  nanogit ls-tree main
 
   # List files in a specific directory
   nanogit ls-tree https://github.com/grafana/nanogit.git main --path docs
@@ -50,13 +55,13 @@ Examples:
 
   # Output as JSON
   nanogit --json ls-tree https://github.com/grafana/nanogit.git main`,
-	Args: cobra.ExactArgs(2),
+	Args: repoArgs(2),
 	RunE: runLsTree,
 }
 
 func runLsTree(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
-	ref := args[1]
+	repoURL, rest := resolveRepoURL(args, 2)
+	ref := rest[0]
 
 	ctx, client, err := setupClient(context.Background(), repoURL)
 	if err != nil {

@@ -103,6 +103,7 @@ The following flags are available for all commands:
 These flags can also be set via environment variables:
 - `NANOGIT_USERNAME` - Authentication username
 - `NANOGIT_TOKEN` - Authentication token
+- `NANOGIT_REPO` - Default repository URL. When set, the `<repository>` positional argument becomes optional for all commands. An explicit positional still overrides it.
 - `NANOGIT_TRACE` - When set (to any non-empty value), emits Debug-level wire/protocol logs to stderr
 
 ## Verbose mode

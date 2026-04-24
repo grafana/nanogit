@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,19 +32,24 @@ func init() {
 }
 
 var putFileCmd = &cobra.Command{
-	Use:   "put-file <repository> <ref> <path> [-]",
+	Use:   "put-file [<repository>] <ref> <path> [-]",
 	Short: "Create or update a file on a branch in a single commit",
 	Long: `Create or update a file on a branch by staging a blob, committing, and
 pushing in a single step. The ref must be a branch: the change is written on
 top of the branch's current tip.
 
 Content can be provided on stdin (default) or read from a local file with
---from-file. The special path "-" as the fourth positional argument is
-accepted but optional.
+--from-file. The trailing "-" positional argument is accepted but optional.
+
+The repository argument is optional when NANOGIT_REPO is set.
 
 Examples:
   # Pipe content on stdin
   echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md -m "add note" --author "Jane <jane@example.com>"
+
+  # Use NANOGIT_REPO env var instead of repeating the URL
+  export NANOGIT_REPO=https://github.com/user/repo.git
+  echo "hello" | nanogit put-file main docs/note.md -m "add note" --author "Jane <jane@example.com>"
 
   # Read content from a local file
   nanogit put-file https://github.com/user/repo.git main docs/note.md \
@@ -60,26 +66,48 @@ Examples:
 	RunE: runPutFile,
 }
 
-// putFileArgs validates positional arguments: three are required, and a
-// fourth optional argument must be the literal "-" meaning "read from stdin".
+// putFileArgs validates positional arguments. The optional trailing "-" marks
+// stdin; after peeling it off we need exactly (repo, ref, path) — or just
+// (ref, path) when NANOGIT_REPO provides the repo URL.
 func putFileArgs(_ *cobra.Command, args []string) error {
-	if len(args) < 3 {
-		return fmt.Errorf("accepts at least 3 arg(s), received %d", len(args))
+	envSet := os.Getenv(repoEnv) != ""
+
+	// A trailing "-" means "read from stdin"; strip it so we can validate the
+	// remaining positional count. "-" in any other position is rejected.
+	if len(args) > 0 && args[len(args)-1] == "-" {
+		args = args[:len(args)-1]
 	}
-	if len(args) > 4 {
-		return fmt.Errorf("accepts at most 4 arg(s), received %d", len(args))
+	if slices.Contains(args, "-") {
+		return fmt.Errorf(`"-" marker is only valid as the last positional argument`)
 	}
-	if len(args) == 4 && args[3] != "-" {
-		return fmt.Errorf("fourth positional argument must be \"-\" (stdin) or omitted, got %q", args[3])
+
+	if len(args) == 3 {
+		return nil
 	}
-	return nil
+	if envSet && len(args) == 2 {
+		return nil
+	}
+	if envSet {
+		return fmt.Errorf("accepts 2-3 positional args (plus optional trailing \"-\" for stdin), received %d", len(args))
+	}
+	return fmt.Errorf("accepts 3 positional args (plus optional trailing \"-\" for stdin), received %d (or set %s and pass 2)", len(args), repoEnv)
+}
+
+// resolvePutFileArgs extracts the repo URL, ref, path, and whether the stdin
+// marker was present. Callers rely on putFileArgs having validated counts.
+func resolvePutFileArgs(args []string) (repoURL, refName, filePath string, stdinMarker bool) {
+	if len(args) > 0 && args[len(args)-1] == "-" {
+		stdinMarker = true
+		args = args[:len(args)-1]
+	}
+	if len(args) == 3 {
+		return args[0], args[1], args[2], stdinMarker
+	}
+	return os.Getenv(repoEnv), args[0], args[1], stdinMarker
 }
 
 func runPutFile(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
-	refName := args[1]
-	filePath := args[2]
-	stdinMarker := len(args) == 4
+	repoURL, refName, filePath, stdinMarker := resolvePutFileArgs(args)
 
 	if putFileMessage == "" {
 		return errors.New("--message/-m is required")

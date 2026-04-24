@@ -15,16 +15,21 @@ func init() {
 }
 
 var catFileCmd = &cobra.Command{
-	Use:   "cat-file <repository> <ref> <path>",
+	Use:   "cat-file [<repository>] <ref> <path>",
 	Short: "Display the contents of a file",
 	Long: `Display the contents of a file from a Git repository at a specific reference.
 
 The ref can be a branch name, tag name, or commit hash.
 The path is the file path within the repository.
+The repository argument is optional when NANOGIT_REPO is set.
 
 Examples:
   # Display file contents
   nanogit cat-file https://github.com/grafana/nanogit.git main README.md
+
+  # Use NANOGIT_REPO env var instead of repeating the URL
+  export NANOGIT_REPO=https://github.com/grafana/nanogit.git
+  nanogit cat-file main README.md
 
   # Display file from a specific tag
   nanogit cat-file https://github.com/grafana/nanogit.git v1.0.0 docs/api.md
@@ -38,14 +43,14 @@ Examples:
   # With authentication
   nanogit cat-file https://github.com/user/private-repo.git main file.txt --token <token>
   NANOGIT_TOKEN=<token> nanogit cat-file https://github.com/user/private-repo.git main file.txt`,
-	Args: cobra.ExactArgs(3),
+	Args: repoArgs(3),
 	RunE: runCatFile,
 }
 
 func runCatFile(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
-	ref := args[1]
-	filePath := args[2]
+	repoURL, rest := resolveRepoURL(args, 3)
+	ref := rest[0]
+	filePath := rest[1]
 
 	ctx, client, err := setupClient(context.Background(), repoURL)
 	if err != nil {
