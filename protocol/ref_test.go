@@ -468,6 +468,19 @@ func TestRefRequestConstructors_Capabilities(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(got), mustFormatCaps(t, caps))
 	})
+
+	t.Run("constructors copy caps so later caller mutations do not alias", func(t *testing.T) {
+		orig := []protocol.Capability{
+			protocol.CapReportStatusV2,
+			protocol.CapQuiet,
+		}
+		req := protocol.NewCreateRefRequest("refs/heads/main", someHash, orig...)
+
+		// Mutating the caller's slice after construction must not change
+		// the capabilities stored on the request.
+		orig[0] = protocol.Capability("tampered")
+		assert.Equal(t, protocol.CapReportStatusV2, req.Capabilities[0])
+	})
 }
 
 func TestParseRefLine(t *testing.T) {

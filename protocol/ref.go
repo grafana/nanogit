@@ -205,6 +205,16 @@ type RefUpdateRequest struct {
 	Capabilities []Capability
 }
 
+// copyCapabilities returns nil for an empty slice and a defensive copy
+// otherwise so the stored capabilities cannot be mutated through the caller's
+// slice after the request is constructed. Mirrors NewPackfileWriter.
+func copyCapabilities(caps []Capability) []Capability {
+	if len(caps) == 0 {
+		return nil
+	}
+	return append([]Capability(nil), caps...)
+}
+
 // NewCreateRefRequest builds a ref update request that creates refName at
 // newRef. When caps is empty, DefaultReceivePackCapabilities() is used at Format
 // time; otherwise the given capabilities replace the default set.
@@ -213,7 +223,7 @@ func NewCreateRefRequest(refName string, newRef hash.Hash, caps ...Capability) R
 		OldRef:       ZeroHash,
 		NewRef:       newRef.String(),
 		RefName:      refName,
-		Capabilities: caps,
+		Capabilities: copyCapabilities(caps),
 	}
 }
 
@@ -224,7 +234,7 @@ func NewUpdateRefRequest(oldRef, newRef hash.Hash, refName string, caps ...Capab
 		OldRef:       oldRef.String(),
 		NewRef:       newRef.String(),
 		RefName:      refName,
-		Capabilities: caps,
+		Capabilities: copyCapabilities(caps),
 	}
 }
 
@@ -236,7 +246,7 @@ func NewDeleteRefRequest(oldRef hash.Hash, refName string, caps ...Capability) R
 		OldRef:       oldRef.String(),
 		NewRef:       ZeroHash,
 		RefName:      refName,
-		Capabilities: caps,
+		Capabilities: copyCapabilities(caps),
 	}
 }
 
