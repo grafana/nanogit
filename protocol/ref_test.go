@@ -13,6 +13,16 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// mustFormatCaps calls protocol.FormatCapabilities and fails the test on
+// error. It lets the existing assertions stay readable now that the
+// production function returns (string, error).
+func mustFormatCaps(t *testing.T, caps []protocol.Capability) string {
+	t.Helper()
+	got, err := protocol.FormatCapabilities(caps)
+	require.NoError(t, err)
+	return got
+}
+
 func TestParseRefName(t *testing.T) {
 	t.Parallel()
 
@@ -270,7 +280,7 @@ func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
 		}
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
 		assert.NotContains(t, string(got), string(protocol.CapSideBand64k))
 	})
 
@@ -282,7 +292,7 @@ func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
 		}
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities()))
+		assert.Contains(t, string(got), mustFormatCaps(t, protocol.DefaultReceivePackCapabilities()))
 		assert.Contains(t, string(got), string(protocol.CapSideBand64k))
 	})
 }
@@ -428,7 +438,7 @@ func TestRefRequestConstructors_Capabilities(t *testing.T) {
 
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities()))
+		assert.Contains(t, string(got), mustFormatCaps(t, protocol.DefaultReceivePackCapabilities()))
 	})
 
 	t.Run("NewCreateRefRequest stores the caller-supplied caps", func(t *testing.T) {
@@ -437,7 +447,7 @@ func TestRefRequestConstructors_Capabilities(t *testing.T) {
 
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
 		assert.NotContains(t, string(got), string(protocol.CapSideBand64k))
 	})
 
@@ -447,7 +457,7 @@ func TestRefRequestConstructors_Capabilities(t *testing.T) {
 
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
 	})
 
 	t.Run("NewDeleteRefRequest stores the caller-supplied caps", func(t *testing.T) {
@@ -456,7 +466,7 @@ func TestRefRequestConstructors_Capabilities(t *testing.T) {
 
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(caps))
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
 	})
 }
 

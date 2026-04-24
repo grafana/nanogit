@@ -63,7 +63,9 @@ func TestFormatCapabilities(t *testing.T) {
 			protocol.CapQuiet,
 			protocol.CapAgent("nanogit"),
 		}
-		assert.Equal(t, "report-status-v2 quiet agent=nanogit", protocol.FormatCapabilities(caps))
+		got, err := protocol.FormatCapabilities(caps)
+		require.NoError(t, err)
+		assert.Equal(t, "report-status-v2 quiet agent=nanogit", got)
 	})
 
 	t.Run("preserves the order the caller provided", func(t *testing.T) {
@@ -71,28 +73,73 @@ func TestFormatCapabilities(t *testing.T) {
 			protocol.CapAgent("nanogit"),
 			protocol.CapReportStatusV2,
 		}
-		got := protocol.FormatCapabilities(caps)
+		got, err := protocol.FormatCapabilities(caps)
+		require.NoError(t, err)
 		assert.Equal(t, "agent=nanogit report-status-v2", got)
 	})
 
 	t.Run("nil falls back to formatted defaults", func(t *testing.T) {
-		got := protocol.FormatCapabilities(nil)
-		want := protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities())
+		got, err := protocol.FormatCapabilities(nil)
+		require.NoError(t, err)
+		want, err := protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities())
+		require.NoError(t, err)
 		assert.Equal(t, want, got)
 		assert.Contains(t, got, string(protocol.CapSideBand64k))
 	})
 
 	t.Run("empty slice falls back to formatted defaults", func(t *testing.T) {
-		got := protocol.FormatCapabilities([]protocol.Capability{})
-		want := protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities())
+		got, err := protocol.FormatCapabilities([]protocol.Capability{})
+		require.NoError(t, err)
+		want, err := protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities())
+		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	})
 
 	t.Run("single capability renders without trailing whitespace", func(t *testing.T) {
-		got := protocol.FormatCapabilities([]protocol.Capability{protocol.CapQuiet})
+		got, err := protocol.FormatCapabilities([]protocol.Capability{protocol.CapQuiet})
+		require.NoError(t, err)
 		assert.Equal(t, "quiet", got)
 		assert.False(t, strings.HasSuffix(got, " "))
 	})
+
+	t.Run("rejects invalid capability", func(t *testing.T) {
+		got, err := protocol.FormatCapabilities([]protocol.Capability{protocol.CapQuiet, "bad token"})
+		require.Error(t, err)
+		assert.Empty(t, got)
+	})
+}
+
+func TestCapability_Validate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		c       protocol.Capability
+		wantErr bool
+	}{
+		{name: "plain token", c: "report-status-v2", wantErr: false},
+		{name: "token with equals", c: "object-format=sha1", wantErr: false},
+		{name: "agent with slash and version", c: protocol.CapAgent("nanogit/1.2.3"), wantErr: false},
+		{name: "empty string", c: "", wantErr: true},
+		{name: "contains space", c: "report status", wantErr: true},
+		{name: "agent with embedded space", c: protocol.CapAgent("nano git"), wantErr: true},
+		{name: "contains tab", c: "report\tstatus", wantErr: true},
+		{name: "contains NUL", c: "report\x00status", wantErr: true},
+		{name: "contains newline", c: "report\nstatus", wantErr: true},
+		{name: "contains carriage return", c: "report\rstatus", wantErr: true},
+		{name: "contains DEL", c: "report\x7fstatus", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := tt.c.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestCapabilityConstants(t *testing.T) {

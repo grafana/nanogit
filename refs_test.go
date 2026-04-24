@@ -482,7 +482,9 @@ func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
 
 	require.NoError(t, client.CreateRef(context.Background(), refToCreate))
 
-	require.Contains(t, string(gotBody), protocol.FormatCapabilities(caps))
+	wantCaps, err := protocol.FormatCapabilities(caps)
+	require.NoError(t, err)
+	require.Contains(t, string(gotBody), wantCaps)
 	require.NotContains(t, string(gotBody), string(protocol.CapSideBand64k))
 }
 

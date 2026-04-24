@@ -14,11 +14,21 @@ func TestNewPackfileWriter_Capabilities(t *testing.T) {
 	writeWithCaps := func(caps ...Capability) []byte {
 		writer := NewPackfileWriter(crypto.SHA1, PackfileStorageMemory, caps...)
 
-		// Add a tree and a commit so WritePackfile passes its validation.
-		treeHash, err := writer.AddBlob([]byte("placeholder"))
+		// Build a minimal valid commit: a real tree referencing a blob, then
+		// a commit whose tree field points at that tree. Using the blob hash
+		// directly as the commit's tree produces an invalid commit object and
+		// is brittle to future validation tightening.
+		blobHash, err := writer.AddBlob([]byte("placeholder"))
 		require.NoError(t, err)
+		treeObj, err := BuildTreeObject(crypto.SHA1, []PackfileTreeEntry{{
+			FileName: "placeholder",
+			FileMode: 0o100644,
+			Hash:     blobHash.String(),
+		}})
+		require.NoError(t, err)
+		writer.AddObject(treeObj)
 		author := &Identity{Name: "a", Email: "a@b", Timestamp: 0, Timezone: "+0000"}
-		_, err = writer.AddCommit(treeHash, hash.Zero, author, author, "msg")
+		_, err = writer.AddCommit(treeObj.Hash, hash.Zero, author, author, "msg")
 		require.NoError(t, err)
 
 		var buf bytes.Buffer
@@ -29,14 +39,18 @@ func TestNewPackfileWriter_Capabilities(t *testing.T) {
 
 	t.Run("no caps advertises the default set including side-band-64k", func(t *testing.T) {
 		out := writeWithCaps()
-		assert.Contains(t, string(out), FormatCapabilities(DefaultReceivePackCapabilities()))
+		want, err := FormatCapabilities(DefaultReceivePackCapabilities())
+		require.NoError(t, err)
+		assert.Contains(t, string(out), want)
 		assert.Contains(t, string(out), string(CapSideBand64k))
 	})
 
 	t.Run("caller-supplied set replaces the default and drops side-band-64k", func(t *testing.T) {
 		caps := []Capability{CapReportStatusV2, CapQuiet, CapObjectFormatSHA1, CapAgent("nanogit")}
 		out := writeWithCaps(caps...)
-		assert.Contains(t, string(out), FormatCapabilities(caps))
+		want, err := FormatCapabilities(caps)
+		require.NoError(t, err)
+		assert.Contains(t, string(out), want)
 		assert.NotContains(t, string(out), string(CapSideBand64k))
 	})
 }

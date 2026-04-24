@@ -200,7 +200,7 @@ type RefUpdateRequest struct {
 	OldRef  string
 	NewRef  string
 	RefName string
-	// Capabilities, if non-empty, overrides the set advertised in the ref
+	// Capabilities, if non-empty, override the set advertised in the ref
 	// update command. When nil or empty, DefaultReceivePackCapabilities() is used.
 	Capabilities []Capability
 }
@@ -278,7 +278,10 @@ func (r RefUpdateRequest) Format() ([]byte, error) {
 		return nil, fmt.Errorf("invalid new ref hash length: got %d, want 40", len(r.NewRef))
 	}
 
-	capabilities := FormatCapabilities(r.Capabilities)
+	capabilities, err := FormatCapabilities(r.Capabilities)
+	if err != nil {
+		return nil, fmt.Errorf("capabilities: %w", err)
+	}
 
 	// Create the ref using receive-pack
 	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n

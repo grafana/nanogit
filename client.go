@@ -136,18 +136,13 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 		return nil, err
 	}
 
-	// Re-resolve options locally to extract client-level configuration that
-	// does not affect the raw transport (e.g., receive-pack capability
-	// overrides). NewRawClient has already validated the options, so any error
-	// here is unreachable.
-	resolved := &options.Options{}
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(resolved); err != nil {
-			return nil, err
-		}
+	// Re-resolve options to extract client-level configuration the raw
+	// transport does not care about (e.g., receive-pack capability overrides).
+	// Options are pure functions so re-application is safe; the shared helper
+	// keeps the loop consistent with NewRawClient.
+	resolved, err := options.Resolve(opts...)
+	if err != nil {
+		return nil, err
 	}
 
 	return &httpClient{

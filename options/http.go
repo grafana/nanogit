@@ -2,6 +2,7 @@ package options
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/grafana/nanogit/protocol"
@@ -52,8 +53,18 @@ func WithoutGitSuffix() Option {
 // A common case is omitting protocol.CapSideBand64k to work around servers
 // that wrap report-status in side-band channel 1 (notably some GitLab
 // configurations — see the package docs).
+//
+// Each capability is validated against protocol.Capability.Validate; an
+// invalid token (empty, containing whitespace, NUL, or other control chars)
+// is rejected at client construction time rather than producing a malformed
+// pkt-line at push time.
 func WithReceivePackCapabilities(caps ...protocol.Capability) Option {
 	return func(o *Options) error {
+		for i, c := range caps {
+			if err := c.Validate(); err != nil {
+				return fmt.Errorf("WithReceivePackCapabilities[%d]: %w", i, err)
+			}
+		}
 		// Copy so subsequent mutations by the caller don't leak into Options.
 		o.ReceivePackCapabilities = append([]protocol.Capability(nil), caps...)
 		return nil

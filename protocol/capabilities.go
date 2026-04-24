@@ -1,11 +1,38 @@
 package protocol
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // Capability names a single Git protocol capability as advertised in the
 // receive-pack / upload-pack pkt-line following the NUL separator.
 // See https://git-scm.com/docs/protocol-capabilities.
 type Capability string
+
+// Validate rejects capability tokens that would break pkt-line framing. Empty
+// tokens splice adjacent capabilities together on the wire; NUL terminates
+// the capability list prematurely; whitespace and other control characters
+// split a single capability into two. The check is defensive — the constants
+// in this package are valid by construction, but caller-supplied values
+// (notably via CapAgent and the CLI's --receive-pack-capability flag) are not.
+func (c Capability) Validate() error {
+	s := string(c)
+	if s == "" {
+		return errors.New("capability must not be empty")
+	}
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		// Reject all ASCII control chars (<= 0x1F), space (0x20), and DEL
+		// (0x7F). Git capabilities are ASCII; higher bytes are unusual but
+		// we leave them to the server rather than guessing.
+		if b <= 0x20 || b == 0x7f {
+			return fmt.Errorf("capability %q contains invalid byte 0x%02x at index %d", s, b, i)
+		}
+	}
+	return nil
+}
 
 // Well-known capabilities advertised by nanogit on receive-pack.
 const (
@@ -45,14 +72,19 @@ func DefaultReceivePackCapabilities() []Capability {
 
 // FormatCapabilities renders caps as the space-separated string that follows
 // the NUL byte in a ref update pkt-line. An empty or nil slice is rendered
-// as the formatted DefaultReceivePackCapabilities.
-func FormatCapabilities(caps []Capability) string {
+// as the formatted DefaultReceivePackCapabilities. Each capability is
+// validated first so a malformed token cannot slip into the wire protocol —
+// the first invalid token short-circuits with an error.
+func FormatCapabilities(caps []Capability) (string, error) {
 	if len(caps) == 0 {
 		caps = DefaultReceivePackCapabilities()
 	}
 	parts := make([]string, len(caps))
 	for i, c := range caps {
+		if err := c.Validate(); err != nil {
+			return "", err
+		}
 		parts[i] = string(c)
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, " "), nil
 }

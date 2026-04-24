@@ -81,19 +81,13 @@ func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 		return nil, errors.New("only HTTP and HTTPS URLs are supported")
 	}
 
-	// Process options first so they can influence URL manipulation
-	options := &options.Options{
-		HTTPClient: &http.Client{},
+	// Process options first so they can influence URL manipulation.
+	options, err := options.Resolve(opts...)
+	if err != nil {
+		return nil, err
 	}
-
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-
-		if err := opt(options); err != nil {
-			return nil, err
-		}
+	if options.HTTPClient == nil {
+		options.HTTPClient = &http.Client{}
 	}
 
 	u.Path = strings.TrimRight(u.Path, "/")
