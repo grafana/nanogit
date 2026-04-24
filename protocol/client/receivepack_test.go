@@ -289,3 +289,106 @@ func TestReceivePack_Retry(t *testing.T) {
 	})
 
 }
+
+// TestReceivePack_PositiveValidation ensures a receive-pack response is
+// only considered successful if it contains an explicit "unpack ok"
+// report-status line. Previously, an empty 2xx response body was
+// silently accepted as success, which hid server-side rejections that
+// wrapped their report-status in an unrecognized side-band channel.
+func TestReceivePack_PositiveValidation(t *testing.T) {
+	t.Parallel()
+
+	pkt := func(s string) []byte {
+		b, err := protocol.PackLine(s).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+	flushed := func(data []byte) []byte {
+		return append(append([]byte{}, data...), []byte("0000")...)
+	}
+	// sideband1 wraps `inner` (which is itself a pkt-line stream) inside a
+	// single outer channel-1 pkt-line, mimicking how Gitea/GitLab deliver
+	// report-status when side-band-64k is negotiated.
+	sideband1 := func(inner []byte) []byte {
+		payload := append([]byte{0x01}, inner...)
+		b, err := protocol.PackLine(payload).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	tests := []struct {
+		name        string
+		body        []byte
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "unpack ok is accepted",
+			body:    flushed(pkt("unpack ok")),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with trailing LF is accepted",
+			body:    flushed(pkt("unpack ok\n")),
+			wantErr: false,
+		},
+		{
+			name: "side-band channel 1 nested report-status is accepted",
+			body: flushed(sideband1(flushed(append(
+				pkt("unpack ok\n"),
+				pkt("ok refs/heads/main\n")...,
+			)))),
+			wantErr: false,
+		},
+		{
+			name: "side-band channel 1 raw ng payload triggers reference update error",
+			body: flushed(pkt(string(append([]byte{0x01}, []byte("ng refs/heads/main pre-receive hook declined\n")...)))),
+			wantErr:     true,
+			errContains: "reference update failed for refs/heads/main",
+		},
+		{
+			name: "side-band channel 1 nested ng triggers reference update error",
+			body: flushed(sideband1(flushed(append(
+				pkt("unpack ok\n"),
+				pkt("ng refs/heads/main pre-receive hook declined\n")...,
+			)))),
+			wantErr:     true,
+			errContains: "reference update failed for refs/heads/main",
+		},
+		{
+			name:        "empty body is rejected",
+			body:        []byte{},
+			wantErr:     true,
+			errContains: "did not contain 'unpack ok'",
+		},
+		{
+			name:        "flush-only body is rejected",
+			body:        []byte("0000"),
+			wantErr:     true,
+			errContains: "did not contain 'unpack ok'",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(tt.body)
+			}))
+			defer server.Close()
+
+			c, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

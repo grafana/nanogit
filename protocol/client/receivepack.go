@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +11,17 @@ import (
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 )
+
+// ErrMissingReportStatus is returned when a receive-pack response completes
+// without an "unpack ok" report-status line. Historically, nanogit accepted
+// such responses as successful pushes, which hid server-side rejections when
+// the server silently closed the stream or wrapped the report-status in a
+// side-band channel the parser did not recognize. Requiring an explicit
+// "unpack ok" ensures push failures surface as errors.
+var ErrMissingReportStatus = errors.New("receive-pack response did not contain 'unpack ok' report-status line")
+
+// unpackOkLine is the Git report-status success sentinel (gitprotocol-pack).
+var unpackOkLine = []byte("unpack ok")
 
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
@@ -62,14 +75,92 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	parser := protocol.NewParser(res.Body)
-	for {
-		if _, err := parser.Next(); err != nil {
-			if err == io.EOF {
-				return nil
-			}
+	return parseReceivePackResponse(res.Body)
+}
 
+// parseReceivePackResponse consumes the pkt-line stream from a
+// git-receive-pack response and enforces that a successful response
+// contains an explicit "unpack ok" report-status line. Any protocol
+// error detected by the parser (ERR, ng, unpack failure, error:/fatal:
+// messages including side-band-wrapped ones) is surfaced as a wrapped
+// git protocol error.
+//
+// Side-band handling:
+//
+// When the client negotiates side-band-64k, the server may deliver the
+// report-status as a nested pkt-line stream multiplexed on channel 1
+// (each packet on the wire starts with a 0x01 byte followed by a
+// chunk of the inner stream). We accumulate the channel-1 bytes and
+// re-parse them as a secondary pkt-line stream so the positive-
+// validation check works for both bare and side-band-wrapped
+// report-status responses.
+func parseReceivePackResponse(body io.Reader) error {
+	parser := protocol.NewParser(body)
+	sawUnpackOk := false
+	var sideBandBuf bytes.Buffer
+
+	for {
+		line, err := parser.Next()
+		if err == nil {
+			if len(line) > 0 && line[0] == 0x01 {
+				// Accumulate channel-1 bytes; they form a nested
+				// pkt-line stream that we parse once the outer
+				// stream has ended.
+				sideBandBuf.Write(line[1:])
+				continue
+			}
+			if isUnpackOkLine(line) {
+				sawUnpackOk = true
+			}
+			continue
+		}
+		if err == io.EOF {
+			break
+		}
+		return fmt.Errorf("git protocol error: %w", err)
+	}
+
+	// Re-parse any side-band-wrapped report-status content so we can
+	// detect push failures (ng) or success sentinels that the server
+	// delivered on channel 1.
+	if sideBandBuf.Len() > 0 {
+		innerParser := protocol.NewParser(&sideBandBuf)
+		for {
+			line, err := innerParser.Next()
+			if err == nil {
+				if isUnpackOkLine(line) {
+					sawUnpackOk = true
+				}
+				continue
+			}
+			if err == io.EOF {
+				break
+			}
 			return fmt.Errorf("git protocol error: %w", err)
 		}
 	}
+
+	if !sawUnpackOk {
+		// No report-status was observed. Per gitprotocol-pack, a
+		// successful receive-pack response MUST include "unpack ok".
+		// Treat the absence as a protocol error rather than silently
+		// returning success — otherwise servers that emit a
+		// degenerate/empty response, or wrap their report-status in a
+		// side-band channel the parser does not recognize, would
+		// leave the ref unadvanced with no error reported to the
+		// caller.
+		return fmt.Errorf("git protocol error: %w", ErrMissingReportStatus)
+	}
+	return nil
+}
+
+// isUnpackOkLine reports whether a parsed packet line is the
+// "unpack ok" report-status sentinel, tolerating a leading side-band
+// channel-1 byte (0x01) and any trailing whitespace per
+// gitprotocol-common.
+func isUnpackOkLine(line []byte) bool {
+	if len(line) > 0 && line[0] == 0x01 {
+		line = line[1:]
+	}
+	return bytes.Equal(bytes.TrimRight(line, " \t\r\n"), unpackOkLine)
 }
