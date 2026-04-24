@@ -30,11 +30,11 @@ func TestCapAgent(t *testing.T) {
 	}
 }
 
-func TestDefaultPushCapabilities(t *testing.T) {
+func TestDefaultReceivePackCapabilities(t *testing.T) {
 	t.Parallel()
 
 	t.Run("contains the expected capabilities", func(t *testing.T) {
-		got := protocol.DefaultPushCapabilities()
+		got := protocol.DefaultReceivePackCapabilities()
 		assert.Contains(t, got, protocol.CapReportStatusV2)
 		assert.Contains(t, got, protocol.CapSideBand64k)
 		assert.Contains(t, got, protocol.CapQuiet)
@@ -43,8 +43,8 @@ func TestDefaultPushCapabilities(t *testing.T) {
 	})
 
 	t.Run("returns a fresh slice so callers can mutate without aliasing", func(t *testing.T) {
-		a := protocol.DefaultPushCapabilities()
-		b := protocol.DefaultPushCapabilities()
+		a := protocol.DefaultReceivePackCapabilities()
+		b := protocol.DefaultReceivePackCapabilities()
 		require.Equal(t, a, b)
 
 		// Mutating a must not affect b.
@@ -77,14 +77,14 @@ func TestFormatCapabilities(t *testing.T) {
 
 	t.Run("nil falls back to formatted defaults", func(t *testing.T) {
 		got := protocol.FormatCapabilities(nil)
-		want := protocol.FormatCapabilities(protocol.DefaultPushCapabilities())
+		want := protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities())
 		assert.Equal(t, want, got)
 		assert.Contains(t, got, string(protocol.CapSideBand64k))
 	})
 
 	t.Run("empty slice falls back to formatted defaults", func(t *testing.T) {
 		got := protocol.FormatCapabilities([]protocol.Capability{})
-		want := protocol.FormatCapabilities(protocol.DefaultPushCapabilities())
+		want := protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities())
 		assert.Equal(t, want, got)
 	})
 

@@ -45,50 +45,50 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 }
 
-func TestWithPushCapabilities(t *testing.T) {
+func TestWithReceivePackCapabilities(t *testing.T) {
 	t.Parallel()
 
 	t.Run("unset by default", func(t *testing.T) {
 		o := &Options{}
-		require.Nil(t, o.PushCapabilities)
+		require.Nil(t, o.ReceivePackCapabilities)
 	})
 
 	t.Run("replaces the set with what the caller passes", func(t *testing.T) {
 		o := &Options{}
 		caps := []protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("custom")}
-		require.NoError(t, WithPushCapabilities(caps...)(o))
-		require.Equal(t, caps, o.PushCapabilities)
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		require.Equal(t, caps, o.ReceivePackCapabilities)
 	})
 
 	t.Run("copies the slice so caller mutations don't leak", func(t *testing.T) {
 		o := &Options{}
 		caps := []protocol.Capability{protocol.CapReportStatusV2}
-		require.NoError(t, WithPushCapabilities(caps...)(o))
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
 		caps[0] = protocol.CapQuiet
-		require.Equal(t, protocol.CapReportStatusV2, o.PushCapabilities[0])
+		require.Equal(t, protocol.CapReportStatusV2, o.ReceivePackCapabilities[0])
 	})
 }
 
-func TestWithoutPushSideBand(t *testing.T) {
+func TestWithoutReceivePackSideBand(t *testing.T) {
 	t.Parallel()
 
 	t.Run("unset by default", func(t *testing.T) {
 		o := &Options{}
-		require.Nil(t, o.PushCapabilities)
+		require.Nil(t, o.ReceivePackCapabilities)
 	})
 
 	t.Run("sets capabilities to default minus side-band-64k", func(t *testing.T) {
 		o := &Options{}
-		require.NoError(t, WithoutPushSideBand()(o))
-		require.NotContains(t, o.PushCapabilities, protocol.CapSideBand64k)
+		require.NoError(t, WithoutReceivePackSideBand()(o))
+		require.NotContains(t, o.ReceivePackCapabilities, protocol.CapSideBand64k)
 		// The rest of the default set is preserved (order matters for the
 		// on-wire pkt-line but is not load-bearing for servers).
-		for _, c := range protocol.DefaultPushCapabilities() {
+		for _, c := range protocol.DefaultReceivePackCapabilities() {
 			if c == protocol.CapSideBand64k {
 				continue
 			}
-			require.True(t, slices.Contains(o.PushCapabilities, c),
-				"default capability %q missing from WithoutPushSideBand output", c)
+			require.True(t, slices.Contains(o.ReceivePackCapabilities, c),
+				"default capability %q missing from WithoutReceivePackSideBand output", c)
 		}
 	})
 }

@@ -101,9 +101,9 @@ type Client interface {
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
 	client.RawClient
-	// pushCapabilities is advertised on receive-pack ref update commands.
-	// When nil or empty, protocol.DefaultPushCapabilities() is used.
-	pushCapabilities []protocol.Capability
+	// receivePackCapabilities is advertised on receive-pack ref update commands.
+	// When nil or empty, protocol.DefaultReceivePackCapabilities() is used.
+	receivePackCapabilities []protocol.Capability
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -137,9 +137,9 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 	}
 
 	// Re-resolve options locally to extract client-level configuration that
-	// does not affect the raw transport (e.g., push capability overrides).
-	// NewRawClient has already validated the options, so any error here is
-	// unreachable.
+	// does not affect the raw transport (e.g., receive-pack capability
+	// overrides). NewRawClient has already validated the options, so any error
+	// here is unreachable.
 	resolved := &options.Options{}
 	for _, opt := range opts {
 		if opt == nil {
@@ -151,7 +151,7 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 	}
 
 	return &httpClient{
-		RawClient:        rawClient,
-		pushCapabilities: resolved.PushCapabilities,
+		RawClient:               rawClient,
+		receivePackCapabilities: resolved.ReceivePackCapabilities,
 	}, nil
 }

@@ -794,7 +794,7 @@ type PackfileWriter struct {
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
 	// Capabilities advertised on the ref update command. Empty means
-	// DefaultPushCapabilities() is used.
+	// DefaultReceivePackCapabilities() is used.
 	capabilities []Capability
 }
 
@@ -807,7 +807,7 @@ const (
 
 // NewPackfileWriter creates a new PackfileWriter with the specified hash
 // algorithm and storage mode. When caps is empty, WritePackfile uses
-// DefaultPushCapabilities() for the ref update command; otherwise the given
+// DefaultReceivePackCapabilities() for the ref update command; otherwise the given
 // capabilities replace the default set.
 func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode, caps ...Capability) *PackfileWriter {
 	return &PackfileWriter{

@@ -14,7 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// These tests exercise push flows with WithoutPushSideBand enabled against a
+// These tests exercise push flows with WithoutReceivePackSideBand enabled against a
 // real Git server. They verify that disabling the "side-band-64k" capability
 // on receive-pack does not regress functional behavior for CreateRef,
 // UpdateRef, DeleteRef, or StagedWriter.Push.
@@ -37,8 +37,8 @@ var _ = Describe("Push without side-band capability", func() {
 		)
 
 		BeforeEach(func() {
-			By("Setting up repo with WithoutPushSideBand")
-			client, _, local, _ = QuickSetup(options.WithoutPushSideBand())
+			By("Setting up repo with WithoutReceivePackSideBand")
+			client, _, local, _ = QuickSetup(options.WithoutReceivePackSideBand())
 
 			By("Publishing initial main branch")
 			_, err := local.Git("branch", "-M", "main")
@@ -91,7 +91,7 @@ var _ = Describe("Push without side-band capability", func() {
 
 	Context("StagedWriter push", func() {
 		It("pushes a new commit to an existing branch", func() {
-			client, _, local, _ := QuickSetup(options.WithoutPushSideBand())
+			client, _, local, _ := QuickSetup(options.WithoutReceivePackSideBand())
 
 			_, err := local.Git("branch", "-M", "main")
 			Expect(err).NotTo(HaveOccurred())
@@ -128,7 +128,7 @@ var _ = Describe("Push without side-band capability", func() {
 		// left pointing at the source HEAD with no new commit — exactly the
 		// "empty branch" symptom.
 		It("creates a new branch then pushes a commit onto it", func() {
-			client, _, local, _ := QuickSetup(options.WithoutPushSideBand())
+			client, _, local, _ := QuickSetup(options.WithoutReceivePackSideBand())
 
 			_, err := local.Git("branch", "-M", "main")
 			Expect(err).NotTo(HaveOccurred())
@@ -177,7 +177,7 @@ var _ = Describe("Push without side-band capability", func() {
 		// and that the same new-branch flow also succeeds. This is a
 		// regression guard for clients that do not opt into the workaround.
 		It("creates a branch and pushes onto it with side-band enabled", func() {
-			client, _, local, _ := QuickSetup() // no WithoutPushSideBand
+			client, _, local, _ := QuickSetup() // no WithoutReceivePackSideBand
 
 			_, err := local.Git("branch", "-M", "main")
 			Expect(err).NotTo(HaveOccurred())

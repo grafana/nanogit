@@ -447,7 +447,7 @@ func TestCreateRef(t *testing.T) {
 	}
 }
 
-func TestCreateRef_WithoutPushSideBand(t *testing.T) {
+func TestCreateRef_WithoutReceivePackSideBand(t *testing.T) {
 	refHash, err := hash.FromHex("1234567890123456789012345678901234567890")
 	require.NoError(t, err)
 	refToCreate := Ref{Name: "refs/heads/main", Hash: refHash}
@@ -469,14 +469,14 @@ func TestCreateRef_WithoutPushSideBand(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewHTTPClient(server.URL, options.WithoutPushSideBand())
+	client, err := NewHTTPClient(server.URL, options.WithoutReceivePackSideBand())
 	require.NoError(t, err)
 
 	require.NoError(t, client.CreateRef(context.Background(), refToCreate))
 
-	// WithoutPushSideBand should drop side-band-64k from the advertised
+	// WithoutReceivePackSideBand should drop side-band-64k from the advertised
 	// capabilities but keep the rest of the default set.
-	defaults := protocol.DefaultPushCapabilities()
+	defaults := protocol.DefaultReceivePackCapabilities()
 	expected := defaults[:0]
 	for _, c := range defaults {
 		if c != protocol.CapSideBand64k {

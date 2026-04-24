@@ -30,10 +30,10 @@ func CapAgent(name string) Capability {
 	return Capability("agent=" + name)
 }
 
-// DefaultPushCapabilities returns a fresh slice of the capabilities nanogit
+// DefaultReceivePackCapabilities returns a fresh slice of the capabilities nanogit
 // advertises by default on receive-pack ref update commands. A new slice is
 // returned on every call so callers may freely mutate it.
-func DefaultPushCapabilities() []Capability {
+func DefaultReceivePackCapabilities() []Capability {
 	return []Capability{
 		CapReportStatusV2,
 		CapSideBand64k,
@@ -45,10 +45,10 @@ func DefaultPushCapabilities() []Capability {
 
 // FormatCapabilities renders caps as the space-separated string that follows
 // the NUL byte in a ref update pkt-line. An empty or nil slice is rendered
-// as the formatted DefaultPushCapabilities.
+// as the formatted DefaultReceivePackCapabilities.
 func FormatCapabilities(caps []Capability) string {
 	if len(caps) == 0 {
-		caps = DefaultPushCapabilities()
+		caps = DefaultReceivePackCapabilities()
 	}
 	parts := make([]string, len(caps))
 	for i, c := range caps {

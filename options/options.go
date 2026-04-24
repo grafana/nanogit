@@ -17,10 +17,10 @@ type Options struct {
 	BasicAuth     *BasicAuth
 	AuthToken     *string
 	SkipGitSuffix bool
-	// PushCapabilities, when non-empty, overrides the capabilities advertised
-	// on receive-pack ref update commands. When nil or empty,
-	// protocol.DefaultPushCapabilities() is used.
-	PushCapabilities []protocol.Capability
+	// ReceivePackCapabilities, when non-empty, overrides the capabilities
+	// advertised on receive-pack ref update commands. When nil or empty,
+	// protocol.DefaultReceivePackCapabilities() is used.
+	ReceivePackCapabilities []protocol.Capability
 }
 
 type Option func(*Options) error

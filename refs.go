@@ -167,7 +167,7 @@ func (c *httpClient) CreateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("check existing ref %q: %w", ref.Name, err)
 	}
 
-	req := protocol.NewCreateRefRequest(ref.Name, ref.Hash, c.pushCapabilities...)
+	req := protocol.NewCreateRefRequest(ref.Name, ref.Hash, c.receivePackCapabilities...)
 	pkt, err := req.Format()
 	if err != nil {
 		return fmt.Errorf("format ref create request for %q: %w", ref.Name, err)
@@ -224,7 +224,7 @@ func (c *httpClient) UpdateRef(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("get existing ref %q: %w", ref.Name, err)
 	}
 
-	req := protocol.NewUpdateRefRequest(oldRef.Hash, ref.Hash, ref.Name, c.pushCapabilities...)
+	req := protocol.NewUpdateRefRequest(oldRef.Hash, ref.Hash, ref.Name, c.receivePackCapabilities...)
 	pkt, err := req.Format()
 	if err != nil {
 		return fmt.Errorf("format ref update request for %q: %w", ref.Name, err)
@@ -278,7 +278,7 @@ func (c *httpClient) DeleteRef(ctx context.Context, refName string) error {
 		return fmt.Errorf("get existing ref %q: %w", refName, err)
 	}
 
-	req := protocol.NewDeleteRefRequest(oldRef.Hash, refName, c.pushCapabilities...)
+	req := protocol.NewDeleteRefRequest(oldRef.Hash, refName, c.receivePackCapabilities...)
 	pkt, err := req.Format()
 	if err != nil {
 		return fmt.Errorf("format ref delete request for %q: %w", refName, err)

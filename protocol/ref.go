@@ -201,12 +201,12 @@ type RefUpdateRequest struct {
 	NewRef  string
 	RefName string
 	// Capabilities, if non-empty, overrides the set advertised in the ref
-	// update command. When nil or empty, DefaultPushCapabilities() is used.
+	// update command. When nil or empty, DefaultReceivePackCapabilities() is used.
 	Capabilities []Capability
 }
 
 // NewCreateRefRequest builds a ref update request that creates refName at
-// newRef. When caps is empty, DefaultPushCapabilities() is used at Format
+// newRef. When caps is empty, DefaultReceivePackCapabilities() is used at Format
 // time; otherwise the given capabilities replace the default set.
 func NewCreateRefRequest(refName string, newRef hash.Hash, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{

@@ -282,7 +282,7 @@ func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
 		}
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultPushCapabilities()))
+		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities()))
 		assert.Contains(t, string(got), string(protocol.CapSideBand64k))
 	})
 }
@@ -428,7 +428,7 @@ func TestRefRequestConstructors_Capabilities(t *testing.T) {
 
 		got, err := req.Format()
 		require.NoError(t, err)
-		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultPushCapabilities()))
+		assert.Contains(t, string(got), protocol.FormatCapabilities(protocol.DefaultReceivePackCapabilities()))
 	})
 
 	t.Run("NewCreateRefRequest stores the caller-supplied caps", func(t *testing.T) {

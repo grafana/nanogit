@@ -29,7 +29,7 @@ func TestNewPackfileWriter_Capabilities(t *testing.T) {
 
 	t.Run("no caps advertises the default set including side-band-64k", func(t *testing.T) {
 		out := writeWithCaps()
-		assert.Contains(t, string(out), FormatCapabilities(DefaultPushCapabilities()))
+		assert.Contains(t, string(out), FormatCapabilities(DefaultReceivePackCapabilities()))
 		assert.Contains(t, string(out), string(CapSideBand64k))
 	})
 
