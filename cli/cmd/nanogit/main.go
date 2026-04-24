@@ -19,6 +19,7 @@ var (
 	globalUsername string
 	globalToken    string
 	globalJSON     bool
+	globalVerbose  bool
 )
 
 func init() {
@@ -26,6 +27,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalUsername, "username", "", "Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')")
 	rootCmd.PersistentFlags().StringVar(&globalToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 	rootCmd.PersistentFlags().BoolVar(&globalJSON, "json", false, "Output results in JSON format")
+	rootCmd.PersistentFlags().BoolVarP(&globalVerbose, "verbose", "v", false, "Be verbose (emit Info-level logs to stderr; set NANOGIT_TRACE=1 for Debug/wire detail)")
 }
 
 func main() {

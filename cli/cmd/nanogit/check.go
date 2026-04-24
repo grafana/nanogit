@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/options"
 	"github.com/spf13/cobra"
 )
 
@@ -41,34 +39,10 @@ Examples:
 
 func runCheck(cmd *cobra.Command, args []string) error {
 	repoURL := args[0]
-	ctx := context.Background()
 
-	// Get authentication credentials from flags or environment
-	token := globalToken
-	if token == "" {
-		token = os.Getenv("NANOGIT_TOKEN")
-	}
-
-	username := globalUsername
-	if username == "" {
-		username = os.Getenv("NANOGIT_USERNAME")
-	}
-	if username == "" {
-		username = "git"
-	}
-
-	// Create client with optional authentication
-	var client nanogit.Client
-	var err error
-	if token != "" {
-		client, err = nanogit.NewHTTPClient(repoURL,
-			options.WithBasicAuth(username, token),
-			options.WithoutGitSuffix())
-	} else {
-		client, err = nanogit.NewHTTPClient(repoURL, options.WithoutGitSuffix())
-	}
+	ctx, client, err := setupClient(context.Background(), repoURL)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+		return err
 	}
 
 	// Check server compatibility
