@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
 )
@@ -100,6 +101,9 @@ type Client interface {
 // It implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
 type httpClient struct {
 	client.RawClient
+	// receivePackCapabilities is advertised on receive-pack ref update commands.
+	// When nil or empty, protocol.DefaultReceivePackCapabilities() is used.
+	receivePackCapabilities []protocol.Capability
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -126,13 +130,24 @@ type httpClient struct {
 //	if err != nil {
 //	    return err
 //	}
-func NewHTTPClient(repo string, options ...options.Option) (Client, error) {
-	rawClient, err := client.NewRawClient(repo, options...)
+func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
+	// Resolve options once so both the raw transport and the higher-level
+	// httpClient fields come from the same application of each Option.
+	// Applying options twice would be safe for the pure options shipped with
+	// nanogit but could misbehave for user-supplied options that observe or
+	// mutate prior state.
+	resolved, err := options.Resolve(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	rawClient, err := client.NewRawClientFromOptions(repo, resolved)
 	if err != nil {
 		return nil, err
 	}
 
 	return &httpClient{
-		RawClient: rawClient,
+		RawClient:               rawClient,
+		receivePackCapabilities: resolved.ReceivePackCapabilities,
 	}, nil
 }

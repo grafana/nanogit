@@ -74,6 +74,71 @@ echo "hi" | ./nanogit put-file main note.md -m "add note"
 
 You should see `hi`. This closes the loop: if all four commands succeed, nanogit can read from and write to this server.
 
+## Receive-pack capabilities
+
+When step 3 succeeds but the pushed commit does not appear on the branch (or the branch ends up empty), the server is almost certainly negotiating a capability set that nanogit cannot parse correctly. This most commonly happens when a server wraps `report-status` inside side-band channel 1 — a configuration seen on some GitLab deployments — which hides the actual push outcome from nanogit's parser.
+
+### Defaults advertised by nanogit
+
+Unless overridden, nanogit advertises the following capabilities on every receive-pack push:
+
+| Capability          | Purpose                                                                 |
+| ------------------- | ----------------------------------------------------------------------- |
+| `report-status-v2`  | Ask the server for a structured report describing the push outcome.    |
+| `side-band-64k`     | Allow the server to multiplex data/progress/error on side-band channels. |
+| `quiet`             | Suppress non-error progress output.                                     |
+| `object-format=sha1`| Declare SHA-1 as the object hash algorithm.                             |
+| `agent=nanogit`     | Identify the client for server-side logging.                            |
+
+The authoritative list lives in `protocol.DefaultReceivePackCapabilities()`.
+
+### Overriding the set
+
+Both the library and the CLI let you replace the advertised set when the default negotiation breaks against a particular server. There is no merge: whatever you pass becomes the complete advertisement.
+
+From the CLI, pass `--receive-pack-capability` once per token (the flag is repeatable):
+
+```bash
+echo "hi" | ./nanogit put-file main note.md -m "add note" \
+  --receive-pack-capability=report-status-v2 \
+  --receive-pack-capability=quiet \
+  --receive-pack-capability=object-format=sha1 \
+  --receive-pack-capability=agent=nanogit
+```
+
+That example drops `side-band-64k` while keeping the rest of the default set — the recommended workaround for the GitLab side-band-wrapping case above.
+
+From the library, use `options.WithReceivePackCapabilities`:
+
+```go
+import (
+    "github.com/grafana/nanogit"
+    "github.com/grafana/nanogit/options"
+    "github.com/grafana/nanogit/protocol"
+)
+
+caps := []protocol.Capability{
+    protocol.CapReportStatusV2,
+    protocol.CapQuiet,
+    protocol.CapObjectFormatSHA1,
+    protocol.CapAgent("nanogit"),
+}
+client, err := nanogit.NewHTTPClient(repoURL,
+    options.WithBasicAuth("git", token),
+    options.WithReceivePackCapabilities(caps...),
+)
+```
+
+Typed helpers (`CapReportStatusV2`, `CapSideBand64k`, `CapQuiet`, `CapObjectFormatSHA1`, `CapAgent(name)`) are exposed under `protocol`. Any other string literal can be passed through as `protocol.Capability("foo")` when you need to negotiate something the helpers don't cover.
+
+### When to override
+
+- Pushes appear to succeed but the branch is unchanged or empty — retry with `side-band-64k` removed.
+- A server log shows it expects a specific capability (for example a hosted provider documenting a required `agent=` prefix or a non-default object format) — build the minimal set it accepts.
+- You are reproducing a bug against a specific server — override explicitly so the capability set is deterministic across runs.
+
+Do not override preemptively: the defaults are tuned for the common case and removing `side-band-64k` against a compliant server loses useful progress reporting.
+
 ## Troubleshooting
 
 Add `-v` for progress on stderr, or `NANOGIT_TRACE=1` for full Git wire-level detail. Both leave stdout clean so commit hashes and file contents stay pipeable.

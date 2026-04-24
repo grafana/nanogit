@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,6 +42,30 @@ func TestWithHTTPClient(t *testing.T) {
 			require.Equal(t, tt.httpClient, o.HTTPClient)
 		})
 	}
+}
+
+func TestWithReceivePackCapabilities(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unset by default", func(t *testing.T) {
+		o := &Options{}
+		require.Nil(t, o.ReceivePackCapabilities)
+	})
+
+	t.Run("replaces the set with what the caller passes", func(t *testing.T) {
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("custom")}
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		require.Equal(t, caps, o.ReceivePackCapabilities)
+	})
+
+	t.Run("copies the slice so caller mutations don't leak", func(t *testing.T) {
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2}
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		caps[0] = protocol.CapQuiet
+		require.Equal(t, protocol.CapReportStatusV2, o.ReceivePackCapabilities[0])
+	})
 }
 
 func TestWithUserAgent(t *testing.T) {

@@ -254,6 +254,15 @@ echo "hello" | NANOGIT_TRACE=1 nanogit put-file https://github.com/user/repo.git
 # JSON output ({commit, path})
 echo "hello" | nanogit --json put-file https://github.com/user/repo.git main docs/note.md \
   -m "add note" --author "Jane Doe <jane@example.com>"
+
+# Override the receive-pack capability set (e.g. drop side-band-64k for a
+# server that wraps report-status in channel 1)
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>" \
+  --receive-pack-capability=report-status-v2 \
+  --receive-pack-capability=quiet \
+  --receive-pack-capability=object-format=sha1 \
+  --receive-pack-capability=agent=nanogit
 ```
 
 **Flags:**
@@ -262,6 +271,7 @@ echo "hello" | nanogit --json put-file https://github.com/user/repo.git main doc
 - `--from-file <path>` — read content from a local file (mutually exclusive with stdin marker `-`)
 - `--author "Name <email>"` — commit author; falls back to `NANOGIT_AUTHOR_NAME` and `NANOGIT_AUTHOR_EMAIL`, errors if unresolved
 - `--committer "Name <email>"` — commit committer; falls back to `NANOGIT_COMMITTER_NAME`/`NANOGIT_COMMITTER_EMAIL`, then to the author
+- `--receive-pack-capability <token>` — override the capabilities advertised on receive-pack (repeatable). When set, the given values replace the nanogit defaults entirely. Use this to work around servers that mis-handle the default negotiation (e.g. drop `side-band-64k` for GitLab deployments that wrap `report-status` in channel 1). See [Receive-pack capabilities](https://grafana.github.io/nanogit/getting-started/server-compatibility/#receive-pack-capabilities) for the default set and guidance.
 
 **Non-default output** is printed to stdout as the new commit hash (or as `{"commit": "...", "path": "..."}` when `--json` is set). All log output (including `-v` / `NANOGIT_TRACE`) goes to stderr, so the commit hash is safe to pipe or capture.
 

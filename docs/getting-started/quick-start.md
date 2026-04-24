@@ -156,6 +156,33 @@ client, err := nanogit.NewHTTPClient(
 client, err := nanogit.NewHTTPClient(repo)
 ```
 
+### Overriding Receive-Pack Capabilities
+
+By default nanogit advertises a capability set tuned for compliant servers (see `protocol.DefaultReceivePackCapabilities()`). Some servers — most notably certain GitLab deployments that wrap `report-status` in side-band channel 1 — negotiate a response nanogit cannot parse, leaving pushes that appear to succeed on the wire but silently drop the ref update. `options.WithReceivePackCapabilities` replaces the advertised set entirely:
+
+```go
+import (
+    "github.com/grafana/nanogit"
+    "github.com/grafana/nanogit/options"
+    "github.com/grafana/nanogit/protocol"
+)
+
+// Drop side-band-64k, keep everything else from the default set.
+caps := []protocol.Capability{
+    protocol.CapReportStatusV2,
+    protocol.CapQuiet,
+    protocol.CapObjectFormatSHA1,
+    protocol.CapAgent("nanogit"),
+}
+
+client, err := nanogit.NewHTTPClient(repo,
+    options.WithBasicAuth("git", token),
+    options.WithReceivePackCapabilities(caps...),
+)
+```
+
+The caller passes the full desired list — there is no merge with the defaults. Arbitrary tokens can be spelled as `protocol.Capability("foo")` when the typed helpers don't cover what the server expects. See [Receive-pack capabilities](server-compatibility.md#receive-pack-capabilities) for the default set and guidance on when to override.
+
 ## Performance Optimization
 
 ### Clone Performance

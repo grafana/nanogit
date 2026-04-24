@@ -386,6 +386,7 @@ The optional trailing `-` indicates stdin explicitly; it can also be omitted. Wh
 - `--from-file <path>` — read content from a local file instead of stdin
 - `--author "Name <email>"` — commit author; falls back to `NANOGIT_AUTHOR_NAME` and `NANOGIT_AUTHOR_EMAIL`. Errors out if unresolved (no silent default)
 - `--committer "Name <email>"` — commit committer; falls back to `NANOGIT_COMMITTER_NAME` / `NANOGIT_COMMITTER_EMAIL`, and finally to the author
+- `--receive-pack-capability <token>` — override the capabilities advertised on the receive-pack push (repeatable). When set, the given values **replace** the nanogit defaults entirely. Common tokens: `report-status-v2`, `side-band-64k`, `quiet`, `object-format=sha1`, `agent=<name>`. Arbitrary tokens are passed through to the server unchanged. See [Receive-pack capabilities](server-compatibility.md#receive-pack-capabilities) for the defaults and when to override them.
 
 **Output**: the new commit hash is printed to stdout. With `--json`, a `{"commit": "...", "path": "..."}` object is emitted instead. All log output (including `-v` / `NANOGIT_TRACE`) goes to stderr, so the commit hash is safe to pipe or capture.
 
@@ -439,6 +440,16 @@ Capture the new commit hash in a script:
 commit=$(echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
   -m "add note" --author "Jane Doe <jane@example.com>")
 echo "Pushed commit: $commit"
+```
+
+Override the advertised receive-pack capabilities (e.g. drop `side-band-64k` to work around servers that wrap `report-status` in side-band channel 1):
+```bash
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>" \
+  --receive-pack-capability=report-status-v2 \
+  --receive-pack-capability=quiet \
+  --receive-pack-capability=object-format=sha1 \
+  --receive-pack-capability=agent=nanogit
 ```
 
 **Notes**:

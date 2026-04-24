@@ -200,29 +200,53 @@ type RefUpdateRequest struct {
 	OldRef  string
 	NewRef  string
 	RefName string
+	// Capabilities, if non-empty, override the set advertised in the ref
+	// update command. When nil or empty, DefaultReceivePackCapabilities() is used.
+	Capabilities []Capability
 }
 
-func NewCreateRefRequest(refName string, newRef hash.Hash) RefUpdateRequest {
+// copyCapabilities returns nil for an empty slice and a defensive copy
+// otherwise so the stored capabilities cannot be mutated through the caller's
+// slice after the request is constructed. Mirrors NewPackfileWriter.
+func copyCapabilities(caps []Capability) []Capability {
+	if len(caps) == 0 {
+		return nil
+	}
+	return append([]Capability(nil), caps...)
+}
+
+// NewCreateRefRequest builds a ref update request that creates refName at
+// newRef. When caps is empty, DefaultReceivePackCapabilities() is used at Format
+// time; otherwise the given capabilities replace the default set.
+func NewCreateRefRequest(refName string, newRef hash.Hash, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  ZeroHash,
-		NewRef:  newRef.String(),
-		RefName: refName,
+		OldRef:       ZeroHash,
+		NewRef:       newRef.String(),
+		RefName:      refName,
+		Capabilities: copyCapabilities(caps),
 	}
 }
 
-func NewUpdateRefRequest(oldRef, newRef hash.Hash, refName string) RefUpdateRequest {
+// NewUpdateRefRequest builds a ref update request that moves refName from
+// oldRef to newRef. Capabilities follow the same rules as NewCreateRefRequest.
+func NewUpdateRefRequest(oldRef, newRef hash.Hash, refName string, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  oldRef.String(),
-		NewRef:  newRef.String(),
-		RefName: refName,
+		OldRef:       oldRef.String(),
+		NewRef:       newRef.String(),
+		RefName:      refName,
+		Capabilities: copyCapabilities(caps),
 	}
 }
 
-func NewDeleteRefRequest(oldRef hash.Hash, refName string) RefUpdateRequest {
+// NewDeleteRefRequest builds a ref update request that deletes refName
+// currently pointing at oldRef. Capabilities follow the same rules as
+// NewCreateRefRequest.
+func NewDeleteRefRequest(oldRef hash.Hash, refName string, caps ...Capability) RefUpdateRequest {
 	return RefUpdateRequest{
-		OldRef:  oldRef.String(),
-		NewRef:  ZeroHash,
-		RefName: refName,
+		OldRef:       oldRef.String(),
+		NewRef:       ZeroHash,
+		RefName:      refName,
+		Capabilities: copyCapabilities(caps),
 	}
 }
 
@@ -264,9 +288,14 @@ func (r RefUpdateRequest) Format() ([]byte, error) {
 		return nil, fmt.Errorf("invalid new ref hash length: got %d, want 40", len(r.NewRef))
 	}
 
+	capabilities, err := FormatCapabilities(r.Capabilities)
+	if err != nil {
+		return nil, fmt.Errorf("capabilities: %w", err)
+	}
+
 	// Create the ref using receive-pack
 	// Format: <old-value> <new-value> <ref-name>\000<capabilities>\n
-	refLine := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n", r.OldRef, r.NewRef, r.RefName)
+	refLine := fmt.Sprintf("%s %s %s\000%s\n", r.OldRef, r.NewRef, r.RefName, capabilities)
 
 	// Calculate the correct length (including the 4 bytes of the length field)
 	lineLen := len(refLine) + 4

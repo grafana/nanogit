@@ -2,7 +2,10 @@ package options
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+
+	"github.com/grafana/nanogit/protocol"
 )
 
 // WithHTTPClient sets a custom HTTP client for making Git protocol requests.
@@ -36,6 +39,34 @@ func WithUserAgent(userAgent string) Option {
 func WithoutGitSuffix() Option {
 	return func(o *Options) error {
 		o.SkipGitSuffix = true
+		return nil
+	}
+}
+
+// WithReceivePackCapabilities overrides the capabilities nanogit advertises on
+// receive-pack ref update commands. When the caller passes any capabilities
+// (even a single one), the given set replaces the default entirely — nanogit
+// does not merge with protocol.DefaultReceivePackCapabilities(). Callers that
+// want a subset of the defaults must build the desired list themselves.
+//
+// Use this when the default set is not appropriate for the target server.
+// A common case is omitting protocol.CapSideBand64k to work around servers
+// that wrap report-status in side-band channel 1 (notably some GitLab
+// configurations — see the package docs).
+//
+// Each capability is validated against protocol.Capability.Validate; an
+// invalid token (empty, containing whitespace, NUL, or other control chars)
+// is rejected at client construction time rather than producing a malformed
+// pkt-line at push time.
+func WithReceivePackCapabilities(caps ...protocol.Capability) Option {
+	return func(o *Options) error {
+		for i, c := range caps {
+			if err := c.Validate(); err != nil {
+				return fmt.Errorf("WithReceivePackCapabilities[%d]: %w", i, err)
+			}
+		}
+		// Copy so subsequent mutations by the caller don't leak into Options.
+		o.ReceivePackCapabilities = append([]protocol.Capability(nil), caps...)
 		return nil
 	}
 }
