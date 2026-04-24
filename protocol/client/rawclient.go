@@ -68,8 +68,23 @@ type rawClient struct {
 //	    return err
 //	}
 func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
+	resolved, err := options.Resolve(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return NewRawClientFromOptions(repo, resolved)
+}
+
+// NewRawClientFromOptions constructs a rawClient from already-resolved options.
+// This lets higher layers (e.g., NewHTTPClient) resolve options exactly once
+// and still extract their own client-level fields from the same resolved
+// struct without replaying the option functions.
+func NewRawClientFromOptions(repo string, resolved *options.Options) (*rawClient, error) {
 	if repo == "" {
 		return nil, errors.New("repository URL cannot be empty")
+	}
+	if resolved == nil {
+		return nil, errors.New("resolved options must not be nil")
 	}
 
 	u, err := url.Parse(repo)
@@ -81,40 +96,33 @@ func NewRawClient(repo string, opts ...options.Option) (*rawClient, error) {
 		return nil, errors.New("only HTTP and HTTPS URLs are supported")
 	}
 
-	// Process options first so they can influence URL manipulation.
-	options, err := options.Resolve(opts...)
-	if err != nil {
-		return nil, err
-	}
-	if options.HTTPClient == nil {
-		options.HTTPClient = &http.Client{}
+	if resolved.HTTPClient == nil {
+		resolved.HTTPClient = &http.Client{}
 	}
 
 	u.Path = strings.TrimRight(u.Path, "/")
-	if u.Path != "" && !strings.HasSuffix(u.Path, ".git") && !options.SkipGitSuffix {
+	if u.Path != "" && !strings.HasSuffix(u.Path, ".git") && !resolved.SkipGitSuffix {
 		u.Path += ".git"
 	}
 
 	var basicAuth *struct{ Username, Password string }
-	if options.BasicAuth != nil {
+	if resolved.BasicAuth != nil {
 		basicAuth = &struct {
 			Username string
 			Password string
 		}{
-			Username: options.BasicAuth.Username,
-			Password: options.BasicAuth.Password,
+			Username: resolved.BasicAuth.Username,
+			Password: resolved.BasicAuth.Password,
 		}
 	}
 
-	c := &rawClient{
+	return &rawClient{
 		base:      u,
-		client:    options.HTTPClient,
-		userAgent: options.UserAgent,
+		client:    resolved.HTTPClient,
+		userAgent: resolved.UserAgent,
 		basicAuth: basicAuth,
-		tokenAuth: options.AuthToken,
-	}
-
-	return c, nil
+		tokenAuth: resolved.AuthToken,
+	}, nil
 }
 
 // addDefaultHeaders adds the default headers to the request.
