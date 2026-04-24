@@ -89,7 +89,9 @@ func runClone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve ref %q: %w", ref, err)
 	}
 
-	fmt.Printf("Cloning %s at %s to %s...\n", repoURL, ref, destPath)
+	if !globalJSON {
+		fmt.Fprintf(os.Stderr, "Cloning %s at %s to %s...\n", repoURL, ref, destPath)
+	}
 
 	// Prepare clone options
 	cloneOpts := nanogit.CloneOptions{
