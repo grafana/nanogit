@@ -291,10 +291,15 @@ func TestReceivePack_Retry(t *testing.T) {
 }
 
 // TestReceivePack_PositiveValidation ensures a receive-pack response is
-// only considered successful if it contains an explicit "unpack ok"
-// report-status line. Previously, an empty 2xx response body was
-// silently accepted as success, which hid server-side rejections that
-// wrapped their report-status in an unrecognized side-band channel.
+// considered successful only when one of the following holds:
+//   - the body is empty / flush-only (caller may have legitimately
+//     omitted report-status from negotiated capabilities), OR
+//   - the body contains an explicit "unpack ok" sentinel (bare or
+//     side-band-wrapped).
+//
+// Non-trivial bodies that lack "unpack ok" are rejected so server-side
+// rejections wrapped in channels the parser cannot interpret no longer
+// silently appear as successful pushes.
 func TestReceivePack_PositiveValidation(t *testing.T) {
 	t.Parallel()
 
@@ -311,6 +316,15 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 	// report-status when side-band-64k is negotiated.
 	sideband1 := func(inner []byte) []byte {
 		payload := append([]byte{0x01}, inner...)
+		b, err := protocol.PackLine(payload).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+	// rawSideband1 wraps a literal text payload (no inner pkt-line
+	// length prefix) inside a single channel-1 outer packet. Used to
+	// exercise the raw-line branch of the side-band parser.
+	rawSideband1 := func(text string) []byte {
+		payload := append([]byte{0x01}, []byte(text)...)
 		b, err := protocol.PackLine(payload).Marshal()
 		require.NoError(t, err)
 		return b
@@ -342,7 +356,7 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 		},
 		{
 			name: "side-band channel 1 raw ng payload triggers reference update error",
-			body: flushed(pkt(string(append([]byte{0x01}, []byte("ng refs/heads/main pre-receive hook declined\n")...)))),
+			body: flushed(rawSideband1("ng refs/heads/main pre-receive hook declined\n")),
 			wantErr:     true,
 			errContains: "reference update failed for refs/heads/main",
 		},
@@ -356,14 +370,36 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			errContains: "reference update failed for refs/heads/main",
 		},
 		{
-			name:        "empty body is rejected",
-			body:        []byte{},
-			wantErr:     true,
-			errContains: "did not contain 'unpack ok'",
+			// Two raw channel-1 packets with NO trailing LF on the
+			// first one. The previous shape concatenated their
+			// payloads and split on LF, producing a single bogus
+			// line "unpack okok refs/heads/main"; with packet
+			// boundaries preserved each packet stays a separate
+			// line and "unpack ok" is recognized.
+			name: "raw side-band channel 1 packets without trailing LF preserve boundaries",
+			body: flushed(append(
+				rawSideband1("unpack ok"),
+				rawSideband1("ok refs/heads/main")...,
+			)),
+			wantErr: false,
 		},
 		{
-			name:        "flush-only body is rejected",
-			body:        []byte("0000"),
+			name:    "empty body is accepted (no report-status negotiated)",
+			body:    []byte{},
+			wantErr: false,
+		},
+		{
+			name:    "flush-only body is accepted (no report-status negotiated)",
+			body:    []byte("0000"),
+			wantErr: false,
+		},
+		{
+			// Server sent a non-trivial body (a channel-2 progress
+			// message) but never sent "unpack ok". This is the
+			// silent-failure shape ErrMissingReportStatus exists
+			// to surface.
+			name: "non-trivial body without unpack ok is rejected",
+			body: flushed(pkt(string(append([]byte{0x02}, []byte("Counting objects: 1, done.\n")...)))),
 			wantErr:     true,
 			errContains: "did not contain 'unpack ok'",
 		},

@@ -12,12 +12,15 @@ import (
 	"github.com/grafana/nanogit/protocol"
 )
 
-// ErrMissingReportStatus is returned when a receive-pack response completes
-// without an "unpack ok" report-status line. Historically, nanogit accepted
-// such responses as successful pushes, which hid server-side rejections when
-// the server silently closed the stream or wrapped the report-status in a
-// side-band channel the parser did not recognize. Requiring an explicit
-// "unpack ok" ensures push failures surface as errors.
+// ErrMissingReportStatus is returned when a receive-pack response contains
+// non-trivial content but no "unpack ok" report-status sentinel. Empty or
+// flush-only responses are accepted silently — they correspond to clients
+// that legitimately omitted report-status / report-status-v2 from their
+// advertised capabilities (via WithReceivePackCapabilities), in which case
+// the server is not required to send a report-status reply. The
+// requirement only kicks in when the server sent something the parser
+// could not interpret as a successful sentinel, which is precisely the
+// silent-failure mode the side-band channel-1 wrapping bug exhibited.
 var ErrMissingReportStatus = errors.New("receive-pack response did not contain 'unpack ok' report-status line")
 
 // unpackOkLine is the Git report-status success sentinel (gitprotocol-pack).
@@ -79,10 +82,13 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 }
 
 // parseReceivePackResponse consumes the pkt-line stream from a
-// git-receive-pack response and enforces that a successful response
-// contains an explicit "unpack ok" report-status line. Any protocol
-// error detected by the parser (ERR, ng, unpack failure, error:/fatal:
-// messages including side-band-wrapped ones) is surfaced as a wrapped
+// git-receive-pack response. When the response contains a recognizable
+// report-status (either bare or side-band-wrapped) it must include an
+// explicit "unpack ok" sentinel; otherwise ErrMissingReportStatus is
+// returned. Empty or flush-only bodies are accepted silently because
+// callers may legitimately omit report-status from their negotiated
+// capabilities. Any protocol error detected by the parser
+// (ERR / ng / unpack failure / error: / fatal:) is surfaced as a wrapped
 // git protocol error.
 //
 // Side-band handling:
@@ -98,21 +104,31 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 //     own channel-1 outer packet as literal text (no inner length
 //     prefix).
 //
-// We accumulate all channel-1 payload, then dispatch on whether the
-// accumulated bytes start with a valid pkt-line length (4 hex digits).
-// Crucially, channel-1 unwrap is scoped to this function and does not
-// leak into the generic detectError path, where channel 1 also carries
-// binary packfile data during fetch/clone.
+// Channel-1 packet boundaries are preserved: each outer packet's
+// payload is stored separately so that two raw packets without
+// trailing LF do not concatenate into a single misclassified line.
+// Format detection runs on the first non-empty payload; if it begins
+// with a pkt-line length header we treat the whole channel-1 stream as
+// nested pkt-lines, otherwise we process each packet's payload as
+// LF-separated raw lines. Channel-1 unwrap is scoped to this function
+// and does not leak into the generic detectError path, where channel 1
+// also carries binary packfile data during fetch/clone.
 func parseReceivePackResponse(body io.Reader) error {
 	parser := protocol.NewParser(body)
 	sawUnpackOk := false
-	var sideBandBuf bytes.Buffer
+	sawAnyContent := false
+	var sideBandPackets [][]byte
 
 	for {
 		line, err := parser.Next()
 		if err == nil {
+			sawAnyContent = true
 			if len(line) > 0 && line[0] == 0x01 {
-				sideBandBuf.Write(line[1:])
+				// Copy the payload so we own a stable slice; the
+				// parser's internal pool may reuse the underlying
+				// buffer between Next() calls.
+				payload := append([]byte(nil), line[1:]...)
+				sideBandPackets = append(sideBandPackets, payload)
 				continue
 			}
 			if isUnpackOkLine(line) {
@@ -126,8 +142,8 @@ func parseReceivePackResponse(body io.Reader) error {
 		return fmt.Errorf("git protocol error: %w", err)
 	}
 
-	if sideBandBuf.Len() > 0 {
-		ok, err := scanSideBandReportStatus(sideBandBuf.Bytes())
+	if len(sideBandPackets) > 0 {
+		ok, err := scanSideBandReportStatus(sideBandPackets)
 		if err != nil {
 			return err
 		}
@@ -136,31 +152,41 @@ func parseReceivePackResponse(body io.Reader) error {
 		}
 	}
 
-	if !sawUnpackOk {
-		// No report-status was observed. Per gitprotocol-pack, a
-		// successful receive-pack response MUST include "unpack ok".
-		// Treat the absence as a protocol error rather than silently
-		// returning success — otherwise servers that emit a
-		// degenerate/empty response, or wrap their report-status in a
-		// side-band channel the parser does not recognize, would
-		// leave the ref unadvanced with no error reported to the
-		// caller.
+	if !sawUnpackOk && sawAnyContent {
+		// The server sent something but no "unpack ok" was observed.
+		// This is the silent-failure shape: a rejection wrapped in a
+		// channel the parser could not interpret would otherwise
+		// leave the ref unadvanced with no error to the caller.
 		return fmt.Errorf("git protocol error: %w", ErrMissingReportStatus)
 	}
 	return nil
 }
 
-// scanSideBandReportStatus inspects accumulated side-band channel-1
-// bytes and reports whether an "unpack ok" success sentinel was seen.
-// It auto-detects between two on-wire encodings of the channel-1
-// payload (nested pkt-line stream vs raw text lines) and returns any
-// protocol-level error (ng/unpack failure/ERR) detected by the
-// underlying parser.
-func scanSideBandReportStatus(payload []byte) (sawUnpackOk bool, err error) {
-	if looksLikePktLine(payload) {
-		return scanNestedPktLineStream(payload)
+// scanSideBandReportStatus inspects channel-1 packets (in arrival
+// order, with original packet boundaries preserved) and reports whether
+// an "unpack ok" success sentinel was seen. The encoding is auto-
+// detected from the first non-empty packet payload: a leading pkt-line
+// length header selects the nested-pkt-line path, otherwise we fall
+// back to raw text parsing.
+func scanSideBandReportStatus(packets [][]byte) (sawUnpackOk bool, err error) {
+	var first []byte
+	for _, p := range packets {
+		if len(p) > 0 {
+			first = p
+			break
+		}
 	}
-	return scanRawReportStatusLines(payload)
+	if first == nil {
+		return false, nil
+	}
+	if looksLikePktLine(first) {
+		var buf bytes.Buffer
+		for _, p := range packets {
+			buf.Write(p)
+		}
+		return scanNestedPktLineStream(buf.Bytes())
+	}
+	return scanRawReportStatusPackets(packets)
 }
 
 // scanNestedPktLineStream parses payload as an inner pkt-line stream
@@ -183,10 +209,27 @@ func scanNestedPktLineStream(payload []byte) (sawUnpackOk bool, err error) {
 	}
 }
 
-// scanRawReportStatusLines treats payload as one or more LF-separated
-// raw report-status lines (the form some servers use when sending each
-// line in its own channel-1 packet). Each non-empty line is wrapped in
-// a synthetic pkt-line and fed to the parser so the same ng / unpack /
+// scanRawReportStatusPackets walks each channel-1 packet payload
+// independently. Within a single packet, lines are LF-separated; across
+// packets, the boundaries provided by the outer pkt-line length act as
+// implicit line terminators so two raw packets without trailing LF
+// (e.g. "unpack ok" + "ok refs/...") are not merged into a single
+// misclassified line.
+func scanRawReportStatusPackets(packets [][]byte) (sawUnpackOk bool, err error) {
+	for _, payload := range packets {
+		ok, e := scanRawReportStatusLines(payload)
+		if e != nil {
+			return sawUnpackOk, e
+		}
+		if ok {
+			sawUnpackOk = true
+		}
+	}
+	return sawUnpackOk, nil
+}
+
+// scanRawReportStatusLines splits a single packet payload on LF and
+// feeds each non-empty line through Parser so the same ng / unpack /
 // ERR / error: / fatal: detection that runs on the bare channel-0
 // stream applies here.
 func scanRawReportStatusLines(payload []byte) (sawUnpackOk bool, err error) {
