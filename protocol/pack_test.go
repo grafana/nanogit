@@ -777,13 +777,16 @@ func TestParsePack_UnpackTrailingWhitespace(t *testing.T) {
 	}
 }
 
-// TestParsePack_SideBandChannel1 covers bug-fix: some Git servers
-// (notably some GitLab configurations) wrap the report-status
-// payload in side-band channel 1 (leading 0x01 byte). The parser
-// MUST unwrap that channel byte before matching "ng", "unpack",
-// etc., otherwise push failures are silently treated as
-// "regular data" and the push appears to succeed.
-func TestParsePack_SideBandChannel1(t *testing.T) {
+// TestParsePack_Channel1NotMisclassified guards the rule that the
+// generic Parser does NOT unwrap side-band channel 1 (0x01) before
+// matching report-status prefixes. Channel 1 also carries arbitrary
+// binary packfile data during fetch/clone (via MultiplexedReader); a
+// pack chunk that happens to start with bytes spelling "ng " or
+// "unpack " must not be misclassified as a reference-update or unpack
+// failure. Channel-1 unwrapping for receive-pack is performed in
+// protocol/client.parseReceivePackResponse, where it is correctly
+// scoped to the response-parsing context.
+func TestParsePack_Channel1NotMisclassified(t *testing.T) {
 	t.Parallel()
 
 	parseAll := func(data []byte) ([][]byte, error) {
@@ -801,44 +804,42 @@ func TestParsePack_SideBandChannel1(t *testing.T) {
 		}
 	}
 
-	wrap := func(payload string) []byte {
-		// 0x01 + payload as a single pkt-line
-		body := append([]byte{0x01}, []byte(payload)...)
+	wrapChannel1 := func(payload []byte) []byte {
+		body := append([]byte{0x01}, payload...)
 		b, err := protocol.PackLine(body).Marshal()
 		require.NoError(t, err)
 		return b
 	}
 
-	t.Run("side-band ng triggers reference update error", func(t *testing.T) {
-		t.Parallel()
-		_, err := parseAll(wrap("ng refs/heads/main pre-receive hook declined\n"))
-		require.Error(t, err)
-		require.True(t, protocol.IsGitReferenceUpdateError(err),
-			"expected GitReferenceUpdateError, got %T: %v", err, err)
-		var refErr *protocol.GitReferenceUpdateError
-		require.ErrorAs(t, err, &refErr)
-		require.Equal(t, "refs/heads/main", refErr.RefName)
-		require.Equal(t, "pre-receive hook declined", refErr.Reason)
-	})
+	tests := []struct {
+		name    string
+		payload []byte
+	}{
+		{
+			name:    "channel 1 chunk starting with 'ng ' is opaque data",
+			payload: []byte("ng refs/heads/main pre-receive hook declined\n"),
+		},
+		{
+			name:    "channel 1 chunk starting with 'unpack ' is opaque data",
+			payload: []byte("unpack index-pack failed\n"),
+		},
+		{
+			name:    "channel 1 chunk starting with 'ERR ' is opaque data",
+			payload: []byte("ERR push declined"),
+		},
+	}
 
-	t.Run("side-band unpack ok is accepted as success", func(t *testing.T) {
-		t.Parallel()
-		_, err := parseAll(wrap("unpack ok\n"))
-		require.NoError(t, err, "side-band-wrapped 'unpack ok' must not produce an error")
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			lines, err := parseAll(wrapChannel1(tt.payload))
+			require.NoError(t, err, "channel 1 binary payload must not produce a report-status error")
+			require.Len(t, lines, 1)
+			require.Equal(t, byte(0x01), lines[0][0], "channel byte must be preserved on the returned line")
+		})
+	}
 
-	t.Run("side-band unpack failure triggers unpack error", func(t *testing.T) {
-		t.Parallel()
-		_, err := parseAll(wrap("unpack index-pack failed\n"))
-		require.Error(t, err)
-		require.True(t, protocol.IsGitUnpackError(err),
-			"expected GitUnpackError, got %T: %v", err, err)
-		var unpackErr *protocol.GitUnpackError
-		require.ErrorAs(t, err, &unpackErr)
-		require.Equal(t, "index-pack failed\n", unpackErr.Message)
-	})
-
-	t.Run("side-band channel 2 progress still treated as regular", func(t *testing.T) {
+	t.Run("channel 2 progress still treated as regular", func(t *testing.T) {
 		t.Parallel()
 		// Progress messages (channel 2) that are NOT error:/fatal: are
 		// returned as regular data lines, not errors. This guards the

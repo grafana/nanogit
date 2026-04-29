@@ -87,13 +87,22 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 //
 // Side-band handling:
 //
-// When the client negotiates side-band-64k, the server may deliver the
-// report-status as a nested pkt-line stream multiplexed on channel 1
-// (each packet on the wire starts with a 0x01 byte followed by a
-// chunk of the inner stream). We accumulate the channel-1 bytes and
-// re-parse them as a secondary pkt-line stream so the positive-
-// validation check works for both bare and side-band-wrapped
-// report-status responses.
+// When the client negotiates side-band-64k, the server delivers the
+// report-status multiplexed on channel 1 (each outer packet starts with
+// 0x01). Different servers wrap the channel-1 payload differently:
+//
+//   - Gitea / GitLab (chunked): the channel-1 payload is itself a
+//     pkt-line stream of report-status lines, possibly chunked across
+//     multiple outer packets.
+//   - GitHub / others (raw):    each report-status line is sent in its
+//     own channel-1 outer packet as literal text (no inner length
+//     prefix).
+//
+// We accumulate all channel-1 payload, then dispatch on whether the
+// accumulated bytes start with a valid pkt-line length (4 hex digits).
+// Crucially, channel-1 unwrap is scoped to this function and does not
+// leak into the generic detectError path, where channel 1 also carries
+// binary packfile data during fetch/clone.
 func parseReceivePackResponse(body io.Reader) error {
 	parser := protocol.NewParser(body)
 	sawUnpackOk := false
@@ -103,9 +112,6 @@ func parseReceivePackResponse(body io.Reader) error {
 		line, err := parser.Next()
 		if err == nil {
 			if len(line) > 0 && line[0] == 0x01 {
-				// Accumulate channel-1 bytes; they form a nested
-				// pkt-line stream that we parse once the outer
-				// stream has ended.
 				sideBandBuf.Write(line[1:])
 				continue
 			}
@@ -120,23 +126,13 @@ func parseReceivePackResponse(body io.Reader) error {
 		return fmt.Errorf("git protocol error: %w", err)
 	}
 
-	// Re-parse any side-band-wrapped report-status content so we can
-	// detect push failures (ng) or success sentinels that the server
-	// delivered on channel 1.
 	if sideBandBuf.Len() > 0 {
-		innerParser := protocol.NewParser(&sideBandBuf)
-		for {
-			line, err := innerParser.Next()
-			if err == nil {
-				if isUnpackOkLine(line) {
-					sawUnpackOk = true
-				}
-				continue
-			}
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("git protocol error: %w", err)
+		ok, err := scanSideBandReportStatus(sideBandBuf.Bytes())
+		if err != nil {
+			return err
+		}
+		if ok {
+			sawUnpackOk = true
 		}
 	}
 
@@ -154,13 +150,90 @@ func parseReceivePackResponse(body io.Reader) error {
 	return nil
 }
 
-// isUnpackOkLine reports whether a parsed packet line is the
-// "unpack ok" report-status sentinel, tolerating a leading side-band
-// channel-1 byte (0x01) and any trailing whitespace per
-// gitprotocol-common.
-func isUnpackOkLine(line []byte) bool {
-	if len(line) > 0 && line[0] == 0x01 {
-		line = line[1:]
+// scanSideBandReportStatus inspects accumulated side-band channel-1
+// bytes and reports whether an "unpack ok" success sentinel was seen.
+// It auto-detects between two on-wire encodings of the channel-1
+// payload (nested pkt-line stream vs raw text lines) and returns any
+// protocol-level error (ng/unpack failure/ERR) detected by the
+// underlying parser.
+func scanSideBandReportStatus(payload []byte) (sawUnpackOk bool, err error) {
+	if looksLikePktLine(payload) {
+		return scanNestedPktLineStream(payload)
 	}
+	return scanRawReportStatusLines(payload)
+}
+
+// scanNestedPktLineStream parses payload as an inner pkt-line stream
+// and returns whether an "unpack ok" line was observed. Any protocol
+// error detected by the parser is returned wrapped.
+func scanNestedPktLineStream(payload []byte) (sawUnpackOk bool, err error) {
+	inner := protocol.NewParser(bytes.NewReader(payload))
+	for {
+		line, parseErr := inner.Next()
+		if parseErr == nil {
+			if isUnpackOkLine(line) {
+				sawUnpackOk = true
+			}
+			continue
+		}
+		if parseErr == io.EOF {
+			return sawUnpackOk, nil
+		}
+		return sawUnpackOk, fmt.Errorf("git protocol error: %w", parseErr)
+	}
+}
+
+// scanRawReportStatusLines treats payload as one or more LF-separated
+// raw report-status lines (the form some servers use when sending each
+// line in its own channel-1 packet). Each non-empty line is wrapped in
+// a synthetic pkt-line and fed to the parser so the same ng / unpack /
+// ERR / error: / fatal: detection that runs on the bare channel-0
+// stream applies here.
+func scanRawReportStatusLines(payload []byte) (sawUnpackOk bool, err error) {
+	for raw := range bytes.SplitSeq(payload, []byte("\n")) {
+		line := bytes.TrimRight(raw, " \t\r")
+		if len(line) == 0 {
+			continue
+		}
+		pkt, marshalErr := protocol.PackLine(line).Marshal()
+		if marshalErr != nil {
+			return sawUnpackOk, fmt.Errorf("git protocol error: %w", marshalErr)
+		}
+		inner := protocol.NewParser(bytes.NewReader(pkt))
+		parsed, parseErr := inner.Next()
+		if parseErr != nil && parseErr != io.EOF {
+			return sawUnpackOk, fmt.Errorf("git protocol error: %w", parseErr)
+		}
+		if isUnpackOkLine(parsed) {
+			sawUnpackOk = true
+		}
+	}
+	return sawUnpackOk, nil
+}
+
+// looksLikePktLine reports whether the first 4 bytes of data form a
+// valid pkt-line length header (4 ASCII hex digits). Used to
+// disambiguate the two channel-1 wire encodings of report-status.
+func looksLikePktLine(data []byte) bool {
+	if len(data) < 4 {
+		return false
+	}
+	for i := range 4 {
+		b := data[i]
+		switch {
+		case b >= '0' && b <= '9':
+		case b >= 'a' && b <= 'f':
+		case b >= 'A' && b <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// isUnpackOkLine reports whether a parsed packet line is the
+// "unpack ok" report-status sentinel, tolerating any trailing
+// whitespace per gitprotocol-common.
+func isUnpackOkLine(line []byte) bool {
 	return bytes.Equal(bytes.TrimRight(line, " \t\r\n"), unpackOkLine)
 }

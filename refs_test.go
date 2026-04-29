@@ -415,7 +415,9 @@ func TestCreateRef(t *testing.T) {
 						// Emit a minimal successful report-status so the
 						// client-side positive-validation check in
 						// ReceivePack is satisfied.
-						_, _ = w.Write(reportStatusUnpackOk())
+						if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
+							t.Errorf("failed to write response: %v", err)
+						}
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -469,7 +471,9 @@ func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			// Emit a minimal successful report-status so the client-side
 			// positive-validation check in ReceivePack is satisfied.
-			_, _ = w.Write(reportStatusUnpackOk())
+			if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
+				t.Errorf("failed to write response: %v", err)
+			}
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 		}
@@ -642,15 +646,19 @@ func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 	// Emit a minimal successful report-status ("unpack ok" + flush) so
 	// ReceivePack's positive-validation check is satisfied.
-	if _, err := w.Write(reportStatusUnpackOk()); err != nil {
+	if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
 		t.Errorf("failed to write response: %v", err)
 	}
 }
 
 // reportStatusUnpackOk builds a minimal valid receive-pack report-status
 // response consisting of a single "unpack ok" pkt-line followed by a flush.
-func reportStatusUnpackOk() []byte {
-	pkt, _ := protocol.FormatPacks(protocol.PackLine("unpack ok\n"))
+// Surfaces any FormatPacks failure via t.Helper / require.NoError instead
+// of silently discarding it.
+func reportStatusUnpackOk(t *testing.T) []byte {
+	t.Helper()
+	pkt, err := protocol.FormatPacks(protocol.PackLine("unpack ok\n"))
+	require.NoError(t, err)
 	return pkt
 }
 
@@ -849,7 +857,7 @@ func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusOK)
 	// Emit a minimal successful report-status so the client-side
 	// positive-validation check in ReceivePack is satisfied.
-	if _, err := w.Write(reportStatusUnpackOk()); err != nil {
+	if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
 		t.Errorf("failed to write response: %v", err)
 	}
 }

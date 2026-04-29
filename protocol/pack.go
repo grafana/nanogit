@@ -538,15 +538,15 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // unwrap that byte before pattern-matching so push failures wrapped in band 1
 // are not silently treated as regular data.
 func detectError(lengthBytes, packetData []byte) error {
-	// Avoid allocation by building fullPacket only when needed
-
-	// Unwrap side-band channel 1 (packfile data channel) for report-status
-	// content. Channels 2 (progress) and 3 (fatal) are handled by
-	// isErrorOrFatalMessageOptimized / handleErrorFatalMessage below.
-	reportData := packetData
-	if len(reportData) > 0 && reportData[0] == 0x01 {
-		reportData = reportData[1:]
-	}
+	// Avoid allocation by building fullPacket only when needed.
+	//
+	// NOTE: side-band channel 1 (0x01) is intentionally NOT unwrapped here.
+	// During fetch/clone, channel 1 carries arbitrary binary packfile data
+	// via MultiplexedReader, and a chunk that happens to start with bytes
+	// matching "ng "/"unpack "/etc. would be misclassified as a report-
+	// status error. Channel-1 unwrapping for receive-pack response parsing
+	// is performed in protocol/client.parseReceivePackResponse where it is
+	// scoped to the right context.
 
 	switch {
 	case bytes.HasPrefix(packetData, errPattern):
@@ -557,18 +557,18 @@ func detectError(lengthBytes, packetData []byte) error {
 		fullPacket := append(lengthBytes, packetData...)
 		return handleErrorFatalMessage(fullPacket, packetData)
 
-	case bytes.HasPrefix(reportData, ngPattern):
+	case bytes.HasPrefix(packetData, ngPattern):
 		fullPacket := append(lengthBytes, packetData...)
-		return handleReferenceUpdateFailure(fullPacket, reportData)
+		return handleReferenceUpdateFailure(fullPacket, packetData)
 
-	case bytes.HasPrefix(reportData, unpackPattern):
+	case bytes.HasPrefix(packetData, unpackPattern):
 		// Extract the status string after "unpack " and trim any trailing
 		// whitespace (LF/CR/spaces). Per gitprotocol-common, non-binary
 		// pkt-lines may or may not include a trailing LF and receivers MUST
 		// tolerate either form. Gitea/GitHub send "unpack ok\n" when
 		// side-band is disabled; a byte-exact comparison to "ok" would
 		// otherwise misclassify that as a failure.
-		unpackData := reportData[len(unpackPattern):]
+		unpackData := packetData[len(unpackPattern):]
 		trimmed := bytes.TrimRight(unpackData, " \t\r\n")
 		if bytes.Equal(trimmed, unpackOkPattern) {
 			return nil // "unpack ok" success
