@@ -370,32 +370,50 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			errContains: "reference update failed for refs/heads/main",
 		},
 		{
-			// Two raw channel-1 packets with NO trailing LF on the
-			// first one. The previous shape concatenated their
-			// payloads and split on LF, producing a single bogus
-			// line "unpack okok refs/heads/main"; with packet
-			// boundaries preserved each packet stays a separate
-			// line and "unpack ok" is recognized.
-			name: "raw side-band channel 1 packets without trailing LF preserve boundaries",
+			// Side-band framing is a byte stream, so packet boundaries
+			// do NOT carry semantic meaning — a status line may be
+			// split mid-token across outer packets (here "unpack o" +
+			// "k\n"). Reassembling across boundaries before line
+			// classification is essential: a per-packet scan would
+			// match "unpack " on the first fragment and emit a
+			// spurious GitUnpackError with Message="o" on a successful
+			// push. This is the Codex P1 case.
+			name: "raw side-band channel 1 line split mid-token across packets is recognized",
 			body: flushed(append(
-				rawSideband1("unpack ok"),
-				rawSideband1("ok refs/heads/main")...,
+				rawSideband1("unpack o"),
+				rawSideband1("k\n")...,
 			)),
 			wantErr: false,
 		},
 		{
-			// Side-band framing is a chunked byte stream, so a
-			// single status line CAN legitimately be split across
-			// outer packets. The concatenated-stream fallback in
-			// scanSideBandReportStatus must still recognize
-			// "unpack ok\n" when one packet ends with "unpack " and
-			// the next begins with "ok\n".
-			name: "raw side-band channel 1 unpack ok split across packets is recognized",
+			// Companion to the mid-token case: a status line split
+			// AFTER a token boundary ("unpack " + "ok\n") must also
+			// reassemble.
+			name: "raw side-band channel 1 unpack ok split at token boundary is recognized",
 			body: flushed(append(
 				rawSideband1("unpack "),
 				rawSideband1("ok\n")...,
 			)),
 			wantErr: false,
+		},
+		{
+			// Two raw channel-1 packets carrying distinct lines
+			// without a trailing LF on the first one is genuinely
+			// ambiguous in the byte-stream model — the bytes merge
+			// into "unpack okok refs/heads/main" with no separator.
+			// We surface this as a failure (the merged line matches
+			// the "unpack " prefix and yields GitUnpackError) rather
+			// than silently misclassifying the response. Servers
+			// SHOULD LF-terminate per gitprotocol-common; one that
+			// doesn't is non-conformant and a hard failure here is
+			// safer than a silent success.
+			name: "raw side-band channel 1 distinct lines without LF separator surfaces as failure",
+			body: flushed(append(
+				rawSideband1("unpack ok"),
+				rawSideband1("ok refs/heads/main")...,
+			)),
+			wantErr:     true,
+			errContains: "pack unpack failed",
 		},
 		{
 			name:    "empty body is accepted (no report-status negotiated)",

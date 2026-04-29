@@ -192,28 +192,19 @@ func parseReceivePackResponse(body io.Reader) error {
 // header across outer side-band packets are still classified as
 // nested. Otherwise we fall back to raw text parsing.
 //
-// Raw mode is hybrid by design. Side-band framing is in principle a
-// chunked byte stream, so a status line can be split across packet
-// boundaries; conversely, observed-in-the-wild servers send each
-// report-status line in its own channel-1 packet without a trailing
-// LF, so naively concatenating would merge distinct lines. We therefore
-// run two passes:
-//
-//  1. Per-packet pass — drives error detection (ng / unpack failure /
-//     ERR / error: / fatal:) and recognizes "unpack ok" when each line
-//     fits in a single packet. Fragment payloads that do not match any
-//     prefix do not produce false positives.
-//  2. Concatenated-stream fallback — only if the per-packet pass did
-//     not see "unpack ok" we re-scan the joined byte stream split on LF
-//     so a server that fragments "unpack ok\n" across packets is still
-//     recognized. Errors are intentionally not re-evaluated here to
-//     avoid spurious matches from cross-packet fragment merging.
+// Both the nested and the raw paths concatenate the channel-1 byte
+// stream before running line-level analysis. Side-band framing is a
+// byte stream, so packet boundaries do NOT carry semantic meaning —
+// inner pkt-lines or raw text lines may be split arbitrarily across
+// outer packets, including in the middle of "unpack ok" or "ng <ref>".
+// Per gitprotocol-common, non-binary report-status lines SHOULD be
+// terminated by an LF; a non-conformant server that omits LF
+// separators will produce a single merged line, which surfaces as
+// ErrMissingReportStatus rather than a silent misclassification.
 func scanSideBandReportStatus(packets [][]byte) (sawUnpackOk bool, err error) {
-	// Detect format by peeking the first 4 bytes of the channel-1 byte
-	// stream, accumulating across packets if the inner pkt-line length
-	// header was fragmented across outer side-band packets. A server
-	// that sends e.g. "00" in one packet and "0eunpack ok\n0000" in
-	// the next must still be classified as nested.
+	// Format detection: peek the first 4 bytes of the channel-1 byte
+	// stream, accumulating across packets so a fragmented inner
+	// pkt-line length header is still classified as nested.
 	var prefix []byte
 	for _, p := range packets {
 		if len(prefix) >= 4 {
@@ -229,40 +220,16 @@ func scanSideBandReportStatus(packets [][]byte) (sawUnpackOk bool, err error) {
 	if len(prefix) == 0 {
 		return false, nil
 	}
-	if looksLikePktLine(prefix) {
-		var buf bytes.Buffer
-		for _, p := range packets {
-			buf.Write(p)
-		}
-		return scanNestedPktLineStream(buf.Bytes())
-	}
 
-	sawUnpackOk, err = scanRawReportStatusPackets(packets)
-	if err != nil {
-		return sawUnpackOk, err
-	}
-	if !sawUnpackOk && containsUnpackOkLine(packets) {
-		sawUnpackOk = true
-	}
-	return sawUnpackOk, nil
-}
-
-// containsUnpackOkLine concatenates the channel-1 payloads and reports
-// whether the resulting byte stream contains an "unpack ok" line
-// (LF-terminated or end-of-stream). Used as a fallback when per-packet
-// scanning misses a status line that was split across packet
-// boundaries.
-func containsUnpackOkLine(packets [][]byte) bool {
 	var buf bytes.Buffer
 	for _, p := range packets {
 		buf.Write(p)
 	}
-	for raw := range bytes.SplitSeq(buf.Bytes(), []byte("\n")) {
-		if bytes.Equal(bytes.TrimRight(raw, " \t\r"), unpackOkLine) {
-			return true
-		}
+
+	if looksLikePktLine(prefix) {
+		return scanNestedPktLineStream(buf.Bytes())
 	}
-	return false
+	return scanRawReportStatusStream(buf.Bytes())
 }
 
 // scanNestedPktLineStream parses payload as an inner pkt-line stream
@@ -285,30 +252,19 @@ func scanNestedPktLineStream(payload []byte) (sawUnpackOk bool, err error) {
 	}
 }
 
-// scanRawReportStatusPackets walks each channel-1 packet payload
-// independently. Within a single packet, lines are LF-separated; across
-// packets, the boundaries provided by the outer pkt-line length act as
-// implicit line terminators so two raw packets without trailing LF
-// (e.g. "unpack ok" + "ok refs/...") are not merged into a single
-// misclassified line.
-func scanRawReportStatusPackets(packets [][]byte) (sawUnpackOk bool, err error) {
-	for _, payload := range packets {
-		ok, e := scanRawReportStatusLines(payload)
-		if e != nil {
-			return sawUnpackOk, e
-		}
-		if ok {
-			sawUnpackOk = true
-		}
-	}
-	return sawUnpackOk, nil
-}
-
-// scanRawReportStatusLines splits a single packet payload on LF and
-// feeds each non-empty line through Parser so the same ng / unpack /
-// ERR / error: / fatal: detection that runs on the bare channel-0
-// stream applies here.
-func scanRawReportStatusLines(payload []byte) (sawUnpackOk bool, err error) {
+// scanRawReportStatusStream treats the concatenated channel-1 byte
+// stream as one or more LF-separated raw report-status lines. Each
+// non-empty line is wrapped in a synthetic pkt-line and fed to Parser
+// so the same ng / unpack failure / ERR / error: / fatal: detection
+// that runs on the bare channel-0 stream applies here.
+//
+// Reassembling across packet boundaries before classification matters:
+// side-band is a byte-stream framing layer, so a status line can be
+// split mid-token (e.g. "unpack o" then "k\n"). Running detectError on
+// the per-packet fragment "unpack o" would match the "unpack " prefix
+// and emit a spurious GitUnpackError on a successful push, so analysis
+// only fires on complete lines.
+func scanRawReportStatusStream(payload []byte) (sawUnpackOk bool, err error) {
 	for raw := range bytes.SplitSeq(payload, []byte("\n")) {
 		line := bytes.TrimRight(raw, " \t\r")
 		if len(line) == 0 {
