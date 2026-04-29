@@ -412,12 +412,7 @@ func TestCreateRef(t *testing.T) {
 							}
 						}
 						w.WriteHeader(http.StatusOK)
-						// Emit a minimal successful report-status so the
-						// client-side positive-validation check in
-						// ReceivePack is satisfied.
-						if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
-							t.Errorf("failed to write response: %v", err)
-						}
+						writeReportStatusUnpackOk(t, w)
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -469,11 +464,7 @@ func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
 			require.NoError(t, err)
 			gotBody = body
 			w.WriteHeader(http.StatusOK)
-			// Emit a minimal successful report-status so the client-side
-			// positive-validation check in ReceivePack is satisfied.
-			if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
-				t.Errorf("failed to write response: %v", err)
-			}
+			writeReportStatusUnpackOk(t, w)
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 		}
@@ -644,22 +635,21 @@ func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Reque
 		validateReceivePackBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
-	// Emit a minimal successful report-status ("unpack ok" + flush) so
-	// ReceivePack's positive-validation check is satisfied.
-	if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
-		t.Errorf("failed to write response: %v", err)
-	}
+	writeReportStatusUnpackOk(t, w)
 }
 
-// reportStatusUnpackOk builds a minimal valid receive-pack report-status
-// response consisting of a single "unpack ok" pkt-line followed by a flush.
-// Surfaces any FormatPacks failure via t.Helper / require.NoError instead
-// of silently discarding it.
-func reportStatusUnpackOk(t *testing.T) []byte {
+// writeReportStatusUnpackOk emits a minimal valid receive-pack report-
+// status response (a single "unpack ok" pkt-line followed by a flush)
+// onto w and surfaces both pkt-line marshal failures and write failures
+// to the test, so handlers can satisfy ReceivePack's positive-validation
+// check in one line without inflating their cyclomatic complexity.
+func writeReportStatusUnpackOk(t *testing.T, w http.ResponseWriter) {
 	t.Helper()
 	pkt, err := protocol.FormatPacks(protocol.PackLine("unpack ok\n"))
 	require.NoError(t, err)
-	return pkt
+	if _, err := w.Write(pkt); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
 }
 
 // validateReceivePackBody validates the request body for receive-pack requests
@@ -855,11 +845,7 @@ func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Req
 		validateDeleteRefBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
-	// Emit a minimal successful report-status so the client-side
-	// positive-validation check in ReceivePack is satisfied.
-	if _, err := w.Write(reportStatusUnpackOk(t)); err != nil {
-		t.Errorf("failed to write response: %v", err)
-	}
+	writeReportStatusUnpackOk(t, w)
 }
 
 // validateDeleteRefBody validates the request body for delete ref requests
