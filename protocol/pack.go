@@ -529,14 +529,12 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
 // Returns an error if any error condition is detected, otherwise returns nil to continue processing.
 //
-// Side-band handling for report-status: some Git servers (notably some GitLab
-// configurations) wrap report-status packets in side-band channel 1 (0x01).
-// Per https://git-scm.com/docs/protocol-capabilities#_report_status and
-// https://git-scm.com/docs/gitprotocol-pack, when side-band-64k is active the
-// report-status payload ("unpack ...", "ok <ref>", "ng <ref> <reason>") may be
-// preceded by a single 0x01 byte that identifies the pack-data channel. We
-// unwrap that byte before pattern-matching so push failures wrapped in band 1
-// are not silently treated as regular data.
+// Side-band handling is intentionally context-specific. Some Git servers
+// may wrap receive-pack report-status payloads in side-band channel 1
+// (0x01), but detectError does not unwrap channel 1 itself. That
+// unwrapping/parsing is performed by receive-pack response parsing code,
+// such as protocol/client.parseReceivePackResponse, where channel-1
+// report-status data can be distinguished from ordinary packfile data.
 func detectError(lengthBytes, packetData []byte) error {
 	// Avoid allocation by building fullPacket only when needed.
 	//
