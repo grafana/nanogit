@@ -103,7 +103,11 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		protocolStorageMode = protocol.PackfileStorageAuto
 	}
 
-	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode, c.receivePackCapabilities...)
+	caps, err := c.effectiveReceivePackCapabilities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve receive-pack capabilities: %w", err)
+	}
+	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode, caps...)
 	return &stagedWriter{
 		client:      c,
 		ref:         ref,
@@ -941,7 +945,16 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	// Always reset the writer and update the ref even if cleanup fails, to maintain consistency
 	// with the successful push that already happened on the server.
 	cleanupErr := w.writer.Cleanup()
-	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, w.client.receivePackCapabilities...)
+	// Capability negotiation is cached behind sync.Once on the client; by the
+	// time we reach this post-push reset the same client has already
+	// negotiated successfully (NewStagedWriter is the first call that fires
+	// it), so this lookup hits the cached value with no extra round-trip.
+	caps, capsErr := w.client.effectiveReceivePackCapabilities(ctx)
+	if capsErr != nil {
+		w.ref.Hash = w.lastCommit.Hash
+		return fmt.Errorf("resolve receive-pack capabilities after push: %w", capsErr)
+	}
+	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
 	w.ref.Hash = w.lastCommit.Hash
 
 	logger.Debug("Push completed",
@@ -1268,8 +1281,14 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 	w.treeEntries = make(map[string]*FlatTreeEntry)
 	w.dirtyPaths = make(map[string]bool)
 
-	// Reset writer state
-	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, w.client.receivePackCapabilities...)
+	// Reset writer state. Capability negotiation, if enabled, is cached
+	// behind sync.Once so this lookup reuses the result negotiated when the
+	// writer was constructed.
+	caps, err := w.client.effectiveReceivePackCapabilities(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve receive-pack capabilities during cleanup: %w", err)
+	}
+	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
 
 	// Mark as cleaned up to prevent further use
 	w.isCleanedUp = true
