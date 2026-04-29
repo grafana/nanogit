@@ -384,6 +384,20 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			// Side-band framing is a chunked byte stream, so a
+			// single status line CAN legitimately be split across
+			// outer packets. The concatenated-stream fallback in
+			// scanSideBandReportStatus must still recognize
+			// "unpack ok\n" when one packet ends with "unpack " and
+			// the next begins with "ok\n".
+			name: "raw side-band channel 1 unpack ok split across packets is recognized",
+			body: flushed(append(
+				rawSideband1("unpack "),
+				rawSideband1("ok\n")...,
+			)),
+			wantErr: false,
+		},
+		{
 			name:    "empty body is accepted (no report-status negotiated)",
 			body:    []byte{},
 			wantErr: false,
