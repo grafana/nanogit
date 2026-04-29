@@ -692,3 +692,162 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 		require.Equal(t, " unpack failed", unpackErr.Message)
 	})
 }
+
+// TestParsePack_UnpackTrailingWhitespace covers bug-fix: "unpack ok\n"
+// and "unpack ok\r\n" (with trailing whitespace permitted by
+// gitprotocol-common) must be accepted as success, not rejected as
+// GitUnpackError{Message: "ok\n"}. Real-world servers (Gitea, GitHub)
+// include a trailing LF on the report-status sentinel, especially when
+// side-band is disabled.
+func TestParsePack_UnpackTrailingWhitespace(t *testing.T) {
+	t.Parallel()
+
+	// parseAll drains parser.Next() until EOF or a non-EOF error.
+	parseAll := func(data []byte) ([][]byte, error) {
+		parser := protocol.NewParser(bytes.NewReader(data))
+		var lines [][]byte
+		for {
+			line, err := parser.Next()
+			if err != nil {
+				if err == io.EOF {
+					return lines, nil
+				}
+				return lines, err
+			}
+			lines = append(lines, line)
+		}
+	}
+
+	pkt := func(s string) []byte {
+		b, err := protocol.PackLine(s).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	tests := []struct {
+		name        string
+		input       []byte
+		wantErr     bool
+		wantMessage string // for GitUnpackError cases
+	}{
+		{
+			name:    "unpack ok no trailing newline",
+			input:   pkt("unpack ok"),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with LF",
+			input:   pkt("unpack ok\n"),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with CRLF",
+			input:   pkt("unpack ok\r\n"),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with trailing spaces",
+			input:   pkt("unpack ok  \n"),
+			wantErr: false,
+		},
+		{
+			name:        "unpack failure with trailing LF",
+			input:       pkt("unpack index-pack failed\n"),
+			wantErr:     true,
+			wantMessage: "index-pack failed\n",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseAll(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.True(t, protocol.IsGitUnpackError(err),
+					"expected GitUnpackError, got %T: %v", err, err)
+				var unpackErr *protocol.GitUnpackError
+				require.ErrorAs(t, err, &unpackErr)
+				require.Equal(t, tt.wantMessage, unpackErr.Message)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestParsePack_Channel1NotMisclassified guards the rule that the
+// generic Parser does NOT unwrap side-band channel 1 (0x01) before
+// matching report-status prefixes. Channel 1 also carries arbitrary
+// binary packfile data during fetch/clone (via MultiplexedReader); a
+// pack chunk that happens to start with bytes spelling "ng " or
+// "unpack " must not be misclassified as a reference-update or unpack
+// failure. Channel-1 unwrapping for receive-pack is performed in
+// protocol/client.parseReceivePackResponse, where it is correctly
+// scoped to the response-parsing context.
+func TestParsePack_Channel1NotMisclassified(t *testing.T) {
+	t.Parallel()
+
+	parseAll := func(data []byte) ([][]byte, error) {
+		parser := protocol.NewParser(bytes.NewReader(data))
+		var lines [][]byte
+		for {
+			line, err := parser.Next()
+			if err != nil {
+				if err == io.EOF {
+					return lines, nil
+				}
+				return lines, err
+			}
+			lines = append(lines, line)
+		}
+	}
+
+	wrapChannel1 := func(payload []byte) []byte {
+		body := append([]byte{0x01}, payload...)
+		b, err := protocol.PackLine(body).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	tests := []struct {
+		name    string
+		payload []byte
+	}{
+		{
+			name:    "channel 1 chunk starting with 'ng ' is opaque data",
+			payload: []byte("ng refs/heads/main pre-receive hook declined\n"),
+		},
+		{
+			name:    "channel 1 chunk starting with 'unpack ' is opaque data",
+			payload: []byte("unpack index-pack failed\n"),
+		},
+		{
+			name:    "channel 1 chunk starting with 'ERR ' is opaque data",
+			payload: []byte("ERR push declined"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			lines, err := parseAll(wrapChannel1(tt.payload))
+			require.NoError(t, err, "channel 1 binary payload must not produce a report-status error")
+			require.Len(t, lines, 1)
+			require.Equal(t, byte(0x01), lines[0][0], "channel byte must be preserved on the returned line")
+		})
+	}
+
+	t.Run("channel 2 progress still treated as regular", func(t *testing.T) {
+		t.Parallel()
+		// Progress messages (channel 2) that are NOT error:/fatal: are
+		// returned as regular data lines, not errors. This guards the
+		// existing behavior for side-band channel 2 progress output.
+		body := append([]byte{0x02}, []byte("Counting objects: 100% (5/5), done.\n")...)
+		b, err := protocol.PackLine(body).Marshal()
+		require.NoError(t, err)
+		_, err = parseAll(b)
+		require.NoError(t, err)
+	})
+}

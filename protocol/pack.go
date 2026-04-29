@@ -96,7 +96,6 @@ var (
 	ngPattern       = []byte("ng ")
 	unpackPattern   = []byte("unpack ")
 	unpackOkPattern = []byte("ok")
-	unpackOkFull    = []byte("unpack ok") // Most common success case
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -529,8 +528,23 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // detectError processes packet content to detect and handle various Git protocol error conditions.
 // It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
 // Returns an error if any error condition is detected, otherwise returns nil to continue processing.
+//
+// Side-band handling is intentionally context-specific. Some Git servers
+// may wrap receive-pack report-status payloads in side-band channel 1
+// (0x01), but detectError does not unwrap channel 1 itself. That
+// unwrapping/parsing is performed by receive-pack response parsing code,
+// such as protocol/client.parseReceivePackResponse, where channel-1
+// report-status data can be distinguished from ordinary packfile data.
 func detectError(lengthBytes, packetData []byte) error {
-	// Avoid allocation by building fullPacket only when needed
+	// Avoid allocation by building fullPacket only when needed.
+	//
+	// NOTE: side-band channel 1 (0x01) is intentionally NOT unwrapped here.
+	// During fetch/clone, channel 1 carries arbitrary binary packfile data
+	// via MultiplexedReader, and a chunk that happens to start with bytes
+	// matching "ng "/"unpack "/etc. would be misclassified as a report-
+	// status error. Channel-1 unwrapping for receive-pack response parsing
+	// is performed in protocol/client.parseReceivePackResponse where it is
+	// scoped to the right context.
 
 	switch {
 	case bytes.HasPrefix(packetData, errPattern):
@@ -546,19 +560,20 @@ func detectError(lengthBytes, packetData []byte) error {
 		return handleReferenceUpdateFailure(fullPacket, packetData)
 
 	case bytes.HasPrefix(packetData, unpackPattern):
-		// Fast path for most common case: "unpack ok"
-		if bytes.Equal(packetData, unpackOkFull) {
-			return nil // Success case, no error
-		}
-
-		// Optimize unpack handling with byte comparison instead of string conversion
+		// Extract the status string after "unpack " and trim any trailing
+		// whitespace (LF/CR/spaces). Per gitprotocol-common, non-binary
+		// pkt-lines may or may not include a trailing LF and receivers MUST
+		// tolerate either form. Gitea/GitHub send "unpack ok\n" when
+		// side-band is disabled; a byte-exact comparison to "ok" would
+		// otherwise misclassify that as a failure.
 		unpackData := packetData[len(unpackPattern):]
-		if !bytes.Equal(unpackData, unpackOkPattern) {
-			fullPacket := append(lengthBytes, packetData...)
-			return NewGitUnpackError(fullPacket, string(unpackData))
+		trimmed := bytes.TrimRight(unpackData, " \t\r\n")
+		if bytes.Equal(trimmed, unpackOkPattern) {
+			return nil // "unpack ok" success
 		}
-		// If unpack ok, continue processing
-		return nil
+		fullPacket := append(lengthBytes, packetData...)
+		return NewGitUnpackError(fullPacket, string(unpackData))
+
 	default:
 		// Regular data packet
 		return nil
@@ -622,10 +637,15 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 	return NewGitServerError(fullPacket, errorType, message)
 }
 
-// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets
+// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets.
+// The packetData argument is expected to have any side-band channel byte already
+// stripped by the caller, so it begins with the literal "ng " prefix.
 func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 	// Format: "ng <refname> <error-msg>"
-	parts := bytes.SplitN(packetData[3:], []byte(" "), 2) // Skip "ng "
+	// Trim any trailing whitespace (e.g. LF) before splitting, per
+	// gitprotocol-common non-binary pkt-line handling.
+	trimmed := bytes.TrimRight(packetData[3:], " \t\r\n") // Skip "ng "
+	parts := bytes.SplitN(trimmed, []byte(" "), 2)
 
 	var refName, reason string
 	if len(parts) >= 1 {

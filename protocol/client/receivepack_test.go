@@ -289,3 +289,215 @@ func TestReceivePack_Retry(t *testing.T) {
 	})
 
 }
+
+// TestReceivePack_PositiveValidation ensures a receive-pack response is
+// considered successful only when one of the following holds:
+//   - the body is empty / flush-only (caller may have legitimately
+//     omitted report-status from negotiated capabilities), OR
+//   - the body contains an explicit "unpack ok" sentinel (bare or
+//     side-band-wrapped).
+//
+// Non-trivial bodies that lack "unpack ok" are rejected so server-side
+// rejections wrapped in channels the parser cannot interpret no longer
+// silently appear as successful pushes.
+func TestReceivePack_PositiveValidation(t *testing.T) {
+	t.Parallel()
+
+	pkt := func(s string) []byte {
+		b, err := protocol.PackLine(s).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+	flushed := func(data []byte) []byte {
+		return append(append([]byte{}, data...), []byte("0000")...)
+	}
+	// sideband1 wraps `inner` (which is itself a pkt-line stream) inside a
+	// single outer channel-1 pkt-line, mimicking how Gitea/GitLab deliver
+	// report-status when side-band-64k is negotiated.
+	sideband1 := func(inner []byte) []byte {
+		payload := append([]byte{0x01}, inner...)
+		b, err := protocol.PackLine(payload).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+	// rawSideband1 wraps a literal text payload (no inner pkt-line
+	// length prefix) inside a single channel-1 outer packet. Used to
+	// exercise the raw-line branch of the side-band parser.
+	rawSideband1 := func(text string) []byte {
+		payload := append([]byte{0x01}, []byte(text)...)
+		b, err := protocol.PackLine(payload).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	tests := []struct {
+		name        string
+		body        []byte
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "unpack ok is accepted",
+			body:    flushed(pkt("unpack ok")),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with trailing LF is accepted",
+			body:    flushed(pkt("unpack ok\n")),
+			wantErr: false,
+		},
+		{
+			name: "side-band channel 1 nested report-status is accepted",
+			body: flushed(sideband1(flushed(append(
+				pkt("unpack ok\n"),
+				pkt("ok refs/heads/main\n")...,
+			)))),
+			wantErr: false,
+		},
+		{
+			name: "side-band channel 1 raw ng payload triggers reference update error",
+			body: flushed(rawSideband1("ng refs/heads/main pre-receive hook declined\n")),
+			wantErr:     true,
+			errContains: "reference update failed for refs/heads/main",
+		},
+		{
+			name: "side-band channel 1 nested ng triggers reference update error",
+			body: flushed(sideband1(flushed(append(
+				pkt("unpack ok\n"),
+				pkt("ng refs/heads/main pre-receive hook declined\n")...,
+			)))),
+			wantErr:     true,
+			errContains: "reference update failed for refs/heads/main",
+		},
+		{
+			// Side-band framing is a byte stream, so packet boundaries
+			// do NOT carry semantic meaning — a status line may be
+			// split mid-token across outer packets (here "unpack o" +
+			// "k\n"). Reassembling across boundaries before line
+			// classification is essential: a per-packet scan would
+			// match "unpack " on the first fragment and emit a
+			// spurious GitUnpackError with Message="o" on a successful
+			// push. This is the Codex P1 case.
+			name: "raw side-band channel 1 line split mid-token across packets is recognized",
+			body: flushed(append(
+				rawSideband1("unpack o"),
+				rawSideband1("k\n")...,
+			)),
+			wantErr: false,
+		},
+		{
+			// Companion to the mid-token case: a status line split
+			// AFTER a token boundary ("unpack " + "ok\n") must also
+			// reassemble.
+			name: "raw side-band channel 1 unpack ok split at token boundary is recognized",
+			body: flushed(append(
+				rawSideband1("unpack "),
+				rawSideband1("ok\n")...,
+			)),
+			wantErr: false,
+		},
+		{
+			// Two raw channel-1 packets carrying distinct lines
+			// without a trailing LF on the first one is genuinely
+			// ambiguous in the byte-stream model — the bytes merge
+			// into "unpack okok refs/heads/main" with no separator.
+			// We surface this as a failure (the merged line matches
+			// the "unpack " prefix and yields GitUnpackError) rather
+			// than silently misclassifying the response. Servers
+			// SHOULD LF-terminate per gitprotocol-common; one that
+			// doesn't is non-conformant and a hard failure here is
+			// safer than a silent success.
+			name: "raw side-band channel 1 distinct lines without LF separator surfaces as failure",
+			body: flushed(append(
+				rawSideband1("unpack ok"),
+				rawSideband1("ok refs/heads/main")...,
+			)),
+			wantErr:     true,
+			errContains: "pack unpack failed",
+		},
+		{
+			name:    "empty body is accepted (no report-status negotiated)",
+			body:    []byte{},
+			wantErr: false,
+		},
+		{
+			name:    "flush-only body is accepted (no report-status negotiated)",
+			body:    []byte("0000"),
+			wantErr: false,
+		},
+		{
+			// Channel-2 progress packets do not carry report-status
+			// content, so a body that contains only progress (and
+			// no unpack ok) is accepted. Callers that omit
+			// report-status from negotiated capabilities legitimately
+			// hit this shape and must not be misreported as failed.
+			name:    "channel-2 progress only is accepted (no report-status negotiated)",
+			body:    flushed(pkt(string(append([]byte{0x02}, []byte("Counting objects: 1, done.\n")...)))),
+			wantErr: false,
+		},
+		{
+			// Same shape, but the body also includes a non-empty
+			// channel-1 packet that is NOT report-status (just
+			// gibberish). The channel-1 packet arms the report-status
+			// requirement, so the missing unpack ok must surface as
+			// ErrMissingReportStatus.
+			name: "channel-1 content without unpack ok is rejected",
+			body: flushed(append(
+				pkt(string(append([]byte{0x02}, []byte("progress\n")...))),
+				rawSideband1("ng refs/heads/main hook declined")...,
+			)),
+			wantErr:     true,
+			errContains: "reference update failed for refs/heads/main",
+		},
+		{
+			// Server fragments the inner pkt-line 4-byte length
+			// header across two channel-1 outer packets: first
+			// packet carries "00", second packet starts with "0e"
+			// followed by "unpack ok\n0000". Format detection must
+			// accumulate across packets to recognize the nested
+			// stream rather than misclassifying it as raw.
+			name: "nested side-band length header fragmented across packets is recognized",
+			body: flushed(append(
+				rawSideband1("00"),
+				rawSideband1("0eunpack ok\n0000")...,
+			)),
+			wantErr: false,
+		},
+		{
+			// Channel 3 is the fatal channel. detectError converts
+			// well-formed "fatal:"/"error:" shapes already; a
+			// non-empty channel-3 payload that does NOT match those
+			// prefixes (a server-specific abrupt close) must still
+			// surface as a GitServerError rather than be silently
+			// dropped — otherwise the push would look successful
+			// despite the server signalling termination.
+			name: "channel-3 payload without fatal prefix surfaces as server error",
+			body: flushed(pkt(string(append([]byte{0x03}, []byte("connection terminated by host")...)))),
+			wantErr:     true,
+			errContains: "git server fatal:",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(tt.body)
+			}))
+			defer server.Close()
+
+			c, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

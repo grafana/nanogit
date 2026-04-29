@@ -830,3 +830,105 @@ func TestProvidersCompatibility(t *testing.T) {
 
 	t.Logf("Provider confirmed to support Git protocol v2")
 }
+
+// TestProvidersWithoutSideBand exercises the full create-branch +
+// staged-writer push flow against a real Git provider with side-band-64k
+// dropped from the advertised receive-pack capabilities. This is the
+// configuration that #269's WithoutPushSideBand option produces and is
+// the path that historically tickled the GitLab "empty branch" silent-
+// failure on servers that wrap report-status in side-band channel 1.
+//
+// Local httptest-based unit tests cover the parser logic in isolation;
+// this test only runs in the provider CI matrix (GitHub / GitLab /
+// Bitbucket) because real provider behaviour for non-default capability
+// sets cannot be reproduced offline. A regression here will surface as
+// a failed CI job, not a flake in local runs.
+func TestProvidersWithoutSideBand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping testproviders suite in short mode")
+		return
+	}
+
+	if os.Getenv("TEST_REPO") == "" || os.Getenv("TEST_TOKEN") == "" || os.Getenv("TEST_USER") == "" {
+		t.Skip("Skipping testproviders suite: TEST_REPO or TEST_TOKEN or TEST_USER not set")
+		return
+	}
+
+	// Default receive-pack set minus side-band-64k. Callers must spell
+	// out every capability they want on the wire — there is no
+	// "subtract" sugar. Mirrors the noSideBandCaps used in the local
+	// httptest integration suite.
+	noSideBandCaps := []protocol.Capability{
+		protocol.CapReportStatusV2,
+		protocol.CapQuiet,
+		protocol.CapObjectFormatSHA1,
+		protocol.CapAgent("nanogit"),
+	}
+
+	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
+	client, err := nanogit.NewHTTPClient(
+		os.Getenv("TEST_REPO"),
+		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
+		options.WithReceivePackCapabilities(noSideBandCaps...),
+	)
+	require.NoError(t, err)
+
+	mainRef, err := client.GetRef(ctx, "refs/heads/main")
+	require.NoError(t, err)
+
+	branchName := fmt.Sprintf("test-no-sideband-%d", time.Now().Unix())
+	fullBranch := "refs/heads/" + branchName
+
+	t.Logf("Creating branch %s pointing at main HEAD %s", fullBranch, mainRef.Hash)
+	require.NoError(t, client.CreateRef(ctx, nanogit.Ref{
+		Name: fullBranch,
+		Hash: mainRef.Hash,
+	}))
+	t.Cleanup(func() {
+		if err := client.DeleteRef(ctx, fullBranch); err != nil {
+			t.Logf("cleanup: failed to delete %s: %v", fullBranch, err)
+		}
+	})
+
+	branchRef, err := client.GetRef(ctx, fullBranch)
+	require.NoError(t, err)
+
+	writer, err := client.NewStagedWriter(ctx, branchRef)
+	require.NoError(t, err)
+
+	author := nanogit.Author{Name: "John Doe", Email: "john.doe@example.com", Time: time.Now()}
+	committer := nanogit.Committer{Name: "John Doe", Email: "john.doe@example.com", Time: time.Now()}
+
+	blobPath := "no-sideband-test.txt"
+	blobContent := []byte("content pushed without side-band-64k")
+	_, err = writer.CreateBlob(ctx, blobPath, blobContent)
+	require.NoError(t, err)
+
+	commit, err := writer.Commit(ctx, "no-sideband: add test file", author, committer)
+	require.NoError(t, err)
+	require.NotNil(t, commit)
+
+	t.Logf("Pushing commit %s to %s without side-band-64k", commit.Hash, fullBranch)
+	require.NoError(t, writer.Push(ctx),
+		"push without side-band-64k must succeed against the provider; "+
+			"a failure here means the server rejected the capability set or returned a "+
+			"report-status the client could not parse")
+
+	// Critical assertion: the branch must actually advance past main.
+	// If the push was silently swallowed (the historical empty-branch
+	// shape), the ref would still point at main HEAD with no error.
+	pushedRef, err := client.GetRef(ctx, fullBranch)
+	require.NoError(t, err)
+	require.Equal(t, commit.Hash, pushedRef.Hash,
+		"branch must advance to the new commit; if it equals main the push was silently swallowed")
+	require.NotEqual(t, mainRef.Hash, pushedRef.Hash,
+		"branch must advance past main; an unchanged hash here is the empty-branch silent-failure shape")
+
+	// Also verify the blob is reachable from the new commit, so we
+	// know the packfile was actually accepted (not just the ref move).
+	pushedCommit, err := client.GetCommit(ctx, pushedRef.Hash)
+	require.NoError(t, err)
+	pushedBlob, err := client.GetBlobByPath(ctx, pushedCommit.Tree, blobPath)
+	require.NoError(t, err, "pushed blob must be reachable from the new commit's tree")
+	require.Equal(t, string(blobContent), string(pushedBlob.Content))
+}
