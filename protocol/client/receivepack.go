@@ -12,14 +12,16 @@ import (
 	"github.com/grafana/nanogit/protocol"
 )
 
-// ErrMissingReportStatus is returned when a receive-pack response contains
-// non-trivial content but no "unpack ok" report-status sentinel. Empty or
-// flush-only responses are accepted silently — they correspond to clients
-// that legitimately omitted report-status / report-status-v2 from their
-// advertised capabilities (via WithReceivePackCapabilities), in which case
-// the server is not required to send a report-status reply. The
-// requirement only kicks in when the server sent something the parser
-// could not interpret as a successful sentinel, which is precisely the
+// ErrMissingReportStatus is returned when a receive-pack response
+// contains report-status content (a bare channel-0 line or a non-empty
+// channel-1 packet) but no "unpack ok" sentinel. Channel-2 progress
+// packets and an empty/flush-only body do NOT arm the requirement —
+// callers that legitimately omit report-status / report-status-v2 from
+// their advertised capabilities (via WithReceivePackCapabilities) can
+// still see progress messages from a server, and the server is not
+// required to reply with report-status in that configuration. The
+// requirement kicks in precisely when the server sent something the
+// parser could not interpret as a successful sentinel, which is the
 // silent-failure mode the side-band channel-1 wrapping bug exhibited.
 var ErrMissingReportStatus = errors.New("receive-pack response did not contain 'unpack ok' report-status line")
 
@@ -116,22 +118,42 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 func parseReceivePackResponse(body io.Reader) error {
 	parser := protocol.NewParser(body)
 	sawUnpackOk := false
-	sawAnyContent := false
+	// sawReportStatusContent tracks whether the server sent anything
+	// that could legitimately carry a report-status sentinel — i.e. a
+	// bare channel-0 line or a non-empty channel-1 packet. Channel-2
+	// (progress) and channel-3 (fatal — already converted to an error
+	// by detectError) do NOT arm the unpack-ok requirement, so callers
+	// that omit report-status from their advertised capabilities are
+	// not misreported as failed pushes when the server still streams
+	// progress.
+	sawReportStatusContent := false
 	var sideBandPackets [][]byte
 
 	for {
 		line, err := parser.Next()
 		if err == nil {
-			sawAnyContent = true
-			if len(line) > 0 && line[0] == 0x01 {
+			if len(line) == 0 {
+				continue
+			}
+			switch line[0] {
+			case 0x02, 0x03:
+				// Progress / fatal channels carry no report-status.
+				continue
+			case 0x01:
 				// Parser.Next() already returns a freshly allocated
 				// slice (see protocol.readPacketData), so a sub-slice
 				// of it is safe to retain across iterations.
-				sideBandPackets = append(sideBandPackets, line[1:])
-				continue
-			}
-			if isUnpackOkLine(line) {
-				sawUnpackOk = true
+				payload := line[1:]
+				sideBandPackets = append(sideBandPackets, payload)
+				if len(payload) > 0 {
+					sawReportStatusContent = true
+				}
+			default:
+				// Bare channel-0 report-status line.
+				sawReportStatusContent = true
+				if isUnpackOkLine(line) {
+					sawUnpackOk = true
+				}
 			}
 			continue
 		}
@@ -151,11 +173,12 @@ func parseReceivePackResponse(body io.Reader) error {
 		}
 	}
 
-	if !sawUnpackOk && sawAnyContent {
-		// The server sent something but no "unpack ok" was observed.
-		// This is the silent-failure shape: a rejection wrapped in a
-		// channel the parser could not interpret would otherwise
-		// leave the ref unadvanced with no error to the caller.
+	if !sawUnpackOk && sawReportStatusContent {
+		// The server sent report-status-shaped content but no
+		// "unpack ok" was observed. This is the silent-failure shape:
+		// a rejection wrapped in a channel the parser could not
+		// interpret would otherwise leave the ref unadvanced with no
+		// error to the caller.
 		return fmt.Errorf("git protocol error: %w", ErrMissingReportStatus)
 	}
 	return nil
@@ -163,9 +186,11 @@ func parseReceivePackResponse(body io.Reader) error {
 
 // scanSideBandReportStatus inspects channel-1 packets in arrival order
 // and reports whether an "unpack ok" success sentinel was seen. The
-// encoding is auto-detected from the first non-empty packet payload: a
-// leading pkt-line length header selects the nested-pkt-line path,
-// otherwise we fall back to raw text parsing.
+// encoding is auto-detected by peeking the first 4 bytes of the
+// channel-1 byte stream — accumulating across packets when the inner
+// pkt-line length header is fragmented — so servers that split the
+// header across outer side-band packets are still classified as
+// nested. Otherwise we fall back to raw text parsing.
 //
 // Raw mode is hybrid by design. Side-band framing is in principle a
 // chunked byte stream, so a status line can be split across packet
@@ -184,17 +209,27 @@ func parseReceivePackResponse(body io.Reader) error {
 //     recognized. Errors are intentionally not re-evaluated here to
 //     avoid spurious matches from cross-packet fragment merging.
 func scanSideBandReportStatus(packets [][]byte) (sawUnpackOk bool, err error) {
-	var first []byte
+	// Detect format by peeking the first 4 bytes of the channel-1 byte
+	// stream, accumulating across packets if the inner pkt-line length
+	// header was fragmented across outer side-band packets. A server
+	// that sends e.g. "00" in one packet and "0eunpack ok\n0000" in
+	// the next must still be classified as nested.
+	var prefix []byte
 	for _, p := range packets {
-		if len(p) > 0 {
-			first = p
+		if len(prefix) >= 4 {
 			break
 		}
+		need := 4 - len(prefix)
+		if len(p) < need {
+			prefix = append(prefix, p...)
+		} else {
+			prefix = append(prefix, p[:need]...)
+		}
 	}
-	if first == nil {
+	if len(prefix) == 0 {
 		return false, nil
 	}
-	if looksLikePktLine(first) {
+	if looksLikePktLine(prefix) {
 		var buf bytes.Buffer
 		for _, p := range packets {
 			buf.Write(p)

@@ -408,14 +408,42 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			// Server sent a non-trivial body (a channel-2 progress
-			// message) but never sent "unpack ok". This is the
-			// silent-failure shape ErrMissingReportStatus exists
-			// to surface.
-			name: "non-trivial body without unpack ok is rejected",
-			body: flushed(pkt(string(append([]byte{0x02}, []byte("Counting objects: 1, done.\n")...)))),
+			// Channel-2 progress packets do not carry report-status
+			// content, so a body that contains only progress (and
+			// no unpack ok) is accepted. Callers that omit
+			// report-status from negotiated capabilities legitimately
+			// hit this shape and must not be misreported as failed.
+			name:    "channel-2 progress only is accepted (no report-status negotiated)",
+			body:    flushed(pkt(string(append([]byte{0x02}, []byte("Counting objects: 1, done.\n")...)))),
+			wantErr: false,
+		},
+		{
+			// Same shape, but the body also includes a non-empty
+			// channel-1 packet that is NOT report-status (just
+			// gibberish). The channel-1 packet arms the report-status
+			// requirement, so the missing unpack ok must surface as
+			// ErrMissingReportStatus.
+			name: "channel-1 content without unpack ok is rejected",
+			body: flushed(append(
+				pkt(string(append([]byte{0x02}, []byte("progress\n")...))),
+				rawSideband1("ng refs/heads/main hook declined")...,
+			)),
 			wantErr:     true,
-			errContains: "did not contain 'unpack ok'",
+			errContains: "reference update failed for refs/heads/main",
+		},
+		{
+			// Server fragments the inner pkt-line 4-byte length
+			// header across two channel-1 outer packets: first
+			// packet carries "00", second packet starts with "0e"
+			// followed by "unpack ok\n0000". Format detection must
+			// accumulate across packets to recognize the nested
+			// stream rather than misclassifying it as raw.
+			name: "nested side-band length header fragmented across packets is recognized",
+			body: flushed(append(
+				rawSideband1("00"),
+				rawSideband1("0eunpack ok\n0000")...,
+			)),
+			wantErr: false,
 		},
 	}
 
