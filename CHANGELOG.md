@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1](https://github.com/grafana/nanogit/compare/v0.16.0...v0.16.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* unwrap side-band channel 1 and validate unpack ok on receive-pack ([#270](https://github.com/grafana/nanogit/issues/270)) ([326b592](https://github.com/grafana/nanogit/commit/326b5923fdd10a5d0694feed74a058dc8763f567)), closes [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#2](https://github.com/grafana/nanogit/issues/2)
+
 ## [0.16.0](https://github.com/grafana/nanogit/compare/v0.15.0...v0.16.0) (2026-04-29)
 
 
