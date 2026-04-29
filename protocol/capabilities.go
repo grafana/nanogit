@@ -88,3 +88,59 @@ func FormatCapabilities(caps []Capability) (string, error) {
 	}
 	return strings.Join(parts, " "), nil
 }
+
+// alwaysRetainedCapabilityKeys lists capability keys that IntersectCapabilities
+// must keep from the client side regardless of whether the server advertised
+// them. report-status-v2 is what nanogit's receive-pack response parser relies
+// on to detect failures — dropping it because the server didn't advertise it
+// would re-introduce silent push success on rejection. agent= is a pure
+// client self-identifier with no server-side feature semantics; preserving it
+// keeps server-side request logs accurate.
+var alwaysRetainedCapabilityKeys = map[string]struct{}{
+	"report-status-v2": {},
+	"agent":            {},
+}
+
+// capabilityKey returns the comparison key for a capability token, which is
+// the substring before the first "=". For valued capabilities like
+// "agent=git/2.43" or "object-format=sha1" this is the bare name; flag
+// capabilities like "report-status-v2" are returned unchanged.
+func capabilityKey(c Capability) string {
+	key, _, _ := strings.Cut(string(c), "=")
+	return key
+}
+
+// IntersectCapabilities filters client to the capabilities also advertised by
+// server, compared by key (the substring before "="), so a client-side
+// "agent=nanogit" matches a server-side "agent=git/2.43". The client's value
+// is always kept on a match — for valued capabilities like "agent=" and
+// "object-format=" the client's value is what we will actually advertise on
+// the wire.
+//
+// Capability order from the client slice is preserved. Capabilities listed in
+// alwaysRetainedCapabilityKeys (report-status-v2, agent=) are kept regardless
+// of what the server advertised, since dropping them would either break
+// nanogit's own response parser or strip the client identifier.
+//
+// A nil or empty server slice is treated as "the server advertised nothing
+// matchable" and yields only the always-retained client entries. The returned
+// slice is freshly allocated; mutating it does not affect either input.
+func IntersectCapabilities(client, server []Capability) []Capability {
+	serverKeys := make(map[string]struct{}, len(server))
+	for _, c := range server {
+		serverKeys[capabilityKey(c)] = struct{}{}
+	}
+
+	out := make([]Capability, 0, len(client))
+	for _, c := range client {
+		key := capabilityKey(c)
+		if _, retain := alwaysRetainedCapabilityKeys[key]; retain {
+			out = append(out, c)
+			continue
+		}
+		if _, ok := serverKeys[key]; ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}

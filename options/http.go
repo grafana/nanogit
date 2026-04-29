@@ -70,3 +70,30 @@ func WithReceivePackCapabilities(caps ...protocol.Capability) Option {
 		return nil
 	}
 }
+
+// WithCapabilityNegotiation enables opt-in receive-pack capability
+// negotiation. When set, on first push the client fetches the server's
+// advertised capabilities via GET info/refs?service=git-receive-pack and
+// advertises the intersection with its desired set on subsequent ref
+// updates. The result is cached for the lifetime of the client (a single
+// extra round-trip per client, not per push), so writer resets across
+// Push/Cleanup do not re-negotiate.
+//
+// Use this when you want defensive correctness against strict servers that
+// reject unknown capabilities, without having to enumerate the safe subset
+// by hand the way WithReceivePackCapabilities requires. The two options
+// compose: WithReceivePackCapabilities provides the desired set, and
+// WithCapabilityNegotiation filters that set against what the server
+// advertises. report-status-v2 and agent= are always retained on the client
+// side because dropping them would either break the response parser or
+// strip the client identifier.
+//
+// On error during negotiation (network failure, 4xx/5xx, parse error) the
+// push aborts. Silent fallback to the static set would hide server
+// misconfiguration and contradicts the explicit opt-in.
+func WithCapabilityNegotiation() Option {
+	return func(o *Options) error {
+		o.NegotiateCapabilities = true
+		return nil
+	}
+}

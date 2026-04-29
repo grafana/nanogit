@@ -2,7 +2,10 @@ package nanogit
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
+	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
@@ -104,6 +107,20 @@ type httpClient struct {
 	// receivePackCapabilities is advertised on receive-pack ref update commands.
 	// When nil or empty, protocol.DefaultReceivePackCapabilities() is used.
 	receivePackCapabilities []protocol.Capability
+	// negotiateCaps gates capability negotiation on first push. See
+	// options.WithCapabilityNegotiation.
+	negotiateCaps bool
+	// negotiateOnce protects the lazy fetch+intersect so that ref ops, writer
+	// resets after Push, and writer resets after Cleanup all reuse the same
+	// negotiated set without extra round-trips.
+	negotiateOnce sync.Once
+	// negotiatedCaps is the result of intersecting the desired client set
+	// with the server's advertised set. Populated by negotiateOnce.Do; only
+	// safe to read after negotiateOnce has run.
+	negotiatedCaps []protocol.Capability
+	// negotiateErr captures any error from the negotiation fetch. Like
+	// negotiatedCaps, only safe to read after negotiateOnce has run.
+	negotiateErr error
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -149,5 +166,54 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 	return &httpClient{
 		RawClient:               rawClient,
 		receivePackCapabilities: resolved.ReceivePackCapabilities,
+		negotiateCaps:           resolved.NegotiateCapabilities,
 	}, nil
+}
+
+// effectiveReceivePackCapabilities returns the capabilities to advertise on
+// receive-pack ref update commands. When negotiation is disabled this is just
+// c.receivePackCapabilities, so the existing nil-slice → DefaultReceivePackCapabilities
+// fallback in the protocol layer keeps working unchanged. When negotiation is
+// enabled, the first call performs a single GET info/refs fetch and intersects
+// the desired client set with the server's advertised set; subsequent calls
+// reuse the cached result via sync.Once.
+//
+// Returns the negotiation error verbatim (wrapped) so the caller can surface
+// it instead of silently falling back to the static set — silent fallback
+// would hide server misconfiguration and contradict the explicit opt-in.
+func (c *httpClient) effectiveReceivePackCapabilities(ctx context.Context) ([]protocol.Capability, error) {
+	if !c.negotiateCaps {
+		return c.receivePackCapabilities, nil
+	}
+
+	c.negotiateOnce.Do(func() {
+		logger := log.FromContext(ctx)
+		logger.Debug("Negotiating receive-pack capabilities")
+
+		serverCaps, err := c.FetchReceivePackCapabilities(ctx)
+		if err != nil {
+			c.negotiateErr = fmt.Errorf("negotiate receive-pack capabilities: %w", err)
+			return
+		}
+
+		// The desired client set is whatever the user configured (via
+		// WithReceivePackCapabilities) or the library defaults if they did
+		// not. We resolve it once here so the intersection has a concrete
+		// list to filter rather than carrying the nil-fallback through.
+		desired := c.receivePackCapabilities
+		if len(desired) == 0 {
+			desired = protocol.DefaultReceivePackCapabilities()
+		}
+
+		c.negotiatedCaps = protocol.IntersectCapabilities(desired, serverCaps)
+		logger.Debug("Receive-pack capabilities negotiated",
+			"server_count", len(serverCaps),
+			"client_count", len(desired),
+			"intersected_count", len(c.negotiatedCaps))
+	})
+
+	if c.negotiateErr != nil {
+		return nil, c.negotiateErr
+	}
+	return c.negotiatedCaps, nil
 }
