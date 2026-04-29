@@ -96,33 +96,22 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 // Side-band handling:
 //
 // When the client negotiates side-band-64k, the server delivers the
-// report-status multiplexed on channel 1 (each outer packet starts with
-// 0x01). Different servers wrap the channel-1 payload differently:
-//
-//   - Gitea / GitLab (chunked): the channel-1 payload is itself a
-//     pkt-line stream of report-status lines, possibly chunked across
-//     multiple outer packets.
-//   - GitHub / others (raw):    each report-status line is sent in its
-//     own channel-1 outer packet as literal text (no inner length
-//     prefix).
-//
-// Channel-1 packet boundaries are preserved: each outer packet's
-// payload is stored separately so that two raw packets without
-// trailing LF do not concatenate into a single misclassified line.
-// Format detection runs on the first non-empty payload; if it begins
-// with a pkt-line length header we treat the whole channel-1 stream as
-// nested pkt-lines, otherwise we process each packet's payload as
-// LF-separated raw lines. Channel-1 unwrap is scoped to this function
-// and does not leak into the generic detectError path, where channel 1
-// also carries binary packfile data during fetch/clone.
+// report-status multiplexed on channel 1 (each outer packet starts
+// with 0x01). Side-band framing is a byte stream, so outer packet
+// boundaries do NOT carry semantic meaning — inner pkt-lines or raw
+// text lines may be split arbitrarily across outer packets. Channel-1
+// payloads are accumulated and reassembled before line-level analysis;
+// see scanSideBandReportStatus for the reassembly + format-detection
+// strategy. Channel-1 unwrap is scoped to this function and does not
+// leak into the generic detectError path, where channel 1 also carries
+// binary packfile data during fetch/clone.
 func parseReceivePackResponse(body io.Reader) error {
 	parser := protocol.NewParser(body)
 	sawUnpackOk := false
 	// sawReportStatusContent tracks whether the server sent anything
 	// that could legitimately carry a report-status sentinel — i.e. a
 	// bare channel-0 line or a non-empty channel-1 packet. Channel-2
-	// (progress) and channel-3 (fatal — already converted to an error
-	// by detectError) do NOT arm the unpack-ok requirement, so callers
+	// (progress) does NOT arm the unpack-ok requirement, so callers
 	// that omit report-status from their advertised capabilities are
 	// not misreported as failed pushes when the server still streams
 	// progress.
@@ -131,36 +120,22 @@ func parseReceivePackResponse(body io.Reader) error {
 
 	for {
 		line, err := parser.Next()
-		if err == nil {
-			if len(line) == 0 {
-				continue
-			}
-			switch line[0] {
-			case 0x02, 0x03:
-				// Progress / fatal channels carry no report-status.
-				continue
-			case 0x01:
-				// Parser.Next() already returns a freshly allocated
-				// slice (see protocol.readPacketData), so a sub-slice
-				// of it is safe to retain across iterations.
-				payload := line[1:]
-				sideBandPackets = append(sideBandPackets, payload)
-				if len(payload) > 0 {
-					sawReportStatusContent = true
-				}
-			default:
-				// Bare channel-0 report-status line.
-				sawReportStatusContent = true
-				if isUnpackOkLine(line) {
-					sawUnpackOk = true
-				}
-			}
-			continue
-		}
 		if err == io.EOF {
 			break
 		}
-		return fmt.Errorf("git protocol error: %w", err)
+		if err != nil {
+			return fmt.Errorf("git protocol error: %w", err)
+		}
+		ok, content, classifyErr := classifyReceivePackLine(line, &sideBandPackets)
+		if classifyErr != nil {
+			return classifyErr
+		}
+		if ok {
+			sawUnpackOk = true
+		}
+		if content {
+			sawReportStatusContent = true
+		}
 	}
 
 	if len(sideBandPackets) > 0 {
@@ -184,6 +159,47 @@ func parseReceivePackResponse(body io.Reader) error {
 	return nil
 }
 
+// classifyReceivePackLine inspects a single parsed pkt-line from the
+// receive-pack response and either appends a channel-1 payload to the
+// running side-band buffer, returns a fatal channel-3 error, or signals
+// whether the line counts as report-status content / contains an
+// "unpack ok" sentinel for the bare channel-0 case.
+func classifyReceivePackLine(line []byte, sideBandPackets *[][]byte) (sawUnpackOk, sawReportStatusContent bool, err error) {
+	if len(line) == 0 {
+		return false, false, nil
+	}
+	switch line[0] {
+	case 0x02:
+		// Channel 2 is progress; it never carries report-status and
+		// does not arm any requirement.
+		return false, false, nil
+	case 0x03:
+		// Channel 3 is fatal. detectError already converts the
+		// well-formed "fatal:"/"error:" prefixed shape into a
+		// GitServerError; an arbitrary non-empty channel-3 payload
+		// that fell through must still be surfaced rather than
+		// silently dropped, otherwise a server that closes the stream
+		// with a fatal note in a shape the parser does not recognize
+		// would look like a successful push.
+		payload := line[1:]
+		if len(payload) == 0 {
+			return false, false, nil
+		}
+		return false, false, fmt.Errorf("git protocol error: %w",
+			protocol.NewGitServerError(line, "fatal", string(payload)))
+	case 0x01:
+		// Parser.Next() already returns a freshly allocated slice (see
+		// protocol.readPacketData), so a sub-slice of it is safe to
+		// retain across iterations.
+		payload := line[1:]
+		*sideBandPackets = append(*sideBandPackets, payload)
+		return false, len(payload) > 0, nil
+	default:
+		// Bare channel-0 report-status line.
+		return isUnpackOkLine(line), true, nil
+	}
+}
+
 // scanSideBandReportStatus inspects channel-1 packets in arrival order
 // and reports whether an "unpack ok" success sentinel was seen. The
 // encoding is auto-detected by peeking the first 4 bytes of the
@@ -197,10 +213,19 @@ func parseReceivePackResponse(body io.Reader) error {
 // byte stream, so packet boundaries do NOT carry semantic meaning —
 // inner pkt-lines or raw text lines may be split arbitrarily across
 // outer packets, including in the middle of "unpack ok" or "ng <ref>".
-// Per gitprotocol-common, non-binary report-status lines SHOULD be
-// terminated by an LF; a non-conformant server that omits LF
-// separators will produce a single merged line, which surfaces as
-// ErrMissingReportStatus rather than a silent misclassification.
+//
+// Trade-off: in the raw path, distinct report-status lines without an
+// LF separator between them merge into a single line. The exact error
+// surfaced depends on what that merged line looks like to detectError
+// (typically GitUnpackError when it begins with "unpack ", or
+// ErrMissingReportStatus when it does not match any sentinel). The
+// alternative — preserving outer packet boundaries as line boundaries
+// — would handle no-LF-separated cases but would also misclassify
+// legitimate mid-token splits (e.g. "unpack o" + "k\n") as failures,
+// which is the path real chunked servers use. We optimise for the
+// byte-stream interpretation that side-band actually specifies and
+// rely on the gitprotocol-common SHOULD that report-status lines are
+// LF-terminated.
 func scanSideBandReportStatus(packets [][]byte) (sawUnpackOk bool, err error) {
 	// Format detection: peek the first 4 bytes of the channel-1 byte
 	// stream, accumulating across packets so a fragmented inner

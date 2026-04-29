@@ -463,6 +463,19 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			)),
 			wantErr: false,
 		},
+		{
+			// Channel 3 is the fatal channel. detectError converts
+			// well-formed "fatal:"/"error:" shapes already; a
+			// non-empty channel-3 payload that does NOT match those
+			// prefixes (a server-specific abrupt close) must still
+			// surface as a GitServerError rather than be silently
+			// dropped — otherwise the push would look successful
+			// despite the server signalling termination.
+			name: "channel-3 payload without fatal prefix surfaces as server error",
+			body: flushed(pkt(string(append([]byte{0x03}, []byte("connection terminated by host")...)))),
+			wantErr:     true,
+			errContains: "git server fatal:",
+		},
 	}
 
 	for _, tt := range tests {
