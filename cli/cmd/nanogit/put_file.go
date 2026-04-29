@@ -12,17 +12,14 @@ import (
 	"time"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/options"
-	"github.com/grafana/nanogit/protocol"
 	"github.com/spf13/cobra"
 )
 
 var (
-	putFileMessage         string
-	putFileFromFile        string
-	putFileAuthor          string
-	putFileCommitter       string
-	putFileReceivePackCaps []string
+	putFileMessage   string
+	putFileFromFile  string
+	putFileAuthor    string
+	putFileCommitter string
 )
 
 func init() {
@@ -32,13 +29,7 @@ func init() {
 	putFileCmd.Flags().StringVar(&putFileFromFile, "from-file", "", "Read content from a local file instead of stdin")
 	putFileCmd.Flags().StringVar(&putFileAuthor, "author", "", "Author of the commit in \"Name <email>\" form (falls back to NANOGIT_AUTHOR_NAME/EMAIL)")
 	putFileCmd.Flags().StringVar(&putFileCommitter, "committer", "", "Committer of the commit in \"Name <email>\" form (falls back to NANOGIT_COMMITTER_NAME/EMAIL, then author)")
-	putFileCmd.Flags().StringSliceVar(&putFileReceivePackCaps, "receive-pack-capability", nil,
-		"Advertised receive-pack capability (repeatable). When set, replaces the default set entirely. "+
-			"Common values include report-status-v2, side-band-64k, quiet, object-format=sha1, and agent=<name>. "+
-			"Arbitrary capability tokens are also accepted as an escape hatch for advanced use. "+
-			"Example: --receive-pack-capability=report-status-v2 --receive-pack-capability=quiet "+
-			"--receive-pack-capability=object-format=sha1 --receive-pack-capability=agent=nanogit "+
-			"(drops side-band-64k to work around servers that wrap report-status in side-band channel 1).")
+	addWriteFlags(putFileCmd)
 }
 
 var putFileCmd = &cobra.Command{
@@ -142,7 +133,7 @@ func runPutFile(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := context.Background()
-	extraOpts, err := buildPutFileClientOptions(putFileReceivePackCaps)
+	extraOpts, err := buildClientOptions()
 	if err != nil {
 		return err
 	}
@@ -295,26 +286,6 @@ func stageAndCommit(ctx context.Context, writer nanogit.StagedWriter, path strin
 type putFileJSON struct {
 	Commit string `json:"commit"`
 	Path   string `json:"path"`
-}
-
-// buildPutFileClientOptions converts the --receive-pack-capability flag into
-// a nanogit options slice. When no capabilities are supplied the slice is
-// empty and the caller keeps the library defaults. Whitespace around each
-// value is trimmed and empty entries are rejected so "a,,b" does not silently
-// add a blank capability.
-func buildPutFileClientOptions(rawCaps []string) ([]options.Option, error) {
-	if len(rawCaps) == 0 {
-		return nil, nil
-	}
-	caps := make([]protocol.Capability, 0, len(rawCaps))
-	for _, raw := range rawCaps {
-		v := strings.TrimSpace(raw)
-		if v == "" {
-			return nil, errors.New("--receive-pack-capability value cannot be empty")
-		}
-		caps = append(caps, protocol.Capability(v))
-	}
-	return []options.Option{options.WithReceivePackCapabilities(caps...)}, nil
 }
 
 func outputPutFileResult(commit *nanogit.Commit, path string) error {

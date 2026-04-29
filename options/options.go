@@ -29,6 +29,11 @@ type Options struct {
 	// advertised on receive-pack ref update commands. When nil or empty,
 	// protocol.DefaultReceivePackCapabilities() is used.
 	ReceivePackCapabilities []protocol.Capability
+	// NegotiateCapabilities, when true, makes the client fetch the server's
+	// receive-pack capability advertisement once per client lifetime and
+	// advertise the intersection with its desired set on subsequent ref
+	// updates. Default is false (no behavior change).
+	NegotiateCapabilities bool
 }
 
 type Option func(*Options) error
