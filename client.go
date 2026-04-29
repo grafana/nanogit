@@ -107,20 +107,24 @@ type httpClient struct {
 	// receivePackCapabilities is advertised on receive-pack ref update commands.
 	// When nil or empty, protocol.DefaultReceivePackCapabilities() is used.
 	receivePackCapabilities []protocol.Capability
-	// negotiateCaps gates capability negotiation on first push. See
+	// negotiateCaps gates capability negotiation. See
 	// options.WithCapabilityNegotiation.
 	negotiateCaps bool
-	// negotiateOnce protects the lazy fetch+intersect so that ref ops, writer
-	// resets after Push, and writer resets after Cleanup all reuse the same
-	// negotiated set without extra round-trips.
-	negotiateOnce sync.Once
+	// negotiateMu serializes the lazy fetch+intersect so concurrent first
+	// callers don't race the network call. Once a successful negotiation
+	// has populated negotiatedCaps, the fast path under negotiateMu's read
+	// lock returns the cached value without extra round-trips. Failures
+	// are NOT cached: a transient first-call error must not poison the
+	// client for its lifetime.
+	negotiateMu sync.RWMutex
+	// negotiated is true only after a successful negotiation has populated
+	// negotiatedCaps. It guards the fast path and ensures retry semantics
+	// after a failed first call.
+	negotiated bool
 	// negotiatedCaps is the result of intersecting the desired client set
-	// with the server's advertised set. Populated by negotiateOnce.Do; only
-	// safe to read after negotiateOnce has run.
+	// with the server's advertised set. Only safe to read while holding
+	// negotiateMu (read or write) and only meaningful when negotiated.
 	negotiatedCaps []protocol.Capability
-	// negotiateErr captures any error from the negotiation fetch. Like
-	// negotiatedCaps, only safe to read after negotiateOnce has run.
-	negotiateErr error
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
@@ -173,47 +177,67 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 // effectiveReceivePackCapabilities returns the capabilities to advertise on
 // receive-pack ref update commands. When negotiation is disabled this is just
 // c.receivePackCapabilities, so the existing nil-slice → DefaultReceivePackCapabilities
-// fallback in the protocol layer keeps working unchanged. When negotiation is
-// enabled, the first call performs a single GET info/refs fetch and intersects
-// the desired client set with the server's advertised set; subsequent calls
-// reuse the cached result via sync.Once.
+// fallback in the protocol layer keeps working unchanged. When negotiation
+// is enabled, the first successful call performs a single GET info/refs
+// fetch and intersects the desired client set with the server's advertised
+// set; the result is cached under c.negotiateMu so subsequent ref ops and
+// writer resets reuse it without extra round-trips.
 //
-// Returns the negotiation error verbatim (wrapped) so the caller can surface
-// it instead of silently falling back to the static set — silent fallback
-// would hide server misconfiguration and contradict the explicit opt-in.
+// Failures are not cached: a transient first-call error (network blip,
+// context deadline) must not poison the client for its entire lifetime, so
+// the next call retries the fetch from scratch. Once negotiation has
+// succeeded the cached value is returned forever.
+//
+// Returns the negotiation error verbatim (wrapped) so the caller can
+// surface it instead of silently falling back to the static set — silent
+// fallback would hide server misconfiguration and contradict the explicit
+// opt-in.
 func (c *httpClient) effectiveReceivePackCapabilities(ctx context.Context) ([]protocol.Capability, error) {
 	if !c.negotiateCaps {
 		return c.receivePackCapabilities, nil
 	}
 
-	c.negotiateOnce.Do(func() {
-		logger := log.FromContext(ctx)
-		logger.Debug("Negotiating receive-pack capabilities")
-
-		serverCaps, err := c.FetchReceivePackCapabilities(ctx)
-		if err != nil {
-			c.negotiateErr = fmt.Errorf("negotiate receive-pack capabilities: %w", err)
-			return
-		}
-
-		// The desired client set is whatever the user configured (via
-		// WithReceivePackCapabilities) or the library defaults if they did
-		// not. We resolve it once here so the intersection has a concrete
-		// list to filter rather than carrying the nil-fallback through.
-		desired := c.receivePackCapabilities
-		if len(desired) == 0 {
-			desired = protocol.DefaultReceivePackCapabilities()
-		}
-
-		c.negotiatedCaps = protocol.IntersectCapabilities(desired, serverCaps)
-		logger.Debug("Receive-pack capabilities negotiated",
-			"server_count", len(serverCaps),
-			"client_count", len(desired),
-			"intersected_count", len(c.negotiatedCaps))
-	})
-
-	if c.negotiateErr != nil {
-		return nil, c.negotiateErr
+	// Fast path: a previous call already negotiated successfully.
+	c.negotiateMu.RLock()
+	if c.negotiated {
+		caps := c.negotiatedCaps
+		c.negotiateMu.RUnlock()
+		return caps, nil
 	}
+	c.negotiateMu.RUnlock()
+
+	// Slow path: take the write lock and re-check, in case a concurrent
+	// caller negotiated while we were waiting.
+	c.negotiateMu.Lock()
+	defer c.negotiateMu.Unlock()
+	if c.negotiated {
+		return c.negotiatedCaps, nil
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Debug("Negotiating receive-pack capabilities")
+
+	serverCaps, err := c.FetchReceivePackCapabilities(ctx)
+	if err != nil {
+		// Do not cache failure: leave c.negotiated false so the next
+		// caller retries the fetch instead of inheriting our error.
+		return nil, fmt.Errorf("negotiate receive-pack capabilities: %w", err)
+	}
+
+	// The desired client set is whatever the user configured (via
+	// WithReceivePackCapabilities) or the library defaults if they did
+	// not. Resolve it once here so the intersection has a concrete list
+	// to filter rather than carrying the nil-fallback through.
+	desired := c.receivePackCapabilities
+	if len(desired) == 0 {
+		desired = protocol.DefaultReceivePackCapabilities()
+	}
+
+	c.negotiatedCaps = protocol.IntersectCapabilities(desired, serverCaps)
+	c.negotiated = true
+	logger.Debug("Receive-pack capabilities negotiated",
+		"server_count", len(serverCaps),
+		"client_count", len(desired),
+		"intersected_count", len(c.negotiatedCaps))
 	return c.negotiatedCaps, nil
 }

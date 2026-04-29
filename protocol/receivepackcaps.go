@@ -32,10 +32,11 @@ import (
 func ParseReceivePackInfoRefs(r io.Reader) ([]Capability, error) {
 	parser := NewParser(r)
 
-	// First pkt-line: "# service=git-receive-pack\n". Parser.Next surfaces
-	// flush packets as io.EOF — the intermediate flush between header and ref
-	// list will produce EOF too, so we keep reading past it until we see the
-	// first ref line or run out of input.
+	// First pkt-line: "# service=git-receive-pack\n". The receive-pack
+	// info/refs format has exactly one flush between the service header and
+	// the ref list (and one trailing flush at end of stream); readNonFlush
+	// skips that single intermediate flush before returning the next
+	// pkt-line.
 	first, err := readNonFlush(parser)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
@@ -79,9 +80,18 @@ func ParseReceivePackInfoRefs(r io.Reader) ([]Capability, error) {
 }
 
 // readNonFlush returns the next non-flush pkt-line from p. Parser.Next maps
-// every flush packet (length == 0000) to io.EOF, so we retry on EOF: if the
-// EOF was a flush separator the retry reads the following pkt-line; if the
-// stream is genuinely exhausted the retry returns io.EOF again.
+// every flush packet (length == 0000) to io.EOF, so on EOF we retry exactly
+// once: if the EOF was a single flush separator the retry consumes the
+// following pkt-line; if the stream is genuinely exhausted the retry
+// returns io.EOF again.
+//
+// The receive-pack info/refs body has at most one flush between the
+// service header and the ref list (and a trailing flush at end of stream),
+// so a single retry is sufficient. Streams with two or more consecutive
+// flushes — which the format does not produce — would surface io.EOF on
+// the second flush and the caller would treat it as end of input. We
+// deliberately do not loop indefinitely on EOF because real EOF would
+// then never terminate.
 func readNonFlush(p *Parser) ([]byte, error) {
 	line, err := p.Next()
 	if err == nil {

@@ -157,8 +157,13 @@ func TestIntersectCapabilities(t *testing.T) {
 			// no quiet
 		}
 		got := protocol.IntersectCapabilities(client, server)
+		// agent= is auto-injected because the client list lacked it.
 		assert.Equal(t,
-			[]protocol.Capability{protocol.CapReportStatusV2, protocol.CapSideBand64k},
+			[]protocol.Capability{
+				protocol.CapReportStatusV2,
+				protocol.CapSideBand64k,
+				protocol.CapAgent("nanogit"),
+			},
 			got,
 		)
 	})
@@ -189,8 +194,13 @@ func TestIntersectCapabilities(t *testing.T) {
 		client := []protocol.Capability{protocol.CapAgent("nanogit")}
 		server := []protocol.Capability{protocol.CapAgent("git/2.43")}
 		got := protocol.IntersectCapabilities(client, server)
-		// We keep our own agent string regardless of what the server identified as.
-		assert.Equal(t, []protocol.Capability{protocol.CapAgent("nanogit")}, got)
+		// We keep our own agent string regardless of what the server
+		// identified as. report-status-v2 is auto-injected because the
+		// client list lacked it.
+		assert.Equal(t,
+			[]protocol.Capability{protocol.CapAgent("nanogit"), protocol.CapReportStatusV2},
+			got,
+		)
 	})
 
 	t.Run("retains report-status-v2 even when server omits it", func(t *testing.T) {
@@ -211,7 +221,12 @@ func TestIntersectCapabilities(t *testing.T) {
 		client := []protocol.Capability{protocol.CapAgent("nanogit")}
 		server := []protocol.Capability{protocol.CapQuiet}
 		got := protocol.IntersectCapabilities(client, server)
-		assert.Equal(t, []protocol.Capability{protocol.CapAgent("nanogit")}, got)
+		// agent= is preserved from the client list; report-status-v2 is
+		// auto-injected because the client list lacked it.
+		assert.Equal(t,
+			[]protocol.Capability{protocol.CapAgent("nanogit"), protocol.CapReportStatusV2},
+			got,
+		)
 	})
 
 	t.Run("drops side-band-64k when server does not advertise it", func(t *testing.T) {
@@ -240,9 +255,30 @@ func TestIntersectCapabilities(t *testing.T) {
 		)
 	})
 
-	t.Run("empty client slice yields empty result", func(t *testing.T) {
+	t.Run("empty client slice still yields the retained caps", func(t *testing.T) {
+		// The function guarantees the result carries report-status-v2 and
+		// agent= regardless of what either side supplied — otherwise an
+		// empty result would hit FormatCapabilities's empty→defaults
+		// fallback and silently advertise the full default set.
 		got := protocol.IntersectCapabilities(nil, []protocol.Capability{protocol.CapQuiet})
-		assert.Empty(t, got)
+		assert.Equal(t,
+			[]protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("nanogit")},
+			got,
+		)
+	})
+
+	t.Run("client that strips retained caps still gets them back", func(t *testing.T) {
+		// User said "I want only quiet"; server doesn't advertise it. The
+		// raw intersection would be empty, which is unsafe — the result
+		// must still include report-status-v2 and agent=nanogit so the
+		// receive-pack response is parseable and nanogit identifies itself.
+		client := []protocol.Capability{protocol.CapQuiet}
+		server := []protocol.Capability{protocol.CapSideBand64k}
+		got := protocol.IntersectCapabilities(client, server)
+		assert.Equal(t,
+			[]protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("nanogit")},
+			got,
+		)
 	})
 
 	t.Run("returned slice is independent of inputs", func(t *testing.T) {

@@ -118,12 +118,17 @@ func capabilityKey(c Capability) string {
 // the wire.
 //
 // Capability order from the client slice is preserved. Capabilities listed in
-// alwaysRetainedCapabilityKeys (report-status-v2, agent=) are kept regardless
-// of what the server advertised, since dropping them would either break
-// nanogit's own response parser or strip the client identifier.
+// alwaysRetainedCapabilityKeys (report-status-v2, agent=) are kept in the
+// result regardless of what the server advertised, and are injected with
+// nanogit's defaults if the client did not include them — dropping them
+// would either break nanogit's own response parser (report-status-v2) or
+// strip the client identifier (agent=). The returned slice is therefore
+// guaranteed to be non-empty: returning an empty slice would trigger the
+// empty→defaults fallback in FormatCapabilities and silently re-introduce
+// capabilities the caller meant to filter out.
 //
 // A nil or empty server slice is treated as "the server advertised nothing
-// matchable" and yields only the always-retained client entries. The returned
+// matchable" and yields only the always-retained entries. The returned
 // slice is freshly allocated; mutating it does not affect either input.
 func IntersectCapabilities(client, server []Capability) []Capability {
 	serverKeys := make(map[string]struct{}, len(server))
@@ -131,16 +136,29 @@ func IntersectCapabilities(client, server []Capability) []Capability {
 		serverKeys[capabilityKey(c)] = struct{}{}
 	}
 
-	out := make([]Capability, 0, len(client))
+	out := make([]Capability, 0, len(client)+len(alwaysRetainedCapabilityKeys))
+	seenRetained := make(map[string]struct{}, len(alwaysRetainedCapabilityKeys))
 	for _, c := range client {
 		key := capabilityKey(c)
 		if _, retain := alwaysRetainedCapabilityKeys[key]; retain {
 			out = append(out, c)
+			seenRetained[key] = struct{}{}
 			continue
 		}
 		if _, ok := serverKeys[key]; ok {
 			out = append(out, c)
 		}
+	}
+
+	// Inject defaults for retained keys missing from the client list. This
+	// upholds the function's contract: the result must always carry the
+	// caps nanogit needs internally (report-status-v2 for the parser,
+	// agent= for the client identifier), even if the caller stripped them.
+	if _, ok := seenRetained["report-status-v2"]; !ok {
+		out = append(out, CapReportStatusV2)
+	}
+	if _, ok := seenRetained["agent"]; !ok {
+		out = append(out, CapAgent("nanogit"))
 	}
 	return out
 }

@@ -168,6 +168,59 @@ func TestNegotiation_FailurePropagates(t *testing.T) {
 		"error chain should mention the negotiation step rather than masking it")
 }
 
+// TestNegotiation_TransientFailureDoesNotPoisonClient guards the retry
+// contract: if the first negotiation fetch fails (transient network error,
+// 5xx, etc.), a subsequent call must retry rather than return the cached
+// error forever. sync.Once would have poisoned the client; the mutex-based
+// implementation only caches successes.
+func TestNegotiation_TransientFailureDoesNotPoisonClient(t *testing.T) {
+	refHash, err := hash.FromHex("1234567890123456789012345678901234567890")
+	require.NoError(t, err)
+
+	var infoRefsHits atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/info/refs") && r.URL.Query().Get("service") == "git-receive-pack":
+			n := infoRefsHits.Add(1)
+			if n == 1 {
+				// First call fails — a transient network blip in disguise.
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			// Second call succeeds.
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(formatInfoRefsBody(t, "report-status-v2 side-band-64k quiet object-format=sha1 agent=git/2.43"))
+		case strings.HasSuffix(r.URL.Path, "/git-upload-pack"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("0000"))
+		case strings.HasSuffix(r.URL.Path, "/git-receive-pack"):
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewHTTPClient(server.URL, options.WithCapabilityNegotiation())
+	require.NoError(t, err)
+
+	// First call: server returns 500 → CreateRef must error out without
+	// caching the failure.
+	err = client.CreateRef(context.Background(), Ref{Name: "refs/heads/a", Hash: refHash})
+	require.Error(t, err, "first call should fail because the server is 500-ing")
+
+	// Second call: server now responds successfully → CreateRef must retry
+	// the negotiation fetch (not return the stale error) and succeed.
+	require.NoError(t, client.CreateRef(context.Background(), Ref{Name: "refs/heads/b", Hash: refHash}),
+		"a transient first failure must not poison the client")
+
+	// Two info/refs hits: one for the failed first attempt, one for the
+	// successful retry. Subsequent ops would reuse the cached success.
+	assert.Equal(t, int32(2), infoRefsHits.Load(),
+		"failed negotiation must not be cached; the next call should retry")
+}
+
 // TestNoNegotiation_DefaultBehaviorUnchanged guards the opt-in contract:
 // without WithCapabilityNegotiation the client must not fetch info/refs at
 // all and must advertise the full static default set.

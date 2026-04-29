@@ -72,12 +72,15 @@ func WithReceivePackCapabilities(caps ...protocol.Capability) Option {
 }
 
 // WithCapabilityNegotiation enables opt-in receive-pack capability
-// negotiation. When set, on first push the client fetches the server's
-// advertised capabilities via GET info/refs?service=git-receive-pack and
-// advertises the intersection with its desired set on subsequent ref
-// updates. The result is cached for the lifetime of the client (a single
-// extra round-trip per client, not per push), so writer resets across
-// Push/Cleanup do not re-negotiate.
+// negotiation. When set, the first call that needs receive-pack
+// capabilities — creating a staged writer or any ref update (CreateRef,
+// UpdateRef, DeleteRef) — fetches the server's advertised capabilities via
+// GET info/refs?service=git-receive-pack and intersects them with the
+// client's desired set. The result is cached for the lifetime of the
+// client (a single extra round-trip per client, not per operation), so
+// subsequent ref ops and writer resets across Push/Cleanup do not
+// re-negotiate. Failed first attempts (network blip, transient 5xx) are
+// not cached; the next call retries from scratch.
 //
 // Use this when you want defensive correctness against strict servers that
 // reject unknown capabilities, without having to enumerate the safe subset
@@ -85,12 +88,13 @@ func WithReceivePackCapabilities(caps ...protocol.Capability) Option {
 // compose: WithReceivePackCapabilities provides the desired set, and
 // WithCapabilityNegotiation filters that set against what the server
 // advertises. report-status-v2 and agent= are always retained on the client
-// side because dropping them would either break the response parser or
-// strip the client identifier.
+// side (and re-injected with nanogit's defaults if the user-supplied set
+// stripped them) because dropping them would either break the response
+// parser or strip the client identifier.
 //
 // On error during negotiation (network failure, 4xx/5xx, parse error) the
-// push aborts. Silent fallback to the static set would hide server
-// misconfiguration and contradicts the explicit opt-in.
+// caller's operation aborts. Silent fallback to the static set would hide
+// server misconfiguration and contradicts the explicit opt-in.
 func WithCapabilityNegotiation() Option {
 	return func(o *Options) error {
 		o.NegotiateCapabilities = true

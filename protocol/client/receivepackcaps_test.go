@@ -63,6 +63,37 @@ func TestFetchReceivePackCapabilities(t *testing.T) {
 			"expected ErrRepositoryNotFound, got %v", err)
 	})
 
+	t.Run("does not advertise Git-Protocol version=2", func(t *testing.T) {
+		// info/refs?service=git-receive-pack is the v1 smart discovery
+		// endpoint; advertising v2 risks getting a v2 response that the
+		// parser cannot handle. The implementation explicitly suppresses
+		// the header — guard that here so a refactor doesn't silently
+		// re-introduce it.
+		var sawProtocolHeader string
+		body, err := protocol.FormatPacks(
+			protocol.PackLine("# service=git-receive-pack\n"),
+			protocol.FlushPacket,
+			protocol.PackLine("aabbccddeeff00112233445566778899aabbccdd refs/heads/main\x00report-status-v2\n"),
+			protocol.FlushPacket,
+		)
+		require.NoError(t, err)
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sawProtocolHeader = r.Header.Get("Git-Protocol")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		_, err = client.FetchReceivePackCapabilities(context.Background())
+		require.NoError(t, err)
+		assert.Empty(t, sawProtocolHeader,
+			"FetchReceivePackCapabilities must not advertise Git-Protocol version=2")
+	})
+
 	t.Run("propagates parse errors verbatim", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)

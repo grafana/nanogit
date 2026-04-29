@@ -35,6 +35,15 @@ func (c *rawClient) FetchReceivePackCapabilities(ctx context.Context) (caps []pr
 	}
 
 	c.addDefaultHeaders(req)
+	// addDefaultHeaders advertises Git-Protocol: version=2, which lets a
+	// server choose between v1 and v2 responses on /info/refs. v2 returns a
+	// "version 2\n" capability advertisement in place of the v1
+	// "# service=git-receive-pack\n" prelude that
+	// protocol.ParseReceivePackInfoRefs expects. We only support the v1
+	// shape (it's the one that carries the receive-pack capability set in
+	// the first ref line), so suppress the protocol-version hint and let
+	// the server fall back to v1.
+	req.Header.Del("Git-Protocol")
 
 	res, err := c.do(ctx, req)
 	if err != nil {
