@@ -72,8 +72,11 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		return nil, fmt.Errorf("get tree %s: %w", commit.Tree.String(), err)
 	}
 
-	// Get the flat tree representation for efficient path-based operations
-	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
+	// Get the flat tree representation for efficient path-based operations.
+	// We use the internal variant so we also receive the submodule (gitlink)
+	// entries that GetFlatTree filters out — without them the writer would
+	// drop submodules from any rebuilt parent tree (grafana/grafana#123891).
+	currentTree, submoduleList, err := c.getFlatTreeWithSubmodules(ctx, commit.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("get flat tree for commit %s: %w", commit.Hash.String(), err)
 	}
@@ -84,11 +87,22 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		entries[entry.Path] = &entry
 	}
 
+	// Track submodules separately. They are not part of `entries` because
+	// staged-write operations (CreateBlob, UpdateBlob, DeleteBlob) only operate
+	// on blobs and trees; submodule paths are opaque from nanogit's perspective.
+	// They are merged back in at tree-build time by collectDirectChildren so
+	// that rebuilt parent trees still reference them.
+	submodules := make(map[string]*FlatTreeEntry, len(submoduleList))
+	for i := range submoduleList {
+		submodules[submoduleList[i].Path] = &submoduleList[i]
+	}
+
 	logger.Debug("Staged writer ready",
 		"ref_name", ref.Name,
 		"commit_hash", commit.Hash.String(),
 		"tree_hash", treeObj.Hash.String(),
-		"tree_entries", len(entries))
+		"tree_entries", len(entries),
+		"submodule_entries", len(submodules))
 
 	// Convert writer storage mode to protocol storage mode
 	var protocolStorageMode protocol.PackfileStorageMode
@@ -109,15 +123,16 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 	}
 	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode, caps...)
 	return &stagedWriter{
-		client:      c,
-		ref:         ref,
-		writer:      writer,
-		lastCommit:  commit,
-		lastTree:    treeObj,
-		objStorage:  objStorage,
-		treeEntries: entries,
-		storageMode: protocolStorageMode,
-		dirtyPaths:  make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
+		client:            c,
+		ref:               ref,
+		writer:            writer,
+		lastCommit:        commit,
+		lastTree:          treeObj,
+		objStorage:        objStorage,
+		treeEntries:       entries,
+		submoduleEntries:  submodules,
+		storageMode:       protocolStorageMode,
+		dirtyPaths:        make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
 	}, nil
 }
 
@@ -146,6 +161,12 @@ type stagedWriter struct {
 	objStorage storage.PackfileStorage
 	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
+	// Submodule (gitlink, mode 0o160000) entries indexed by full path. These
+	// are not first-class tree entries the writer can mutate (they point to a
+	// commit in another repo), but they must be re-emitted whenever a parent
+	// directory's tree gets rebuilt — otherwise we silently drop them on
+	// commit. See grafana/grafana#123891.
+	submoduleEntries map[string]*FlatTreeEntry
 	// Storage mode for packfile writer
 	storageMode protocol.PackfileStorageMode
 	// Track if cleanup has been called
@@ -1165,6 +1186,12 @@ func (w *stagedWriter) buildPendingTrees(ctx context.Context) error {
 }
 
 // collectDirectChildren collects all direct children entries for a directory path.
+//
+// In addition to staged tree entries (`treeEntries`), this also merges in any
+// submodule (gitlink) entries from `submoduleEntries` whose parent directory
+// matches dirPath, so they survive a tree rebuild. A staged entry at the same
+// path always wins, which matters if a caller ever stages a write at a path
+// that previously held a submodule.
 func (w *stagedWriter) collectDirectChildren(dirPath string) []protocol.PackfileTreeEntry {
 	var entries []protocol.PackfileTreeEntry
 	pathPrefix := dirPath
@@ -1186,6 +1213,23 @@ func (w *stagedWriter) collectDirectChildren(dirPath string) []protocol.Packfile
 				Hash:     entry.Hash.String(),
 			})
 		}
+	}
+
+	// Merge in any submodule entries that live directly under dirPath, unless
+	// a staged change has shadowed them.
+	for entryPath, entry := range w.submoduleEntries {
+		if _, shadowed := w.treeEntries[entryPath]; shadowed {
+			continue
+		}
+		isDirectChild, childName := w.isDirectChild(entryPath, dirPath, pathPrefix)
+		if !isDirectChild {
+			continue
+		}
+		entries = append(entries, protocol.PackfileTreeEntry{
+			FileMode: entry.Mode,
+			FileName: childName,
+			Hash:     entry.Hash.String(),
+		})
 	}
 
 	return entries
