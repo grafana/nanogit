@@ -978,6 +978,18 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
 	w.ref.Hash = w.lastCommit.Hash
 
+	// Drop any submodule entries whose path was shadowed by a staged
+	// blob or tree in the just-pushed commit. The writer is reused for
+	// follow-up commits, so without this a sequence like "shadow the
+	// submodule with a blob, push, delete the blob, push" would let the
+	// stale submodule entry re-emit on the second rebuild and resurrect
+	// the gitlink the user just replaced.
+	for path := range w.submoduleEntries {
+		if _, shadowed := w.treeEntries[path]; shadowed {
+			delete(w.submoduleEntries, path)
+		}
+	}
+
 	logger.Debug("Push completed",
 		"ref_name", w.ref.Name,
 		"new_hash", w.lastCommit.Hash.String())

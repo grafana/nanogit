@@ -315,4 +315,60 @@ var _ = Describe("Writer Operations with Submodules", func() {
 			expectSubmodulePreserved(local, "dashboards/lib", gitlinkHash)
 		})
 	})
+
+	// Regression test for the shadow-then-delete sequence Copilot flagged
+	// during review of the original fix: the writer is reused across pushes,
+	// so an in-memory submodule entry that was shadowed by a write in commit
+	// N must NOT come back when the shadow is deleted in commit N+1.
+	// Without the post-Push reconciliation, the second commit re-emits the
+	// stale gitlink and resurrects the submodule the user just replaced.
+	Context("Submodule replaced then the replacement is deleted", func() {
+		It("should not resurrect the submodule across a follow-up push on the same writer", func() {
+			client, _, local, user := QuickSetup()
+			subURL := pushSubmoduleSource(user)
+
+			By("Mounting the submodule at the repository root")
+			_ = addSubmodule(local, subURL, "thirdparty")
+
+			writer := createWriterFromHead(ctx, client, local)
+
+			By("First commit: overwrite the submodule path with a regular blob")
+			// CreateBlob succeeds at a submodule path because treeEntries
+			// (filtered) doesn't contain it; this is the realistic shape
+			// of "user replaces the submodule with a regular file".
+			_, err := writer.CreateBlob(ctx, "thirdparty",
+				[]byte("plain file replacing the submodule"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Replace submodule with a regular file",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the first push replaced the submodule with a blob")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			out, err := local.Git("ls-tree", "--full-tree", "origin/main", "thirdparty")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strings.TrimSpace(out)).To(HavePrefix("100644 blob "),
+				"after the first push, thirdparty should be a regular blob, not a submodule")
+
+			By("Second commit (same writer): delete the replacement blob")
+			_, err = writer.DeleteBlob(ctx, "thirdparty")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Remove the replacement file",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the submodule was NOT resurrected by the second push")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			out, err = local.Git("ls-tree", "--full-tree", "origin/main", "thirdparty")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strings.TrimSpace(out)).To(BeEmpty(),
+				"thirdparty must not exist after the second push; "+
+					"a 160000 entry here means a stale submoduleEntries cache "+
+					"resurrected the gitlink the previous commit replaced")
+		})
+	})
 })
