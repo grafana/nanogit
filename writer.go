@@ -629,6 +629,18 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 		delete(w.treeEntries, entryPath)
 	}
 
+	// Drop any cached submodule entries that lived under this tree.
+	// Otherwise an in-session DeleteTree(parent) + CreateBlob(parent/x) on
+	// the same writer would resurrect the gitlink at commit time:
+	// collectDirectChildren rebuilds the recreated parent and re-emits the
+	// submodule from the still-cached submoduleEntries (Push-time prune
+	// runs after, so a single-commit sequence isn't covered by it alone).
+	for entryPath := range w.submoduleEntries {
+		if entryPath == path || strings.HasPrefix(entryPath, pathPrefix) {
+			delete(w.submoduleEntries, entryPath)
+		}
+	}
+
 	// Update the tree structure to remove the directory entry
 	if err := w.removeTreeFromTree(ctx, path); err != nil {
 		return hash.Zero, fmt.Errorf("remove tree from entire tree: %w", err)
@@ -683,6 +695,12 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 	if err := w.moveTreeEntries(ctx, srcPath, destPath, entriesToMove); err != nil {
 		return hash.Zero, err
 	}
+
+	// Reparent any cached submodule entries that lived under srcPath onto
+	// destPath. Without this, the moved subtree would be missing its
+	// gitlinks at commit time, and the old paths would dangle in the cache
+	// — risking resurrection if anything later rebuilds srcPath.
+	w.reparentSubmodules(srcPath, destPath)
 
 	if err := w.updateTreeStructuresForMove(ctx, srcPath, destPath, treeHash); err != nil {
 		return hash.Zero, err
@@ -778,6 +796,32 @@ func (w *stagedWriter) calculateNewTreeEntryPath(srcPath, destPath, entryPath st
 	// Replace the source path prefix with destination path prefix
 	relativePath := entryPath[len(srcPath)+1:] // +1 for the "/"
 	return destPath + "/" + relativePath
+}
+
+// reparentSubmodules translates any cached submodule paths under srcPath
+// to the equivalent path under destPath. Used by MoveTree so the
+// submodule cache tracks the staged state — leaving stale srcPath keys
+// would risk resurrecting a moved gitlink at the old location if anything
+// later rebuilt srcPath, and would also drop the gitlink from the moved
+// subtree's rebuilt parent.
+func (w *stagedWriter) reparentSubmodules(srcPath, destPath string) {
+	srcPrefix := srcPath + "/"
+	type rename struct{ from, to string }
+	var renames []rename
+	for entryPath := range w.submoduleEntries {
+		switch {
+		case entryPath == srcPath:
+			renames = append(renames, rename{from: entryPath, to: destPath})
+		case strings.HasPrefix(entryPath, srcPrefix):
+			renames = append(renames, rename{from: entryPath, to: destPath + "/" + entryPath[len(srcPrefix):]})
+		}
+	}
+	for _, r := range renames {
+		entry := w.submoduleEntries[r.from]
+		delete(w.submoduleEntries, r.from)
+		entry.Path = r.to
+		w.submoduleEntries[r.to] = entry
+	}
 }
 
 // updateTreeStructuresForMove updates tree structures for both source and destination
@@ -982,21 +1026,23 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	w.ref.Hash = w.lastCommit.Hash
 
 	// Drop submodule entries that the just-pushed commit removed from the
-	// tree, in either of the two shapes that can occur on a reused writer:
+	// tree, in either of the shapes that can occur on a reused writer:
 	//
 	//   1. Direct shadow — a staged blob/tree at the submodule's exact
 	//      path. A follow-up commit that deletes that blob/tree would
 	//      otherwise resurrect the gitlink from this stale cache.
-	//   2. Ancestor removed — a staged DeleteTree (or equivalent) wiped
-	//      a parent directory of the submodule. The submodule path is
-	//      no longer reachable, but a follow-up commit that recreates
-	//      the parent (e.g. CreateBlob inside the now-deleted directory)
-	//      would walk dirty paths back up and re-emit the orphaned
-	//      gitlink on rebuild.
+	//   2. Ancestor missing — a staged DeleteTree (or equivalent) wiped
+	//      a parent directory of the submodule.
+	//   3. Ancestor replaced by a non-tree — e.g. DeleteTree("a") then
+	//      CreateBlob("a", ...). The path "a" is back in treeEntries,
+	//      but as a blob, so "a/b" is unreachable in the pushed commit;
+	//      treating mere key-presence as "ancestor exists" would keep
+	//      the orphaned gitlink and risk resurrection if a later commit
+	//      replaces "a" with a tree again.
 	//
-	// Submodules whose all ancestors are still present in treeEntries
-	// (or are the implicit root) and whose own path is unshadowed remain
-	// valid and are kept for the next commit's tree rebuild.
+	// Submodules whose every ancestor is a tree in treeEntries (or the
+	// implicit root) and whose own path is unshadowed remain valid and
+	// are kept for the next commit's tree rebuild.
 	for path := range w.submoduleEntries {
 		if _, shadowed := w.treeEntries[path]; shadowed {
 			delete(w.submoduleEntries, path)
@@ -1008,7 +1054,8 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 				break // reached root level — implicit, always present
 			}
 			parent = parent[:slash]
-			if _, exists := w.treeEntries[parent]; !exists {
+			ancestor, exists := w.treeEntries[parent]
+			if !exists || ancestor.Type != protocol.ObjectTypeTree {
 				delete(w.submoduleEntries, path)
 				break
 			}

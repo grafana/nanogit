@@ -433,4 +433,117 @@ var _ = Describe("Writer Operations with Submodules", func() {
 				afterRecreate)
 		})
 	})
+
+	// In-session DeleteTree(parent) + CreateBlob(parent/x) BEFORE any
+	// Push: the resurrection happens at Commit time, so the post-Push
+	// reconciliation can't catch it on its own. The fix needs to drop the
+	// affected submoduleEntries inside DeleteTree itself.
+	Context("Submodule's parent is deleted and recreated within a single commit", func() {
+		It("should not resurrect the submodule on a single commit that wipes and rebuilds the parent", func() {
+			client, _, local, user := QuickSetup()
+			subURL := pushSubmoduleSource(user)
+
+			By("Creating dashboards/home.json so the dir exists for the submodule mount")
+			Expect(local.CreateDirPath("dashboards")).To(Succeed())
+			Expect(local.CreateFile("dashboards/home.json", `{"title":"home"}`)).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add dashboard")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Mounting the submodule at dashboards/lib")
+			_ = addSubmodule(local, subURL, "dashboards/lib")
+
+			writer := createWriterFromHead(ctx, client, local)
+
+			By("Staging DeleteTree + CreateBlob inside the same commit")
+			_, err = writer.DeleteTree(ctx, "dashboards")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.CreateBlob(ctx, "dashboards/new.json",
+				[]byte(`{"title":"new"}`))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Wipe and rebuild dashboards in one commit",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the single pushed commit does not contain the gitlink")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			pushed, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pushed).NotTo(ContainSubstring("dashboards/lib"),
+				"dashboards/lib must not be in the pushed commit; a 160000 entry "+
+					"here means collectDirectChildren re-emitted a stale gitlink "+
+					"during the commit's tree rebuild (Push-time prune is too "+
+					"late to catch this single-commit shape).\nfull tree:\n%s", pushed)
+			Expect(pushed).To(ContainSubstring("\tdashboards/new.json"),
+				"the new blob must be in the pushed commit; otherwise the test "+
+					"isn't exercising the rebuild path.\nfull tree:\n%s", pushed)
+		})
+	})
+
+	// Type-aware ancestor check: if the submodule's parent is replaced
+	// by a blob (not a tree), the submodule is unreachable in the new
+	// commit, but a key-presence-only ancestor check would keep it
+	// cached and risk resurrection on a later commit that turns the
+	// blob back into a directory.
+	Context("Submodule's parent is replaced by a blob", func() {
+		It("should not resurrect the submodule when a parent-as-blob is later turned back into a tree", func() {
+			client, _, local, user := QuickSetup()
+			subURL := pushSubmoduleSource(user)
+
+			By("Creating an initial dashboards/home.json")
+			Expect(local.CreateDirPath("dashboards")).To(Succeed())
+			Expect(local.CreateFile("dashboards/home.json", `{"title":"home"}`)).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add dashboard")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Mounting the submodule at dashboards/lib")
+			_ = addSubmodule(local, subURL, "dashboards/lib")
+
+			writer := createWriterFromHead(ctx, client, local)
+
+			By("Push 1: replace the dashboards directory with a blob at the same path")
+			_, err = writer.DeleteTree(ctx, "dashboards")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.CreateBlob(ctx, "dashboards",
+				[]byte("dashboards is a regular file now"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Replace dashboards/ with a blob",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			afterReplace, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(afterReplace).To(MatchRegexp(`(?m)^100644 blob \S+\tdashboards$`),
+				"after Push 1 dashboards must be a blob (mode 100644).\nfull tree:\n%s", afterReplace)
+
+			By("Push 2 on the same writer: turn dashboards back into a directory by writing inside it")
+			_, err = writer.DeleteBlob(ctx, "dashboards")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.CreateBlob(ctx, "dashboards/new.json",
+				[]byte(`{"title":"new"}`))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "dashboards back as a directory",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			afterRebuild, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(afterRebuild).NotTo(ContainSubstring("dashboards/lib"),
+				"dashboards/lib must not appear in Push 2's commit; a 160000 entry "+
+					"here means the Push-time ancestor check accepted a non-tree "+
+					"entry as a valid parent and let the orphaned gitlink "+
+					"survive into the next rebuild.\nfull tree:\n%s", afterRebuild)
+		})
+	})
 })
