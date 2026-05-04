@@ -1035,42 +1035,7 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
 	w.ref.Hash = w.lastCommit.Hash
 
-	// Drop submodule entries that the just-pushed commit removed from the
-	// tree, in either of the shapes that can occur on a reused writer:
-	//
-	//   1. Direct shadow — a staged blob/tree at the submodule's exact
-	//      path. A follow-up commit that deletes that blob/tree would
-	//      otherwise resurrect the gitlink from this stale cache.
-	//   2. Ancestor missing — a staged DeleteTree (or equivalent) wiped
-	//      a parent directory of the submodule.
-	//   3. Ancestor replaced by a non-tree — e.g. DeleteTree("a") then
-	//      CreateBlob("a", ...). The path "a" is back in treeEntries,
-	//      but as a blob, so "a/b" is unreachable in the pushed commit;
-	//      treating mere key-presence as "ancestor exists" would keep
-	//      the orphaned gitlink and risk resurrection if a later commit
-	//      replaces "a" with a tree again.
-	//
-	// Submodules whose every ancestor is a tree in treeEntries (or the
-	// implicit root) and whose own path is unshadowed remain valid and
-	// are kept for the next commit's tree rebuild.
-	for path := range w.submoduleEntries {
-		if _, shadowed := w.treeEntries[path]; shadowed {
-			delete(w.submoduleEntries, path)
-			continue
-		}
-		for parent := path; ; {
-			slash := strings.LastIndex(parent, "/")
-			if slash == -1 {
-				break // reached root level — implicit, always present
-			}
-			parent = parent[:slash]
-			ancestor, exists := w.treeEntries[parent]
-			if !exists || ancestor.Type != protocol.ObjectTypeTree {
-				delete(w.submoduleEntries, path)
-				break
-			}
-		}
-	}
+	w.pruneSubmoduleEntriesAfterPush()
 
 	logger.Debug("Push completed",
 		"ref_name", w.ref.Name,
@@ -1084,6 +1049,47 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// pruneSubmoduleEntriesAfterPush drops cached submodule (gitlink) entries
+// that the just-pushed commit removed from the tree. The writer is reused
+// for follow-up commits, so a stale entry would re-emit through
+// collectDirectChildren on the next rebuild and resurrect a submodule the
+// caller had already removed. Three shapes are handled:
+//
+//  1. Direct shadow — a staged blob/tree at the submodule's exact path.
+//     A follow-up commit that deletes the shadow would otherwise revive
+//     the gitlink from this cache.
+//  2. Ancestor missing — a staged DeleteTree (or equivalent) wiped a
+//     parent directory of the submodule.
+//  3. Ancestor replaced by a non-tree — e.g. DeleteTree("a") followed
+//     by CreateBlob("a", ...). The path "a" is back in treeEntries but
+//     as a blob, so "a/b" is unreachable in the pushed commit; treating
+//     mere key-presence as "ancestor exists" would keep the orphaned
+//     gitlink and risk resurrection if a later commit makes "a" a tree
+//     again.
+//
+// Submodules whose every ancestor is still a tree in treeEntries (or the
+// implicit root) and whose own path is unshadowed are kept.
+func (w *stagedWriter) pruneSubmoduleEntriesAfterPush() {
+	for path := range w.submoduleEntries {
+		if _, shadowed := w.treeEntries[path]; shadowed {
+			delete(w.submoduleEntries, path)
+			continue
+		}
+		for parent := path; ; {
+			slash := strings.LastIndex(parent, "/")
+			if slash == -1 {
+				break // reached root — implicit, always present
+			}
+			parent = parent[:slash]
+			ancestor, exists := w.treeEntries[parent]
+			if !exists || ancestor.Type != protocol.ObjectTypeTree {
+				delete(w.submoduleEntries, path)
+				break
+			}
+		}
+	}
 }
 
 // addMissingOrStaleTreeEntries marks directory paths as dirty for deferred tree building.
