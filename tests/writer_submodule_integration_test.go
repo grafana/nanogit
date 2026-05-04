@@ -316,12 +316,14 @@ var _ = Describe("Writer Operations with Submodules", func() {
 		})
 	})
 
-	// Regression test for the shadow-then-delete sequence Copilot flagged
-	// during review of the original fix: the writer is reused across pushes,
-	// so an in-memory submodule entry that was shadowed by a write in commit
-	// N must NOT come back when the shadow is deleted in commit N+1.
-	// Without the post-Push reconciliation, the second commit re-emits the
-	// stale gitlink and resurrects the submodule the user just replaced.
+	// Regression tests for the two writer-reuse hazards Copilot flagged
+	// during review of the original fix: the writer is reused across
+	// pushes, so any in-memory submodule entry that was removed from the
+	// tree by a previous push must NOT come back on a later commit.
+	// Without the post-Push reconciliation the stale gitlink re-emits
+	// from collectDirectChildren and resurrects a submodule the user
+	// just removed.
+
 	Context("Submodule replaced then the replacement is deleted", func() {
 		It("should not resurrect the submodule across a follow-up push on the same writer", func() {
 			client, _, local, user := QuickSetup()
@@ -369,6 +371,66 @@ var _ = Describe("Writer Operations with Submodules", func() {
 				"thirdparty must not exist after the second push; "+
 					"a 160000 entry here means a stale submoduleEntries cache "+
 					"resurrected the gitlink the previous commit replaced")
+		})
+	})
+
+	Context("Submodule's parent directory is deleted then recreated", func() {
+		It("should not resurrect the submodule when the parent dir is recreated on the same writer", func() {
+			client, _, local, user := QuickSetup()
+			subURL := pushSubmoduleSource(user)
+
+			By("Creating dashboards/home.json so the dir exists for the submodule mount")
+			Expect(local.CreateDirPath("dashboards")).To(Succeed())
+			Expect(local.CreateFile("dashboards/home.json", `{"title":"home"}`)).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Add dashboard")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Mounting the submodule at dashboards/lib")
+			_ = addSubmodule(local, subURL, "dashboards/lib")
+
+			writer := createWriterFromHead(ctx, client, local)
+
+			By("First commit: delete the entire dashboards/ tree (submodule and all)")
+			_, err = writer.DeleteTree(ctx, "dashboards")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Remove dashboards directory",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the first push wiped dashboards/ entirely")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			afterDelete, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(afterDelete).NotTo(ContainSubstring("dashboards/"),
+				"dashboards/ should be gone after the first push;\nfull tree:\n%s", afterDelete)
+
+			By("Second commit (same writer): recreate a file under dashboards/")
+			_, err = writer.CreateBlob(ctx, "dashboards/new.json",
+				[]byte(`{"title":"new"}`))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Recreate dashboards with a new file",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the submodule was NOT resurrected when dashboards/ was rebuilt")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			afterRecreate, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(afterRecreate).NotTo(ContainSubstring("dashboards/lib"),
+				"dashboards/lib must not be in the new tree; a 160000 entry "+
+					"here means an orphaned submoduleEntries cache resurrected "+
+					"the gitlink whose parent dir was deleted in the previous "+
+					"push.\nfull tree:\n%s", afterRecreate)
+			Expect(afterRecreate).To(ContainSubstring("\tdashboards/new.json"),
+				"the second commit's blob must have actually landed; "+
+					"otherwise the test isn't exercising the rebuild path.\nfull tree:\n%s",
+				afterRecreate)
 		})
 	})
 })

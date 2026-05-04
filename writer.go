@@ -81,10 +81,13 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		return nil, fmt.Errorf("get flat tree for commit %s: %w", commit.Hash.String(), err)
 	}
 
-	// Build tree entries map from flat tree
+	// Build tree entries map from flat tree. Index over the slice so the
+	// pointers stored in the map reference the slice's backing array
+	// directly — taking &entry of a range-loop variable would force the
+	// per-iteration variable to escape to the heap on every entry.
 	entries := make(map[string]*FlatTreeEntry, len(currentTree.Entries))
-	for _, entry := range currentTree.Entries {
-		entries[entry.Path] = &entry
+	for i := range currentTree.Entries {
+		entries[currentTree.Entries[i].Path] = &currentTree.Entries[i]
 	}
 
 	// Track submodules separately. They are not part of `entries` because
@@ -978,15 +981,37 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
 	w.ref.Hash = w.lastCommit.Hash
 
-	// Drop any submodule entries whose path was shadowed by a staged
-	// blob or tree in the just-pushed commit. The writer is reused for
-	// follow-up commits, so without this a sequence like "shadow the
-	// submodule with a blob, push, delete the blob, push" would let the
-	// stale submodule entry re-emit on the second rebuild and resurrect
-	// the gitlink the user just replaced.
+	// Drop submodule entries that the just-pushed commit removed from the
+	// tree, in either of the two shapes that can occur on a reused writer:
+	//
+	//   1. Direct shadow — a staged blob/tree at the submodule's exact
+	//      path. A follow-up commit that deletes that blob/tree would
+	//      otherwise resurrect the gitlink from this stale cache.
+	//   2. Ancestor removed — a staged DeleteTree (or equivalent) wiped
+	//      a parent directory of the submodule. The submodule path is
+	//      no longer reachable, but a follow-up commit that recreates
+	//      the parent (e.g. CreateBlob inside the now-deleted directory)
+	//      would walk dirty paths back up and re-emit the orphaned
+	//      gitlink on rebuild.
+	//
+	// Submodules whose all ancestors are still present in treeEntries
+	// (or are the implicit root) and whose own path is unshadowed remain
+	// valid and are kept for the next commit's tree rebuild.
 	for path := range w.submoduleEntries {
 		if _, shadowed := w.treeEntries[path]; shadowed {
 			delete(w.submoduleEntries, path)
+			continue
+		}
+		for parent := path; ; {
+			slash := strings.LastIndex(parent, "/")
+			if slash == -1 {
+				break // reached root level — implicit, always present
+			}
+			parent = parent[:slash]
+			if _, exists := w.treeEntries[parent]; !exists {
+				delete(w.submoduleEntries, path)
+				break
+			}
 		}
 	}
 
