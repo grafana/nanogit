@@ -546,4 +546,47 @@ var _ = Describe("Writer Operations with Submodules", func() {
 					"survive into the next rebuild.\nfull tree:\n%s", afterRebuild)
 		})
 	})
+
+	// DeleteTree(ctx, "") and DeleteTree(ctx, ".") take an early-return
+	// fast path that installs an empty root tree without running the
+	// per-path submodule prune. A follow-up write on the same writer
+	// would otherwise rebuild the root from a cleared treeEntries plus
+	// a still-populated submoduleEntries and re-emit every original
+	// gitlink. Fixed by clearing submoduleEntries inside that branch.
+	Context("Whole-repo wipe via DeleteTree('') leaves no cached submodules behind", func() {
+		It("should not resurrect a root-level submodule on a follow-up write after DeleteTree('')", func() {
+			client, _, local, user := QuickSetup()
+			subURL := pushSubmoduleSource(user)
+
+			By("Mounting a submodule at the repository root")
+			_ = addSubmodule(local, subURL, "thirdparty")
+
+			writer := createWriterFromHead(ctx, client, local)
+
+			By("Push 1: wipe the entire tree via DeleteTree('')")
+			_, err := writer.DeleteTree(ctx, "")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Wipe the repository", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Push 2 on the same writer: add a new file at the root")
+			_, err = writer.CreateBlob(ctx, "fresh.txt", []byte("hello"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Add fresh file after wipe", testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the submodule was NOT resurrected by the follow-up write")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			afterFollowUp, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(afterFollowUp).NotTo(ContainSubstring("\tthirdparty"),
+				"thirdparty must not exist in Push 2's tree; a 160000 entry "+
+					"here means the DeleteTree('') fast path skipped the "+
+					"submodule cache prune and the follow-up rebuild re-emitted "+
+					"the gitlink from a stale cache.\nfull tree:\n%s", afterFollowUp)
+		})
+	})
 })

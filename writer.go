@@ -590,6 +590,11 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 		w.writer.AddObject(emptyTree)
 		w.objStorage.Add(&emptyTree)
+		// Wipe the submodule cache too — otherwise a follow-up write on
+		// the same writer would walk submoduleEntries during the next
+		// root rebuild and silently re-emit gitlinks the user just
+		// removed when wiping the repo.
+		clear(w.submoduleEntries)
 		w.treeEntries[""] = &FlatTreeEntry{
 			Path: "",
 			Hash: emptyHash,
