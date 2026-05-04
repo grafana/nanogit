@@ -548,12 +548,13 @@ var _ = Describe("Writer Operations with Submodules", func() {
 	})
 
 	// DeleteTree(ctx, "") and DeleteTree(ctx, ".") take an early-return
-	// fast path that installs an empty root tree without running the
-	// per-path submodule prune. A follow-up write on the same writer
-	// would otherwise rebuild the root from a cleared treeEntries plus
-	// a still-populated submoduleEntries and re-emit every original
-	// gitlink. Fixed by clearing submoduleEntries inside that branch.
-	Context("Whole-repo wipe via DeleteTree('') leaves no cached submodules behind", func() {
+	// fast path that installs an empty root tree. The path was leaving
+	// the writer's in-memory state (treeEntries + submoduleEntries) in
+	// place, so a follow-up write on the same writer would rebuild the
+	// root from those stale maps and silently re-emit every original
+	// top-level entry — including any gitlinks. Fixed by clearing both
+	// maps (and dirtyPaths) inside that branch.
+	Context("Whole-repo wipe via DeleteTree('') leaves no cached state behind", func() {
 		It("should not resurrect a root-level submodule on a follow-up write after DeleteTree('')", func() {
 			client, _, local, user := QuickSetup()
 			subURL := pushSubmoduleSource(user)
@@ -587,6 +588,54 @@ var _ = Describe("Writer Operations with Submodules", func() {
 					"here means the DeleteTree('') fast path skipped the "+
 					"submodule cache prune and the follow-up rebuild re-emitted "+
 					"the gitlink from a stale cache.\nfull tree:\n%s", afterFollowUp)
+		})
+
+		It("should not leak any pre-wipe entries through to a follow-up write", func() {
+			client, _, local, user := QuickSetup()
+			subURL := pushSubmoduleSource(user)
+
+			By("Seeding the repo with a directory, root file, and a submodule")
+			Expect(local.CreateDirPath("dashboards")).To(Succeed())
+			Expect(local.CreateFile("dashboards/home.json", `{"title":"home"}`)).To(Succeed())
+			Expect(local.CreateFile("rootfile.txt", "root level content")).To(Succeed())
+			_, err := local.Git("add", ".")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = local.Git("commit", "-m", "Seed pre-wipe content")
+			Expect(err).NotTo(HaveOccurred())
+			_ = addSubmodule(local, subURL, "thirdparty")
+
+			writer := createWriterFromHead(ctx, client, local)
+
+			By("Single commit: DeleteTree('') then CreateBlob('fresh.txt')")
+			_, err = writer.DeleteTree(ctx, "")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.CreateBlob(ctx, "fresh.txt", []byte("hello"))
+			Expect(err).NotTo(HaveOccurred())
+			_, err = writer.Commit(ctx, "Wipe and reseed in a single commit",
+				testAuthor, testCommitter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writer.Push(ctx)).To(Succeed())
+
+			By("Verifying the new tree contains ONLY the new file")
+			_, err = local.Git("fetch", "origin", "main")
+			Expect(err).NotTo(HaveOccurred())
+			tree, err := local.Git("ls-tree", "-r", "--full-tree", "origin/main")
+			Expect(err).NotTo(HaveOccurred())
+			tree = strings.TrimSpace(tree)
+
+			lines := strings.Split(tree, "\n")
+			var paths []string
+			for _, line := range lines {
+				fields := strings.Fields(line)
+				if len(fields) >= 4 {
+					paths = append(paths, fields[3])
+				}
+			}
+			Expect(paths).To(ConsistOf("fresh.txt"),
+				"after DeleteTree('') + CreateBlob('fresh.txt') the new tree "+
+					"must contain only fresh.txt; any other path here means the "+
+					"fast path leaked stale staged state into the rebuild.\nfull tree:\n%s",
+				tree)
 		})
 	})
 })

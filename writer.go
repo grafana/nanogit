@@ -590,11 +590,16 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 		w.writer.AddObject(emptyTree)
 		w.objStorage.Add(&emptyTree)
-		// Wipe the submodule cache too — otherwise a follow-up write on
-		// the same writer would walk submoduleEntries during the next
-		// root rebuild and silently re-emit gitlinks the user just
-		// removed when wiping the repo.
+		// Wipe all in-memory staged state so the writer matches the empty
+		// tree we just installed. Without clearing treeEntries and
+		// submoduleEntries, a follow-up CreateBlob/UpdateBlob on the same
+		// writer would rebuild the root from the original top-level
+		// entries and silently re-emit the content (and gitlinks) the
+		// wipe was supposed to remove. dirtyPaths is also dropped — any
+		// previously staged paths are now invalid.
+		clear(w.treeEntries)
 		clear(w.submoduleEntries)
+		clear(w.dirtyPaths)
 		w.treeEntries[""] = &FlatTreeEntry{
 			Path: "",
 			Hash: emptyHash,
@@ -1410,9 +1415,14 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 		return fmt.Errorf("cleanup packfile writer: %w", err)
 	}
 
-	// Clear all staged changes from memory
+	// Clear all staged changes from memory. submoduleEntries can pin
+	// large initial-state slices (one entry per submodule) so it is
+	// reset too — the writer is single-use after Cleanup, and any
+	// follow-up Push would have already gone through the per-Push
+	// reconciliation.
 	w.treeEntries = make(map[string]*FlatTreeEntry)
 	w.dirtyPaths = make(map[string]bool)
+	w.submoduleEntries = make(map[string]*FlatTreeEntry)
 
 	// Reset writer state. Capability negotiation, if enabled, is cached
 	// behind sync.Once so this lookup reuses the result negotiated when the
