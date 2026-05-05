@@ -179,7 +179,16 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 
 // sendFetchRequest sends the fetch request and parses the response.
 // maxBytes caps the response body before parsing; 0 disables the cap.
+//
+// On a parse error the response body is closed before returning so the
+// HTTP connection can be reused; previously the caller skipped its
+// "responseReader != nil" defer because we returned a nil reader on
+// error, leaking the body. The oversize-cap path made this more
+// reachable because malformed-by-truncation responses now bubble up as
+// parse errors while the underlying body still has bytes (or a
+// connection) to release.
 func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (io.ReadCloser, *protocol.FetchResponse, error) {
+	logger := log.FromContext(ctx)
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, nil, fmt.Errorf("sending commands: %w", err)
@@ -190,6 +199,9 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	parser := protocol.NewParser(responseReader)
 	response, err := protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
+		if closeErr := responseReader.Close(); closeErr != nil {
+			logger.Error("error closing fetch response body after parse failure", "error", closeErr)
+		}
 		return nil, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
 

@@ -956,7 +956,7 @@ func (c *httpClient) fetchMissingTreeObject(ctx context.Context, treeHash hash.H
 		Want:             []hash.Hash{treeHash},
 		Done:             true,
 		NoExtraObjects:   true, // We only want this specific object
-		MaxResponseBytes: c.limits.MultiObjectFetch,
+		MaxResponseBytes: c.limits.SingleObjectFetch,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed: %w", err)

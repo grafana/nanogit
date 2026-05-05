@@ -87,13 +87,16 @@ func TestNewLimitedReadCloser(t *testing.T) {
 		assert.True(t, closed)
 	})
 
-	t.Run("error type is comparable via errors.Is on sentinel", func(t *testing.T) {
+	t.Run("errors.As recovers the typed error", func(t *testing.T) {
+		// ErrResponseTooLarge is a typed error (no sentinel value),
+		// so errors.As is the documented match path. Pin the
+		// recovery shape so future wrapping at higher layers does
+		// not silently break it.
 		body := io.NopCloser(strings.NewReader("xx"))
 		r := newLimitedReadCloser(body, 1, "fetch")
 
 		_, err := io.ReadAll(r)
 		require.Error(t, err)
-		// errors.As is the documented match path; check it explicitly.
 		var tooLarge *ErrResponseTooLarge
 		assert.True(t, errors.As(err, &tooLarge))
 	})

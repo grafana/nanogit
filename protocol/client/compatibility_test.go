@@ -147,8 +147,12 @@ func TestCompatibilityReadLimit(t *testing.T) {
 		require.Equal(t, int64(compatibilityFloor), compatibilityReadLimit(-1))
 	})
 
-	t.Run("smaller than floor still returns the floor", func(t *testing.T) {
-		require.Equal(t, int64(compatibilityFloor), compatibilityReadLimit(1024))
+	t.Run("smaller than floor is honored as configured", func(t *testing.T) {
+		// An explicit positive value is the operator telling us what
+		// they want — even if it is below the unlimited-fallback
+		// floor. The floor only applies when the caller leaves
+		// RefsMetadata at zero (unlimited).
+		require.Equal(t, int64(1024), compatibilityReadLimit(1024))
 	})
 
 	t.Run("larger than floor passes through", func(t *testing.T) {

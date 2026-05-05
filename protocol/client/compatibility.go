@@ -85,17 +85,21 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 	}
 }
 
-// compatibilityFloor is the minimum byte cap applied to protocol-detection
-// reads even when the caller requests "no limit". Protocol detection only
-// needs the first capability advertisement, so a 1 MB floor is generous
-// while keeping the path bounded.
+// compatibilityFloor is the byte cap applied to protocol-detection reads
+// when the caller leaves RefsMetadata at "no limit". Protocol detection
+// only needs the first capability advertisement, so a 1 MiB floor keeps
+// that path bounded by default. Once the caller configures any positive
+// RefsMetadata value it is honored verbatim — including values smaller
+// than the floor — because an explicitly configured cap is the operator
+// telling us what they want.
 const compatibilityFloor = 1024 * 1024
 
 // compatibilityReadLimit returns the byte cap to apply to a protocol
 // detection read given the configured RefsMetadata limit. A configured
-// value of 0 ("no limit") still bottoms out at compatibilityFloor.
+// value of 0 ("no limit") falls back to compatibilityFloor; any positive
+// value is honored as-is.
 func compatibilityReadLimit(refsMetadata int64) int64 {
-	if refsMetadata <= 0 || refsMetadata < compatibilityFloor {
+	if refsMetadata <= 0 {
 		return compatibilityFloor
 	}
 	return refsMetadata
