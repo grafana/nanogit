@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol/hash"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -41,7 +42,25 @@ import (
 //   2. Submodule as a sibling of the modified blob (same parent
 //      directory): that directory is dirty, so the submodule sibling
 //      gets dropped.
+// As with the main writer Describe, the submodule preservation specs run
+// once with the default static capability set and once with capability
+// negotiation enabled, so the gitlink-preservation invariants hold under
+// both wire shapes.
 var _ = Describe("Writer Operations with Submodules", func() {
+	BeforeEach(func() { quickSetupExtraOpts = nil })
+	AfterEach(func() { quickSetupExtraOpts = nil })
+	writerSubmoduleOperationsSpecs()
+})
+
+var _ = Describe("Writer Operations with Submodules (with capability negotiation)", func() {
+	BeforeEach(func() {
+		quickSetupExtraOpts = []options.Option{options.WithCapabilityNegotiation()}
+	})
+	AfterEach(func() { quickSetupExtraOpts = nil })
+	writerSubmoduleOperationsSpecs()
+})
+
+func writerSubmoduleOperationsSpecs() {
 	var (
 		testAuthor = nanogit.Author{
 			Name:  "Test Author",
@@ -638,4 +657,4 @@ var _ = Describe("Writer Operations with Submodules", func() {
 				tree)
 		})
 	})
-})
+}
