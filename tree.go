@@ -1035,16 +1035,21 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	logger.Debug("Fetch tree object", "hash", want.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:       true,
-		NoBlobFilter:     true,
-		Want:             []hash.Hash{want},
-		Done:             true,
-		// NoExtraObjects=false is an explicit prefetch: GetFlatTree
-		// (or staged-writer init) consumes the warmed cache after
-		// this call, so the wire response is multi-object by shape
-		// and the multi-object budget applies.
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{want},
+		Done:         true,
+		// NoExtraObjects=false lets the server include nearby tree
+		// objects opportunistically as a cache warmup, but the
+		// public API surface (GetTree, NewStagedWriter base-tree
+		// fetch) is conceptually a single-tree-by-hash lookup. The
+		// CLI flag --max-bytes-single-object documents GetTree as
+		// single-object, so the SingleObjectFetch cap applies — a
+		// caller who only configures the single-object knob still
+		// gets a bound here even when MultiObjectFetch is left at
+		// "unlimited".
 		NoExtraObjects:   false,
-		MaxResponseBytes: c.limits.MultiObjectFetch,
+		MaxResponseBytes: c.limits.SingleObjectFetch,
 	})
 	if err != nil {
 		// TODO: handle this at the client level
