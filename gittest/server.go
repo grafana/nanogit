@@ -126,7 +126,13 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 		"GITEA__security__SECRET_KEY":             "supersecretkey",
 		"GITEA__security__INTERNAL_TOKEN":         "internal",
 		"GITEA__security__DISABLE_GITEA_SSH":      "true",
-		"GITEA__mailer__ENABLED":                  "false",
+		// Allow site admins to set custom git hooks via the API.
+		// Gitea defaults this to true; we flip it so integration tests
+		// can install per-repo pre-receive hooks to exercise the
+		// receive-pack error path with realistic side-band channel-2
+		// progress (e.g. hook stderr surfaced as remote: messages).
+		"GITEA__security__DISABLE_GIT_HOOKS": "false",
+		"GITEA__mailer__ENABLED":             "false",
 	}
 
 	// Start Gitea container
