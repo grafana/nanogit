@@ -206,6 +206,15 @@ type Tree struct {
 //	    fmt.Printf("%s (%s)\n", entry.Path, entry.Type)
 //	}
 func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*FlatTree, error) {
+	flatTree, _, err := c.getFlatTreeWithSubmodules(ctx, commitHash)
+	return flatTree, err
+}
+
+// getFlatTreeWithSubmodules behaves like GetFlatTree but also returns any
+// gitlink (submodule) entries that GetFlatTree filters out, with their full
+// repository-relative paths. Internal-only: used by StagedWriter so it can
+// preserve submodule entries when rebuilding parent trees.
+func (c *httpClient) getFlatTreeWithSubmodules(ctx context.Context, commitHash hash.Hash) (*FlatTree, []FlatTreeEntry, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Get flat tree",
 		"commit_hash", commitHash.String())
@@ -214,19 +223,20 @@ func (c *httpClient) GetFlatTree(ctx context.Context, commitHash hash.Hash) (*Fl
 
 	allTreeObjects, rootTree, err := c.fetchAllTreeObjects(ctx, commitHash)
 	if err != nil {
-		return nil, fmt.Errorf("fetch tree objects for commit %s: %w", commitHash.String(), err)
+		return nil, nil, fmt.Errorf("fetch tree objects for commit %s: %w", commitHash.String(), err)
 	}
 
-	flatTree, err := c.flatten(ctx, rootTree, allTreeObjects)
+	flatTree, submodules, err := c.flatten(ctx, rootTree, allTreeObjects)
 	if err != nil {
-		return nil, fmt.Errorf("flatten tree %s: %w", rootTree.Hash.String(), err)
+		return nil, nil, fmt.Errorf("flatten tree %s: %w", rootTree.Hash.String(), err)
 	}
 
 	logger.Debug("Flat tree retrieved",
 		"commit_hash", commitHash.String(),
 		"tree_hash", rootTree.Hash.String(),
-		"entry_count", len(flatTree.Entries))
-	return flatTree, nil
+		"entry_count", len(flatTree.Entries),
+		"submodule_count", len(submodules))
+	return flatTree, submodules, nil
 }
 
 // fetchAllTreeObjects collects all tree objects needed for the flat tree by starting with
@@ -787,13 +797,21 @@ func (c *httpClient) completeMissingTrees(
 }
 
 // flatten converts collected tree objects into a flat tree structure using depth-first traversal.
-func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) (*FlatTree, error) {
+//
+// It returns the flat tree (regular trees and blobs only) plus the list of
+// submodule (gitlink, mode 0o160000) entries it filtered out, with their full
+// repository-relative paths. Most callers (including GetFlatTree) discard the
+// submodule list; the StagedWriter retains it so it can re-emit those entries
+// when rebuilding parent trees — without that, every commit on a repo with
+// submodules silently drops them. See grafana/grafana#123891.
+func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObject, allTreeObjects storage.PackfileStorage) (*FlatTree, []FlatTreeEntry, error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Flatten tree", "treeHash", rootTree.Hash.String())
 
 	// Pre-allocate entries slice with estimated capacity to reduce reallocations
 	estimatedSize := estimateFlatTreeSize(rootTree, allTreeObjects)
 	entries := make([]FlatTreeEntry, 0, estimatedSize)
+	var submodules []FlatTreeEntry
 
 	// Use depth-first traversal with sorted processing to naturally produce sorted entries
 	var traverseTree func(tree *protocol.PackfileObject, basePath string) error
@@ -834,11 +852,19 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 			}
 
 			// Gitlink / submodule (mode 0o160000): points to a commit in another
-			// repository. Skip it entirely — callers of GetFlatTree expect only
-			// trees and blobs.
+			// repository. Capture the entry so writer-side callers can preserve it
+			// when rebuilding parent trees, but keep it out of the flat tree —
+			// callers that walk the flat tree expect only trees and blobs.
 			if entry.FileMode == 0o160000 {
-				logger.Debug("Skipping submodule entry in flat tree",
+				logger.Debug("Captured submodule entry from flat tree traversal",
 					"name", entry.FileName, "path", entryPath, "hash", entry.Hash)
+				submodules = append(submodules, FlatTreeEntry{
+					Name: entry.FileName,
+					Path: entryPath,
+					Mode: uint32(entry.FileMode),
+					Hash: entryHash,
+					Type: protocol.ObjectTypeCommit,
+				})
 				continue
 			}
 
@@ -896,16 +922,17 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 
 	// Start depth-first traversal from root
 	if err := traverseTree(rootTree, ""); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	logger.Debug("Tree flattening completed",
 		"treeHash", rootTree.Hash.String(),
-		"totalEntries", len(entries))
+		"totalEntries", len(entries),
+		"submoduleCount", len(submodules))
 	return &FlatTree{
 		Entries: entries,
 		Hash:    rootTree.Hash,
-	}, nil
+	}, submodules, nil
 }
 
 // fetchMissingTreeObject attempts to fetch a single missing tree object individually.

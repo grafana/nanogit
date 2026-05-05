@@ -793,6 +793,9 @@ type PackfileWriter struct {
 	isCleanedUp bool
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
+	// Capabilities advertised on the ref update command. Empty means
+	// DefaultReceivePackCapabilities() is used.
+	capabilities []Capability
 }
 
 const (
@@ -802,13 +805,22 @@ const (
 	MemoryBytesThreshold = 5 * 1024 * 1024
 )
 
-// NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm and storage mode.
-func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *PackfileWriter {
+// NewPackfileWriter creates a new PackfileWriter with the specified hash
+// algorithm and storage mode. When caps is empty, WritePackfile uses
+// DefaultReceivePackCapabilities() for the ref update command; otherwise the given
+// capabilities replace the default set. The capability slice is copied so
+// later caller mutations cannot change what this writer advertises.
+func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode, caps ...Capability) *PackfileWriter {
+	var capsCopy []Capability
+	if len(caps) > 0 {
+		capsCopy = append([]Capability(nil), caps...)
+	}
 	return &PackfileWriter{
 		objectHashes:  make(map[string]bool),
 		memoryObjects: make([]PackfileObject, 0),
 		storageMode:   storageMode,
 		algo:          algo,
+		capabilities:  capsCopy,
 	}
 }
 
@@ -894,18 +906,20 @@ func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
 // The tree represents a directory structure with file modes and hashes.
 func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObject, error) {
 	// Sort entries according to Git specification: alphabetically by name,
-	// but directories are treated as if they have a trailing slash
+	// but directories are treated as if they have a trailing slash. Only
+	// real directory trees (exact mode 0o40000) get the trailing-slash
+	// treatment — gitlinks (0o160000) share the 0o40000 bit but are
+	// stored as files for the purposes of canonical tree ordering, so
+	// matching on the bit alone produced incorrectly-sorted trees that
+	// server-side fsck would reject.
 	sort.Slice(entries, func(i, j int) bool {
 		nameI := entries[i].FileName
 		nameJ := entries[j].FileName
 
-		// If entry i is a directory (mode 040000), append "/" for sorting
-		if entries[i].FileMode&0o40000 != 0 {
+		if entries[i].FileMode == 0o40000 {
 			nameI += "/"
 		}
-
-		// If entry j is a directory (mode 040000), append "/" for sorting
-		if entries[j].FileMode&0o40000 != 0 {
+		if entries[j].FileMode == 0o40000 {
 			nameJ += "/"
 		}
 
@@ -1074,10 +1088,15 @@ func (pw *PackfileWriter) validateWriteState() error {
 
 // writeRefUpdate writes the reference update command and flush packet
 func (pw *PackfileWriter) writeRefUpdate(writer io.Writer, refName string, oldRefHash hash.Hash) error {
-	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
+	capabilities, err := FormatCapabilities(pw.capabilities)
+	if err != nil {
+		return fmt.Errorf("capabilities: %w", err)
+	}
+	refUpdate := fmt.Sprintf("%s %s %s\000%s\n",
 		oldRefHash.String(),
 		pw.lastCommitHash.String(),
-		refName)
+		refName,
+		capabilities)
 
 	refUpdateLen := len(refUpdate) + 4
 	refUpdateLine := fmt.Sprintf("%04x%s", refUpdateLen, refUpdate)

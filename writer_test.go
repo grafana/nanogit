@@ -64,6 +64,10 @@ func (m *mockRawClient) UploadPack(ctx context.Context, data io.Reader) (io.Read
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockRawClient) FetchReceivePackCapabilities(ctx context.Context) ([]protocol.Capability, error) {
+	return nil, errors.New("not implemented")
+}
+
 // TestStagedWriter_Cleanup_NormalBehavior tests that Cleanup()
 // properly cleans up resources and marks the writer as cleaned up.
 func TestStagedWriter_Cleanup_NormalBehavior(t *testing.T) {

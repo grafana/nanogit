@@ -13,6 +13,16 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// mustFormatCaps calls protocol.FormatCapabilities and fails the test on
+// error. It lets the existing assertions stay readable now that the
+// production function returns (string, error).
+func mustFormatCaps(t *testing.T, caps []protocol.Capability) string {
+	t.Helper()
+	got, err := protocol.FormatCapabilities(caps)
+	require.NoError(t, err)
+	return got
+}
+
 func TestParseRefName(t *testing.T) {
 	t.Parallel()
 
@@ -252,6 +262,41 @@ func TestRefUpdateRequest_Format(t *testing.T) {
 	}
 }
 
+func TestRefUpdateRequest_Format_CustomCapabilities(t *testing.T) {
+	t.Parallel()
+
+	t.Run("caller-supplied capabilities replace the default", func(t *testing.T) {
+		caps := []protocol.Capability{
+			protocol.CapReportStatusV2,
+			protocol.CapQuiet,
+			protocol.CapObjectFormatSHA1,
+			protocol.CapAgent("nanogit"),
+		}
+		req := protocol.RefUpdateRequest{
+			OldRef:       protocol.ZeroHash,
+			NewRef:       "1234567890123456789012345678901234567890",
+			RefName:      "refs/heads/main",
+			Capabilities: caps,
+		}
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
+		assert.NotContains(t, string(got), string(protocol.CapSideBand64k))
+	})
+
+	t.Run("nil capabilities fall back to default", func(t *testing.T) {
+		req := protocol.RefUpdateRequest{
+			OldRef:  protocol.ZeroHash,
+			NewRef:  "1234567890123456789012345678901234567890",
+			RefName: "refs/heads/main",
+		}
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), mustFormatCaps(t, protocol.DefaultReceivePackCapabilities()))
+		assert.Contains(t, string(got), string(protocol.CapSideBand64k))
+	})
+}
+
 func TestNewCreateRefRequest(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -372,6 +417,70 @@ func TestNewDeleteRefRequest(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestRefRequestConstructors_Capabilities(t *testing.T) {
+	t.Parallel()
+
+	someHash, err := hash.FromHex("1234567890123456789012345678901234567890")
+	require.NoError(t, err)
+	otherHash, err := hash.FromHex("0987654321098765432109876543210987654321")
+	require.NoError(t, err)
+	caps := []protocol.Capability{
+		protocol.CapReportStatusV2,
+		protocol.CapQuiet,
+		protocol.CapAgent("nanogit"),
+	}
+
+	t.Run("no caps produces a request that formats with the default set", func(t *testing.T) {
+		req := protocol.NewCreateRefRequest("refs/heads/main", someHash)
+		assert.Nil(t, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), mustFormatCaps(t, protocol.DefaultReceivePackCapabilities()))
+	})
+
+	t.Run("NewCreateRefRequest stores the caller-supplied caps", func(t *testing.T) {
+		req := protocol.NewCreateRefRequest("refs/heads/main", someHash, caps...)
+		assert.Equal(t, caps, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
+		assert.NotContains(t, string(got), string(protocol.CapSideBand64k))
+	})
+
+	t.Run("NewUpdateRefRequest stores the caller-supplied caps", func(t *testing.T) {
+		req := protocol.NewUpdateRefRequest(someHash, otherHash, "refs/heads/main", caps...)
+		assert.Equal(t, caps, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
+	})
+
+	t.Run("NewDeleteRefRequest stores the caller-supplied caps", func(t *testing.T) {
+		req := protocol.NewDeleteRefRequest(someHash, "refs/heads/main", caps...)
+		assert.Equal(t, caps, req.Capabilities)
+
+		got, err := req.Format()
+		require.NoError(t, err)
+		assert.Contains(t, string(got), mustFormatCaps(t, caps))
+	})
+
+	t.Run("constructors copy caps so later caller mutations do not alias", func(t *testing.T) {
+		orig := []protocol.Capability{
+			protocol.CapReportStatusV2,
+			protocol.CapQuiet,
+		}
+		req := protocol.NewCreateRefRequest("refs/heads/main", someHash, orig...)
+
+		// Mutating the caller's slice after construction must not change
+		// the capabilities stored on the request.
+		orig[0] = protocol.Capability("tampered")
+		assert.Equal(t, protocol.CapReportStatusV2, req.Capabilities[0])
+	})
 }
 
 func TestParseRefLine(t *testing.T) {

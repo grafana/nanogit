@@ -266,6 +266,7 @@ func TestLsTreeCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
+		envRepo     string
 		expectError bool
 	}{
 		{
@@ -274,7 +275,7 @@ func TestLsTreeCommand(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "one argument returns error",
+			name:        "one argument returns error without env",
 			args:        []string{"url"},
 			expectError: true,
 		},
@@ -288,6 +289,12 @@ func TestLsTreeCommand(t *testing.T) {
 			args:        []string{"https://github.com/grafana/nanogit.git", "main"},
 			expectError: false,
 		},
+		{
+			name:        "one argument accepted when NANOGIT_REPO is set",
+			args:        []string{"main"},
+			envRepo:     "https://github.com/grafana/nanogit.git",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -299,6 +306,8 @@ func TestLsTreeCommand(t *testing.T) {
 			lsTreePath = ""
 			globalUsername = ""
 			globalToken = ""
+
+			t.Setenv("NANOGIT_REPO", tt.envRepo)
 
 			// Test argument validation
 			lsTreeCmd.SetArgs(tt.args)

@@ -54,10 +54,45 @@ nanogit [global flags] <command> [command flags] [arguments]
 Available for all commands:
 
 - `-h, --help` - Show help information
-- `-v, --version` - Show version information
+- `--version` - Show version information
 - `--username <string>` - Authentication username (defaults to 'git', can also use `NANOGIT_USERNAME` env var)
 - `--token <string>` - Authentication token (can also use `NANOGIT_TOKEN` env var)
 - `--json` - Output results in JSON format (where applicable)
+- `-v, --verbose` - Emit Info-level logs to stderr (see [Verbose mode](#verbose-mode))
+
+### Verbose mode
+
+nanogit follows git's verbosity conventions. By default only warnings and errors are emitted. Two levels of extra output are available:
+
+- **`-v` / `--verbose`** — enables Info-level progress messages on stderr, like `git push -v`.
+- **`NANOGIT_TRACE=1`** environment variable — enables Debug-level wire/protocol detail, like `GIT_TRACE=1` / `GIT_CURL_VERBOSE=1`. The env var works on its own — you don't also need `-v`.
+
+All log output goes to stderr, so `stdout` stays pipeable even when verbose mode is on.
+
+```bash
+# Info-level progress
+nanogit -v clone https://github.com/grafana/nanogit.git ./tmp
+
+# Full wire trace (Debug)
+NANOGIT_TRACE=1 nanogit clone https://github.com/grafana/nanogit.git ./tmp
+
+# Combine with --json: stdout stays valid JSON, logs go to stderr
+nanogit -v --json ls-tree https://github.com/grafana/nanogit.git main
+```
+
+### Default repository
+
+Set `NANOGIT_REPO` once to avoid repeating the repository URL on every command. When it is set, the `<repository>` positional argument becomes optional; pass an explicit URL to override.
+
+```bash
+export NANOGIT_REPO=https://github.com/user/repo.git
+nanogit check
+nanogit ls-tree main
+echo "hi" | nanogit put-file main note.md -m "add note"
+nanogit cat-file main note.md
+```
+
+For `clone`, a single positional argument is treated as the destination path unless it looks like a URL (contains `://`).
 
 ### Authentication
 
@@ -178,6 +213,67 @@ nanogit clone https://github.com/grafana/nanogit.git ./my-repo --exclude 'node_m
 # Adjust performance (defaults: batch-size=50, concurrency=10)
 nanogit clone https://github.com/grafana/nanogit.git ./my-repo --batch-size 100 --concurrency 20
 ```
+
+#### put-file
+
+Create or update a file on a branch in a single commit. The change is staged, committed, and pushed in one step. The ref must be a branch — tags and raw commit hashes are rejected because staged writes target branch tips.
+
+Content is read from **stdin** by default, or from a local file with `--from-file`. Author identity must be supplied explicitly (via `--author` or the `NANOGIT_AUTHOR_NAME` / `NANOGIT_AUTHOR_EMAIL` environment variables) — nanogit does not fabricate a default. Committer defaults to the author unless overridden.
+
+```bash
+# Pipe content on stdin
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" \
+  --author "Jane Doe <jane@example.com>"
+
+# Read content from a local file
+nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  --from-file ./local.md \
+  -m "add note" \
+  --author "Jane Doe <jane@example.com>"
+
+# Author via environment (recommended for scripts)
+export NANOGIT_AUTHOR_NAME="Jane Doe"
+export NANOGIT_AUTHOR_EMAIL="jane@example.com"
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md -m "add note"
+
+# Distinct committer
+nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" \
+  --author "Jane Doe <jane@example.com>" \
+  --committer "CI Bot <ci@example.com>" \
+  --from-file ./local.md
+
+# With verbose/trace output to see what the protocol layer is doing
+echo "hello" | nanogit -v put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>"
+
+echo "hello" | NANOGIT_TRACE=1 nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>"
+
+# JSON output ({commit, path})
+echo "hello" | nanogit --json put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>"
+
+# Override the receive-pack capability set (e.g. drop side-band-64k for a
+# server that wraps report-status in channel 1)
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>" \
+  --receive-pack-capability=report-status-v2 \
+  --receive-pack-capability=quiet \
+  --receive-pack-capability=object-format=sha1 \
+  --receive-pack-capability=agent=nanogit
+```
+
+**Flags:**
+
+- `-m, --message <string>` — commit message (required)
+- `--from-file <path>` — read content from a local file (mutually exclusive with stdin marker `-`)
+- `--author "Name <email>"` — commit author; falls back to `NANOGIT_AUTHOR_NAME` and `NANOGIT_AUTHOR_EMAIL`, errors if unresolved
+- `--committer "Name <email>"` — commit committer; falls back to `NANOGIT_COMMITTER_NAME`/`NANOGIT_COMMITTER_EMAIL`, then to the author
+- `--receive-pack-capability <token>` — override the capabilities advertised on receive-pack (repeatable). When set, the given values replace the nanogit defaults entirely. Use this to work around servers that mis-handle the default negotiation (e.g. drop `side-band-64k` for GitLab deployments that wrap `report-status` in channel 1). See [Receive-pack capabilities](https://grafana.github.io/nanogit/getting-started/server-compatibility/#receive-pack-capabilities) for the default set and guidance.
+
+**Non-default output** is printed to stdout as the new commit hash (or as `{"commit": "...", "path": "..."}` when `--json` is set). All log output (including `-v` / `NANOGIT_TRACE`) goes to stderr, so the commit hash is safe to pipe or capture.
 
 For more details, see the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/).
 

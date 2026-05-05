@@ -79,6 +79,7 @@ func TestCatFileCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
+		envRepo     string
 		expectError bool
 	}{
 		{
@@ -92,7 +93,7 @@ func TestCatFileCommand(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "two arguments returns error",
+			name:        "two arguments returns error without env",
 			args:        []string{"url", "ref"},
 			expectError: true,
 		},
@@ -106,6 +107,12 @@ func TestCatFileCommand(t *testing.T) {
 			args:        []string{"https://github.com/grafana/nanogit.git", "main", "README.md"},
 			expectError: false,
 		},
+		{
+			name:        "two arguments accepted when NANOGIT_REPO is set",
+			args:        []string{"main", "README.md"},
+			envRepo:     "https://github.com/grafana/nanogit.git",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -114,6 +121,8 @@ func TestCatFileCommand(t *testing.T) {
 			globalJSON = false
 			globalUsername = ""
 			globalToken = ""
+
+			t.Setenv("NANOGIT_REPO", tt.envRepo)
 
 			// Test argument validation
 			catFileCmd.SetArgs(tt.args)

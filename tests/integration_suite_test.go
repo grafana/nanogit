@@ -62,7 +62,7 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo, *gittest.User) {
+func QuickSetup(extraOpts ...options.Option) (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo, *gittest.User) {
 	user, err := gitServer.CreateUser(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -83,8 +83,10 @@ func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create nanogit client from connection info
-	client, err := nanogit.NewHTTPClient(connInfo.URL,
-		options.WithBasicAuth(connInfo.Username, connInfo.Password))
+	clientOpts := append([]options.Option{
+		options.WithBasicAuth(connInfo.Username, connInfo.Password),
+	}, extraOpts...)
+	client, err := nanogit.NewHTTPClient(connInfo.URL, clientOpts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	return client, repo, local, user

@@ -240,3 +240,62 @@ func TestBuildTreeObject_DirectoryFileSorting(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildTreeObject_GitlinkSortsAsFile guards against a class of regression
+// where gitlink (submodule, mode 0o160000) entries get sorted with a trailing
+// "/" because their mode happens to share the 0o40000 bit with directories.
+// Git's canonical tree ordering treats only real directory trees as if they
+// had a trailing slash; gitlinks sort as files. A tree built with the wrong
+// sort key passes nanogit's local hashing but is rejected by server-side
+// fsck on a real Git server (and silently mis-orders entries against any
+// other client that follows the spec).
+//
+// Concrete shape: with names "submod" (gitlink) and "submod-x" (file), the
+// correct order is ["submod", "submod-x"] because raw-name comparison places
+// the shorter prefix first. The buggy order — appending "/" to the gitlink
+// for sorting — would yield "submod/" > "submod-x" because '/' (0x2F) >
+// '-' (0x2D), flipping the order to ["submod-x", "submod"].
+func TestBuildTreeObject_GitlinkSortsAsFile(t *testing.T) {
+	t.Parallel()
+
+	entries := []protocol.PackfileTreeEntry{
+		{
+			FileName: "submod-x",
+			FileMode: 0o100644, // file
+			Hash:     "111111dd22095088e7a0ecfcd02b817755f43180",
+		},
+		{
+			FileName: "submod",
+			FileMode: 0o160000, // gitlink / submodule
+			Hash:     "222222dd22095088e7a0ecfcd02b817755f43181",
+		},
+		{
+			FileName: "submod-dir",
+			FileMode: 0o40000, // real directory
+			Hash:     "333333dd22095088e7a0ecfcd02b817755f43182",
+		},
+	}
+
+	treeObj, err := protocol.BuildTreeObject(crypto.SHA1, entries)
+	require.NoError(t, err)
+
+	actualOrder := make([]string, len(treeObj.Tree))
+	for i, e := range treeObj.Tree {
+		actualOrder[i] = e.FileName
+	}
+
+	// Expected canonical order:
+	//   "submod"      — gitlink, sorted as raw name
+	//   "submod-dir/" — real directory, implicit trailing "/" → after
+	//                   "submod" because the shorter prefix wins, but
+	//                   before "submod-x" because '-' (0x2D) < 'x' (0x78)
+	//                   at position 6.
+	//   "submod-x"    — file, sorted as raw name
+	// The buggy variant (gitlink sorted as "submod/") would push the
+	// gitlink after "submod-x" because '/' (0x2F) > '-' (0x2D),
+	// producing ["submod-dir", "submod-x", "submod"].
+	require.Equal(t,
+		[]string{"submod", "submod-dir", "submod-x"},
+		actualOrder,
+		"gitlink (mode 0o160000) must sort as a file, not as a directory")
+}

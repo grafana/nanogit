@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -96,7 +97,6 @@ var (
 	ngPattern       = []byte("ng ")
 	unpackPattern   = []byte("unpack ")
 	unpackOkPattern = []byte("ok")
-	unpackOkFull    = []byte("unpack ok") // Most common success case
 )
 
 // Pack is the interface that wraps the Marshal method.
@@ -186,6 +186,20 @@ type GitUnpackError struct {
 	Message string
 }
 
+// RemoteRejectionError wraps an error returned from a receive-pack
+// response together with any human-readable progress messages the
+// server emitted on side-band channel 2 in the same response. Pre-
+// receive hooks and push rules on servers like GitLab write their
+// reason to channel 2 (visible to git CLI users as `remote: …` lines),
+// so the underlying typed error (e.g. GitReferenceUpdateError with
+// reason "pre-receive hook declined") often lacks the actionable
+// detail. This wrapper preserves the underlying error for errors.As /
+// errors.Is and only enriches the surfaced message.
+type RemoteRejectionError struct {
+	Err            error
+	RemoteMessages []string
+}
+
 func (e *PackParseError) Error() string {
 	if e.Err == nil {
 		return fmt.Sprintf("error parsing line %q", e.Line)
@@ -223,6 +237,35 @@ func (e *GitUnpackError) Error() string {
 // Unwrap enables errors.Is() compatibility with ErrGitUnpackError
 func (e *GitUnpackError) Unwrap() error {
 	return ErrGitUnpackError
+}
+
+func (e *RemoteRejectionError) Error() string {
+	// Defensive nil-guards: the wrapper is only ever constructed
+	// internally with a non-nil Err, but it is an exported type and
+	// external callers can construct zero-valued instances. A
+	// fallback message beats a panic on .Error().
+	underlying := "remote rejection"
+	if e.Err != nil {
+		underlying = e.Err.Error()
+	}
+	if len(e.RemoteMessages) == 0 {
+		return underlying
+	}
+	var b strings.Builder
+	b.WriteString(underlying)
+	for _, m := range e.RemoteMessages {
+		b.WriteString("\nremote: ")
+		b.WriteString(m)
+	}
+	return b.String()
+}
+
+// Unwrap returns the underlying receive-pack error so errors.As /
+// errors.Is keep finding the typed cause (GitReferenceUpdateError,
+// GitUnpackError, GitServerError, …). Returns nil if Err is unset,
+// which ends the unwrap chain rather than panicking.
+func (e *RemoteRejectionError) Unwrap() error {
+	return e.Err
 }
 
 // NewPackParseError creates a new PackParseError with the given line and error.
@@ -529,8 +572,23 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 // detectError processes packet content to detect and handle various Git protocol error conditions.
 // It examines the packet data for error indicators like "ERR", "error:", "fatal:", "ng", and "unpack" messages.
 // Returns an error if any error condition is detected, otherwise returns nil to continue processing.
+//
+// Side-band handling is intentionally context-specific. Some Git servers
+// may wrap receive-pack report-status payloads in side-band channel 1
+// (0x01), but detectError does not unwrap channel 1 itself. That
+// unwrapping/parsing is performed by receive-pack response parsing code,
+// such as protocol/client.parseReceivePackResponse, where channel-1
+// report-status data can be distinguished from ordinary packfile data.
 func detectError(lengthBytes, packetData []byte) error {
-	// Avoid allocation by building fullPacket only when needed
+	// Avoid allocation by building fullPacket only when needed.
+	//
+	// NOTE: side-band channel 1 (0x01) is intentionally NOT unwrapped here.
+	// During fetch/clone, channel 1 carries arbitrary binary packfile data
+	// via MultiplexedReader, and a chunk that happens to start with bytes
+	// matching "ng "/"unpack "/etc. would be misclassified as a report-
+	// status error. Channel-1 unwrapping for receive-pack response parsing
+	// is performed in protocol/client.parseReceivePackResponse where it is
+	// scoped to the right context.
 
 	switch {
 	case bytes.HasPrefix(packetData, errPattern):
@@ -546,19 +604,20 @@ func detectError(lengthBytes, packetData []byte) error {
 		return handleReferenceUpdateFailure(fullPacket, packetData)
 
 	case bytes.HasPrefix(packetData, unpackPattern):
-		// Fast path for most common case: "unpack ok"
-		if bytes.Equal(packetData, unpackOkFull) {
-			return nil // Success case, no error
-		}
-
-		// Optimize unpack handling with byte comparison instead of string conversion
+		// Extract the status string after "unpack " and trim any trailing
+		// whitespace (LF/CR/spaces). Per gitprotocol-common, non-binary
+		// pkt-lines may or may not include a trailing LF and receivers MUST
+		// tolerate either form. Gitea/GitHub send "unpack ok\n" when
+		// side-band is disabled; a byte-exact comparison to "ok" would
+		// otherwise misclassify that as a failure.
 		unpackData := packetData[len(unpackPattern):]
-		if !bytes.Equal(unpackData, unpackOkPattern) {
-			fullPacket := append(lengthBytes, packetData...)
-			return NewGitUnpackError(fullPacket, string(unpackData))
+		trimmed := bytes.TrimRight(unpackData, " \t\r\n")
+		if bytes.Equal(trimmed, unpackOkPattern) {
+			return nil // "unpack ok" success
 		}
-		// If unpack ok, continue processing
-		return nil
+		fullPacket := append(lengthBytes, packetData...)
+		return NewGitUnpackError(fullPacket, string(unpackData))
+
 	default:
 		// Regular data packet
 		return nil
@@ -622,10 +681,15 @@ func handleErrorFatalMessage(fullPacket, packetData []byte) error {
 	return NewGitServerError(fullPacket, errorType, message)
 }
 
-// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets
+// handleReferenceUpdateFailure processes "ng" (no good) reference update failure packets.
+// The packetData argument is expected to have any side-band channel byte already
+// stripped by the caller, so it begins with the literal "ng " prefix.
 func handleReferenceUpdateFailure(fullPacket, packetData []byte) error {
 	// Format: "ng <refname> <error-msg>"
-	parts := bytes.SplitN(packetData[3:], []byte(" "), 2) // Skip "ng "
+	// Trim any trailing whitespace (e.g. LF) before splitting, per
+	// gitprotocol-common non-binary pkt-line handling.
+	trimmed := bytes.TrimRight(packetData[3:], " \t\r\n") // Skip "ng "
+	parts := bytes.SplitN(trimmed, []byte(" "), 2)
 
 	var refName, reason string
 	if len(parts) >= 1 {

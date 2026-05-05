@@ -78,6 +78,7 @@ Ready to use nanogit? Check out our guides:
 
 - **[Installation](getting-started/installation.md)** - Install nanogit in your project
 - **[Quick Start](getting-started/quick-start.md)** - Basic usage examples and common patterns
+- **[Server Compatibility](getting-started/server-compatibility.md)** - Verify your Git server supports nanogit in four CLI commands
 - **[API Reference](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API documentation on GoDoc
 
 ## Architecture
