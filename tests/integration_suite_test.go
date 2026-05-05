@@ -25,6 +25,12 @@ var (
 		Success(msg string, keysAndValues ...any)
 	}
 	ctx context.Context
+
+	// quickSetupExtraOpts is prepended to the per-call extraOpts in QuickSetup.
+	// Outer Describe/Context blocks set this in BeforeEach to parameterize an
+	// entire tree of specs (e.g. once with WithCapabilityNegotiation and once
+	// without) without having to thread the option through every call site.
+	quickSetupExtraOpts []options.Option
 )
 
 func TestIntegrationSuite(t *testing.T) {
@@ -82,10 +88,15 @@ func QuickSetup(extraOpts ...options.Option) (nanogit.Client, *gittest.RemoteRep
 	connInfo, err := local.InitWithRemote(user, repo)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Create nanogit client from connection info
-	clientOpts := append([]options.Option{
+	// Create nanogit client from connection info. The package-level
+	// quickSetupExtraOpts is applied first so per-call extraOpts can still
+	// override (e.g. an outer Describe sets WithCapabilityNegotiation while
+	// an inner spec adds WithReceivePackCapabilities).
+	clientOpts := []options.Option{
 		options.WithBasicAuth(connInfo.Username, connInfo.Password),
-	}, extraOpts...)
+	}
+	clientOpts = append(clientOpts, quickSetupExtraOpts...)
+	clientOpts = append(clientOpts, extraOpts...)
 	client, err := nanogit.NewHTTPClient(connInfo.URL, clientOpts...)
 	Expect(err).NotTo(HaveOccurred())
 

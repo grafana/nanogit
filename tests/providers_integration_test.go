@@ -16,6 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// negotiationModes is the list of receive-pack capability modes every
+// provider writer test runs against. The default (no extra options)
+// exercises the static capability set; WithCapabilityNegotiation()
+// exercises the lazy info/refs?service=git-receive-pack fetch and the
+// intersected set on the wire. Running both shapes against a real
+// provider is what catches parser regressions or capability surprises
+// that container tests cannot reproduce.
+var negotiationModes = []struct {
+	name      string
+	extraOpts []options.Option
+}{
+	{name: "without negotiation", extraOpts: nil},
+	{name: "with capability negotiation", extraOpts: []options.Option{options.WithCapabilityNegotiation()}},
+}
+
 func TestProviders(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping testproviders suite in short mode")
@@ -27,11 +42,22 @@ func TestProviders(t *testing.T) {
 		return
 	}
 
+	for _, mode := range negotiationModes {
+		t.Run(mode.name, func(t *testing.T) {
+			runProvidersBaseFlow(t, mode.extraOpts...)
+		})
+	}
+}
+
+func runProvidersBaseFlow(t *testing.T, extraOpts ...options.Option) {
+	t.Helper()
+
 	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
-	client, err := nanogit.NewHTTPClient(
-		os.Getenv("TEST_REPO"),
+	clientOpts := []options.Option{
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
-	)
+	}
+	clientOpts = append(clientOpts, extraOpts...)
+	client, err := nanogit.NewHTTPClient(os.Getenv("TEST_REPO"), clientOpts...)
 	require.NoError(t, err)
 	auth, err := client.IsAuthorized(ctx)
 	require.NoError(t, err)
@@ -41,7 +67,10 @@ func TestProviders(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exists)
 
-	branchName := fmt.Sprintf("test-branch-%d", time.Now().Unix())
+	// UnixNano so back-to-back subtests (with/without negotiation) don't
+	// collide on the same branch name when they execute inside the same
+	// second.
+	branchName := fmt.Sprintf("test-branch-%d", time.Now().UnixNano())
 	mainRef, err := client.GetRef(ctx, "refs/heads/main")
 	require.NoError(t, err)
 	err = client.CreateRef(ctx, nanogit.Ref{
@@ -442,11 +471,22 @@ func TestProvidersLargeBlob(t *testing.T) {
 		return
 	}
 
+	for _, mode := range negotiationModes {
+		t.Run(mode.name, func(t *testing.T) {
+			runProvidersLargeBlobFlow(t, mode.extraOpts...)
+		})
+	}
+}
+
+func runProvidersLargeBlobFlow(t *testing.T, extraOpts ...options.Option) {
+	t.Helper()
+
 	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
-	client, err := nanogit.NewHTTPClient(
-		os.Getenv("TEST_REPO"),
+	clientOpts := []options.Option{
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
-	)
+	}
+	clientOpts = append(clientOpts, extraOpts...)
+	client, err := nanogit.NewHTTPClient(os.Getenv("TEST_REPO"), clientOpts...)
 	require.NoError(t, err)
 
 	auth, err := client.IsAuthorized(ctx)
@@ -463,7 +503,7 @@ func TestProvidersLargeBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, len(dashboardContent), 3000000, "Dashboard should be larger than 3MB")
 
-	branchName := fmt.Sprintf("test-large-blob-%d", time.Now().Unix())
+	branchName := fmt.Sprintf("test-large-blob-%d", time.Now().UnixNano())
 	mainRef, err := client.GetRef(ctx, "refs/heads/main")
 	require.NoError(t, err)
 
@@ -550,15 +590,26 @@ func TestProvidersClone(t *testing.T) {
 		return
 	}
 
+	for _, mode := range negotiationModes {
+		t.Run(mode.name, func(t *testing.T) {
+			runProvidersCloneFlow(t, mode.extraOpts...)
+		})
+	}
+}
+
+func runProvidersCloneFlow(t *testing.T, extraOpts ...options.Option) {
+	t.Helper()
+
 	ctx := log.ToContext(context.Background(), gittest.NewStructuredLogger(gittest.NewTestLogger(t)))
-	client, err := nanogit.NewHTTPClient(
-		os.Getenv("TEST_REPO"),
+	clientOpts := []options.Option{
 		options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN")),
-	)
+	}
+	clientOpts = append(clientOpts, extraOpts...)
+	client, err := nanogit.NewHTTPClient(os.Getenv("TEST_REPO"), clientOpts...)
 	require.NoError(t, err)
 
 	// Create a test branch with multiple files for cloning
-	branchName := fmt.Sprintf("test-clone-%d", time.Now().Unix())
+	branchName := fmt.Sprintf("test-clone-%d", time.Now().UnixNano())
 	mainRef, err := client.GetRef(ctx, "refs/heads/main")
 	require.NoError(t, err)
 
