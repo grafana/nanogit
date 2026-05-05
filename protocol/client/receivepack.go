@@ -28,6 +28,54 @@ var ErrMissingReportStatus = errors.New("receive-pack response did not contain '
 // unpackOkLine is the Git report-status success sentinel (gitprotocol-pack).
 var unpackOkLine = []byte("unpack ok")
 
+// maxRemoteProgressBytes caps the total bytes of side-band channel 2
+// (progress) buffered per receive-pack response. The buffer is only
+// read on the error path, but is populated speculatively from every
+// channel-2 packet — without a cap, a successful push that streams
+// verbose progress would retain it all until EOF and then drop it,
+// regressing memory usage versus the pre-channel-2-capture code path.
+//
+// 64 KiB is an order of magnitude larger than realistic hook output
+// (typical GitLab push-rule violations and pre-receive hook messages
+// are well under 1 KiB) yet small enough that worst-case retention is
+// trivial even under high concurrency. When exceeded, further
+// channel-2 packets are silently dropped — the surfaced error message
+// gets clipped, which is far better than an unbounded allocation.
+const maxRemoteProgressBytes = 64 * 1024
+
+// remoteProgressBuffer captures side-band channel 2 payloads up to a
+// fixed total byte budget. Once the budget is exhausted further
+// payloads are dropped on the floor; the truncation is silent because
+// the only consumer (decodeRemoteProgress) is purely diagnostic and
+// the alternative — a "(truncated)" sentinel line — adds noise to the
+// surfaced error string for negligible debugging value.
+type remoteProgressBuffer struct {
+	payloads [][]byte
+	used     int
+}
+
+func (b *remoteProgressBuffer) append(payload []byte) {
+	if len(payload) == 0 || b.used >= maxRemoteProgressBytes {
+		return
+	}
+	remain := maxRemoteProgressBytes - b.used
+	if len(payload) > remain {
+		// Copy the kept prefix into a fresh slice. Slicing alone
+		// would retain the original pkt-line's full backing array
+		// (up to ~64 KiB) for the lifetime of the buffer, so a
+		// payload that mostly overflows the budget could pin
+		// almost a full packet of memory per response — defeating
+		// maxRemoteProgressBytes. The copy releases the rest.
+		truncated := make([]byte, remain)
+		copy(truncated, payload)
+		b.payloads = append(b.payloads, truncated)
+		b.used = maxRemoteProgressBytes
+		return
+	}
+	b.payloads = append(b.payloads, payload)
+	b.used += len(payload)
+}
+
 // ReceivePack sends a POST request to the git-receive-pack endpoint.
 // This endpoint is used to send objects to the remote repository.
 // The data parameter is streamed to the server, and the response is parsed internally.
@@ -105,7 +153,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 // strategy. Channel-1 unwrap is scoped to this function and does not
 // leak into the generic detectError path, where channel 1 also carries
 // binary packfile data during fetch/clone.
-func parseReceivePackResponse(body io.Reader) error {
+func parseReceivePackResponse(body io.Reader) (err error) {
 	parser := protocol.NewParser(body)
 	sawUnpackOk := false
 	// sawReportStatusContent tracks whether the server sent anything
@@ -117,16 +165,35 @@ func parseReceivePackResponse(body io.Reader) error {
 	// progress.
 	sawReportStatusContent := false
 	var sideBandPackets [][]byte
+	// progress accumulates side-band channel 2 payloads up to
+	// maxRemoteProgressBytes. Channel 2 carries the human-readable
+	// output of pre-receive hooks and push rules (visible to git CLI
+	// users as `remote: …` lines), which is the actionable detail
+	// behind a bare "pre-receive hook declined" or "push rule
+	// violation" reason. We surface it on the error path only —
+	// successful pushes drop it after EOF — and the cap keeps a
+	// successful, verbose push from holding onto unbounded progress.
+	var progress remoteProgressBuffer
+	defer func() {
+		if err == nil {
+			return
+		}
+		msgs := decodeRemoteProgress(progress.payloads)
+		if len(msgs) == 0 {
+			return
+		}
+		err = &protocol.RemoteRejectionError{Err: err, RemoteMessages: msgs}
+	}()
 
 	for {
-		line, err := parser.Next()
-		if err == io.EOF {
+		line, parseErr := parser.Next()
+		if parseErr == io.EOF {
 			break
 		}
-		if err != nil {
-			return fmt.Errorf("git protocol error: %w", err)
+		if parseErr != nil {
+			return fmt.Errorf("git protocol error: %w", parseErr)
 		}
-		ok, content, classifyErr := classifyReceivePackLine(line, &sideBandPackets)
+		ok, content, classifyErr := classifyReceivePackLine(line, &sideBandPackets, &progress)
 		if classifyErr != nil {
 			return classifyErr
 		}
@@ -161,17 +228,25 @@ func parseReceivePackResponse(body io.Reader) error {
 
 // classifyReceivePackLine inspects a single parsed pkt-line from the
 // receive-pack response and either appends a channel-1 payload to the
-// running side-band buffer, returns a fatal channel-3 error, or signals
-// whether the line counts as report-status content / contains an
-// "unpack ok" sentinel for the bare channel-0 case.
-func classifyReceivePackLine(line []byte, sideBandPackets *[][]byte) (sawUnpackOk, sawReportStatusContent bool, err error) {
+// running side-band buffer, captures a channel-2 progress payload (up
+// to the buffer's byte budget), returns a fatal channel-3 error, or
+// signals whether the line counts as report-status content / contains
+// an "unpack ok" sentinel for the bare channel-0 case.
+func classifyReceivePackLine(line []byte, sideBandPackets *[][]byte, progress *remoteProgressBuffer) (sawUnpackOk, sawReportStatusContent bool, err error) {
 	if len(line) == 0 {
 		return false, false, nil
 	}
 	switch line[0] {
 	case 0x02:
 		// Channel 2 is progress; it never carries report-status and
-		// does not arm any requirement.
+		// does not arm any requirement. Capture the payload so
+		// parseReceivePackResponse can attach it to any error
+		// returned from this response — pre-receive hook stdout and
+		// push-rule violation messages are emitted here on GitLab,
+		// and a bare "pre-receive hook declined" is rarely actionable
+		// without that context. Capture is bounded; see
+		// remoteProgressBuffer.
+		progress.append(line[1:])
 		return false, false, nil
 	case 0x03:
 		// Channel 3 is fatal. detectError already converts the
@@ -336,4 +411,44 @@ func looksLikePktLine(data []byte) bool {
 // whitespace per gitprotocol-common.
 func isUnpackOkLine(line []byte) bool {
 	return bytes.Equal(bytes.TrimRight(line, " \t\r\n"), unpackOkLine)
+}
+
+// decodeRemoteProgress concatenates side-band channel 2 payloads,
+// splits them on LF or CR (servers commonly use \r for spinner
+// updates), trims trailing whitespace, and returns the non-empty
+// lines in arrival order. Leading whitespace is preserved so indented
+// hook output (bullet lists, sub-items emitted by GitLab push rules,
+// etc.) renders correctly when re-surfaced as `remote: …` lines.
+// Channel 2 is a byte stream, so an individual progress line may be
+// split across outer packets; reassembly before splitting is
+// essential.
+func decodeRemoteProgress(packets [][]byte) []string {
+	if len(packets) == 0 {
+		return nil
+	}
+	var buf bytes.Buffer
+	for _, p := range packets {
+		buf.Write(p)
+	}
+	lines := bytes.FieldsFunc(buf.Bytes(), func(r rune) bool {
+		return r == '\n' || r == '\r'
+	})
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		// TrimRight strips trailing CR/whitespace from the kept
+		// content; TrimSpace is used only to decide emptiness so
+		// lines like "    - bullet" keep their indentation.
+		kept := bytes.TrimRight(l, " \t\r\n")
+		if len(bytes.TrimSpace(kept)) == 0 {
+			continue
+		}
+		out = append(out, string(kept))
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

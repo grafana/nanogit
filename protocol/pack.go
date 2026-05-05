@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -185,6 +186,20 @@ type GitUnpackError struct {
 	Message string
 }
 
+// RemoteRejectionError wraps an error returned from a receive-pack
+// response together with any human-readable progress messages the
+// server emitted on side-band channel 2 in the same response. Pre-
+// receive hooks and push rules on servers like GitLab write their
+// reason to channel 2 (visible to git CLI users as `remote: …` lines),
+// so the underlying typed error (e.g. GitReferenceUpdateError with
+// reason "pre-receive hook declined") often lacks the actionable
+// detail. This wrapper preserves the underlying error for errors.As /
+// errors.Is and only enriches the surfaced message.
+type RemoteRejectionError struct {
+	Err            error
+	RemoteMessages []string
+}
+
 func (e *PackParseError) Error() string {
 	if e.Err == nil {
 		return fmt.Sprintf("error parsing line %q", e.Line)
@@ -222,6 +237,35 @@ func (e *GitUnpackError) Error() string {
 // Unwrap enables errors.Is() compatibility with ErrGitUnpackError
 func (e *GitUnpackError) Unwrap() error {
 	return ErrGitUnpackError
+}
+
+func (e *RemoteRejectionError) Error() string {
+	// Defensive nil-guards: the wrapper is only ever constructed
+	// internally with a non-nil Err, but it is an exported type and
+	// external callers can construct zero-valued instances. A
+	// fallback message beats a panic on .Error().
+	underlying := "remote rejection"
+	if e.Err != nil {
+		underlying = e.Err.Error()
+	}
+	if len(e.RemoteMessages) == 0 {
+		return underlying
+	}
+	var b strings.Builder
+	b.WriteString(underlying)
+	for _, m := range e.RemoteMessages {
+		b.WriteString("\nremote: ")
+		b.WriteString(m)
+	}
+	return b.String()
+}
+
+// Unwrap returns the underlying receive-pack error so errors.As /
+// errors.Is keep finding the typed cause (GitReferenceUpdateError,
+// GitUnpackError, GitServerError, …). Returns nil if Err is unset,
+// which ends the unwrap chain rather than panicking.
+func (e *RemoteRejectionError) Unwrap() error {
+	return e.Err
 }
 
 // NewPackParseError creates a new PackParseError with the given line and error.
