@@ -906,18 +906,20 @@ func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
 // The tree represents a directory structure with file modes and hashes.
 func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObject, error) {
 	// Sort entries according to Git specification: alphabetically by name,
-	// but directories are treated as if they have a trailing slash
+	// but directories are treated as if they have a trailing slash. Only
+	// real directory trees (exact mode 0o40000) get the trailing-slash
+	// treatment — gitlinks (0o160000) share the 0o40000 bit but are
+	// stored as files for the purposes of canonical tree ordering, so
+	// matching on the bit alone produced incorrectly-sorted trees that
+	// server-side fsck would reject.
 	sort.Slice(entries, func(i, j int) bool {
 		nameI := entries[i].FileName
 		nameJ := entries[j].FileName
 
-		// If entry i is a directory (mode 040000), append "/" for sorting
-		if entries[i].FileMode&0o40000 != 0 {
+		if entries[i].FileMode == 0o40000 {
 			nameI += "/"
 		}
-
-		// If entry j is a directory (mode 040000), append "/" for sorting
-		if entries[j].FileMode&0o40000 != 0 {
+		if entries[j].FileMode == 0o40000 {
 			nameJ += "/"
 		}
 

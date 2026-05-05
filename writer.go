@@ -72,23 +72,40 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		return nil, fmt.Errorf("get tree %s: %w", commit.Tree.String(), err)
 	}
 
-	// Get the flat tree representation for efficient path-based operations
-	currentTree, err := c.GetFlatTree(ctx, commit.Hash)
+	// Get the flat tree representation for efficient path-based operations.
+	// We use the internal variant so we also receive the submodule (gitlink)
+	// entries that GetFlatTree filters out — without them the writer would
+	// drop submodules from any rebuilt parent tree (grafana/grafana#123891).
+	currentTree, submoduleList, err := c.getFlatTreeWithSubmodules(ctx, commit.Hash)
 	if err != nil {
 		return nil, fmt.Errorf("get flat tree for commit %s: %w", commit.Hash.String(), err)
 	}
 
-	// Build tree entries map from flat tree
+	// Build tree entries map from flat tree. Index over the slice so the
+	// pointers stored in the map reference the slice's backing array
+	// directly — taking &entry of a range-loop variable would force the
+	// per-iteration variable to escape to the heap on every entry.
 	entries := make(map[string]*FlatTreeEntry, len(currentTree.Entries))
-	for _, entry := range currentTree.Entries {
-		entries[entry.Path] = &entry
+	for i := range currentTree.Entries {
+		entries[currentTree.Entries[i].Path] = &currentTree.Entries[i]
+	}
+
+	// Track submodules separately. They are not part of `entries` because
+	// staged-write operations (CreateBlob, UpdateBlob, DeleteBlob) only operate
+	// on blobs and trees; submodule paths are opaque from nanogit's perspective.
+	// They are merged back in at tree-build time by collectDirectChildren so
+	// that rebuilt parent trees still reference them.
+	submodules := make(map[string]*FlatTreeEntry, len(submoduleList))
+	for i := range submoduleList {
+		submodules[submoduleList[i].Path] = &submoduleList[i]
 	}
 
 	logger.Debug("Staged writer ready",
 		"ref_name", ref.Name,
 		"commit_hash", commit.Hash.String(),
 		"tree_hash", treeObj.Hash.String(),
-		"tree_entries", len(entries))
+		"tree_entries", len(entries),
+		"submodule_entries", len(submodules))
 
 	// Convert writer storage mode to protocol storage mode
 	var protocolStorageMode protocol.PackfileStorageMode
@@ -109,15 +126,16 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 	}
 	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode, caps...)
 	return &stagedWriter{
-		client:      c,
-		ref:         ref,
-		writer:      writer,
-		lastCommit:  commit,
-		lastTree:    treeObj,
-		objStorage:  objStorage,
-		treeEntries: entries,
-		storageMode: protocolStorageMode,
-		dirtyPaths:  make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
+		client:            c,
+		ref:               ref,
+		writer:            writer,
+		lastCommit:        commit,
+		lastTree:          treeObj,
+		objStorage:        objStorage,
+		treeEntries:       entries,
+		submoduleEntries:  submodules,
+		storageMode:       protocolStorageMode,
+		dirtyPaths:        make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
 	}, nil
 }
 
@@ -146,6 +164,12 @@ type stagedWriter struct {
 	objStorage storage.PackfileStorage
 	// Flat mapping of paths to tree entries
 	treeEntries map[string]*FlatTreeEntry
+	// Submodule (gitlink, mode 0o160000) entries indexed by full path. These
+	// are not first-class tree entries the writer can mutate (they point to a
+	// commit in another repo), but they must be re-emitted whenever a parent
+	// directory's tree gets rebuilt — otherwise we silently drop them on
+	// commit. See grafana/grafana#123891.
+	submoduleEntries map[string]*FlatTreeEntry
 	// Storage mode for packfile writer
 	storageMode protocol.PackfileStorageMode
 	// Track if cleanup has been called
@@ -566,6 +590,16 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 
 		w.writer.AddObject(emptyTree)
 		w.objStorage.Add(&emptyTree)
+		// Wipe all in-memory staged state so the writer matches the empty
+		// tree we just installed. Without clearing treeEntries and
+		// submoduleEntries, a follow-up CreateBlob/UpdateBlob on the same
+		// writer would rebuild the root from the original top-level
+		// entries and silently re-emit the content (and gitlinks) the
+		// wipe was supposed to remove. dirtyPaths is also dropped — any
+		// previously staged paths are now invalid.
+		clear(w.treeEntries)
+		clear(w.submoduleEntries)
+		clear(w.dirtyPaths)
 		w.treeEntries[""] = &FlatTreeEntry{
 			Path: "",
 			Hash: emptyHash,
@@ -603,6 +637,18 @@ func (w *stagedWriter) DeleteTree(ctx context.Context, path string) (hash.Hash, 
 	for _, entryPath := range entriesToDelete {
 		logger.Debug("removing entry", "path", entryPath)
 		delete(w.treeEntries, entryPath)
+	}
+
+	// Drop any cached submodule entries that lived under this tree.
+	// Otherwise an in-session DeleteTree(parent) + CreateBlob(parent/x) on
+	// the same writer would resurrect the gitlink at commit time:
+	// collectDirectChildren rebuilds the recreated parent and re-emits the
+	// submodule from the still-cached submoduleEntries (Push-time prune
+	// runs after, so a single-commit sequence isn't covered by it alone).
+	for entryPath := range w.submoduleEntries {
+		if entryPath == path || strings.HasPrefix(entryPath, pathPrefix) {
+			delete(w.submoduleEntries, entryPath)
+		}
 	}
 
 	// Update the tree structure to remove the directory entry
@@ -659,6 +705,12 @@ func (w *stagedWriter) MoveTree(ctx context.Context, srcPath, destPath string) (
 	if err := w.moveTreeEntries(ctx, srcPath, destPath, entriesToMove); err != nil {
 		return hash.Zero, err
 	}
+
+	// Reparent any cached submodule entries that lived under srcPath onto
+	// destPath. Without this, the moved subtree would be missing its
+	// gitlinks at commit time, and the old paths would dangle in the cache
+	// — risking resurrection if anything later rebuilds srcPath.
+	w.reparentSubmodules(srcPath, destPath)
 
 	if err := w.updateTreeStructuresForMove(ctx, srcPath, destPath, treeHash); err != nil {
 		return hash.Zero, err
@@ -754,6 +806,32 @@ func (w *stagedWriter) calculateNewTreeEntryPath(srcPath, destPath, entryPath st
 	// Replace the source path prefix with destination path prefix
 	relativePath := entryPath[len(srcPath)+1:] // +1 for the "/"
 	return destPath + "/" + relativePath
+}
+
+// reparentSubmodules translates any cached submodule paths under srcPath
+// to the equivalent path under destPath. Used by MoveTree so the
+// submodule cache tracks the staged state — leaving stale srcPath keys
+// would risk resurrecting a moved gitlink at the old location if anything
+// later rebuilt srcPath, and would also drop the gitlink from the moved
+// subtree's rebuilt parent.
+func (w *stagedWriter) reparentSubmodules(srcPath, destPath string) {
+	srcPrefix := srcPath + "/"
+	type rename struct{ from, to string }
+	var renames []rename
+	for entryPath := range w.submoduleEntries {
+		switch {
+		case entryPath == srcPath:
+			renames = append(renames, rename{from: entryPath, to: destPath})
+		case strings.HasPrefix(entryPath, srcPrefix):
+			renames = append(renames, rename{from: entryPath, to: destPath + "/" + entryPath[len(srcPrefix):]})
+		}
+	}
+	for _, r := range renames {
+		entry := w.submoduleEntries[r.from]
+		delete(w.submoduleEntries, r.from)
+		entry.Path = r.to
+		w.submoduleEntries[r.to] = entry
+	}
 }
 
 // updateTreeStructuresForMove updates tree structures for both source and destination
@@ -957,6 +1035,8 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
 	w.ref.Hash = w.lastCommit.Hash
 
+	w.pruneSubmoduleEntriesAfterPush()
+
 	logger.Debug("Push completed",
 		"ref_name", w.ref.Name,
 		"new_hash", w.lastCommit.Hash.String())
@@ -969,6 +1049,47 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// pruneSubmoduleEntriesAfterPush drops cached submodule (gitlink) entries
+// that the just-pushed commit removed from the tree. The writer is reused
+// for follow-up commits, so a stale entry would re-emit through
+// collectDirectChildren on the next rebuild and resurrect a submodule the
+// caller had already removed. Three shapes are handled:
+//
+//  1. Direct shadow — a staged blob/tree at the submodule's exact path.
+//     A follow-up commit that deletes the shadow would otherwise revive
+//     the gitlink from this cache.
+//  2. Ancestor missing — a staged DeleteTree (or equivalent) wiped a
+//     parent directory of the submodule.
+//  3. Ancestor replaced by a non-tree — e.g. DeleteTree("a") followed
+//     by CreateBlob("a", ...). The path "a" is back in treeEntries but
+//     as a blob, so "a/b" is unreachable in the pushed commit; treating
+//     mere key-presence as "ancestor exists" would keep the orphaned
+//     gitlink and risk resurrection if a later commit makes "a" a tree
+//     again.
+//
+// Submodules whose every ancestor is still a tree in treeEntries (or the
+// implicit root) and whose own path is unshadowed are kept.
+func (w *stagedWriter) pruneSubmoduleEntriesAfterPush() {
+	for path := range w.submoduleEntries {
+		if _, shadowed := w.treeEntries[path]; shadowed {
+			delete(w.submoduleEntries, path)
+			continue
+		}
+		for parent := path; ; {
+			slash := strings.LastIndex(parent, "/")
+			if slash == -1 {
+				break // reached root — implicit, always present
+			}
+			parent = parent[:slash]
+			ancestor, exists := w.treeEntries[parent]
+			if !exists || ancestor.Type != protocol.ObjectTypeTree {
+				delete(w.submoduleEntries, path)
+				break
+			}
+		}
+	}
 }
 
 // addMissingOrStaleTreeEntries marks directory paths as dirty for deferred tree building.
@@ -1165,6 +1286,12 @@ func (w *stagedWriter) buildPendingTrees(ctx context.Context) error {
 }
 
 // collectDirectChildren collects all direct children entries for a directory path.
+//
+// In addition to staged tree entries (`treeEntries`), this also merges in any
+// submodule (gitlink) entries from `submoduleEntries` whose parent directory
+// matches dirPath, so they survive a tree rebuild. A staged entry at the same
+// path always wins, which matters if a caller ever stages a write at a path
+// that previously held a submodule.
 func (w *stagedWriter) collectDirectChildren(dirPath string) []protocol.PackfileTreeEntry {
 	var entries []protocol.PackfileTreeEntry
 	pathPrefix := dirPath
@@ -1186,6 +1313,23 @@ func (w *stagedWriter) collectDirectChildren(dirPath string) []protocol.Packfile
 				Hash:     entry.Hash.String(),
 			})
 		}
+	}
+
+	// Merge in any submodule entries that live directly under dirPath, unless
+	// a staged change has shadowed them.
+	for entryPath, entry := range w.submoduleEntries {
+		if _, shadowed := w.treeEntries[entryPath]; shadowed {
+			continue
+		}
+		isDirectChild, childName := w.isDirectChild(entryPath, dirPath, pathPrefix)
+		if !isDirectChild {
+			continue
+		}
+		entries = append(entries, protocol.PackfileTreeEntry{
+			FileMode: entry.Mode,
+			FileName: childName,
+			Hash:     entry.Hash.String(),
+		})
 	}
 
 	return entries
@@ -1277,9 +1421,14 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 		return fmt.Errorf("cleanup packfile writer: %w", err)
 	}
 
-	// Clear all staged changes from memory
+	// Clear all staged changes from memory. submoduleEntries can pin
+	// large initial-state slices (one entry per submodule) so it is
+	// reset too — the writer is single-use after Cleanup, and any
+	// follow-up Push would have already gone through the per-Push
+	// reconciliation.
 	w.treeEntries = make(map[string]*FlatTreeEntry)
 	w.dirtyPaths = make(map[string]bool)
+	w.submoduleEntries = make(map[string]*FlatTreeEntry)
 
 	// Reset writer state. Capability negotiation, if enabled, is cached
 	// behind sync.Once so this lookup reuses the result negotiated when the
