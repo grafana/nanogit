@@ -611,6 +611,108 @@ func TestGitUnpackError(t *testing.T) {
 	})
 }
 
+func TestRemoteRejectionError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Error passes through underlying when no remote messages", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(
+			[]byte("ng refs/heads/main pre-receive hook declined"),
+			"refs/heads/main", "pre-receive hook declined",
+		)
+		wrapped := &protocol.RemoteRejectionError{Err: underlying}
+		require.Equal(t, underlying.Error(), wrapped.Error())
+	})
+
+	t.Run("Error passes through underlying when RemoteMessages is nil", func(t *testing.T) {
+		t.Parallel()
+		underlying := errors.New("boom")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: nil}
+		require.Equal(t, "boom", wrapped.Error())
+	})
+
+	t.Run("Error appends single remote message on its own line", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(
+			[]byte("ng refs/heads/main pre-receive hook declined"),
+			"refs/heads/main", "pre-receive hook declined",
+		)
+		wrapped := &protocol.RemoteRejectionError{
+			Err: underlying,
+			RemoteMessages: []string{
+				"GitLab: You are not allowed to push code to protected branches on this project.",
+			},
+		}
+		require.Equal(t,
+			"reference update failed for refs/heads/main: pre-receive hook declined\n"+
+				"remote: GitLab: You are not allowed to push code to protected branches on this project.",
+			wrapped.Error())
+	})
+
+	t.Run("Error appends each remote message on its own line preserving order", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitUnpackError([]byte("unpack failed"), "failed")
+		wrapped := &protocol.RemoteRejectionError{
+			Err: underlying,
+			RemoteMessages: []string{
+				"line 1",
+				"line 2",
+				"line 3",
+			},
+		}
+		require.Equal(t,
+			"pack unpack failed: failed\n"+
+				"remote: line 1\n"+
+				"remote: line 2\n"+
+				"remote: line 3",
+			wrapped.Error())
+	})
+
+	t.Run("Unwrap returns the underlying error", func(t *testing.T) {
+		t.Parallel()
+		underlying := errors.New("underlying")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying}
+		require.Same(t, underlying, errors.Unwrap(wrapped))
+	})
+
+	t.Run("errors.As finds the wrapper through chain", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(nil, "refs/heads/main", "denied")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+		// Wrap once more like callers would.
+		outer := fmt.Errorf("git protocol error: %w", wrapped)
+
+		var got *protocol.RemoteRejectionError
+		require.True(t, errors.As(outer, &got))
+		require.Equal(t, []string{"hello"}, got.RemoteMessages)
+	})
+
+	t.Run("errors.As finds underlying typed error through wrapper", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(nil, "refs/heads/main", "denied")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+
+		var refErr *protocol.GitReferenceUpdateError
+		require.True(t, errors.As(wrapped, &refErr))
+		require.Equal(t, "refs/heads/main", refErr.RefName)
+		require.Equal(t, "denied", refErr.Reason)
+	})
+
+	t.Run("errors.Is finds underlying sentinel through wrapper", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(nil, "refs/heads/main", "denied")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+		require.True(t, errors.Is(wrapped, protocol.ErrGitReferenceUpdateError))
+	})
+
+	t.Run("errors.Is finds GitUnpackError sentinel through wrapper", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitUnpackError(nil, "boom")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+		require.True(t, errors.Is(wrapped, protocol.ErrGitUnpackError))
+	})
+}
+
 func TestParsePackNewErrorTypes(t *testing.T) {
 	t.Parallel()
 

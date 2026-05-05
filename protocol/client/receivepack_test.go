@@ -502,6 +502,118 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 	}
 }
 
+// TestDecodeRemoteProgress exercises the channel-2 progress decoder
+// directly. Side-band channel 2 is a byte stream — a single line may
+// be split across outer packets, and servers terminate lines with
+// either LF, CRLF, or bare CR (the latter is used for spinner
+// overwrites). The decoder concatenates payloads, splits on LF/CR,
+// trims surrounding whitespace, and drops empty lines.
+func TestDecodeRemoteProgress(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		packets [][]byte
+		want    []string
+	}{
+		{
+			name:    "nil input",
+			packets: nil,
+			want:    nil,
+		},
+		{
+			name:    "no packets",
+			packets: [][]byte{},
+			want:    nil,
+		},
+		{
+			name:    "all-whitespace packets are dropped",
+			packets: [][]byte{[]byte("   \t  \n\r\n  ")},
+			want:    nil,
+		},
+		{
+			// FieldsFunc treats consecutive separators as one and
+			// produces no fields at all, so this hits the
+			// len(lines)==0 short-circuit rather than the
+			// per-line trim-then-drop path above.
+			name:    "only line terminators yields no lines",
+			packets: [][]byte{[]byte("\n\n\r\n\r\n")},
+			want:    nil,
+		},
+		{
+			name:    "single LF-terminated line",
+			packets: [][]byte{[]byte("hello\n")},
+			want:    []string{"hello"},
+		},
+		{
+			name:    "single line without trailing LF",
+			packets: [][]byte{[]byte("hello")},
+			want:    []string{"hello"},
+		},
+		{
+			name:    "CRLF line terminator",
+			packets: [][]byte{[]byte("hello\r\nworld\r\n")},
+			want:    []string{"hello", "world"},
+		},
+		{
+			name:    "bare CR line terminator (spinner overwrite)",
+			packets: [][]byte{[]byte("frame1\rframe2\rfinal\n")},
+			want:    []string{"frame1", "frame2", "final"},
+		},
+		{
+			name:    "leading and trailing whitespace per line is trimmed",
+			packets: [][]byte{[]byte("  spaced  \n\thello\t\n")},
+			want:    []string{"spaced", "hello"},
+		},
+		{
+			name:    "consecutive empty lines are dropped",
+			packets: [][]byte{[]byte("\n\n\nreal line\n\n\n")},
+			want:    []string{"real line"},
+		},
+		{
+			name: "line split across packet boundaries is reassembled",
+			packets: [][]byte{
+				[]byte("part one "),
+				[]byte("part two\n"),
+			},
+			want: []string{"part one part two"},
+		},
+		{
+			name: "multiple packets with multiple lines",
+			packets: [][]byte{
+				[]byte("first\nsecond"),
+				[]byte("-continued\n"),
+				[]byte("third\n"),
+			},
+			want: []string{"first", "second-continued", "third"},
+		},
+		{
+			name: "GitLab-style decorated multi-line output",
+			packets: [][]byte{
+				[]byte("\n========================================\n"),
+				[]byte("GL-HOOK-ERR: Commit must reference issue.\n"),
+				[]byte("GL-HOOK-ERR: See https://example.com\n"),
+				[]byte("========================================\n\n"),
+			},
+			want: []string{
+				"========================================",
+				"GL-HOOK-ERR: Commit must reference issue.",
+				"GL-HOOK-ERR: See https://example.com",
+				"========================================",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := decodeRemoteProgress(tt.packets)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 // TestReceivePack_RemoteProgressOnError ensures human-readable remote
 // progress messages emitted on side-band channel 2 are attached to any
 // error returned from the same response. Pre-receive hooks and push
@@ -659,5 +771,253 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 
 		var wrapped *protocol.RemoteRejectionError
 		require.False(t, errors.As(err, &wrapped), "did not expect RemoteRejectionError when no channel-2 progress was sent, got %T: %v", err, err)
+	})
+
+	t.Run("unpack failure with channel-2 progress is wrapped and preserves GitUnpackError", func(t *testing.T) {
+		t.Parallel()
+		// Bare channel-0 "unpack <reason>" (not "ok") triggers
+		// detectError → GitUnpackError directly out of parser.Next().
+		// The same response carries channel-2 progress from the
+		// server. Note: a channel-2 packet whose payload is prefixed
+		// with "error:" or "fatal:" is intentionally converted to a
+		// GitServerError by detectError (see isErrorOrFatalMessageOptimized);
+		// only non-error-prefixed channel-2 payloads are captured as
+		// progress, so the fixture deliberately uses a plain message.
+		body := flushed(bytes.Join([][]byte{
+			progress("Receiving objects...\n"),
+			pkt("unpack index-pack failed\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var unpackErr *protocol.GitUnpackError
+		require.True(t, errors.As(err, &unpackErr),
+			"expected GitUnpackError in chain, got %T: %v", err, err)
+		require.Equal(t, "index-pack failed", strings.TrimSpace(unpackErr.Message))
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+		require.Equal(t, []string{"Receiving objects..."}, wrapped.RemoteMessages)
+	})
+
+	t.Run("channel-3 fatal with channel-2 progress is wrapped and preserves GitServerError", func(t *testing.T) {
+		t.Parallel()
+		// Channel 2 progress arrives first, then a channel-3 fatal
+		// terminates parsing. The defer in parseReceivePackResponse
+		// must still attach the captured progress.
+		body := flushed(bytes.Join([][]byte{
+			progress("Counting objects: 1, done.\n"),
+			progress("Resolving deltas: 100% (0/0).\n"),
+			pkt(string(append([]byte{0x03}, []byte("connection terminated by host")...))),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var serverErr *protocol.GitServerError
+		require.True(t, errors.As(err, &serverErr),
+			"expected GitServerError in chain, got %T: %v", err, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+		require.Equal(t, []string{
+			"Counting objects: 1, done.",
+			"Resolving deltas: 100% (0/0).",
+		}, wrapped.RemoteMessages)
+	})
+
+	t.Run("missing report-status with channel-2 progress is wrapped", func(t *testing.T) {
+		t.Parallel()
+		// A non-empty channel-1 packet with content that does not
+		// match any error sentinel arms the report-status requirement
+		// without satisfying it, producing ErrMissingReportStatus.
+		// Channel-2 progress in the same response should still be
+		// attached.
+		body := flushed(bytes.Join([][]byte{
+			progress("server-side message of the day\n"),
+			rawSideband1("garbled report status with no recognizable line\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrMissingReportStatus)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped),
+			"expected ErrMissingReportStatus to be wrapped with progress, got %T: %v", err, err)
+		require.Equal(t, []string{"server-side message of the day"}, wrapped.RemoteMessages)
+	})
+
+	t.Run("empty channel-2 packet does not produce a wrapper", func(t *testing.T) {
+		t.Parallel()
+		// A packet that is just the side-band channel byte (0x02)
+		// with no payload should not be captured as progress —
+		// otherwise rejected pushes with no real progress would
+		// surface a wrapper with an empty RemoteMessages list.
+		body := flushed(bytes.Join([][]byte{
+			pkt(string([]byte{0x02})),
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.False(t, errors.As(err, &wrapped),
+			"empty channel-2 payload must not arm the wrapper, got %T: %v", err, err)
+
+		var refErr *protocol.GitReferenceUpdateError
+		require.True(t, errors.As(err, &refErr))
+	})
+
+	t.Run("CR-only line terminator in progress is split correctly", func(t *testing.T) {
+		t.Parallel()
+		body := flushed(bytes.Join([][]byte{
+			progress("Compressing: 50%\rCompressing: 100%\rdone\n"),
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+		require.Equal(t, []string{
+			"Compressing: 50%",
+			"Compressing: 100%",
+			"done",
+		}, wrapped.RemoteMessages)
+	})
+
+	t.Run("empty channel-3 packet does not produce an error or wrapper", func(t *testing.T) {
+		t.Parallel()
+		// A packet that is just the side-band channel byte (0x03)
+		// with no payload should not be surfaced as an error —
+		// detectError already converts well-formed "fatal:"/"error:"
+		// prefixed channel-3 packets, and classifyReceivePackLine
+		// surfaces non-empty channel-3 payloads as a generic fatal.
+		// An empty channel-3 packet is a no-op; combined with a
+		// successful unpack ok, the response succeeds.
+		body := flushed(bytes.Join([][]byte{
+			pkt(string([]byte{0x03})),
+			pkt("unpack ok\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.NoError(t, err)
+	})
+
+	t.Run("channel-2 packet with error: prefix becomes GitServerError not progress", func(t *testing.T) {
+		t.Parallel()
+		// detectError converts side-band channel 2 packets prefixed
+		// with "error:" or "fatal:" directly into GitServerError
+		// (see isErrorOrFatalMessageOptimized). Such a packet is the
+		// error itself, not auxiliary progress, and must NOT be
+		// captured as a remote message — otherwise the same text
+		// would appear twice in the surfaced output.
+		body := flushed(progress("error: missing prerequisite object abc123\n"))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var serverErr *protocol.GitServerError
+		require.True(t, errors.As(err, &serverErr))
+		require.Equal(t, "error", serverErr.ErrorType)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.False(t, errors.As(err, &wrapped),
+			"channel-2 error: prefix is the error itself, not progress; got %T: %v", err, err)
+	})
+
+	t.Run("progress emitted after the rejection in the same response is still captured", func(t *testing.T) {
+		t.Parallel()
+		// Servers that interleave progress around the report-status
+		// can emit channel-2 packets after the ng line. The defer in
+		// parseReceivePackResponse runs after the full body is read,
+		// so trailing progress must still be attached.
+		body := flushed(bytes.Join([][]byte{
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+			progress("trailing remote message after rejection\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+		require.Equal(t, []string{"trailing remote message after rejection"}, wrapped.RemoteMessages)
 	})
 }
