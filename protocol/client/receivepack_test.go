@@ -1008,6 +1008,16 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 			"channel-2 error: prefix is the error itself, not progress; got %T: %v", err, err)
 	})
 
+	// noKeepAliveClient gives a sub-test its own HTTP client whose
+	// transport disables keep-alives, so heavy response-body tests
+	// don't add idle connections to the shared http.DefaultTransport
+	// pool. Without this, a flake in net/http's idle-connection
+	// handling (golang/go#22330) can surface as
+	// "http: CloseIdleConnections called" in any concurrent sub-test.
+	noKeepAliveClient := options.WithHTTPClient(&http.Client{
+		Transport: &http.Transport{DisableKeepAlives: true},
+	})
+
 	t.Run("channel-2 progress is bounded by maxRemoteProgressBytes", func(t *testing.T) {
 		t.Parallel()
 		// A verbose hook that streams more channel-2 bytes than the
@@ -1033,7 +1043,7 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 		}))
 		defer server.Close()
 
-		c, err := NewRawClient(server.URL + "/repo")
+		c, err := NewRawClient(server.URL+"/repo", noKeepAliveClient)
 		require.NoError(t, err)
 
 		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
@@ -1072,7 +1082,7 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 		}))
 		defer server.Close()
 
-		c, err := NewRawClient(server.URL + "/repo")
+		c, err := NewRawClient(server.URL+"/repo", noKeepAliveClient)
 		require.NoError(t, err)
 
 		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
