@@ -502,6 +502,90 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 	}
 }
 
+// TestRemoteProgressBuffer_AppendTruncatesAndCopies verifies that
+// remoteProgressBuffer caps total bytes at maxRemoteProgressBytes and,
+// crucially, copies the truncated prefix into a fresh slice instead
+// of subslicing the input. Subslicing alone would keep the original
+// pkt-line's full backing array (~64 KiB) alive for the lifetime of
+// the buffer, defeating the byte cap in terms of actual memory
+// retention.
+func TestRemoteProgressBuffer_AppendTruncatesAndCopies(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero-length payload is a no-op", func(t *testing.T) {
+		t.Parallel()
+		var b remoteProgressBuffer
+		b.append(nil)
+		b.append([]byte{})
+		require.Empty(t, b.payloads)
+		require.Equal(t, 0, b.used)
+	})
+
+	t.Run("payload smaller than budget is appended as-is", func(t *testing.T) {
+		t.Parallel()
+		var b remoteProgressBuffer
+		small := []byte("hello")
+		b.append(small)
+		require.Len(t, b.payloads, 1)
+		require.Equal(t, []byte("hello"), b.payloads[0])
+		require.Equal(t, len(small), b.used)
+	})
+
+	t.Run("packets past the cap are dropped silently", func(t *testing.T) {
+		t.Parallel()
+		var b remoteProgressBuffer
+		b.append(bytes.Repeat([]byte("x"), maxRemoteProgressBytes))
+		require.Equal(t, maxRemoteProgressBytes, b.used)
+
+		// Subsequent packet should be entirely dropped.
+		b.append([]byte("ignored"))
+		require.Len(t, b.payloads, 1)
+		require.Equal(t, maxRemoteProgressBytes, b.used)
+	})
+
+	t.Run("truncated payload is copied so original backing array can be GC'd", func(t *testing.T) {
+		t.Parallel()
+		var b remoteProgressBuffer
+
+		// Pre-fill so the next append must truncate.
+		const headroom = 16
+		b.append(bytes.Repeat([]byte("a"), maxRemoteProgressBytes-headroom))
+
+		// Construct a payload much larger than the remaining
+		// headroom; the kept prefix should be exactly `headroom`
+		// bytes and stored in a fresh allocation, not a subslice
+		// of `payload`.
+		payload := make([]byte, 4*1024)
+		for i := range payload {
+			payload[i] = 'X'
+		}
+		b.append(payload)
+
+		require.Equal(t, maxRemoteProgressBytes, b.used,
+			"buffer should be exactly at the cap after truncation")
+		require.Len(t, b.payloads, 2)
+
+		stored := b.payloads[1]
+		require.Len(t, stored, headroom, "stored prefix size")
+
+		// Capacity equality is the structural proof: a subslice of
+		// `payload` would have cap(stored) == cap(payload)-offset
+		// (~4096), keeping the full 4 KiB allocation alive. A fresh
+		// copy has cap(stored) == len(stored) == headroom.
+		require.Equal(t, headroom, cap(stored),
+			"truncated prefix must be a fresh allocation, not a subslice "+
+				"of the input (subslicing would retain the full input backing array)")
+
+		// Behavioural proof: mutating the original after the fact
+		// must not change the stored bytes.
+		want := append([]byte(nil), stored...)
+		for i := range payload {
+			payload[i] = 0
+		}
+		require.Equal(t, want, stored, "stored bytes must be decoupled from input")
+	})
+}
+
 // TestDecodeRemoteProgress exercises the channel-2 progress decoder
 // directly. Side-band channel 2 is a byte stream — a single line may
 // be split across outer packets, and servers terminate lines with

@@ -60,7 +60,17 @@ func (b *remoteProgressBuffer) append(payload []byte) {
 	}
 	remain := maxRemoteProgressBytes - b.used
 	if len(payload) > remain {
-		payload = payload[:remain]
+		// Copy the kept prefix into a fresh slice. Slicing alone
+		// would retain the original pkt-line's full backing array
+		// (up to ~64 KiB) for the lifetime of the buffer, so a
+		// payload that mostly overflows the budget could pin
+		// almost a full packet of memory per response — defeating
+		// maxRemoteProgressBytes. The copy releases the rest.
+		truncated := make([]byte, remain)
+		copy(truncated, payload)
+		b.payloads = append(b.payloads, truncated)
+		b.used = maxRemoteProgressBytes
+		return
 	}
 	b.payloads = append(b.payloads, payload)
 	b.used += len(payload)
