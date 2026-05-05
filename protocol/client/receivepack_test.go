@@ -501,3 +501,163 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestReceivePack_RemoteProgressOnError ensures human-readable remote
+// progress messages emitted on side-band channel 2 are attached to any
+// error returned from the same response. Pre-receive hooks and push
+// rules on servers like GitLab write their reason to channel 2; a bare
+// "pre-receive hook declined" reason is rarely actionable on its own,
+// so the wrapper preserves the underlying typed error and enriches the
+// surfaced message with the captured `remote: …` lines.
+func TestReceivePack_RemoteProgressOnError(t *testing.T) {
+	t.Parallel()
+
+	pkt := func(s string) []byte {
+		b, err := protocol.PackLine(s).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+	flushed := func(data []byte) []byte {
+		return append(append([]byte{}, data...), []byte("0000")...)
+	}
+	progress := func(text string) []byte {
+		return pkt(string(append([]byte{0x02}, []byte(text)...)))
+	}
+	rawSideband1 := func(text string) []byte {
+		payload := append([]byte{0x01}, []byte(text)...)
+		b, err := protocol.PackLine(payload).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	t.Run("ng with channel-2 progress surfaces both reason and remote messages", func(t *testing.T) {
+		t.Parallel()
+		body := flushed(bytes.Join([][]byte{
+			progress("GitLab: You are not allowed to push code to protected branches on this project.\n"),
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		// Underlying typed error is preserved for programmatic inspection.
+		var refErr *protocol.GitReferenceUpdateError
+		require.True(t, errors.As(err, &refErr), "expected GitReferenceUpdateError in chain, got %T: %v", err, err)
+		require.Equal(t, "refs/heads/main", refErr.RefName)
+		require.Equal(t, "pre-receive hook declined", refErr.Reason)
+
+		// Wrapper carries the channel-2 progress lines.
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped), "expected RemoteRejectionError in chain, got %T: %v", err, err)
+		require.Equal(t, []string{
+			"GitLab: You are not allowed to push code to protected branches on this project.",
+		}, wrapped.RemoteMessages)
+
+		// The surfaced message includes both pieces.
+		require.Contains(t, err.Error(), "reference update failed for refs/heads/main: pre-receive hook declined")
+		require.Contains(t, err.Error(), "remote: GitLab: You are not allowed to push code to protected branches on this project.")
+	})
+
+	t.Run("multiline progress is split into separate remote lines and empties dropped", func(t *testing.T) {
+		t.Parallel()
+		body := flushed(bytes.Join([][]byte{
+			progress("\n========================================\n"),
+			progress("GL-HOOK-ERR: Commit message must reference an issue.\n"),
+			progress("GL-HOOK-ERR: See https://example.com/policy\n"),
+			progress("========================================\n\n"),
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+		require.Equal(t, []string{
+			"========================================",
+			"GL-HOOK-ERR: Commit message must reference an issue.",
+			"GL-HOOK-ERR: See https://example.com/policy",
+			"========================================",
+		}, wrapped.RemoteMessages)
+	})
+
+	t.Run("progress line split across packets is reassembled", func(t *testing.T) {
+		t.Parallel()
+		body := flushed(bytes.Join([][]byte{
+			progress("GitLab: Push rule "),
+			progress("violation: file too large.\n"),
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "remote: GitLab: Push rule violation: file too large.")
+	})
+
+	t.Run("channel-2 progress on a successful push does not produce a wrapper error", func(t *testing.T) {
+		t.Parallel()
+		body := flushed(bytes.Join([][]byte{
+			progress("Counting objects: 1, done.\n"),
+			pkt("unpack ok\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.NoError(t, err)
+	})
+
+	t.Run("error without channel-2 progress is not wrapped", func(t *testing.T) {
+		t.Parallel()
+		body := flushed(rawSideband1("ng refs/heads/main pre-receive hook declined\n"))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.False(t, errors.As(err, &wrapped), "did not expect RemoteRejectionError when no channel-2 progress was sent, got %T: %v", err, err)
+	})
+}

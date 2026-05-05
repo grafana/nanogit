@@ -105,7 +105,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 // strategy. Channel-1 unwrap is scoped to this function and does not
 // leak into the generic detectError path, where channel 1 also carries
 // binary packfile data during fetch/clone.
-func parseReceivePackResponse(body io.Reader) error {
+func parseReceivePackResponse(body io.Reader) (err error) {
 	parser := protocol.NewParser(body)
 	sawUnpackOk := false
 	// sawReportStatusContent tracks whether the server sent anything
@@ -117,16 +117,35 @@ func parseReceivePackResponse(body io.Reader) error {
 	// progress.
 	sawReportStatusContent := false
 	var sideBandPackets [][]byte
+	// progressPackets accumulates side-band channel 2 payloads in
+	// arrival order. Channel 2 carries the human-readable output of
+	// pre-receive hooks and push rules (visible to git CLI users as
+	// `remote: …` lines), which is the actionable detail behind a
+	// bare "pre-receive hook declined" or "push rule violation"
+	// reason. We surface it on the error path only — successful
+	// pushes don't need it, and including it on success would just
+	// noisy-up benign progress.
+	var progressPackets [][]byte
+	defer func() {
+		if err == nil {
+			return
+		}
+		msgs := decodeRemoteProgress(progressPackets)
+		if len(msgs) == 0 {
+			return
+		}
+		err = &protocol.RemoteRejectionError{Err: err, RemoteMessages: msgs}
+	}()
 
 	for {
-		line, err := parser.Next()
-		if err == io.EOF {
+		line, parseErr := parser.Next()
+		if parseErr == io.EOF {
 			break
 		}
-		if err != nil {
-			return fmt.Errorf("git protocol error: %w", err)
+		if parseErr != nil {
+			return fmt.Errorf("git protocol error: %w", parseErr)
 		}
-		ok, content, classifyErr := classifyReceivePackLine(line, &sideBandPackets)
+		ok, content, classifyErr := classifyReceivePackLine(line, &sideBandPackets, &progressPackets)
 		if classifyErr != nil {
 			return classifyErr
 		}
@@ -161,17 +180,27 @@ func parseReceivePackResponse(body io.Reader) error {
 
 // classifyReceivePackLine inspects a single parsed pkt-line from the
 // receive-pack response and either appends a channel-1 payload to the
-// running side-band buffer, returns a fatal channel-3 error, or signals
-// whether the line counts as report-status content / contains an
-// "unpack ok" sentinel for the bare channel-0 case.
-func classifyReceivePackLine(line []byte, sideBandPackets *[][]byte) (sawUnpackOk, sawReportStatusContent bool, err error) {
+// running side-band buffer, captures a channel-2 progress payload,
+// returns a fatal channel-3 error, or signals whether the line counts
+// as report-status content / contains an "unpack ok" sentinel for the
+// bare channel-0 case.
+func classifyReceivePackLine(line []byte, sideBandPackets, progressPackets *[][]byte) (sawUnpackOk, sawReportStatusContent bool, err error) {
 	if len(line) == 0 {
 		return false, false, nil
 	}
 	switch line[0] {
 	case 0x02:
 		// Channel 2 is progress; it never carries report-status and
-		// does not arm any requirement.
+		// does not arm any requirement. Capture the payload so
+		// parseReceivePackResponse can attach it to any error
+		// returned from this response — pre-receive hook stdout and
+		// push-rule violation messages are emitted here on GitLab,
+		// and a bare "pre-receive hook declined" is rarely actionable
+		// without that context.
+		payload := line[1:]
+		if len(payload) > 0 {
+			*progressPackets = append(*progressPackets, payload)
+		}
 		return false, false, nil
 	case 0x03:
 		// Channel 3 is fatal. detectError already converts the
@@ -336,4 +365,38 @@ func looksLikePktLine(data []byte) bool {
 // whitespace per gitprotocol-common.
 func isUnpackOkLine(line []byte) bool {
 	return bytes.Equal(bytes.TrimRight(line, " \t\r\n"), unpackOkLine)
+}
+
+// decodeRemoteProgress concatenates side-band channel 2 payloads,
+// splits them on LF or CR (servers commonly use \r for spinner
+// updates), trims surrounding whitespace, and returns the non-empty
+// lines in arrival order. Channel 2 is a byte stream, so an
+// individual progress line may be split across outer packets;
+// reassembly before splitting is essential.
+func decodeRemoteProgress(packets [][]byte) []string {
+	if len(packets) == 0 {
+		return nil
+	}
+	var buf bytes.Buffer
+	for _, p := range packets {
+		buf.Write(p)
+	}
+	lines := bytes.FieldsFunc(buf.Bytes(), func(r rune) bool {
+		return r == '\n' || r == '\r'
+	})
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		trimmed := bytes.TrimSpace(l)
+		if len(trimmed) == 0 {
+			continue
+		}
+		out = append(out, string(trimmed))
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
