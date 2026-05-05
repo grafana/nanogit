@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/grafana/nanogit/compare/v0.16.1...v0.17.0) (2026-05-05)
+
+
+### Features
+
+* surface side-band channel-2 progress in receive-pack errors ([#284](https://github.com/grafana/nanogit/issues/284)) ([c10af65](https://github.com/grafana/nanogit/commit/c10af650b61c74c810069f3867c44ccf70c330f5)), closes [#270](https://github.com/grafana/nanogit/issues/270)
+
+
+### Bug Fixes
+
+* preserve submodules in StagedWriter tree rebuilds ([#282](https://github.com/grafana/nanogit/issues/282)) ([6b236f3](https://github.com/grafana/nanogit/commit/6b236f3083b5de19bd48d251d90838d376b2c6c7)), closes [grafana/grafana#123891](https://github.com/grafana/grafana/issues/123891) [grafana/grafana#123891](https://github.com/grafana/grafana/issues/123891)
+
 ## [0.16.1](https://github.com/grafana/nanogit/compare/v0.16.0...v0.16.1) (2026-04-29)
 
 
