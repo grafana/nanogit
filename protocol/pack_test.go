@@ -631,6 +631,34 @@ func TestRemoteRejectionError(t *testing.T) {
 		require.Equal(t, "boom", wrapped.Error())
 	})
 
+	t.Run("Error returns fallback when Err is nil and no remote messages", func(t *testing.T) {
+		t.Parallel()
+		// Defensive zero-value behaviour: the type is exported, so
+		// external callers can construct a bare RemoteRejectionError.
+		// .Error() must not panic.
+		wrapped := &protocol.RemoteRejectionError{}
+		require.NotPanics(t, func() { _ = wrapped.Error() })
+		require.NotEmpty(t, wrapped.Error())
+	})
+
+	t.Run("Error returns fallback prefix when Err is nil but remote messages set", func(t *testing.T) {
+		t.Parallel()
+		wrapped := &protocol.RemoteRejectionError{
+			RemoteMessages: []string{"line 1", "line 2"},
+		}
+		require.NotPanics(t, func() { _ = wrapped.Error() })
+		got := wrapped.Error()
+		require.Contains(t, got, "remote: line 1")
+		require.Contains(t, got, "remote: line 2")
+	})
+
+	t.Run("Unwrap returns nil when Err is nil and does not panic", func(t *testing.T) {
+		t.Parallel()
+		wrapped := &protocol.RemoteRejectionError{}
+		require.NotPanics(t, func() { _ = errors.Unwrap(wrapped) })
+		require.Nil(t, errors.Unwrap(wrapped))
+	})
+
 	t.Run("Error appends single remote message on its own line", func(t *testing.T) {
 		t.Parallel()
 		underlying := protocol.NewGitReferenceUpdateError(

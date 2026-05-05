@@ -561,9 +561,24 @@ func TestDecodeRemoteProgress(t *testing.T) {
 			want:    []string{"frame1", "frame2", "final"},
 		},
 		{
-			name:    "leading and trailing whitespace per line is trimmed",
+			name:    "trailing whitespace is trimmed but leading whitespace is preserved",
 			packets: [][]byte{[]byte("  spaced  \n\thello\t\n")},
-			want:    []string{"spaced", "hello"},
+			want:    []string{"  spaced", "\thello"},
+		},
+		{
+			name: "indented hook output keeps its indentation (bullet lists, sub-items)",
+			packets: [][]byte{
+				[]byte("GL-HOOK-ERR: Push rule violations:\n"),
+				[]byte("  - Commit message must reference an issue\n"),
+				[]byte("  - File exceeds maximum size\n"),
+				[]byte("    See https://example.com/policy\n"),
+			},
+			want: []string{
+				"GL-HOOK-ERR: Push rule violations:",
+				"  - Commit message must reference an issue",
+				"  - File exceeds maximum size",
+				"    See https://example.com/policy",
+			},
 		},
 		{
 			name:    "consecutive empty lines are dropped",
@@ -991,6 +1006,86 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 		var wrapped *protocol.RemoteRejectionError
 		require.False(t, errors.As(err, &wrapped),
 			"channel-2 error: prefix is the error itself, not progress; got %T: %v", err, err)
+	})
+
+	t.Run("channel-2 progress is bounded by maxRemoteProgressBytes", func(t *testing.T) {
+		t.Parallel()
+		// A verbose hook that streams more channel-2 bytes than the
+		// per-response cap must not retain unbounded data; once the
+		// cap is exhausted further packets are dropped silently and
+		// the surfaced error contains only the captured prefix.
+		// pkt-line lengths are 4 hex chars (uint16, max 0xffff), so
+		// a single packet payload can't exceed ~64 KiB. We send
+		// several 32 KiB chunks whose total exceeds the cap; the
+		// captured byte count must not exceed maxRemoteProgressBytes.
+		chunk := func(b byte) []byte {
+			line := bytes.Repeat([]byte{b}, 32*1024)
+			return progress(string(line) + "\n")
+		}
+		body := flushed(bytes.Join([][]byte{
+			chunk('a'), chunk('b'), chunk('c'), chunk('d'), chunk('e'), // 5 * 32 KiB = 160 KiB > 64 KiB cap
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+
+		var totalRetained int
+		for _, m := range wrapped.RemoteMessages {
+			totalRetained += len(m)
+		}
+		require.LessOrEqual(t, totalRetained, maxRemoteProgressBytes,
+			"total captured progress must not exceed the byte cap")
+		// Sanity: we should have actually filled close to the cap so
+		// this test would notice if the bound were silently set to 0.
+		require.Greater(t, totalRetained, maxRemoteProgressBytes/2,
+			"captured progress should fill at least half the cap before truncation")
+	})
+
+	t.Run("channel-2 packets past the cap are silently dropped", func(t *testing.T) {
+		t.Parallel()
+		// First packet nearly fills the cap; second packet exceeds
+		// the remaining headroom and is mostly dropped.
+		filler := bytes.Repeat([]byte("a"), maxRemoteProgressBytes-1024) // leaves 1 KiB headroom
+		dropped := bytes.Repeat([]byte("b"), 32*1024)                    // only ~1 KiB fits, rest dropped
+		body := flushed(bytes.Join([][]byte{
+			progress(string(filler) + "\n"),
+			progress(string(dropped) + "\n"),
+			rawSideband1("ng refs/heads/main pre-receive hook declined\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.Error(t, err)
+
+		var wrapped *protocol.RemoteRejectionError
+		require.True(t, errors.As(err, &wrapped))
+		var totalRetained int
+		for _, m := range wrapped.RemoteMessages {
+			totalRetained += len(m)
+		}
+		require.LessOrEqual(t, totalRetained, maxRemoteProgressBytes,
+			"total captured progress must not exceed the byte cap regardless of packet count")
 	})
 
 	t.Run("progress emitted after the rejection in the same response is still captured", func(t *testing.T) {

@@ -240,11 +240,19 @@ func (e *GitUnpackError) Unwrap() error {
 }
 
 func (e *RemoteRejectionError) Error() string {
+	// Defensive nil-guards: the wrapper is only ever constructed
+	// internally with a non-nil Err, but it is an exported type and
+	// external callers can construct zero-valued instances. A
+	// fallback message beats a panic on .Error().
+	underlying := "remote rejection"
+	if e.Err != nil {
+		underlying = e.Err.Error()
+	}
 	if len(e.RemoteMessages) == 0 {
-		return e.Err.Error()
+		return underlying
 	}
 	var b strings.Builder
-	b.WriteString(e.Err.Error())
+	b.WriteString(underlying)
 	for _, m := range e.RemoteMessages {
 		b.WriteString("\nremote: ")
 		b.WriteString(m)
@@ -254,7 +262,8 @@ func (e *RemoteRejectionError) Error() string {
 
 // Unwrap returns the underlying receive-pack error so errors.As /
 // errors.Is keep finding the typed cause (GitReferenceUpdateError,
-// GitUnpackError, GitServerError, …).
+// GitUnpackError, GitServerError, …). Returns nil if Err is unset,
+// which ends the unwrap chain rather than panicking.
 func (e *RemoteRejectionError) Unwrap() error {
 	return e.Err
 }
