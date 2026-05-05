@@ -611,6 +611,136 @@ func TestGitUnpackError(t *testing.T) {
 	})
 }
 
+func TestRemoteRejectionError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Error passes through underlying when no remote messages", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(
+			[]byte("ng refs/heads/main pre-receive hook declined"),
+			"refs/heads/main", "pre-receive hook declined",
+		)
+		wrapped := &protocol.RemoteRejectionError{Err: underlying}
+		require.Equal(t, underlying.Error(), wrapped.Error())
+	})
+
+	t.Run("Error passes through underlying when RemoteMessages is nil", func(t *testing.T) {
+		t.Parallel()
+		underlying := errors.New("boom")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: nil}
+		require.Equal(t, "boom", wrapped.Error())
+	})
+
+	t.Run("Error returns fallback when Err is nil and no remote messages", func(t *testing.T) {
+		t.Parallel()
+		// Defensive zero-value behaviour: the type is exported, so
+		// external callers can construct a bare RemoteRejectionError.
+		// .Error() must not panic.
+		wrapped := &protocol.RemoteRejectionError{}
+		require.NotPanics(t, func() { _ = wrapped.Error() })
+		require.NotEmpty(t, wrapped.Error())
+	})
+
+	t.Run("Error returns fallback prefix when Err is nil but remote messages set", func(t *testing.T) {
+		t.Parallel()
+		wrapped := &protocol.RemoteRejectionError{
+			RemoteMessages: []string{"line 1", "line 2"},
+		}
+		require.NotPanics(t, func() { _ = wrapped.Error() })
+		got := wrapped.Error()
+		require.Contains(t, got, "remote: line 1")
+		require.Contains(t, got, "remote: line 2")
+	})
+
+	t.Run("Unwrap returns nil when Err is nil and does not panic", func(t *testing.T) {
+		t.Parallel()
+		wrapped := &protocol.RemoteRejectionError{}
+		require.NotPanics(t, func() { _ = errors.Unwrap(wrapped) })
+		require.Nil(t, errors.Unwrap(wrapped))
+	})
+
+	t.Run("Error appends single remote message on its own line", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(
+			[]byte("ng refs/heads/main pre-receive hook declined"),
+			"refs/heads/main", "pre-receive hook declined",
+		)
+		wrapped := &protocol.RemoteRejectionError{
+			Err: underlying,
+			RemoteMessages: []string{
+				"GitLab: You are not allowed to push code to protected branches on this project.",
+			},
+		}
+		require.Equal(t,
+			"reference update failed for refs/heads/main: pre-receive hook declined\n"+
+				"remote: GitLab: You are not allowed to push code to protected branches on this project.",
+			wrapped.Error())
+	})
+
+	t.Run("Error appends each remote message on its own line preserving order", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitUnpackError([]byte("unpack failed"), "failed")
+		wrapped := &protocol.RemoteRejectionError{
+			Err: underlying,
+			RemoteMessages: []string{
+				"line 1",
+				"line 2",
+				"line 3",
+			},
+		}
+		require.Equal(t,
+			"pack unpack failed: failed\n"+
+				"remote: line 1\n"+
+				"remote: line 2\n"+
+				"remote: line 3",
+			wrapped.Error())
+	})
+
+	t.Run("Unwrap returns the underlying error", func(t *testing.T) {
+		t.Parallel()
+		underlying := errors.New("underlying")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying}
+		require.Same(t, underlying, errors.Unwrap(wrapped))
+	})
+
+	t.Run("errors.As finds the wrapper through chain", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(nil, "refs/heads/main", "denied")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+		// Wrap once more like callers would.
+		outer := fmt.Errorf("git protocol error: %w", wrapped)
+
+		var got *protocol.RemoteRejectionError
+		require.True(t, errors.As(outer, &got))
+		require.Equal(t, []string{"hello"}, got.RemoteMessages)
+	})
+
+	t.Run("errors.As finds underlying typed error through wrapper", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(nil, "refs/heads/main", "denied")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+
+		var refErr *protocol.GitReferenceUpdateError
+		require.True(t, errors.As(wrapped, &refErr))
+		require.Equal(t, "refs/heads/main", refErr.RefName)
+		require.Equal(t, "denied", refErr.Reason)
+	})
+
+	t.Run("errors.Is finds underlying sentinel through wrapper", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitReferenceUpdateError(nil, "refs/heads/main", "denied")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+		require.True(t, errors.Is(wrapped, protocol.ErrGitReferenceUpdateError))
+	})
+
+	t.Run("errors.Is finds GitUnpackError sentinel through wrapper", func(t *testing.T) {
+		t.Parallel()
+		underlying := protocol.NewGitUnpackError(nil, "boom")
+		wrapped := &protocol.RemoteRejectionError{Err: underlying, RemoteMessages: []string{"hello"}}
+		require.True(t, errors.Is(wrapped, protocol.ErrGitUnpackError))
+	})
+}
+
 func TestParsePackNewErrorTypes(t *testing.T) {
 	t.Parallel()
 
@@ -772,3 +902,162 @@ func TestParserRejectsOversizedPktLine(t *testing.T) {
 type readerFunc func(p []byte) (int, error)
 
 func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
+
+// TestParsePack_UnpackTrailingWhitespace covers bug-fix: "unpack ok\n"
+// and "unpack ok\r\n" (with trailing whitespace permitted by
+// gitprotocol-common) must be accepted as success, not rejected as
+// GitUnpackError{Message: "ok\n"}. Real-world servers (Gitea, GitHub)
+// include a trailing LF on the report-status sentinel, especially when
+// side-band is disabled.
+func TestParsePack_UnpackTrailingWhitespace(t *testing.T) {
+	t.Parallel()
+
+	// parseAll drains parser.Next() until EOF or a non-EOF error.
+	parseAll := func(data []byte) ([][]byte, error) {
+		parser := protocol.NewParser(bytes.NewReader(data))
+		var lines [][]byte
+		for {
+			line, err := parser.Next()
+			if err != nil {
+				if err == io.EOF {
+					return lines, nil
+				}
+				return lines, err
+			}
+			lines = append(lines, line)
+		}
+	}
+
+	pkt := func(s string) []byte {
+		b, err := protocol.PackLine(s).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	tests := []struct {
+		name        string
+		input       []byte
+		wantErr     bool
+		wantMessage string // for GitUnpackError cases
+	}{
+		{
+			name:    "unpack ok no trailing newline",
+			input:   pkt("unpack ok"),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with LF",
+			input:   pkt("unpack ok\n"),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with CRLF",
+			input:   pkt("unpack ok\r\n"),
+			wantErr: false,
+		},
+		{
+			name:    "unpack ok with trailing spaces",
+			input:   pkt("unpack ok  \n"),
+			wantErr: false,
+		},
+		{
+			name:        "unpack failure with trailing LF",
+			input:       pkt("unpack index-pack failed\n"),
+			wantErr:     true,
+			wantMessage: "index-pack failed\n",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseAll(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.True(t, protocol.IsGitUnpackError(err),
+					"expected GitUnpackError, got %T: %v", err, err)
+				var unpackErr *protocol.GitUnpackError
+				require.ErrorAs(t, err, &unpackErr)
+				require.Equal(t, tt.wantMessage, unpackErr.Message)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestParsePack_Channel1NotMisclassified guards the rule that the
+// generic Parser does NOT unwrap side-band channel 1 (0x01) before
+// matching report-status prefixes. Channel 1 also carries arbitrary
+// binary packfile data during fetch/clone (via MultiplexedReader); a
+// pack chunk that happens to start with bytes spelling "ng " or
+// "unpack " must not be misclassified as a reference-update or unpack
+// failure. Channel-1 unwrapping for receive-pack is performed in
+// protocol/client.parseReceivePackResponse, where it is correctly
+// scoped to the response-parsing context.
+func TestParsePack_Channel1NotMisclassified(t *testing.T) {
+	t.Parallel()
+
+	parseAll := func(data []byte) ([][]byte, error) {
+		parser := protocol.NewParser(bytes.NewReader(data))
+		var lines [][]byte
+		for {
+			line, err := parser.Next()
+			if err != nil {
+				if err == io.EOF {
+					return lines, nil
+				}
+				return lines, err
+			}
+			lines = append(lines, line)
+		}
+	}
+
+	wrapChannel1 := func(payload []byte) []byte {
+		body := append([]byte{0x01}, payload...)
+		b, err := protocol.PackLine(body).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+
+	tests := []struct {
+		name    string
+		payload []byte
+	}{
+		{
+			name:    "channel 1 chunk starting with 'ng ' is opaque data",
+			payload: []byte("ng refs/heads/main pre-receive hook declined\n"),
+		},
+		{
+			name:    "channel 1 chunk starting with 'unpack ' is opaque data",
+			payload: []byte("unpack index-pack failed\n"),
+		},
+		{
+			name:    "channel 1 chunk starting with 'ERR ' is opaque data",
+			payload: []byte("ERR push declined"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			lines, err := parseAll(wrapChannel1(tt.payload))
+			require.NoError(t, err, "channel 1 binary payload must not produce a report-status error")
+			require.Len(t, lines, 1)
+			require.Equal(t, byte(0x01), lines[0][0], "channel byte must be preserved on the returned line")
+		})
+	}
+
+	t.Run("channel 2 progress still treated as regular", func(t *testing.T) {
+		t.Parallel()
+		// Progress messages (channel 2) that are NOT error:/fatal: are
+		// returned as regular data lines, not errors. This guards the
+		// existing behavior for side-band channel 2 progress output.
+		body := append([]byte{0x02}, []byte("Counting objects: 100% (5/5), done.\n")...)
+		b, err := protocol.PackLine(body).Marshal()
+		require.NoError(t, err)
+		_, err = parseAll(b)
+		require.NoError(t, err)
+	})
+}

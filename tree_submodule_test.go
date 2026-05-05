@@ -165,7 +165,7 @@ func TestFlatten_SkipsSubmoduleEntries(t *testing.T) {
 	childTree := makeChildTree()
 	allObjects.Add(rootTree, childTree)
 
-	flatTree, err := httpC.flatten(ctx, rootTree, allObjects)
+	flatTree, submodules, err := httpC.flatten(ctx, rootTree, allObjects)
 
 	// With the bug present, flatten() treats the submodule (mode 0o160000) as a tree,
 	// fails to find it in the collection, and tries to fetch it individually from the
@@ -189,6 +189,12 @@ func TestFlatten_SkipsSubmoduleEntries(t *testing.T) {
 	}
 	require.ElementsMatch(t, expectedPaths, actualPaths,
 		"flat tree should contain only trees and blobs, not submodule entries")
+
+	// flatten now also returns the submodule entries it filtered, so callers
+	// like StagedWriter can re-emit them when rebuilding parent trees.
+	require.Len(t, submodules, 1, "submodule entry should be returned alongside the flat tree")
+	require.Equal(t, "external-lib", submodules[0].Path)
+	require.Equal(t, uint32(0o160000), submodules[0].Mode)
 }
 
 func TestFlatten_SubmoduleNotRecursed(t *testing.T) {
@@ -221,7 +227,7 @@ func TestFlatten_SubmoduleNotRecursed(t *testing.T) {
 	childTree := makeChildTree()
 	allObjects.Add(rootTree, childTree)
 
-	flatTree, err := httpC.flatten(ctx, rootTree, allObjects)
+	flatTree, submodules, err := httpC.flatten(ctx, rootTree, allObjects)
 	require.NoError(t, err, "flatten should succeed without trying to recurse into submodules")
 
 	// The submodule is entirely skipped: neither it nor its contents appear in the flat tree.
@@ -242,6 +248,11 @@ func TestFlatten_SubmoduleNotRecursed(t *testing.T) {
 	}
 	require.ElementsMatch(t, expectedPaths, actualPaths,
 		"flat tree should contain exactly the expected entries")
+
+	// The skipped submodule must surface in the second return value so the
+	// writer can preserve it across tree rebuilds.
+	require.Len(t, submodules, 1)
+	require.Equal(t, "external-lib", submodules[0].Path)
 }
 
 func TestPackfileObjectToTree_SubmoduleSkipped(t *testing.T) {

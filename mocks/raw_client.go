@@ -53,6 +53,19 @@ type FakeRawClient struct {
 		result1 map[string]*protocol.PackfileObject
 		result2 error
 	}
+	FetchReceivePackCapabilitiesStub        func(context.Context) ([]protocol.Capability, error)
+	fetchReceivePackCapabilitiesMutex       sync.RWMutex
+	fetchReceivePackCapabilitiesArgsForCall []struct {
+		arg1 context.Context
+	}
+	fetchReceivePackCapabilitiesReturns struct {
+		result1 []protocol.Capability
+		result2 error
+	}
+	fetchReceivePackCapabilitiesReturnsOnCall map[int]struct {
+		result1 []protocol.Capability
+		result2 error
+	}
 	IsAuthorizedStub        func(context.Context) (bool, error)
 	isAuthorizedMutex       sync.RWMutex
 	isAuthorizedArgsForCall []struct {
@@ -324,6 +337,70 @@ func (fake *FakeRawClient) FetchReturnsOnCall(i int, result1 map[string]*protoco
 	}
 	fake.fetchReturnsOnCall[i] = struct {
 		result1 map[string]*protocol.PackfileObject
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) FetchReceivePackCapabilities(arg1 context.Context) ([]protocol.Capability, error) {
+	fake.fetchReceivePackCapabilitiesMutex.Lock()
+	ret, specificReturn := fake.fetchReceivePackCapabilitiesReturnsOnCall[len(fake.fetchReceivePackCapabilitiesArgsForCall)]
+	fake.fetchReceivePackCapabilitiesArgsForCall = append(fake.fetchReceivePackCapabilitiesArgsForCall, struct {
+		arg1 context.Context
+	}{arg1})
+	stub := fake.FetchReceivePackCapabilitiesStub
+	fakeReturns := fake.fetchReceivePackCapabilitiesReturns
+	fake.recordInvocation("FetchReceivePackCapabilities", []interface{}{arg1})
+	fake.fetchReceivePackCapabilitiesMutex.Unlock()
+	if stub != nil {
+		return stub(arg1)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeRawClient) FetchReceivePackCapabilitiesCallCount() int {
+	fake.fetchReceivePackCapabilitiesMutex.RLock()
+	defer fake.fetchReceivePackCapabilitiesMutex.RUnlock()
+	return len(fake.fetchReceivePackCapabilitiesArgsForCall)
+}
+
+func (fake *FakeRawClient) FetchReceivePackCapabilitiesCalls(stub func(context.Context) ([]protocol.Capability, error)) {
+	fake.fetchReceivePackCapabilitiesMutex.Lock()
+	defer fake.fetchReceivePackCapabilitiesMutex.Unlock()
+	fake.FetchReceivePackCapabilitiesStub = stub
+}
+
+func (fake *FakeRawClient) FetchReceivePackCapabilitiesArgsForCall(i int) context.Context {
+	fake.fetchReceivePackCapabilitiesMutex.RLock()
+	defer fake.fetchReceivePackCapabilitiesMutex.RUnlock()
+	argsForCall := fake.fetchReceivePackCapabilitiesArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRawClient) FetchReceivePackCapabilitiesReturns(result1 []protocol.Capability, result2 error) {
+	fake.fetchReceivePackCapabilitiesMutex.Lock()
+	defer fake.fetchReceivePackCapabilitiesMutex.Unlock()
+	fake.FetchReceivePackCapabilitiesStub = nil
+	fake.fetchReceivePackCapabilitiesReturns = struct {
+		result1 []protocol.Capability
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeRawClient) FetchReceivePackCapabilitiesReturnsOnCall(i int, result1 []protocol.Capability, result2 error) {
+	fake.fetchReceivePackCapabilitiesMutex.Lock()
+	defer fake.fetchReceivePackCapabilitiesMutex.Unlock()
+	fake.FetchReceivePackCapabilitiesStub = nil
+	if fake.fetchReceivePackCapabilitiesReturnsOnCall == nil {
+		fake.fetchReceivePackCapabilitiesReturnsOnCall = make(map[int]struct {
+			result1 []protocol.Capability
+			result2 error
+		})
+	}
+	fake.fetchReceivePackCapabilitiesReturnsOnCall[i] = struct {
+		result1 []protocol.Capability
 		result2 error
 	}{result1, result2}
 }

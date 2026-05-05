@@ -131,6 +131,32 @@ client, err := nanogit.NewHTTPClient(repoURL,
 
 Typed helpers (`CapReportStatusV2`, `CapSideBand64k`, `CapQuiet`, `CapObjectFormatSHA1`, `CapAgent(name)`) are exposed under `protocol`. Any other string literal can be passed through as `protocol.Capability("foo")` when you need to negotiate something the helpers don't cover.
 
+### Programmatic negotiation
+
+Knowing the right subset to advertise requires knowing what the server supports. `options.WithCapabilityNegotiation()` flips that around: nanogit fetches `GET info/refs?service=git-receive-pack` once per client lifetime, parses the v1-style capability advertisement, and intersects it with the desired set on every subsequent ref update. The fetch result is cached behind `sync.Once`, so writer resets after `Push` and `Cleanup` reuse the same negotiated set without extra round-trips.
+
+```go
+client, err := nanogit.NewHTTPClient(repoURL,
+    options.WithBasicAuth("git", token),
+    options.WithCapabilityNegotiation(),
+)
+```
+
+The option composes with `WithReceivePackCapabilities`: the explicit set becomes the desired list, and negotiation filters it down to what the server actually advertises. This is the right pattern when you want the safety of a hand-curated list *and* the defensiveness of dropping anything the server omits.
+
+`report-status-v2` and `agent=` are always retained on the client side regardless of the server's advertisement. Dropping `report-status-v2` would re-introduce silent push success on rejection (nanogit's response parser depends on it), and `agent=` is a pure client self-identifier with no server-side feature semantics.
+
+The CLI exposes the same option via `--negotiate-capabilities`:
+
+```bash
+NANOGIT_TRACE=1 ./nanogit -v put-file main note.md -m "add note" \
+  --negotiate-capabilities < note.md
+```
+
+The trace output will show one extra `GET info/refs?service=git-receive-pack` before the push and a receive-pack POST that advertises only the intersected set.
+
+Negotiation is opt-in. When it fails (network error, 4xx/5xx, malformed advertisement) the push aborts; silent fallback to the static set would hide server misconfiguration and contradict the explicit opt-in. This option is "defensive correctness for strict servers and cleaner traces," not a fix for protocol bugs — for example, it does not bypass servers that wrap `report-status` in side-band channel 1, because they *do* advertise `side-band-64k`. For that case, drop `side-band-64k` explicitly with `WithReceivePackCapabilities`.
+
 ### When to override
 
 - Pushes appear to succeed but the branch is unchanged or empty — retry with `side-band-64k` removed.

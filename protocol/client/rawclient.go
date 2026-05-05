@@ -26,6 +26,7 @@ type RawClient interface {
 	IsServerCompatible(ctx context.Context) (bool, error)
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
 	ReceivePack(ctx context.Context, data io.Reader) error
+	FetchReceivePackCapabilities(ctx context.Context) ([]protocol.Capability, error)
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }

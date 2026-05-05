@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 
@@ -18,7 +19,27 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// Writer specs are registered twice — once with capability negotiation
+// disabled (the default wire shape) and once with it enabled — so every
+// writer flow is exercised against both the static-default and negotiated
+// receive-pack capability sets. The toggle is plumbed through QuickSetup
+// via the package-level quickSetupExtraOpts variable so the spec body
+// itself does not need to know which mode it is running in.
 var _ = Describe("Writer Operations", func() {
+	BeforeEach(func() { quickSetupExtraOpts = nil })
+	AfterEach(func() { quickSetupExtraOpts = nil })
+	writerOperationsSpecs()
+})
+
+var _ = Describe("Writer Operations (with capability negotiation)", func() {
+	BeforeEach(func() {
+		quickSetupExtraOpts = []options.Option{options.WithCapabilityNegotiation()}
+	})
+	AfterEach(func() { quickSetupExtraOpts = nil })
+	writerOperationsSpecs()
+})
+
+func writerOperationsSpecs() {
 	var (
 		testAuthor = nanogit.Author{
 			Name:  "Test Author",
@@ -2927,4 +2948,4 @@ var _ = Describe("Writer Operations", func() {
 			Expect(fsckOutput).NotTo(ContainSubstring("not properly sorted"))
 		})
 	})
-})
+}

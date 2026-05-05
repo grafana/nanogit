@@ -88,3 +88,77 @@ func FormatCapabilities(caps []Capability) (string, error) {
 	}
 	return strings.Join(parts, " "), nil
 }
+
+// alwaysRetainedCapabilityKeys lists capability keys that IntersectCapabilities
+// must keep from the client side regardless of whether the server advertised
+// them. report-status-v2 is what nanogit's receive-pack response parser relies
+// on to detect failures — dropping it because the server didn't advertise it
+// would re-introduce silent push success on rejection. agent= is a pure
+// client self-identifier with no server-side feature semantics; preserving it
+// keeps server-side request logs accurate.
+var alwaysRetainedCapabilityKeys = map[string]struct{}{
+	"report-status-v2": {},
+	"agent":            {},
+}
+
+// capabilityKey returns the comparison key for a capability token, which is
+// the substring before the first "=". For valued capabilities like
+// "agent=git/2.43" or "object-format=sha1" this is the bare name; flag
+// capabilities like "report-status-v2" are returned unchanged.
+func capabilityKey(c Capability) string {
+	key, _, _ := strings.Cut(string(c), "=")
+	return key
+}
+
+// IntersectCapabilities filters client to the capabilities also advertised by
+// server, compared by key (the substring before "="), so a client-side
+// "agent=nanogit" matches a server-side "agent=git/2.43". The client's value
+// is always kept on a match — for valued capabilities like "agent=" and
+// "object-format=" the client's value is what we will actually advertise on
+// the wire.
+//
+// Capability order from the client slice is preserved. Capabilities listed in
+// alwaysRetainedCapabilityKeys (report-status-v2, agent=) are kept in the
+// result regardless of what the server advertised, and are injected with
+// nanogit's defaults if the client did not include them — dropping them
+// would either break nanogit's own response parser (report-status-v2) or
+// strip the client identifier (agent=). The returned slice is therefore
+// guaranteed to be non-empty: returning an empty slice would trigger the
+// empty→defaults fallback in FormatCapabilities and silently re-introduce
+// capabilities the caller meant to filter out.
+//
+// A nil or empty server slice is treated as "the server advertised nothing
+// matchable" and yields only the always-retained entries. The returned
+// slice is freshly allocated; mutating it does not affect either input.
+func IntersectCapabilities(client, server []Capability) []Capability {
+	serverKeys := make(map[string]struct{}, len(server))
+	for _, c := range server {
+		serverKeys[capabilityKey(c)] = struct{}{}
+	}
+
+	out := make([]Capability, 0, len(client)+len(alwaysRetainedCapabilityKeys))
+	seenRetained := make(map[string]struct{}, len(alwaysRetainedCapabilityKeys))
+	for _, c := range client {
+		key := capabilityKey(c)
+		if _, retain := alwaysRetainedCapabilityKeys[key]; retain {
+			out = append(out, c)
+			seenRetained[key] = struct{}{}
+			continue
+		}
+		if _, ok := serverKeys[key]; ok {
+			out = append(out, c)
+		}
+	}
+
+	// Inject defaults for retained keys missing from the client list. This
+	// upholds the function's contract: the result must always carry the
+	// caps nanogit needs internally (report-status-v2 for the parser,
+	// agent= for the client identifier), even if the caller stripped them.
+	if _, ok := seenRetained["report-status-v2"]; !ok {
+		out = append(out, CapReportStatusV2)
+	}
+	if _, ok := seenRetained["agent"]; !ok {
+		out = append(out, CapAgent("nanogit"))
+	}
+	return out
+}

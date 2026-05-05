@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/grafana/nanogit/compare/v0.16.1...v0.17.0) (2026-05-05)
+
+
+### Features
+
+* surface side-band channel-2 progress in receive-pack errors ([#284](https://github.com/grafana/nanogit/issues/284)) ([c10af65](https://github.com/grafana/nanogit/commit/c10af650b61c74c810069f3867c44ccf70c330f5)), closes [#270](https://github.com/grafana/nanogit/issues/270)
+
+
+### Bug Fixes
+
+* preserve submodules in StagedWriter tree rebuilds ([#282](https://github.com/grafana/nanogit/issues/282)) ([6b236f3](https://github.com/grafana/nanogit/commit/6b236f3083b5de19bd48d251d90838d376b2c6c7)), closes [grafana/grafana#123891](https://github.com/grafana/grafana/issues/123891) [grafana/grafana#123891](https://github.com/grafana/grafana/issues/123891)
+
+## [0.16.1](https://github.com/grafana/nanogit/compare/v0.16.0...v0.16.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* unwrap side-band channel 1 and validate unpack ok on receive-pack ([#270](https://github.com/grafana/nanogit/issues/270)) ([326b592](https://github.com/grafana/nanogit/commit/326b5923fdd10a5d0694feed74a058dc8763f567)), closes [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#2](https://github.com/grafana/nanogit/issues/2)
+
+## [0.16.0](https://github.com/grafana/nanogit/compare/v0.15.0...v0.16.0) (2026-04-29)
+
+
+### Features
+
+* opt-in receive-pack capability negotiation ([#279](https://github.com/grafana/nanogit/issues/279)) ([8051dc7](https://github.com/grafana/nanogit/commit/8051dc71bc5e2da428fe7b10dc2400a530f3c84a))
+
+## [0.15.0](https://github.com/grafana/nanogit/compare/v0.14.0...v0.15.0) (2026-04-24)
+
+
+### Features
+
+* allow overriding receive-pack capabilities (library + CLI) ([#269](https://github.com/grafana/nanogit/issues/269)) ([aa2831f](https://github.com/grafana/nanogit/commit/aa2831f76a8f15c6f8755e192f2a4baab4950e86)), closes [#270](https://github.com/grafana/nanogit/issues/270) [#270](https://github.com/grafana/nanogit/issues/270)
+* **cli:** add NANOGIT_REPO env var for default repository URL ([#275](https://github.com/grafana/nanogit/issues/275)) ([62c565d](https://github.com/grafana/nanogit/commit/62c565d80b3660fbed52c323d617a172afcbe0b8))
+
+
+### Documentation
+
+* add server compatibility check guide ([#274](https://github.com/grafana/nanogit/issues/274)) ([3463873](https://github.com/grafana/nanogit/commit/3463873aaa6d3ca54bb77b19fca6f5b2ec86fa37))
+
 ## [0.14.0](https://github.com/grafana/nanogit/compare/v0.13.1...v0.14.0) (2026-04-24)
 
 
@@ -12,11 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * **cli:** add put-file write command and verbose/trace logging ([#271](https://github.com/grafana/nanogit/issues/271)) ([5ce8b23](https://github.com/grafana/nanogit/commit/5ce8b233cf2e09400a2b6c7d8041465638d54106))
 
-
 ### Bug Fixes
 
 * **deps:** update module github.com/go-git/go-git/v5 to v5.18.0 [security] ([#268](https://github.com/grafana/nanogit/issues/268)) ([5deb68c](https://github.com/grafana/nanogit/commit/5deb68c20e20995725227e3c2369336b46f753b2))
 * **security:** upgrade to Go 1.25.9 to address stdlib vulnerabilities ([#272](https://github.com/grafana/nanogit/issues/272)) ([33be959](https://github.com/grafana/nanogit/commit/33be95986b8d5f31bb4935118d97aff5eb4c7471))
+
+## [0.13.1](https://github.com/grafana/nanogit/compare/v0.13.0...v0.13.1) (2026-03-30)
+
+* **deps:** update module github.com/go-git/go-git/v5 to v5.17.1 [security] ([#263](https://github.com/grafana/nanogit/issues/263)) ([f66f760](https://github.com/grafana/nanogit/commit/f66f760e16628ef982797478abd2590ddb27d651))
 
 ## [0.13.0](https://github.com/grafana/nanogit/compare/v0.12.1...v0.13.0) (2026-03-19)
 

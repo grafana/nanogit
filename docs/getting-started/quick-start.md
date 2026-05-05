@@ -183,6 +183,8 @@ client, err := nanogit.NewHTTPClient(repo,
 
 The caller passes the full desired list — there is no merge with the defaults. Arbitrary tokens can be spelled as `protocol.Capability("foo")` when the typed helpers don't cover what the server expects. See [Receive-pack capabilities](server-compatibility.md#receive-pack-capabilities) for the default set and guidance on when to override.
 
+If you would rather not enumerate the safe subset by hand, `options.WithCapabilityNegotiation()` makes the client fetch the server's advertisement once and advertise the intersection on subsequent pushes. See [Programmatic negotiation](server-compatibility.md#programmatic-negotiation) for the trade-offs.
+
 ## Performance Optimization
 
 ### Clone Performance

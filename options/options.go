@@ -33,6 +33,11 @@ type Options struct {
 	// response, classified by operation. The zero value disables every cap
 	// so embedders that don't opt in keep today's unbounded behavior.
 	Limits Limits
+	// NegotiateCapabilities, when true, makes the client fetch the server's
+	// receive-pack capability advertisement once per client lifetime and
+	// advertise the intersection with its desired set on subsequent ref
+	// updates. Default is false (no behavior change).
+	NegotiateCapabilities bool
 }
 
 // Limits caps the total bytes nanogit will read from the server in a single

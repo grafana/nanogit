@@ -412,6 +412,7 @@ func TestCreateRef(t *testing.T) {
 							}
 						}
 						w.WriteHeader(http.StatusOK)
+						writeReportStatusUnpackOk(t, w)
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -463,6 +464,7 @@ func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
 			require.NoError(t, err)
 			gotBody = body
 			w.WriteHeader(http.StatusOK)
+			writeReportStatusUnpackOk(t, w)
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 		}
@@ -633,6 +635,21 @@ func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Reque
 		validateReceivePackBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
+	writeReportStatusUnpackOk(t, w)
+}
+
+// writeReportStatusUnpackOk emits a minimal valid receive-pack report-
+// status response (a single "unpack ok" pkt-line followed by a flush)
+// onto w and surfaces both pkt-line marshal failures and write failures
+// to the test, so handlers can satisfy ReceivePack's positive-validation
+// check in one line without inflating their cyclomatic complexity.
+func writeReportStatusUnpackOk(t *testing.T, w http.ResponseWriter) {
+	t.Helper()
+	pkt, err := protocol.FormatPacks(protocol.PackLine("unpack ok\n"))
+	require.NoError(t, err)
+	if _, err := w.Write(pkt); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
 }
 
 // validateReceivePackBody validates the request body for receive-pack requests
@@ -828,6 +845,7 @@ func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Req
 		validateDeleteRefBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
+	writeReportStatusUnpackOk(t, w)
 }
 
 // validateDeleteRefBody validates the request body for delete ref requests

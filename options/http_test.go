@@ -68,6 +68,33 @@ func TestWithReceivePackCapabilities(t *testing.T) {
 	})
 }
 
+func TestWithCapabilityNegotiation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unset by default", func(t *testing.T) {
+		o := &Options{}
+		require.False(t, o.NegotiateCapabilities)
+	})
+
+	t.Run("sets the flag when applied", func(t *testing.T) {
+		o := &Options{}
+		require.NoError(t, WithCapabilityNegotiation()(o))
+		require.True(t, o.NegotiateCapabilities)
+	})
+
+	t.Run("composes with WithReceivePackCapabilities", func(t *testing.T) {
+		// WithReceivePackCapabilities provides the desired set;
+		// WithCapabilityNegotiation flags that the set should be intersected
+		// with the server's advertisement at push time. Both fields coexist.
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("custom")}
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		require.NoError(t, WithCapabilityNegotiation()(o))
+		require.Equal(t, caps, o.ReceivePackCapabilities)
+		require.True(t, o.NegotiateCapabilities)
+	})
+}
+
 func TestWithUserAgent(t *testing.T) {
 	tests := []struct {
 		name      string
