@@ -903,6 +903,37 @@ type readerFunc func(p []byte) (int, error)
 
 func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
 
+func TestErrPktLineTooLarge(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Error formats length and max", func(t *testing.T) {
+		// Pin the exact stringification: operators read this in logs
+		// and pre-existing alerting rules may match the prefix.
+		e := &protocol.ErrPktLineTooLarge{Length: 70000, Max: protocol.MaxPktLineSize}
+		require.Equal(t,
+			"pkt-line length 70000 exceeds protocol max 65520",
+			e.Error())
+	})
+
+	t.Run("errors.Is matches the sentinel", func(t *testing.T) {
+		e := &protocol.ErrPktLineTooLarge{Length: 1, Max: 0}
+		require.True(t, errors.Is(e, protocol.ErrPktLineTooLargeSentinel))
+		// Unwrap returns the sentinel.
+		require.Same(t, protocol.ErrPktLineTooLargeSentinel, e.Unwrap())
+	})
+
+	t.Run("errors.As recovers the typed error", func(t *testing.T) {
+		// Wrap once with fmt.Errorf to simulate the path taken when
+		// the parser returns the error and a higher layer adds
+		// context (e.g. fmt.Errorf("parse: %w", err)).
+		wrapped := fmt.Errorf("parse: %w", &protocol.ErrPktLineTooLarge{Length: 99999, Max: 65520})
+		var typed *protocol.ErrPktLineTooLarge
+		require.True(t, errors.As(wrapped, &typed))
+		require.Equal(t, uint64(99999), typed.Length)
+		require.Equal(t, uint64(65520), typed.Max)
+	})
+}
+
 // TestParsePack_UnpackTrailingWhitespace covers bug-fix: "unpack ok\n"
 // and "unpack ok\r\n" (with trailing whitespace permitted by
 // gitprotocol-common) must be accepted as success, not rejected as
