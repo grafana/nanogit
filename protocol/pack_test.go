@@ -692,3 +692,83 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 		require.Equal(t, " unpack failed", unpackErr.Message)
 	})
 }
+
+func TestParserRejectsOversizedPktLine(t *testing.T) {
+	t.Parallel()
+
+	// trackingReader records how many bytes were actually read so we can
+	// assert that the parser did NOT pull the (fake) 65535-byte payload
+	// into memory after rejecting the length header.
+	type trackingReader struct {
+		buf  *bytes.Buffer
+		read int
+	}
+
+	readWith := func(payloadSize int, hexLen string) (int, error) {
+		t.Helper()
+		// 4-byte hex length, no body — readPacketLength only reads the
+		// header, and we want to confirm the parser bails before trying
+		// to read any payload bytes.
+		buf := bytes.NewBuffer([]byte(hexLen))
+		// Pad with arbitrary garbage to simulate a body the parser must
+		// NOT consume.
+		buf.Write(bytes.Repeat([]byte{'x'}, payloadSize))
+		tr := &trackingReader{buf: buf}
+		reader := readerFunc(func(p []byte) (int, error) {
+			n, err := tr.buf.Read(p)
+			tr.read += n
+			return n, err
+		})
+		parser := protocol.NewParser(reader)
+		_, err := parser.Next()
+		return tr.read, err
+	}
+
+	t.Run("length 65521 is rejected (just over the cap)", func(t *testing.T) {
+		// 0xFFF1 = 65521, one above MaxPktLineSize (65520).
+		bytesRead, err := readWith(100, "fff1")
+		require.Error(t, err)
+
+		var tooLarge *protocol.ErrPktLineTooLarge
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, uint64(65521), tooLarge.Length)
+		require.Equal(t, uint64(protocol.MaxPktLineSize), tooLarge.Max)
+
+		// errors.Is should match the sentinel.
+		require.True(t, errors.Is(err, protocol.ErrPktLineTooLargeSentinel))
+
+		// Crucially, the parser must not have read any payload bytes.
+		require.Equal(t, 4, bytesRead, "parser should bail after the 4-byte length header")
+	})
+
+	t.Run("length 65535 is rejected (max representable)", func(t *testing.T) {
+		bytesRead, err := readWith(100, "ffff")
+		require.Error(t, err)
+
+		var tooLarge *protocol.ErrPktLineTooLarge
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, uint64(65535), tooLarge.Length)
+
+		require.Equal(t, 4, bytesRead)
+	})
+
+	t.Run("length 65520 is accepted (exactly at the cap)", func(t *testing.T) {
+		// Build a real well-formed packet of length 65520 and ensure it
+		// parses without triggering the new check.
+		payload := bytes.Repeat([]byte{'a'}, protocol.MaxPktLineDataSize)
+		hdr := fmt.Sprintf("%04x", protocol.MaxPktLineSize)
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString(hdr)
+		buf.Write(payload)
+
+		parser := protocol.NewParser(buf)
+		got, err := parser.Next()
+		require.NoError(t, err)
+		require.Equal(t, payload, got)
+	})
+}
+
+// readerFunc adapts a function into an io.Reader for use in tests.
+type readerFunc func(p []byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }

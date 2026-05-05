@@ -52,8 +52,9 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
+	body := newLimitedReadCloser(res.Body, c.limits.ReceivePackResponse, "receive-pack")
 	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
+		if closeErr := body.Close(); closeErr != nil && err == nil {
 			err = fmt.Errorf("error closing response body: %w", closeErr)
 		}
 	}()
@@ -62,7 +63,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	parser := protocol.NewParser(res.Body)
+	parser := protocol.NewParser(body)
 	for {
 		if _, err := parser.Next(); err != nil {
 			if err == io.EOF {

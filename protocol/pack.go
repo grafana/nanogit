@@ -57,6 +57,11 @@ var (
 	// ErrDataTooLarge is returned when attempting to create a packet with data larger than MaxPktLineDataSize.
 	ErrDataTooLarge = errors.New("the data field is too large")
 
+	// ErrPktLineTooLargeSentinel is the sentinel returned by errors.Is when an
+	// incoming pkt-line declares a length larger than MaxPktLineSize. Callers
+	// that need the offending length can errors.As to *ErrPktLineTooLarge.
+	ErrPktLineTooLargeSentinel = errors.New("pkt-line length exceeds protocol max")
+
 	// ErrPackParseError is returned when parsing a Git packet fails.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrPackParseError = errors.New("pack parse error")
@@ -98,6 +103,20 @@ var (
 	unpackOkPattern = []byte("ok")
 	unpackOkFull    = []byte("unpack ok") // Most common success case
 )
+
+// ErrPktLineTooLarge is returned when a pkt-line declares a length larger
+// than MaxPktLineSize. Callers can errors.As to recover the offending
+// length, or errors.Is(err, ErrPktLineTooLargeSentinel) for a sentinel match.
+type ErrPktLineTooLarge struct {
+	Length uint64
+	Max    uint64
+}
+
+func (e *ErrPktLineTooLarge) Error() string {
+	return fmt.Sprintf("pkt-line length %d exceeds protocol max %d", e.Length, e.Max)
+}
+
+func (e *ErrPktLineTooLarge) Unwrap() error { return ErrPktLineTooLargeSentinel }
 
 // Pack is the interface that wraps the Marshal method.
 // All packet types must implement this interface to be used with FormatPackets.
@@ -415,6 +434,15 @@ func (p *Parser) Next() (line []byte, err error) {
 
 		if length == 0 {
 			return nil, io.EOF
+		}
+
+		// Reject pkt-lines whose declared length exceeds the protocol cap
+		// before readPacketData allocates a buffer of that size. The 4-byte
+		// hex length field can encode up to 0xFFFF (65535) but the spec
+		// caps the total packet at MaxPktLineSize (65520); a server
+		// declaring more is malformed and could be probing for an OOM.
+		if length > MaxPktLineSize {
+			return nil, &ErrPktLineTooLarge{Length: length, Max: MaxPktLineSize}
 		}
 
 		// Handle different packet types

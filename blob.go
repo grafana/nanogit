@@ -37,10 +37,11 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 		"blob_hash", blobID.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		Want:           []hash.Hash{blobID},
-		Done:           true,
-		NoExtraObjects: true, // we only need that single blob
+		NoProgress:       true,
+		Want:             []hash.Hash{blobID},
+		Done:             true,
+		NoExtraObjects:   true, // we only need that single blob
+		MaxResponseBytes: c.limits.SingleObjectFetch,
 	})
 	if err != nil {
 		// TODO: handle this at the client level

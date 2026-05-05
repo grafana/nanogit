@@ -29,6 +29,30 @@ type Options struct {
 	// advertised on receive-pack ref update commands. When nil or empty,
 	// protocol.DefaultReceivePackCapabilities() is used.
 	ReceivePackCapabilities []protocol.Capability
+	// Limits caps the bytes nanogit will read from the server per HTTP
+	// response, classified by operation. The zero value disables every cap
+	// so embedders that don't opt in keep today's unbounded behavior.
+	Limits Limits
+}
+
+// Limits caps the total bytes nanogit will read from the server in a single
+// HTTP response, broken down by operation class. A zero value for any field
+// means "no limit" so the zero Limits preserves nanogit's historic behavior.
+//
+// Negative values are rejected at construction time (see WithLimits).
+type Limits struct {
+	// SingleObjectFetch caps responses to fetches that target a single
+	// object (GetBlob, GetTree, GetCommit, ...).
+	SingleObjectFetch int64
+	// MultiObjectFetch caps responses to fetches that may return many
+	// objects (GetFlatTree, ListCommits, CompareCommits, Clone).
+	MultiObjectFetch int64
+	// RefsMetadata caps ref-listing and protocol-detection responses
+	// (ListRefs, GetRef, smart-info / capability advertisement).
+	RefsMetadata int64
+	// ReceivePackResponse caps the server's reply to a receive-pack push
+	// (CreateRef, UpdateRef, DeleteRef, staged Push).
+	ReceivePackResponse int64
 }
 
 type Option func(*Options) error

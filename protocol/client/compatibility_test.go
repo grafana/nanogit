@@ -74,7 +74,7 @@ func TestIsServerCompatible(t *testing.T) {
 			t.Parallel()
 
 			// Test the detection function directly
-			version := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody))
+			version := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody), 0)
 			expectedVersion := protocolVersionV2
 			if !tt.expectedCompatible {
 				// Could be v1 or unknown, but we just care if it's not v2
@@ -131,7 +131,27 @@ func TestProtocolVersionDetection_EdgeCases(t *testing.T) {
 		responseBody := formatTestResponse(t,
 			protocol.PackLine("version 2\n"),
 			protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\n"))
-		version := detectProtocolVersionFromReader(strings.NewReader(responseBody))
+		version := detectProtocolVersionFromReader(strings.NewReader(responseBody), 0)
 		require.Equal(t, protocolVersionV2, version, "should detect v2 when both indicators present")
+	})
+}
+
+func TestCompatibilityReadLimit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero (unlimited) returns the floor", func(t *testing.T) {
+		require.Equal(t, int64(compatibilityFloor), compatibilityReadLimit(0))
+	})
+
+	t.Run("negative returns the floor", func(t *testing.T) {
+		require.Equal(t, int64(compatibilityFloor), compatibilityReadLimit(-1))
+	})
+
+	t.Run("smaller than floor still returns the floor", func(t *testing.T) {
+		require.Equal(t, int64(compatibilityFloor), compatibilityReadLimit(1024))
+	})
+
+	t.Run("larger than floor passes through", func(t *testing.T) {
+		require.Equal(t, int64(2*compatibilityFloor), compatibilityReadLimit(2*compatibilityFloor))
 	})
 }

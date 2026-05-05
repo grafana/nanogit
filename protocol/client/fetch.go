@@ -26,6 +26,13 @@ type FetchOptions struct {
 	// This can significantly improve performance when fetching specific objects from large repositories,
 	// as it avoids downloading and processing unnecessary objects.
 	NoExtraObjects bool
+
+	// MaxResponseBytes caps the upload-pack response body (the packfile
+	// stream the server returns) before the parser starts consuming it.
+	// 0 disables the cap. High-level callers select an appropriate value
+	// from options.Limits based on whether the fetch targets a single
+	// object (Limits.SingleObjectFetch) or many (Limits.MultiObjectFetch).
+	MaxResponseBytes int64
 }
 
 func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
@@ -47,7 +54,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
-	responseReader, response, err := c.sendFetchRequest(ctx, pkt)
+	responseReader, response, err := c.sendFetchRequest(ctx, pkt, pendingOpts.MaxResponseBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -170,12 +177,15 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 	logger.Debug("Fetch request raw data", "request", string(pkt))
 }
 
-// sendFetchRequest sends the fetch request and parses the response
-func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (io.ReadCloser, *protocol.FetchResponse, error) {
+// sendFetchRequest sends the fetch request and parses the response.
+// maxBytes caps the response body before parsing; 0 disables the cap.
+func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (io.ReadCloser, *protocol.FetchResponse, error) {
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, nil, fmt.Errorf("sending commands: %w", err)
 	}
+
+	responseReader = newLimitedReadCloser(responseReader, maxBytes, "fetch")
 
 	parser := protocol.NewParser(responseReader)
 	response, err := protocol.ParseFetchResponse(ctx, parser)

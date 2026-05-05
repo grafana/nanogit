@@ -67,8 +67,11 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 		return false, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	// Parse the response to detect protocol version
-	version := detectProtocolVersionFromReader(res.Body)
+	// Parse the response to detect protocol version. Use the configured
+	// RefsMetadata cap, but enforce a 1 MB safety floor: protocol detection
+	// only ever needs to read the first capability advertisement, so an
+	// embedder asking for "no limit" still gets bounded behavior here.
+	version := detectProtocolVersionFromReader(res.Body, compatibilityReadLimit(c.limits.RefsMetadata))
 
 	switch version {
 	case protocolVersionV2:
@@ -82,12 +85,30 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 	}
 }
 
+// compatibilityFloor is the minimum byte cap applied to protocol-detection
+// reads even when the caller requests "no limit". Protocol detection only
+// needs the first capability advertisement, so a 1 MB floor is generous
+// while keeping the path bounded.
+const compatibilityFloor = 1024 * 1024
+
+// compatibilityReadLimit returns the byte cap to apply to a protocol
+// detection read given the configured RefsMetadata limit. A configured
+// value of 0 ("no limit") still bottoms out at compatibilityFloor.
+func compatibilityReadLimit(refsMetadata int64) int64 {
+	if refsMetadata <= 0 || refsMetadata < compatibilityFloor {
+		return compatibilityFloor
+	}
+	return refsMetadata
+}
+
 // detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response
 // to determine the protocol version. Uses early-exit optimization when v2 is detected.
-func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
-	// Limit read to 1MB to prevent memory exhaustion from malicious servers
-	const maxResponseSize = 1024 * 1024 // 1MB
-	limitedReader := io.LimitReader(body, maxResponseSize)
+// limit caps the bytes read; a value <= 0 falls back to compatibilityFloor.
+func detectProtocolVersionFromReader(body io.Reader, limit int64) protocolVersion {
+	if limit <= 0 {
+		limit = compatibilityFloor
+	}
+	limitedReader := io.LimitReader(body, limit)
 
 	// Read all content from body first
 	content, err := io.ReadAll(limitedReader)

@@ -479,10 +479,11 @@ func (c *httpClient) fetchBlobBatch(ctx context.Context, entries []FlatTreeEntry
 
 	// Fetch all hashes in a single request using the protocol Fetch
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		Want:           hashes,
-		Done:           true,
-		NoExtraObjects: true,
+		NoProgress:       true,
+		Want:             hashes,
+		Done:             true,
+		NoExtraObjects:   true,
+		MaxResponseBytes: c.limits.MultiObjectFetch,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch %d blobs: %w", len(hashes), err)

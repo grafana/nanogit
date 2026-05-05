@@ -41,6 +41,10 @@ type rawClient struct {
 	basicAuth *struct{ Username, Password string }
 	// Token-based authentication header
 	tokenAuth *string
+	// limits caps response bytes per operation class. Zero values mean
+	// "no limit", preserving historic unbounded behavior for embedders
+	// that don't opt in via options.WithLimits.
+	limits options.Limits
 }
 
 // NewRawClient creates a new Git client for the specified repository URL.
@@ -122,6 +126,7 @@ func NewRawClientFromOptions(repo string, resolved *options.Options) (*rawClient
 		userAgent: resolved.UserAgent,
 		basicAuth: basicAuth,
 		tokenAuth: resolved.AuthToken,
+		limits:    resolved.Limits,
 	}, nil
 }
 
