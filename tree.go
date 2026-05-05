@@ -1039,8 +1039,12 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 		NoBlobFilter:     true,
 		Want:             []hash.Hash{want},
 		Done:             true,
-		NoExtraObjects:   false, // GetFlatTree is called after this one. Let's read all of them
-		MaxResponseBytes: c.limits.SingleObjectFetch,
+		// NoExtraObjects=false is an explicit prefetch: GetFlatTree
+		// (or staged-writer init) consumes the warmed cache after
+		// this call, so the wire response is multi-object by shape
+		// and the multi-object budget applies.
+		NoExtraObjects:   false,
+		MaxResponseBytes: c.limits.MultiObjectFetch,
 	})
 	if err != nil {
 		// TODO: handle this at the client level

@@ -433,6 +433,15 @@ func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtr
 	logger.Debug("Get commit",
 		"commit_hash", commitHash.String())
 
+	// noExtraObjects=true (the GetCommit public API) is a single-object
+	// fetch by shape. noExtraObjects=false (NewStagedWriter init) lets
+	// the server return associated tree objects for cache warmup, so the
+	// response shape is multi-object and the larger budget applies.
+	maxBytes := c.limits.SingleObjectFetch
+	if !noExtraObjects {
+		maxBytes = c.limits.MultiObjectFetch
+	}
+
 	objects, err := c.Fetch(ctx, client.FetchOptions{
 		NoProgress:       true,
 		NoBlobFilter:     true,
@@ -441,7 +450,7 @@ func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtr
 		Shallow:          true,
 		Done:             true,
 		NoExtraObjects:   noExtraObjects,
-		MaxResponseBytes: c.limits.SingleObjectFetch,
+		MaxResponseBytes: maxBytes,
 	})
 	if err != nil {
 		// TODO: handle this at the client level
