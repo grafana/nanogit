@@ -210,6 +210,49 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	return responseReader, response, nil
 }
 
+// allWantedObjectsCollected reports whether every entry in wanted is already
+// present in got. Returns false when wanted is empty or nil — the caller's
+// "early termination" branches only apply to NoExtraObjects fetches with at
+// least one requested hash.
+func allWantedObjectsCollected(wanted map[string]bool, got map[string]*protocol.PackfileObject) bool {
+	if len(wanted) == 0 {
+		return false
+	}
+	for h := range wanted {
+		if _, ok := got[h]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// classifyReadObjectErr decides whether a non-nil error from ReadObject
+// must abort processPackfileResponse. A non-nil return is the error to
+// propagate; nil means the caller should break out of the read loop and
+// finalize whatever was already collected. Splitting this out keeps
+// processPackfileResponse's cyclomatic complexity manageable while
+// preserving the DoS-protection contract:
+//
+//   - *ErrResponseTooLarge propagates UNLESS the fetch is a NoExtraObjects
+//     request that already collected every wanted object — in that case the
+//     cap fired on bytes we don't need, and surfacing it would turn
+//     successful single-object lookups into false negatives under servers
+//     that over-send.
+//   - Every other error (zlib problems, unexpected EOF, malformed delta
+//     data) is tolerated: packfile parsing has pre-existing leniencies that
+//     downstream batched flows depend on, and tightening those is a separate
+//     refactor.
+func classifyReadObjectErr(err error, pendingWanted map[string]bool, collected map[string]*protocol.PackfileObject) error {
+	var tooLarge *ErrResponseTooLarge
+	if !errors.As(err, &tooLarge) {
+		return nil
+	}
+	if allWantedObjectsCollected(pendingWanted, collected) {
+		return nil
+	}
+	return fmt.Errorf("read packfile object: %w", err)
+}
+
 // processPackfileResponse processes the packfile response and extracts objects
 func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
 	logger := log.FromContext(ctx)
@@ -231,20 +274,8 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			// *ErrResponseTooLarge MUST propagate — that is the
-			// DoS-protection contract: a server-induced
-			// truncation under the configured cap has to look
-			// distinct from a successful partial fetch, so the
-			// caller can tell a too-tight cap apart from a real
-			// ObjectNotFound. All other parse errors (zlib
-			// problems, unexpected EOF, malformed delta data)
-			// are tolerated as before — packfile parsing has
-			// pre-existing leniencies that downstream batched
-			// flows depend on, and tightening those is a
-			// separate refactor.
-			var tooLarge *ErrResponseTooLarge
-			if errors.As(err, &tooLarge) {
-				return fmt.Errorf("read packfile object: %w", err)
+			if terr := classifyReadObjectErr(err, pendingWantedHashes, objects); terr != nil {
+				return terr
 			}
 			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
 			break
@@ -277,9 +308,17 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 				foundWantedCount++
 				logger.Debug("Found wanted object", "hash", objHashStr, "foundCount", foundWantedCount, "totalWanted", len(pendingWantedHashes))
 
-				// Stop reading if we've found all wanted objects
+				// Stop reading if we've found all wanted objects.
+				// Previously this branch only logged "stopping
+				// early" without actually breaking, so the loop
+				// drained the rest of the packfile — wasteful at
+				// best, and now actively hostile under tight
+				// per-operation caps where the trailing bytes
+				// would trip ErrResponseTooLarge after we already
+				// had what the caller asked for.
 				if foundWantedCount >= len(pendingWantedHashes) {
 					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount, "skippingRemaining", len(objects)-count)
+					break
 				}
 			}
 		}
