@@ -270,7 +270,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	// Collect delta objects for later resolution
 	var deltas []*protocol.PackfileObject
 
-	var count, objectCount, foundWantedCount, totalDelta int
+	var objectCount, foundWantedCount, totalDelta int
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
@@ -284,7 +284,6 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		if obj.Object == nil {
 			break
 		}
-		count++
 
 		// Collect delta objects for later resolution instead of skipping them
 		if obj.Object.Type == protocol.ObjectTypeRefDelta {
@@ -301,26 +300,17 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		objects[obj.Object.Hash.String()] = obj.Object
 		objectCount++
 
-		// Check for early termination if enabled and we have pending wants
-		if pendingWantedHashes != nil {
-			objHashStr := obj.Object.Hash.String()
-			if pendingWantedHashes[objHashStr] {
-				foundWantedCount++
-				logger.Debug("Found wanted object", "hash", objHashStr, "foundCount", foundWantedCount, "totalWanted", len(pendingWantedHashes))
-
-				// Stop reading if we've found all wanted objects.
-				// Previously this branch only logged "stopping
-				// early" without actually breaking, so the loop
-				// drained the rest of the packfile — wasteful at
-				// best, and now actively hostile under tight
-				// per-operation caps where the trailing bytes
-				// would trip ErrResponseTooLarge after we already
-				// had what the caller asked for.
-				if foundWantedCount >= len(pendingWantedHashes) {
-					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount, "skippingRemaining", len(objects)-count)
-					break
-				}
-			}
+		if shouldTerminateEarly(pendingWantedHashes, obj.Object.Hash.String(), &foundWantedCount) {
+			logger.Debug("All wanted objects found, stopping early",
+				"totalObjectsRead", objectCount, "queuedDeltas", totalDelta)
+			// Drop any deltas queued before the early break.
+			// Their bases may live in the unread tail of the
+			// stream, so resolveDeltas would spuriously report
+			// missing-base errors against an over-sending or
+			// adversarial server. The wanted set is already
+			// satisfied by the non-delta objects collected above.
+			deltas = nil
+			break
 		}
 	}
 
@@ -334,6 +324,27 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	}
 
 	return nil
+}
+
+// shouldTerminateEarly bumps the wanted-object counter when the just-read
+// hash is part of the pending wanted set, and reports whether every wanted
+// object has now been collected. Returning true tells the caller to break
+// out of the read loop — both to avoid draining the rest of the packfile
+// (wasteful) and to keep the new tight per-operation caps from tripping
+// ErrResponseTooLarge on bytes the caller never asked for.
+//
+// Splitting this out is mostly housekeeping: it keeps
+// processPackfileResponse under the gocyclo-15 ceiling and makes the
+// early-termination contract testable in isolation.
+func shouldTerminateEarly(pendingWanted map[string]bool, objHash string, foundCount *int) bool {
+	if pendingWanted == nil {
+		return false
+	}
+	if !pendingWanted[objHash] {
+		return false
+	}
+	*foundCount++
+	return *foundCount >= len(pendingWanted)
 }
 
 // resolveDeltas resolves delta objects by applying them to their base objects.

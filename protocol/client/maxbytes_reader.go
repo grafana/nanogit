@@ -39,29 +39,60 @@ type limitedReadCloser struct {
 	remaining int64
 	limit     int64
 	op        string
+	// err sticks once the underlying body has terminated (either via
+	// its own EOF/error or via our cap). Subsequent Read calls return
+	// it without touching the body, so callers that loop after a
+	// terminal condition cannot trigger another underlying read.
+	err error
 }
 
+// Read implements the http.MaxBytesReader pattern: read at most remaining+1
+// bytes from the underlying body in a single call so the cap-vs-fits
+// decision happens in one round trip. The previous implementation issued an
+// explicit one-byte probe Read whenever remaining hit zero — that probe was
+// a separate round trip after the caller had already read the cap's worth
+// of bytes, which let a server stalling at exactly the boundary keep us
+// blocked on a second read instead of failing fast. With this pattern the
+// "is there more after the cap?" question is answered inside the same
+// underlying Read the caller initiated, so we either get the over-cap byte
+// alongside the legitimate data or get a clean EOF — no extra blocking
+// probe call. Callers should still set HTTP-level read deadlines for the
+// pathological "server hangs mid-chunk" case; that is unavoidable without
+// timeouts at any layer, but eliminating the explicit probe removes the
+// most-reachable stall surface.
 func (l *limitedReadCloser) Read(p []byte) (int, error) {
-	if l.remaining <= 0 {
-		// Probe one extra byte: if the body is also at EOF we forward
-		// io.EOF; if it has more data we report ErrResponseTooLarge.
-		var probe [1]byte
-		n, err := l.body.Read(probe[:])
-		if n > 0 {
-			return 0, &ErrResponseTooLarge{Limit: l.limit, Op: l.op}
-		}
-		if err == nil {
-			err = io.EOF
-		}
-		return 0, err
+	if l.err != nil {
+		return 0, l.err
+	}
+	if len(p) == 0 {
+		return 0, nil
 	}
 
-	if int64(len(p)) > l.remaining {
-		p = p[:l.remaining]
+	// Cap the read at remaining+1 bytes. Getting back exactly
+	// remaining+1 bytes is the unambiguous "body exceeds the cap"
+	// signal; <= remaining is fine.
+	if int64(len(p))-1 > l.remaining {
+		p = p[:l.remaining+1]
 	}
 	n, err := l.body.Read(p)
-	l.remaining -= int64(n)
-	return n, err
+
+	if int64(n) <= l.remaining {
+		l.remaining -= int64(n)
+		// Stick terminal errors (including io.EOF) so we never go
+		// back to the body after it tells us it's done.
+		if err != nil {
+			l.err = err
+		}
+		return n, err
+	}
+
+	// Got remaining+1 bytes — body exceeds the cap. Hand the caller
+	// the cap's worth and stick the typed error. No further reads
+	// will reach the underlying body.
+	n = int(l.remaining)
+	l.remaining = 0
+	l.err = &ErrResponseTooLarge{Limit: l.limit, Op: l.op}
+	return n, l.err
 }
 
 func (l *limitedReadCloser) Close() error {

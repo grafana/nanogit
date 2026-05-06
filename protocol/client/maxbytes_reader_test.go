@@ -127,11 +127,11 @@ func TestNewLimitedReadCloser(t *testing.T) {
 		assert.ErrorIs(t, err, io.EOF)
 	})
 
-	t.Run("zero-byte non-EOF Read at the boundary forwards underlying error", func(t *testing.T) {
-		// Edge case in the probe path: underlying reader returns
-		// (0, someErr) where someErr is not EOF and not nil. The
-		// limited reader must forward someErr as-is, not coerce it
-		// to io.EOF and not invent ErrResponseTooLarge.
+	t.Run("non-EOF underlying error at the boundary propagates", func(t *testing.T) {
+		// When the underlying body ends with a non-EOF error
+		// (network blip, transport failure) at the same time the
+		// cap is hit, the limited reader must forward that error
+		// as-is rather than masking it as ErrResponseTooLarge.
 		injected := errors.New("injected transport failure")
 		body := &errAfterCloser{
 			Reader: strings.NewReader("ab"),
@@ -145,9 +145,9 @@ func TestNewLimitedReadCloser(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 2, n)
 
-		// Now we are at the boundary; the next Read enters the
-		// probe path. The fake body returns (0, injected), which
-		// must propagate untouched.
+		// Next Read asks the body for one more byte (the +1 trick).
+		// errAfterCloser converts the underlying io.EOF into
+		// `injected`; the limited reader must propagate it.
 		n, err = r.Read(buf)
 		assert.Equal(t, 0, n)
 		assert.ErrorIs(t, err, injected)
@@ -157,30 +157,39 @@ func TestNewLimitedReadCloser(t *testing.T) {
 			"a non-EOF zero-byte read must NOT be reported as oversized")
 	})
 
-	t.Run("zero-byte nil-error Read at the boundary surfaces io.EOF", func(t *testing.T) {
-		// Edge case: underlying reader returns (0, nil) at the
-		// probe. limitedReadCloser must coerce that to io.EOF so
-		// the caller sees a deterministic stream end.
-		body := &fixedReader{data: []byte("ab")}
-		r := newLimitedReadCloser(body, 2, "fetch")
+	t.Run("terminal error sticks across subsequent Read calls", func(t *testing.T) {
+		// Once the cap is hit, further Reads must return
+		// ErrResponseTooLarge directly without ever touching the
+		// underlying body again — that is what closes the stall
+		// vector the probe-based implementation had.
+		probed := false
+		body := &probeCounter{
+			Reader: strings.NewReader("hello world"),
+			onRead: func() { probed = true },
+		}
+		r := newLimitedReadCloser(body, 5, "fetch")
 
-		// Drain the body.
-		buf := make([]byte, 2)
+		// First Read trips the cap.
+		got, err := io.ReadAll(r)
+		require.Error(t, err)
+		var tooLarge *ErrResponseTooLarge
+		require.True(t, errors.As(err, &tooLarge))
+		assert.LessOrEqual(t, len(got), 5)
+
+		// Reset the probe sentinel and confirm subsequent Reads
+		// don't re-enter the body.
+		probed = false
+		buf := make([]byte, 8)
 		n, err := r.Read(buf)
-		require.NoError(t, err)
-		require.Equal(t, 2, n)
-
-		// Probe: fixedReader returns (0, nil) when exhausted.
-		n, err = r.Read(buf)
 		assert.Equal(t, 0, n)
-		assert.ErrorIs(t, err, io.EOF)
+		assert.True(t, errors.As(err, &tooLarge))
+		assert.False(t, probed, "Read after cap must not touch the underlying body")
 	})
 }
 
 // errAfterCloser is an io.ReadCloser that wraps a strings.Reader and
 // returns a configured error once the inner reader is exhausted (instead
-// of io.EOF). Lets us exercise the probe path without introducing extra
-// dependencies.
+// of io.EOF).
 type errAfterCloser struct {
 	*strings.Reader
 	err error
@@ -196,24 +205,22 @@ func (e *errAfterCloser) Read(p []byte) (int, error) {
 
 func (e *errAfterCloser) Close() error { return nil }
 
-// fixedReader is an io.ReadCloser that returns (0, nil) once exhausted —
-// a quirk allowed by io.Reader's contract that callers must tolerate.
-// We use it to exercise the (n=0, err=nil) branch of the probe path.
-type fixedReader struct {
-	data []byte
-	pos  int
+// probeCounter wraps a Reader and fires onRead whenever Read is called.
+// Lets a test assert that the limited reader is not touching the body
+// after a terminal error has been recorded.
+type probeCounter struct {
+	*strings.Reader
+	onRead func()
 }
 
-func (f *fixedReader) Read(p []byte) (int, error) {
-	if f.pos >= len(f.data) {
-		return 0, nil
+func (p *probeCounter) Read(b []byte) (int, error) {
+	if p.onRead != nil {
+		p.onRead()
 	}
-	n := copy(p, f.data[f.pos:])
-	f.pos += n
-	return n, nil
+	return p.Reader.Read(b)
 }
 
-func (f *fixedReader) Close() error { return nil }
+func (p *probeCounter) Close() error { return nil }
 
 // dripReader returns one byte per Read until exhausted.
 type dripReader struct {

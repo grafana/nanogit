@@ -90,6 +90,15 @@ func TestClassifyReadObjectErr(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("non-cap zlib-style error is still tolerated alongside the cap branch", func(t *testing.T) {
+		// Defense in depth: the cap-vs-pending check must not
+		// short-circuit non-cap errors. zlib problems, etc., still
+		// fall through the early-return and let the caller break
+		// out of the read loop without an artificial error.
+		zlibErr := errors.New("zlib: invalid header")
+		assert.NoError(t, classifyReadObjectErr(zlibErr, map[string]bool{"a": true}, map[string]*protocol.PackfileObject{}))
+	})
+
 	t.Run("wrapped cap error is still recognized", func(t *testing.T) {
 		// The packfile reader may wrap with fmt.Errorf("...: %w", err);
 		// classifyReadObjectErr must use errors.As so the swallow /
@@ -107,5 +116,39 @@ func TestClassifyReadObjectErr(t *testing.T) {
 		require.Error(t, err)
 		var tooLarge *ErrResponseTooLarge
 		assert.True(t, errors.As(err, &tooLarge))
+	})
+}
+
+func TestShouldTerminateEarly(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil wanted set never terminates", func(t *testing.T) {
+		// Fetches without NoExtraObjects don't pre-build a wanted
+		// map; this branch must therefore stay disabled — otherwise
+		// any matching hash would prematurely cut a normal multi-
+		// object fetch short.
+		count := 0
+		assert.False(t, shouldTerminateEarly(nil, "abc", &count))
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("non-wanted hash leaves the counter alone", func(t *testing.T) {
+		count := 0
+		wanted := map[string]bool{"want": true}
+		assert.False(t, shouldTerminateEarly(wanted, "other", &count))
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("wanted hash bumps the counter and signals when complete", func(t *testing.T) {
+		count := 0
+		wanted := map[string]bool{"a": true, "b": true}
+
+		assert.False(t, shouldTerminateEarly(wanted, "a", &count),
+			"first wanted hash should not yet terminate")
+		assert.Equal(t, 1, count)
+
+		assert.True(t, shouldTerminateEarly(wanted, "b", &count),
+			"final wanted hash should terminate")
+		assert.Equal(t, 2, count)
 	})
 }

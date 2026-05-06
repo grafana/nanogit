@@ -111,14 +111,19 @@ var _ = Describe("Byte limits (DoS protection)", func() {
 				MultiObjectFetch: 128,
 			}))
 
-			By("Creating a tree with several files so the packfile is non-trivial")
+			By("Creating a tree with a few files so the tree object has multiple entries")
 			Expect(local.CreateDirPath("dir")).To(Succeed())
 			for i := range 5 {
 				name := fmt.Sprintf("dir/f%d.txt", i)
-				// Incompressible per-file payload so the packfile
-				// wire size scales with the file size rather than
-				// collapsing to near-zero under zlib.
-				Expect(local.CreateFile(name, incompressibleBytes(4*1024))).To(Succeed())
+				// File contents do not affect the wire size here:
+				// GetFlatTree fetches with NoBlobFilter=true (which
+				// asks the server for "filter blob:none"), so blob
+				// payloads are stripped and only commit + tree
+				// objects travel. The 128-byte cap is below the
+				// minimal commit + root-tree shape, which is what
+				// trips the cap. The files exist only so the tree
+				// has structure to traverse on the local side.
+				Expect(local.CreateFile(name, "x")).To(Succeed())
 			}
 			_, err := local.Git("add", ".")
 			Expect(err).NotTo(HaveOccurred())
