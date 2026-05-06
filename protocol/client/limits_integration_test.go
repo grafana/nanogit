@@ -14,15 +14,15 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
-// hugePktLineBody returns a body whose first pkt-line declares 65280 bytes
-// of data but is followed by enough payload that the limit reader trips
-// inside the readPacketData ReadFull call. The exact payload bytes don't
-// matter; only that there are far more than the cap allows.
+// hugePktLineBody returns a body whose first pkt-line declares a total
+// length of 65280 bytes (0xFF00) — i.e. 65276 payload bytes plus the
+// 4-byte length header. We then write all 65276 payload bytes so a
+// well-behaved client reads the whole packet; tests with a low cap will
+// trip inside the readPacketData ReadFull call before the payload ends.
 func hugePktLineBody() []byte {
-	// Length 0xFF00 (65280) is below MaxPktLineSize (65520), so the
-	// per-packet validation accepts it. We then write 65276 payload bytes
-	// (length minus the 4-byte header) so a well-behaved client reads
-	// the whole packet — tests with a low cap will trip on the way.
+	// 0xFF00 is below MaxPktLineSize (65520), so the per-packet
+	// validation accepts it. The payload is the declared length minus
+	// the 4-byte header.
 	const declaredLen = 0xFF00
 	var b strings.Builder
 	b.WriteString("ff00")

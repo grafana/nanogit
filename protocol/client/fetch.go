@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"errors"
 	"fmt"
 	"io"
 
@@ -230,8 +231,19 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
-			break
+			// io.EOF is the natural end-of-stream from the
+			// packfile reader. Anything else (notably
+			// *ErrResponseTooLarge from the limit reader, or a
+			// truncated/torn body) is a real failure: silently
+			// breaking would let a server-induced truncation
+			// look like a successful partial fetch and surface
+			// downstream as ObjectNotFound, undermining the
+			// DoS-protection contract.
+			if errors.Is(err, io.EOF) {
+				logger.Debug("Finished reading objects", "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
+				break
+			}
+			return fmt.Errorf("read packfile object: %w", err)
 		}
 
 		if obj.Object == nil {
