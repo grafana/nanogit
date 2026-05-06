@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,22 +118,25 @@ func compatibilityReadLimit(refsMetadata int64) int64 {
 // detected. limit caps the bytes read; a value <= 0 falls back to
 // compatibilityFloor.
 //
-// Returns a non-nil error only when the response could not be read at all
-// (notably *ErrResponseTooLarge when the cap is exceeded). A successful
-// read that does not match either v1 or v2 is reported via
+// The cap-vs-detection contract: a v1 or v2 indicator that fits inside the
+// cap is honored regardless of how much extra data follows (large v1 repos
+// have many refs but only need the first one to identify the protocol). The
+// *ErrResponseTooLarge error is surfaced ONLY when the cap is exhausted and
+// neither indicator was seen — i.e. the cap kept us from getting an answer.
+// A successful read that does not match either v1 or v2 is reported via
 // protocolVersionUnknown with a nil error so the caller can distinguish
-// "server is incompatible" from "we never finished reading the response".
+// "server is incompatible" from "the cap was too tight to decide".
 func detectProtocolVersionFromReader(body io.Reader, limit int64) (protocolVersion, error) {
 	if limit <= 0 {
 		limit = compatibilityFloor
 	}
 	limitedReader := newLimitedReadCloser(io.NopCloser(body), limit, "compatibility")
 
-	// Read all content from body first
-	content, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return protocolVersionUnknown, err
-	}
+	// io.ReadAll on the limited reader returns whatever bytes the
+	// reader produced before erroring, even if the error is
+	// *ErrResponseTooLarge. We parse those bytes first and only let
+	// the cap error escape if the parse couldn't pin down a version.
+	content, readErr := io.ReadAll(limitedReader)
 
 	// Create a buffer reader that we can restart after flush packets
 	reader := bytes.NewReader(content)
@@ -170,9 +174,22 @@ func detectProtocolVersionFromReader(body io.Reader, limit int64) (protocolVersi
 		}
 	}
 
-	// Determine version based on indicators found
+	// Determine version based on indicators found. A v1 ref line is a
+	// commit to v1 even if more bytes were truncated by the cap: every
+	// additional pkt-line in a v1 advertisement is just another ref.
 	if hasRefLine {
 		return protocolVersionV1, nil
+	}
+
+	// No version indicator seen. If the read failed because the cap
+	// was hit, surface that — the operator's tuning prevented us from
+	// answering. Otherwise we genuinely cannot tell.
+	if readErr != nil {
+		var tooLarge *ErrResponseTooLarge
+		if errors.As(readErr, &tooLarge) {
+			return protocolVersionUnknown, readErr
+		}
+		return protocolVersionUnknown, readErr
 	}
 	return protocolVersionUnknown, nil
 }

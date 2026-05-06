@@ -142,11 +142,12 @@ func TestProtocolVersionDetection_EdgeCases(t *testing.T) {
 func TestDetectProtocolVersionFromReaderSurfacesLimitErr(t *testing.T) {
 	t.Parallel()
 
-	// Body is much larger than the cap, so the limit reader trips and
-	// the function must surface *ErrResponseTooLarge to the caller.
-	// Without the typed error, an oversize info/refs response would
-	// silently look like an incompatible server, which is exactly the
-	// failure mode operators tuning RefsMetadata need to distinguish.
+	// Body is much larger than the cap AND has no v1/v2 indicator, so
+	// the limit reader trips and the function must surface
+	// *ErrResponseTooLarge to the caller. Without the typed error, an
+	// oversize info/refs response with no decisive bytes would silently
+	// look like an incompatible server — exactly the failure mode
+	// operators tuning RefsMetadata need to distinguish.
 	bigBody := strings.Repeat("x", 4096)
 	_, err := detectProtocolVersionFromReader(strings.NewReader(bigBody), 64)
 	require.Error(t, err)
@@ -156,6 +157,28 @@ func TestDetectProtocolVersionFromReaderSurfacesLimitErr(t *testing.T) {
 		"expected *ErrResponseTooLarge, got %T: %v", err, err)
 	require.Equal(t, "compatibility", tooLarge.Op)
 	require.Equal(t, int64(64), tooLarge.Limit)
+}
+
+func TestDetectProtocolVersionV1DespiteCapHit(t *testing.T) {
+	t.Parallel()
+
+	// A large v1 response (many refs) must still be identified as v1
+	// even when the cap fires before we finish reading the body. The
+	// cap is only there to bound memory; once we have a v1 ref line
+	// in hand the additional bytes are just more refs of the same
+	// kind, so surfacing *ErrResponseTooLarge here would regress the
+	// documented "compatible=false" path for genuinely large v1 repos.
+	body := formatTestResponse(t,
+		// First a real v1 ref line that fits inside the cap.
+		protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\n"),
+	)
+	// Pad with additional bytes well past the cap so io.ReadAll
+	// returns *ErrResponseTooLarge alongside the partial buffer.
+	body += strings.Repeat("x", 8192)
+
+	version, err := detectProtocolVersionFromReader(strings.NewReader(body), 128)
+	require.NoError(t, err, "v1 must be identifiable from the bytes that fit in the cap")
+	require.Equal(t, protocolVersionV1, version)
 }
 
 func TestCompatibilityReadLimit(t *testing.T) {
