@@ -231,19 +231,23 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			// io.EOF is the natural end-of-stream from the
-			// packfile reader. Anything else (notably
-			// *ErrResponseTooLarge from the limit reader, or a
-			// truncated/torn body) is a real failure: silently
-			// breaking would let a server-induced truncation
-			// look like a successful partial fetch and surface
-			// downstream as ObjectNotFound, undermining the
-			// DoS-protection contract.
-			if errors.Is(err, io.EOF) {
-				logger.Debug("Finished reading objects", "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
-				break
+			// *ErrResponseTooLarge MUST propagate — that is the
+			// DoS-protection contract: a server-induced
+			// truncation under the configured cap has to look
+			// distinct from a successful partial fetch, so the
+			// caller can tell a too-tight cap apart from a real
+			// ObjectNotFound. All other parse errors (zlib
+			// problems, unexpected EOF, malformed delta data)
+			// are tolerated as before — packfile parsing has
+			// pre-existing leniencies that downstream batched
+			// flows depend on, and tightening those is a
+			// separate refactor.
+			var tooLarge *ErrResponseTooLarge
+			if errors.As(err, &tooLarge) {
+				return fmt.Errorf("read packfile object: %w", err)
 			}
-			return fmt.Errorf("read packfile object: %w", err)
+			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
+			break
 		}
 
 		if obj.Object == nil {
