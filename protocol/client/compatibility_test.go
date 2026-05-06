@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -74,7 +75,8 @@ func TestIsServerCompatible(t *testing.T) {
 			t.Parallel()
 
 			// Test the detection function directly
-			version := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody), 0)
+			version, err := detectProtocolVersionFromReader(strings.NewReader(tt.responseBody), 0)
+			require.NoError(t, err)
 			expectedVersion := protocolVersionV2
 			if !tt.expectedCompatible {
 				// Could be v1 or unknown, but we just care if it's not v2
@@ -131,9 +133,29 @@ func TestProtocolVersionDetection_EdgeCases(t *testing.T) {
 		responseBody := formatTestResponse(t,
 			protocol.PackLine("version 2\n"),
 			protocol.PackLine("1234567890abcdef1234567890abcdef12345678 refs/heads/main\n"))
-		version := detectProtocolVersionFromReader(strings.NewReader(responseBody), 0)
+		version, err := detectProtocolVersionFromReader(strings.NewReader(responseBody), 0)
+		require.NoError(t, err)
 		require.Equal(t, protocolVersionV2, version, "should detect v2 when both indicators present")
 	})
+}
+
+func TestDetectProtocolVersionFromReaderSurfacesLimitErr(t *testing.T) {
+	t.Parallel()
+
+	// Body is much larger than the cap, so the limit reader trips and
+	// the function must surface *ErrResponseTooLarge to the caller.
+	// Without the typed error, an oversize info/refs response would
+	// silently look like an incompatible server, which is exactly the
+	// failure mode operators tuning RefsMetadata need to distinguish.
+	bigBody := strings.Repeat("x", 4096)
+	_, err := detectProtocolVersionFromReader(strings.NewReader(bigBody), 64)
+	require.Error(t, err)
+
+	var tooLarge *ErrResponseTooLarge
+	require.True(t, errors.As(err, &tooLarge),
+		"expected *ErrResponseTooLarge, got %T: %v", err, err)
+	require.Equal(t, "compatibility", tooLarge.Op)
+	require.Equal(t, int64(64), tooLarge.Limit)
 }
 
 func TestCompatibilityReadLimit(t *testing.T) {

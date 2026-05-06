@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/grafana/nanogit"
@@ -36,12 +37,15 @@ func TestProvidersByteLimits(t *testing.T) {
 	authOpt := options.WithBasicAuth(os.Getenv("TEST_USER"), os.Getenv("TEST_TOKEN"))
 	repoURL := os.Getenv("TEST_REPO")
 
-	// Resolve a known commit hash with an unconstrained client so the
-	// cap-triggering subtests have a stable target to call GetCommit
-	// against without depending on the provider's exact ref shape.
+	// Resolve any default branch with an unconstrained client so the
+	// cap-triggering subtests have a stable commit hash to call
+	// GetCommit against. We don't assume "main" — providers and repos
+	// vary (master, develop, trunk, …) — so we pick the first head we
+	// find. This keeps the test repo-agnostic, matching the file's
+	// header contract that no specific seeding is required.
 	baseClient, err := nanogit.NewHTTPClient(repoURL, authOpt)
 	require.NoError(t, err)
-	mainRef, err := baseClient.GetRef(ctx, "refs/heads/main")
+	headRef, err := resolveAnyDefaultBranch(ctx, baseClient)
 	require.NoError(t, err)
 
 	t.Run("RefsMetadata cap surfaces ErrResponseTooLarge from ListRefs", func(t *testing.T) {
@@ -67,7 +71,7 @@ func TestProvidersByteLimits(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		_, err = c.GetCommit(ctx, mainRef.Hash)
+		_, err = c.GetCommit(ctx, headRef.Hash)
 		require.Error(t, err)
 		var tooLarge *clientpkg.ErrResponseTooLarge
 		require.True(t, errors.As(err, &tooLarge),
@@ -83,7 +87,7 @@ func TestProvidersByteLimits(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		_, err = c.GetFlatTree(ctx, mainRef.Hash)
+		_, err = c.GetFlatTree(ctx, headRef.Hash)
 		require.Error(t, err)
 		var tooLarge *clientpkg.ErrResponseTooLarge
 		require.True(t, errors.As(err, &tooLarge),
@@ -106,13 +110,38 @@ func TestProvidersByteLimits(t *testing.T) {
 
 		// Hitting GetRef and GetCommit through a generously-capped
 		// client must NOT regress against the unconfigured baseline.
-		ref, err := c.GetRef(ctx, "refs/heads/main")
+		ref, err := c.GetRef(ctx, headRef.Name)
 		require.NoError(t, err)
-		require.Equal(t, mainRef.Hash, ref.Hash)
+		require.Equal(t, headRef.Hash, ref.Hash)
 
-		commit, err := c.GetCommit(ctx, mainRef.Hash)
+		commit, err := c.GetCommit(ctx, headRef.Hash)
 		require.NoError(t, err)
-		require.Equal(t, mainRef.Hash, commit.Hash)
+		require.Equal(t, headRef.Hash, commit.Hash)
 	})
+}
+
+// resolveAnyDefaultBranch returns a Ref pointing at a branch that exists
+// on the remote, trying common defaults (main, master) first and falling
+// back to the first refs/heads/* the server advertises. Used to keep
+// provider tests repo-agnostic: the test header promises the test does
+// not need a specific default branch, so hardcoding "refs/heads/main"
+// would silently break repos using a different convention.
+func resolveAnyDefaultBranch(ctx context.Context, c nanogit.Client) (nanogit.Ref, error) {
+	for _, candidate := range []string{"refs/heads/main", "refs/heads/master"} {
+		ref, err := c.GetRef(ctx, candidate)
+		if err == nil {
+			return ref, nil
+		}
+	}
+	refs, err := c.ListRefs(ctx)
+	if err != nil {
+		return nanogit.Ref{}, err
+	}
+	for _, ref := range refs {
+		if strings.HasPrefix(ref.Name, "refs/heads/") {
+			return ref, nil
+		}
+	}
+	return nanogit.Ref{}, errors.New("no refs/heads/* branch found on remote")
 }
 
