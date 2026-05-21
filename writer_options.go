@@ -17,11 +17,16 @@ const (
 	PackfileStorageDisk
 )
 
+// CommitModifier transforms a commit's canonical bytes before hashing.
+type CommitModifier func(commit []byte) ([]byte, error)
+
 // WriterOptions holds configuration options for StagedWriter.
 type WriterOptions struct {
 	// StorageMode determines how packfile objects are stored during staging.
 	// Default is PackfileStorageAuto.
 	StorageMode PackfileStorageMode
+
+	CommitModifier CommitModifier
 }
 
 // WriterOption is a function type for configuring WriterOptions.
@@ -50,6 +55,14 @@ func WithDiskStorage() WriterOption {
 func WithAutoStorage() WriterOption {
 	return func(opts *WriterOptions) error {
 		opts.StorageMode = PackfileStorageAuto
+		return nil
+	}
+}
+
+// WithCommitModifier installs a CommitModifier on the writer.
+func WithCommitModifier(m CommitModifier) WriterOption {
+	return func(opts *WriterOptions) error {
+		opts.CommitModifier = m
 		return nil
 	}
 }

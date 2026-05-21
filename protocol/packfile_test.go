@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 func TestParsePackfile(t *testing.T) {
@@ -298,4 +299,30 @@ func TestBuildTreeObject_GitlinkSortsAsFile(t *testing.T) {
 		[]string{"submod", "submod-dir", "submod-x"},
 		actualOrder,
 		"gitlink (mode 0o160000) must sort as a file, not as a directory")
+}
+
+func TestAddCommit_Modifier(t *testing.T) {
+	t.Parallel()
+
+	writer := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+	blobHash, err := writer.AddBlob([]byte("hello"))
+	require.NoError(t, err)
+	tree, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{{
+		FileName: "x", FileMode: 0o100644, Hash: blobHash.String(),
+	}})
+	require.NoError(t, err)
+	writer.AddObject(tree)
+	author := &protocol.Identity{Name: "a", Email: "a@b", Timestamp: 0, Timezone: "+0000"}
+
+	var seen []byte
+	suffix := []byte("\nextra")
+	got, err := writer.AddCommit(tree.Hash, hash.Zero, author, author, "msg", func(b []byte) ([]byte, error) {
+		seen = append([]byte(nil), b...)
+		return append(seen, suffix...), nil
+	})
+	require.NoError(t, err)
+
+	want, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeCommit, append(append([]byte(nil), seen...), suffix...))
+	require.NoError(t, err)
+	require.Equal(t, want.String(), got.String())
 }

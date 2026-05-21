@@ -126,16 +126,17 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 	}
 	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode, caps...)
 	return &stagedWriter{
-		client:            c,
-		ref:               ref,
-		writer:            writer,
-		lastCommit:        commit,
-		lastTree:          treeObj,
-		objStorage:        objStorage,
-		treeEntries:       entries,
-		submoduleEntries:  submodules,
-		storageMode:       protocolStorageMode,
-		dirtyPaths:        make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
+		client:           c,
+		ref:              ref,
+		writer:           writer,
+		lastCommit:       commit,
+		lastTree:         treeObj,
+		objStorage:       objStorage,
+		treeEntries:      entries,
+		submoduleEntries: submodules,
+		storageMode:      protocolStorageMode,
+		dirtyPaths:       make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
+		commitModifier:   opts.CommitModifier,
 	}, nil
 }
 
@@ -175,7 +176,8 @@ type stagedWriter struct {
 	// Track if cleanup has been called
 	isCleanedUp bool
 	// Deferred tree building optimization: track which directory paths need tree rebuilding
-	dirtyPaths map[string]bool
+	dirtyPaths     map[string]bool
+	commitModifier CommitModifier
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.
@@ -921,7 +923,7 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		Timezone:  committer.Time.Format("-0700"),
 	}
 
-	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message)
+	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message, w.commitModifier)
 	if err != nil {
 		return nil, fmt.Errorf("create commit object: %w", err)
 	}

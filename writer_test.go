@@ -182,6 +182,7 @@ func TestStagedWriter_Push_RetryAfterFailure(t *testing.T) {
 		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
 		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
 		"Test commit",
+		nil,
 	)
 	require.NoError(t, err)
 	writer.lastCommit = &Commit{
@@ -249,6 +250,7 @@ func TestStagedWriter_Push_ReceivePackSuccessIgnoresWritePackfileError(t *testin
 		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
 		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
 		"Test commit",
+		nil,
 	)
 	require.NoError(t, err)
 	writer.lastCommit = &Commit{

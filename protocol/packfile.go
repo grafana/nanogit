@@ -987,7 +987,7 @@ func (w *PackfileWriter) HasObjects() bool {
 
 // AddCommit adds a commit object to the packfile.
 // The commit references a tree and optionally a parent commit.
-func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string) (hash.Hash, error) {
+func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, modify func([]byte) ([]byte, error)) (hash.Hash, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return hash.Hash{}, err
 	}
@@ -1003,8 +1003,17 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 	data.WriteString("\n")
 	data.WriteString(message)
 
+	out := data.Bytes()
+	if modify != nil {
+		var err error
+		out, err = modify(out)
+		if err != nil {
+			return hash.Hash{}, fmt.Errorf("modify commit: %w", err)
+		}
+	}
+
 	// Compute hash immediately
-	h, err := Object(w.algo, ObjectTypeCommit, data.Bytes())
+	h, err := Object(w.algo, ObjectTypeCommit, out)
 	if err != nil {
 		return hash.Hash{}, fmt.Errorf("computing commit hash: %w", err)
 	}
@@ -1017,7 +1026,7 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 	// Create commit object
 	obj := PackfileObject{
 		Type: ObjectTypeCommit,
-		Data: data.Bytes(),
+		Data: out,
 		Hash: h,
 		Commit: &PackfileCommit{
 			Tree:      tree,
