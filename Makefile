@@ -24,7 +24,7 @@ test-integration:
 
 .PHONY: test-providers
 test-providers:
-	go test -race -run TestProviders ./tests
+	go test -race -run 'TestProviders|TestSignProvidersVerify' ./tests
 
 test: test-unit test-integration
 

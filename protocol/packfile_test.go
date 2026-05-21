@@ -301,28 +301,25 @@ func TestBuildTreeObject_GitlinkSortsAsFile(t *testing.T) {
 		"gitlink (mode 0o160000) must sort as a file, not as a directory")
 }
 
-func TestAddCommit_Modifier(t *testing.T) {
+func TestParseCommit_GPGSig(t *testing.T) {
 	t.Parallel()
 
-	writer := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
-	blobHash, err := writer.AddBlob([]byte("hello"))
-	require.NoError(t, err)
-	tree, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{{
-		FileName: "x", FileMode: 0o100644, Hash: blobHash.String(),
-	}})
-	require.NoError(t, err)
-	writer.AddObject(tree)
-	author := &protocol.Identity{Name: "a", Email: "a@b", Timestamp: 0, Timezone: "+0000"}
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+	signature := "-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQ\nABCDEFGH123456\n-----END PGP SIGNATURE-----"
+	c := &protocol.PackfileCommit{
+		Tree:      hash.Zero,
+		Parent:    hash.Zero,
+		Author:    ident,
+		Committer: ident,
+		Message:   "signed commit\n",
+		Signature: signature,
+	}
 
-	var seen []byte
-	suffix := []byte("\nextra")
-	got, err := writer.AddCommit(tree.Hash, hash.Zero, author, author, "msg", func(b []byte) ([]byte, error) {
-		seen = append([]byte(nil), b...)
-		return append(seen, suffix...), nil
-	})
-	require.NoError(t, err)
+	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+	require.NoError(t, obj.Parse())
 
-	want, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeCommit, append(append([]byte(nil), seen...), suffix...))
-	require.NoError(t, err)
-	require.Equal(t, want.String(), got.String())
+	require.Equal(t, signature, obj.Commit.Signature)
+	require.Equal(t, "signed commit\n", obj.Commit.Message)
+	require.Equal(t, "a@b", obj.Commit.Author.Email)
+	require.Empty(t, obj.Commit.Fields)
 }

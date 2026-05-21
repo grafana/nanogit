@@ -1,0 +1,10 @@
+title = "nanogit gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test-only signing fixtures used by tests/sign_local_verify_test.go. These are ephemeral keys for an unregistrable @test.invalid identity and sign nothing trusted; regenerated only when the tests need fresh material."
+paths = [
+    '''^tests/testdata/signing/.*$''',
+]

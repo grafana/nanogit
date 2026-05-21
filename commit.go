@@ -228,9 +228,9 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 // Additional optimizations considered:
 // - Could use byte enum for common modes (0o100644, 0o100755, 0o040000) + overflow field
 type entryInfo struct {
-	hash     hash.Hash
-	mode     uint16              // uint16 is sufficient for Git file modes (max 0o160000)
-	objType  protocol.ObjectType // Git object type (blob, tree, etc.)
+	hash    hash.Hash
+	mode    uint16              // uint16 is sufficient for Git file modes (max 0o160000)
+	objType protocol.ObjectType // Git object type (blob, tree, etc.)
 }
 
 // compareTrees recursively compares two trees and collects changes between them.

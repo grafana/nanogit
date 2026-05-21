@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
@@ -178,7 +179,7 @@ func TestStagedWriter_Push_RetryAfterFailure(t *testing.T) {
 	treeHash := hash.Zero // Use zero for simplicity in this test
 	commitHash, err := writer.writer.AddCommit(
 		treeHash,
-		hash.Zero, // no parent
+		hash.Zero,
 		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
 		&protocol.Identity{Name: "Test", Email: "test@example.com", Timestamp: 1234567890, Timezone: "+0000"},
 		"Test commit",
@@ -270,4 +271,110 @@ func TestStagedWriter_Push_ReceivePackSuccessIgnoresWritePackfileError(t *testin
 
 	// Assert: Writer cleaned up (objects removed)
 	assert.False(t, writer.writer.HasObjects(), "Writer should be cleaned up after successful push")
+}
+
+type mockSigner struct {
+	signature string
+	err       error
+	gotBytes  []byte
+}
+
+func (m *mockSigner) Sign(c *protocol.PackfileCommit) error {
+	m.gotBytes = append([]byte(nil), c.Build()...)
+	if m.err != nil {
+		return m.err
+	}
+	c.Signature = m.signature
+	return nil
+}
+
+func TestStagedWriter_Commit_SignerError(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	treeObj, err := protocol.BuildTreeObject(crypto.SHA1, nil)
+	require.NoError(t, err)
+
+	sentinel := errors.New("signer boom")
+	writer := &stagedWriter{
+		client:      &httpClient{RawClient: &mockRawClient{}},
+		ref:         Ref{Name: "refs/heads/main", Hash: hash.Zero},
+		writer:      protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory),
+		objStorage:  storage.NewInMemoryStorage(ctx),
+		treeEntries: make(map[string]*FlatTreeEntry),
+		dirtyPaths:  make(map[string]bool),
+		storageMode: protocol.PackfileStorageMemory,
+		lastTree:    &treeObj,
+		lastCommit:  &Commit{Hash: hash.Zero, Tree: treeObj.Hash, Parent: hash.Zero},
+		signer:      &mockSigner{err: sentinel},
+	}
+
+	_, err = writer.writer.AddBlob([]byte("payload"))
+	require.NoError(t, err)
+
+	when := time.Unix(1234567890, 0).UTC()
+	_, err = writer.Commit(ctx, "msg",
+		Author{Name: "A", Email: "a@b", Time: when},
+		Committer{Name: "A", Email: "a@b", Time: when})
+	require.ErrorIs(t, err, sentinel)
+}
+
+func TestStagedWriter_Commit_SignerInvoked(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	treeObj, err := protocol.BuildTreeObject(crypto.SHA1, nil)
+	require.NoError(t, err)
+
+	m := &mockSigner{signature: "fake-armored-signature"}
+	writer := &stagedWriter{
+		client:      &httpClient{RawClient: &mockRawClient{}},
+		ref:         Ref{Name: "refs/heads/main", Hash: hash.Zero},
+		writer:      protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory),
+		objStorage:  storage.NewInMemoryStorage(ctx),
+		treeEntries: make(map[string]*FlatTreeEntry),
+		dirtyPaths:  make(map[string]bool),
+		storageMode: protocol.PackfileStorageMemory,
+		lastTree:    &treeObj,
+		lastCommit:  &Commit{Hash: hash.Zero, Tree: treeObj.Hash, Parent: hash.Zero},
+		signer:      m,
+	}
+
+	_, err = writer.writer.AddBlob([]byte("payload"))
+	require.NoError(t, err)
+
+	when := time.Unix(1234567890, 0).UTC()
+	_, err = writer.Commit(ctx, "msg",
+		Author{Name: "A", Email: "a@b", Time: when},
+		Committer{Name: "A", Email: "a@b", Time: when})
+	require.NoError(t, err)
+
+	assert.Contains(t, string(m.gotBytes), "msg")
+	assert.Contains(t, string(m.gotBytes), "tree ")
+	assert.NotContains(t, string(m.gotBytes), "gpgsig", "signer must receive unsigned bytes")
+}
+
+func TestSignerOptions(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		opt      WriterOption
+		wantType signerType
+		wantKey  []byte
+		wantCert []byte
+	}{
+		{"gpg", WithGPGSigner([]byte("k")), signerGPG, []byte("k"), nil},
+		{"ssh", WithSSHSigner([]byte("k")), signerSSH, []byte("k"), nil},
+		{"smime", WithSMIMESigner([]byte("k"), []byte("c")), signerSMIME, []byte("k"), []byte("c")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := applyWriterOptions([]WriterOption{tc.opt})
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantType, opts.signerType)
+			assert.Equal(t, tc.wantKey, opts.signerKey)
+			assert.Equal(t, tc.wantCert, opts.signerCert)
+		})
+	}
 }

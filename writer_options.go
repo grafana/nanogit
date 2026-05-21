@@ -17,8 +17,14 @@ const (
 	PackfileStorageDisk
 )
 
-// CommitModifier transforms a commit's canonical bytes before hashing.
-type CommitModifier func(commit []byte) ([]byte, error)
+type signerType int
+
+const (
+	signerNone signerType = iota
+	signerGPG
+	signerSSH
+	signerSMIME
+)
 
 // WriterOptions holds configuration options for StagedWriter.
 type WriterOptions struct {
@@ -26,7 +32,9 @@ type WriterOptions struct {
 	// Default is PackfileStorageAuto.
 	StorageMode PackfileStorageMode
 
-	CommitModifier CommitModifier
+	signerType signerType
+	signerKey  []byte
+	signerCert []byte
 }
 
 // WriterOption is a function type for configuring WriterOptions.
@@ -59,10 +67,30 @@ func WithAutoStorage() WriterOption {
 	}
 }
 
-// WithCommitModifier installs a CommitModifier on the writer.
-func WithCommitModifier(m CommitModifier) WriterOption {
+// WithGPGSigner signs every commit with an unencrypted armored OpenPGP key.
+func WithGPGSigner(armoredKey []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.CommitModifier = m
+		opts.signerType = signerGPG
+		opts.signerKey = armoredKey
+		return nil
+	}
+}
+
+// WithSSHSigner signs every commit with an SSH private key.
+func WithSSHSigner(privateKey []byte) WriterOption {
+	return func(opts *WriterOptions) error {
+		opts.signerType = signerSSH
+		opts.signerKey = privateKey
+		return nil
+	}
+}
+
+// WithSMIMESigner signs every commit with an S/MIME (X.509) key and certificate.
+func WithSMIMESigner(privateKey, certificate []byte) WriterOption {
+	return func(opts *WriterOptions) error {
+		opts.signerType = signerSMIME
+		opts.signerKey = privateKey
+		opts.signerCert = certificate
 		return nil
 	}
 }
