@@ -631,8 +631,8 @@ func isErrorOrFatalMessageOptimized(data []byte) bool {
 		return true
 	}
 
-	// Side-band format: check for channels 2 or 3 with error/fatal messages
-	if len(data) > 1 && (data[0] == 0x02 || data[0] == 0x03) {
+	// Side-band format: check for channel 3 with error/fatal messages
+	if len(data) > 1 && data[0] == 0x03 {
 		return bytes.HasPrefix(data[1:], errorPattern) || bytes.HasPrefix(data[1:], fatalPattern)
 	}
 
