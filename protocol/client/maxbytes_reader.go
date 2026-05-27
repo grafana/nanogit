@@ -70,9 +70,12 @@ func (l *limitedReadCloser) Read(p []byte) (int, error) {
 
 	// Cap the read at remaining+1 bytes. Getting back exactly
 	// remaining+1 bytes is the unambiguous "body exceeds the cap"
-	// signal; <= remaining is fine.
+	// signal; <= remaining is fine. The conversion to int is safe:
+	// the predicate guarantees len(p)-1 > l.remaining, so
+	// l.remaining+1 <= len(p), and len(p) fits in int by definition
+	// (it came from len() on a slice).
 	if int64(len(p))-1 > l.remaining {
-		p = p[:l.remaining+1]
+		p = p[:int(l.remaining+1)]
 	}
 	n, err := l.body.Read(p)
 

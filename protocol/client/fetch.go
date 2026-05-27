@@ -210,20 +210,13 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	return responseReader, response, nil
 }
 
-// allWantedObjectsCollected reports whether every entry in wanted is already
-// present in got. Returns false when wanted is empty or nil — the caller's
-// "early termination" branches only apply to NoExtraObjects fetches with at
-// least one requested hash.
-func allWantedObjectsCollected(wanted map[string]bool, got map[string]*protocol.PackfileObject) bool {
-	if len(wanted) == 0 {
-		return false
-	}
-	for h := range wanted {
-		if _, ok := got[h]; !ok {
-			return false
-		}
-	}
-	return true
+// allWantedObjectsCollected reports whether the read loop has seen every
+// wanted hash. The caller maintains pendingWanted by deleting each hash on
+// first sight (see shouldTerminateEarly), so an empty map means "all
+// collected". A nil map means the fetch is not NoExtraObjects and the
+// early-termination / cap-swallow branches stay disabled.
+func allWantedObjectsCollected(pendingWanted map[string]bool) bool {
+	return pendingWanted != nil && len(pendingWanted) == 0
 }
 
 // classifyReadObjectErr decides whether a non-nil error from ReadObject
@@ -242,12 +235,16 @@ func allWantedObjectsCollected(wanted map[string]bool, got map[string]*protocol.
 //     data) is tolerated: packfile parsing has pre-existing leniencies that
 //     downstream batched flows depend on, and tightening those is a separate
 //     refactor.
-func classifyReadObjectErr(err error, pendingWanted map[string]bool, collected map[string]*protocol.PackfileObject) error {
+//
+// pendingWanted is the deletion-tracked map maintained by the read loop:
+// nil means the fetch isn't NoExtraObjects (so the swallow path is
+// disabled), empty means every wanted hash has been seen.
+func classifyReadObjectErr(err error, pendingWanted map[string]bool) error {
 	var tooLarge *ErrResponseTooLarge
 	if !errors.As(err, &tooLarge) {
 		return nil
 	}
-	if allWantedObjectsCollected(pendingWanted, collected) {
+	if allWantedObjectsCollected(pendingWanted) {
 		return nil
 	}
 	return fmt.Errorf("read packfile object: %w", err)
@@ -270,14 +267,14 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	// Collect delta objects for later resolution
 	var deltas []*protocol.PackfileObject
 
-	var objectCount, foundWantedCount, totalDelta int
+	var objectCount, totalDelta int
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			if terr := classifyReadObjectErr(err, pendingWantedHashes, objects); terr != nil {
+			if terr := classifyReadObjectErr(err, pendingWantedHashes); terr != nil {
 				return terr
 			}
-			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
+			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "totalDeltas", totalDelta)
 			break
 		}
 
@@ -300,7 +297,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		objects[obj.Object.Hash.String()] = obj.Object
 		objectCount++
 
-		if shouldTerminateEarly(pendingWantedHashes, obj.Object.Hash.String(), &foundWantedCount) {
+		if shouldTerminateEarly(pendingWantedHashes, obj.Object.Hash.String()) {
 			logger.Debug("All wanted objects found, stopping early",
 				"totalObjectsRead", objectCount, "queuedDeltas", totalDelta)
 			// Drop any deltas queued before the early break.
@@ -326,25 +323,30 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	return nil
 }
 
-// shouldTerminateEarly bumps the wanted-object counter when the just-read
-// hash is part of the pending wanted set, and reports whether every wanted
-// object has now been collected. Returning true tells the caller to break
-// out of the read loop — both to avoid draining the rest of the packfile
-// (wasteful) and to keep the new tight per-operation caps from tripping
-// ErrResponseTooLarge on bytes the caller never asked for.
+// shouldTerminateEarly deletes the just-read hash from the pending wanted
+// set and reports whether the set is now empty. Returning true tells the
+// caller to break out of the read loop — both to avoid draining the rest of
+// the packfile (wasteful) and to keep the new tight per-operation caps from
+// tripping ErrResponseTooLarge on bytes the caller never asked for.
+//
+// Tracking by deletion rather than a counter is what makes this safe
+// against a malicious or buggy server that sends the same wanted object
+// more than once: each hash decrements the pending set exactly once, so
+// duplicates can't trigger early termination before every distinct hash
+// has been seen.
 //
 // Splitting this out is mostly housekeeping: it keeps
 // processPackfileResponse under the gocyclo-15 ceiling and makes the
 // early-termination contract testable in isolation.
-func shouldTerminateEarly(pendingWanted map[string]bool, objHash string, foundCount *int) bool {
+func shouldTerminateEarly(pendingWanted map[string]bool, objHash string) bool {
 	if pendingWanted == nil {
 		return false
 	}
 	if !pendingWanted[objHash] {
 		return false
 	}
-	*foundCount++
-	return *foundCount >= len(pendingWanted)
+	delete(pendingWanted, objHash)
+	return len(pendingWanted) == 0
 }
 
 // resolveDeltas resolves delta objects by applying them to their base objects.
