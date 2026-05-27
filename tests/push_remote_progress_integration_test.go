@@ -177,7 +177,7 @@ var _ = Describe("Receive-pack remote progress on successful push", func() {
 
 		const hookMsg = "fatal: cannot exec 'exit 0 #': No such file or directory"
 		hookScript := "#!/bin/sh\n" +
-			"echo '" + hookMsg + "' 1>&2\n" +
+			"echo \"" + hookMsg + "\" 1>&2\n" +
 			"exit 0\n"
 
 		By("Installing a hook that prints 'fatal:' to stderr but exits 0 (success)")

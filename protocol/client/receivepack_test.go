@@ -355,8 +355,8 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "side-band channel 1 raw ng payload triggers reference update error",
-			body: flushed(rawSideband1("ng refs/heads/main pre-receive hook declined\n")),
+			name:        "side-band channel 1 raw ng payload triggers reference update error",
+			body:        flushed(rawSideband1("ng refs/heads/main pre-receive hook declined\n")),
 			wantErr:     true,
 			errContains: "reference update failed for refs/heads/main",
 		},
@@ -471,8 +471,8 @@ func TestReceivePack_PositiveValidation(t *testing.T) {
 			// surface as a GitServerError rather than be silently
 			// dropped — otherwise the push would look successful
 			// despite the server signalling termination.
-			name: "channel-3 payload without fatal prefix surfaces as server error",
-			body: flushed(pkt(string(append([]byte{0x03}, []byte("connection terminated by host")...)))),
+			name:        "channel-3 payload without fatal prefix surfaces as server error",
+			body:        flushed(pkt(string(append([]byte{0x03}, []byte("connection terminated by host")...)))),
 			wantErr:     true,
 			errContains: "git server fatal:",
 		},
@@ -1061,54 +1061,6 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("channel-2 packet with error: prefix alongside unpack ok is not an error", func(t *testing.T) {
-		t.Parallel()
-		// Per gitprotocol-pack, channel 2 is informational only.
-		// A "error:" prefix on channel 2 must not cause failure when
-		// channel 1 reports "unpack ok".
-		body := flushed(bytes.Join([][]byte{
-			progress("error: missing prerequisite object abc123\n"),
-			pkt("unpack ok\n"),
-		}, nil))
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
-		}))
-		defer server.Close()
-
-		c, err := NewRawClient(server.URL + "/repo")
-		require.NoError(t, err)
-
-		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
-		require.NoError(t, err, "channel-2 error: prefix must not cause failure when channel-1 reports success")
-	})
-
-	t.Run("channel-2 fatal: alongside unpack ok is not an error (issue #124392)", func(t *testing.T) {
-		t.Parallel()
-		// Regression test for https://github.com/grafana/grafana/issues/124392.
-		// GitLab CE emits "fatal: cannot exec..." on channel 2 while channel 1
-		// carries "unpack ok". nanogit was incorrectly treating channel-2
-		// "fatal:" as a fatal error. Only channel 3 is truly fatal.
-		body := flushed(bytes.Join([][]byte{
-			progress("fatal: cannot exec 'exit 0 #': No such file or directory\n"),
-			pkt("unpack ok\n"),
-			pkt("ok refs/heads/main\n"),
-		}, nil))
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
-		}))
-		defer server.Close()
-
-		c, err := NewRawClient(server.URL + "/repo")
-		require.NoError(t, err)
-
-		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
-		require.NoError(t, err, "channel-2 fatal: must not cause failure when channel-1 reports success")
-	})
-
 	// noKeepAliveClient gives a sub-test its own HTTP client whose
 	// transport disables keep-alives, so heavy response-body tests
 	// don't add idle connections to the shared http.DefaultTransport
@@ -1225,5 +1177,69 @@ func TestReceivePack_RemoteProgressOnError(t *testing.T) {
 		var wrapped *protocol.RemoteRejectionError
 		require.True(t, errors.As(err, &wrapped))
 		require.Equal(t, []string{"trailing remote message after rejection"}, wrapped.RemoteMessages)
+	})
+}
+
+func TestReceivePack_RemoteProgressOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	pkt := func(s string) []byte {
+		b, err := protocol.PackLine(s).Marshal()
+		require.NoError(t, err)
+		return b
+	}
+	flushed := func(data []byte) []byte {
+		return append(append([]byte{}, data...), []byte("0000")...)
+	}
+	progress := func(text string) []byte {
+		return pkt(string(append([]byte{0x02}, []byte(text)...)))
+	}
+
+	t.Run("channel-2 packet with error: prefix alongside unpack ok is not an error", func(t *testing.T) {
+		t.Parallel()
+		// Per gitprotocol-pack, channel 2 is informational only.
+		// A "error:" prefix on channel 2 must not cause failure when
+		// channel 1 reports "unpack ok".
+		body := flushed(bytes.Join([][]byte{
+			progress("error: missing prerequisite object abc123\n"),
+			pkt("unpack ok\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.NoError(t, err, "channel-2 error: prefix must not cause failure when channel-1 reports success")
+	})
+
+	t.Run("channel-2 fatal: alongside unpack ok is not an error (issue #124392)", func(t *testing.T) {
+		t.Parallel()
+		// Regression test for https://github.com/grafana/grafana/issues/124392.
+		// GitLab CE emits "fatal: cannot exec..." on channel 2 while channel 1
+		// carries "unpack ok". nanogit was incorrectly treating channel-2
+		// "fatal:" as a fatal error. Only channel 3 is truly fatal.
+		body := flushed(bytes.Join([][]byte{
+			progress("fatal: cannot exec 'exit 0 #': No such file or directory\n"),
+			pkt("unpack ok\n"),
+			pkt("ok refs/heads/main\n"),
+		}, nil))
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		c, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = c.ReceivePack(context.Background(), bytes.NewReader([]byte("test data")))
+		require.NoError(t, err, "channel-2 fatal: must not cause failure when channel-1 reports success")
 	})
 }
