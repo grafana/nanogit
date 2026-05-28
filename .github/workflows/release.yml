@@ -24,7 +24,7 @@ jobs:
       contents: read
     steps:
       - name: Wait for CI checks
-        uses: lewagon/wait-on-check-action@74049309dfeff245fe8009a0137eacf28136cb3c # v1.5.0
+        uses: lewagon/wait-on-check-action@9312864dfbc9fd208e9c0417843430751c042800 # v1.7.0
         with:
           ref: ${{ github.sha }}
           check-regexp: '.*'
@@ -50,7 +50,7 @@ jobs:
           persist-credentials: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 'lts/*'
           # Disable caching to prevent cache poisoning attacks
@@ -59,12 +59,12 @@ jobs:
       - name: Install semantic-release
         run: |
           npm install -g \
-            semantic-release@23 \
-            @semantic-release/changelog@6 \
-            @semantic-release/github@10 \
-            @semantic-release/commit-analyzer@12 \
-            @semantic-release/release-notes-generator@13 \
-            conventional-changelog-conventionalcommits@7
+            semantic-release@23.1.1 \
+            @semantic-release/changelog@6.0.3 \
+            @semantic-release/github@10.3.5 \
+            @semantic-release/commit-analyzer@12.0.0 \
+            @semantic-release/release-notes-generator@13.0.0 \
+            conventional-changelog-conventionalcommits@7.0.2
 
       - name: Setup Git
         run: |
@@ -135,15 +135,15 @@ jobs:
 
       - name: Setup Go
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version: '1.25.9'
+          go-version: '1.26.3'
           # Disable cache to prevent cache poisoning attacks
           cache: false
 
       - name: Build CLI binaries with GoReleaser
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7
         with:
           distribution: goreleaser
           # Pin to specific version to prevent runtime artifact poisoning
