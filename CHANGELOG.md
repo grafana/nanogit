@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1](https://github.com/grafana/nanogit/compare/v0.17.0...v0.17.1) (2026-05-28)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/klauspost/compress to v1.18.6 ([#319](https://github.com/grafana/nanogit/issues/319)) ([bcd1626](https://github.com/grafana/nanogit/commit/bcd162661bca0a1565ed2cbbe252dd0ce291ea56))
+* **deps:** update module github.com/maxbrunsfeld/counterfeiter/v6 to v6.12.2 ([#310](https://github.com/grafana/nanogit/issues/310)) ([50f8820](https://github.com/grafana/nanogit/commit/50f882009455aa4fb4195432f5e80cf6f19dad2e))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.42.0 ([#316](https://github.com/grafana/nanogit/issues/316)) ([51bcaf3](https://github.com/grafana/nanogit/commit/51bcaf3df770b869ad5dfed11a33e71b5e2eb75e))
+* **protocol:** don't treat sideband channel 2 fatal: as a fatal error ([#289](https://github.com/grafana/nanogit/issues/289)) ([633960d](https://github.com/grafana/nanogit/commit/633960d388dea9c3a720133a5ae47fe5f00e99ac))
+* **security/high:** update module github.com/go-git/go-billy/v5 to v5.9.0 [security] ([#299](https://github.com/grafana/nanogit/issues/299)) ([a7f8377](https://github.com/grafana/nanogit/commit/a7f8377958f4744d3f83f47cb51b382d0e8647fb))
+* **security/high:** update module github.com/go-git/go-git/v5 to v5.19.1 [security] ([#300](https://github.com/grafana/nanogit/issues/300)) ([9348dbc](https://github.com/grafana/nanogit/commit/9348dbc3577d1e38ff38edca875e1d12fdc98ed0))
+* **security/unknown:** update module golang.org/x/crypto to v0.52.0 [security] ([#301](https://github.com/grafana/nanogit/issues/301)) ([dbf16f3](https://github.com/grafana/nanogit/commit/dbf16f317be76571d3e43617c0483cafcd1d16a9))
+* **security/unknown:** update module golang.org/x/net to v0.55.0 [security] ([#302](https://github.com/grafana/nanogit/issues/302)) ([6d5ca01](https://github.com/grafana/nanogit/commit/6d5ca013b8528d953da3edc5979fc7432052f7aa))
+* **security/unknown:** update module golang.org/x/sys to v0.44.0 [security] ([#303](https://github.com/grafana/nanogit/issues/303)) ([3493b6d](https://github.com/grafana/nanogit/commit/3493b6d1f63ecb45eab4c52e34ad5a770479630c))
+* **security:** upgrade to Go 1.25.10 to address GO-2026-4971 ([#323](https://github.com/grafana/nanogit/issues/323)) ([6646278](https://github.com/grafana/nanogit/commit/66462788450f0992f129c036e25f88e99511ffd9))
+
 ## [0.17.0](https://github.com/grafana/nanogit/compare/v0.16.1...v0.17.0) (2026-05-05)
 
 
