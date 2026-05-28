@@ -136,22 +136,8 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 		submoduleEntries: submodules,
 		storageMode:      protocolStorageMode,
 		dirtyPaths:       make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
-		signer:           resolveSigner(opts),
+		signer:           opts.signer,
 	}, nil
-}
-
-// resolveSigner builds the protocol.Signer for the configured signer type.
-func resolveSigner(opts *WriterOptions) protocol.Signer {
-	switch opts.signerType {
-	case signerGPG:
-		return protocol.NewGPGSigner(opts.signerKey)
-	case signerSSH:
-		return protocol.NewSSHSigner(opts.signerKey)
-	case signerSMIME:
-		return protocol.NewSMIMESigner(opts.signerKey, opts.signerCert)
-	default:
-		return nil
-	}
 }
 
 // stagedWriter implements the StagedWriter interface.

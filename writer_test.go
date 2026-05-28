@@ -358,23 +358,18 @@ func TestSignerOptions(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name     string
-		opt      WriterOption
-		wantType signerType
-		wantKey  []byte
-		wantCert []byte
+		name string
+		opt  WriterOption
 	}{
-		{"gpg", WithGPGSigner([]byte("k")), signerGPG, []byte("k"), nil},
-		{"ssh", WithSSHSigner([]byte("k")), signerSSH, []byte("k"), nil},
-		{"smime", WithSMIMESigner([]byte("k"), []byte("c")), signerSMIME, []byte("k"), []byte("c")},
+		{"gpg", WithGPGSigner([]byte("k"))},
+		{"ssh", WithSSHSigner([]byte("k"))},
+		{"smime", WithSMIMESigner([]byte("k"), []byte("c"))},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts, err := applyWriterOptions([]WriterOption{tc.opt})
 			require.NoError(t, err)
-			assert.Equal(t, tc.wantType, opts.signerType)
-			assert.Equal(t, tc.wantKey, opts.signerKey)
-			assert.Equal(t, tc.wantCert, opts.signerCert)
+			assert.NotNil(t, opts.signer)
 		})
 	}
 }

@@ -1,5 +1,7 @@
 package nanogit
 
+import "github.com/grafana/nanogit/protocol"
+
 // PackfileStorageMode defines how packfile objects are stored during staging.
 type PackfileStorageMode int
 
@@ -17,24 +19,13 @@ const (
 	PackfileStorageDisk
 )
 
-type signerType int
-
-const (
-	signerNone signerType = iota
-	signerGPG
-	signerSSH
-	signerSMIME
-)
-
 // WriterOptions holds configuration options for StagedWriter.
 type WriterOptions struct {
 	// StorageMode determines how packfile objects are stored during staging.
 	// Default is PackfileStorageAuto.
 	StorageMode PackfileStorageMode
 
-	signerType signerType
-	signerKey  []byte
-	signerCert []byte
+	signer protocol.Signer
 }
 
 // WriterOption is a function type for configuring WriterOptions.
@@ -70,8 +61,7 @@ func WithAutoStorage() WriterOption {
 // WithGPGSigner signs every commit with an unencrypted armored OpenPGP key.
 func WithGPGSigner(armoredKey []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.signerType = signerGPG
-		opts.signerKey = armoredKey
+		opts.signer = protocol.NewGPGSigner(armoredKey)
 		return nil
 	}
 }
@@ -79,8 +69,7 @@ func WithGPGSigner(armoredKey []byte) WriterOption {
 // WithSSHSigner signs every commit with an SSH private key.
 func WithSSHSigner(privateKey []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.signerType = signerSSH
-		opts.signerKey = privateKey
+		opts.signer = protocol.NewSSHSigner(privateKey)
 		return nil
 	}
 }
@@ -88,9 +77,7 @@ func WithSSHSigner(privateKey []byte) WriterOption {
 // WithSMIMESigner signs every commit with an S/MIME (X.509) key and certificate.
 func WithSMIMESigner(privateKey, certificate []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.signerType = signerSMIME
-		opts.signerKey = privateKey
-		opts.signerCert = certificate
+		opts.signer = protocol.NewSMIMESigner(privateKey, certificate)
 		return nil
 	}
 }
