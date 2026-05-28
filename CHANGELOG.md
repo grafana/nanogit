@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2](https://github.com/grafana/nanogit/compare/v0.17.1...v0.17.2) (2026-05-28)
+
+
+### Bug Fixes
+
+* **docs:** pin esbuild to 0.27.5 and bump pages actions to v5 ([#324](https://github.com/grafana/nanogit/issues/324)) ([e15255a](https://github.com/grafana/nanogit/commit/e15255aada2b1f5d48b4abf0dba7b16fc8c462a4)), closes [#320](https://github.com/grafana/nanogit/issues/320) [#321](https://github.com/grafana/nanogit/issues/321)
+
 ## [0.17.0](https://github.com/grafana/nanogit/compare/v0.16.1...v0.17.0) (2026-05-05)
 
 
