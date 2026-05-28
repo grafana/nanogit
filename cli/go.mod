@@ -1,6 +1,6 @@
 module github.com/grafana/nanogit/cli
 
-go 1.25.9
+go 1.25.10
 
 require (
 	github.com/grafana/nanogit v0.0.0
