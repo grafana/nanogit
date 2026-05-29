@@ -18,38 +18,38 @@ func TestWithLimits(t *testing.T) {
 
 	t.Run("round-trips configured values", func(t *testing.T) {
 		want := Limits{
-			SingleObjectFetch:   1 << 20,
-			MultiObjectFetch:    1 << 30,
-			RefsMetadata:        1 << 16,
-			ReceivePackResponse: 1 << 16,
+			SingleObjectFetchMaxBytes:   1 << 20,
+			MultiObjectFetchMaxBytes:    1 << 30,
+			RefsMetadataMaxBytes:        1 << 16,
+			ReceivePackResponseMaxBytes: 1 << 16,
 		}
 		resolved, err := Resolve(WithLimits(want))
 		require.NoError(t, err)
 		assert.Equal(t, want, resolved.Limits)
 	})
 
-	t.Run("negative SingleObjectFetch rejected", func(t *testing.T) {
-		_, err := Resolve(WithLimits(Limits{SingleObjectFetch: -1}))
+	t.Run("negative SingleObjectFetchMaxBytes rejected", func(t *testing.T) {
+		_, err := Resolve(WithLimits(Limits{SingleObjectFetchMaxBytes: -1}))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "SingleObjectFetch")
+		assert.Contains(t, err.Error(), "SingleObjectFetchMaxBytes")
 	})
 
-	t.Run("negative MultiObjectFetch rejected", func(t *testing.T) {
-		_, err := Resolve(WithLimits(Limits{MultiObjectFetch: -1}))
+	t.Run("negative MultiObjectFetchMaxBytes rejected", func(t *testing.T) {
+		_, err := Resolve(WithLimits(Limits{MultiObjectFetchMaxBytes: -1}))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "MultiObjectFetch")
+		assert.Contains(t, err.Error(), "MultiObjectFetchMaxBytes")
 	})
 
-	t.Run("negative RefsMetadata rejected", func(t *testing.T) {
-		_, err := Resolve(WithLimits(Limits{RefsMetadata: -1}))
+	t.Run("negative RefsMetadataMaxBytes rejected", func(t *testing.T) {
+		_, err := Resolve(WithLimits(Limits{RefsMetadataMaxBytes: -1}))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "RefsMetadata")
+		assert.Contains(t, err.Error(), "RefsMetadataMaxBytes")
 	})
 
-	t.Run("negative ReceivePackResponse rejected", func(t *testing.T) {
-		_, err := Resolve(WithLimits(Limits{ReceivePackResponse: -1}))
+	t.Run("negative ReceivePackResponseMaxBytes rejected", func(t *testing.T) {
+		_, err := Resolve(WithLimits(Limits{ReceivePackResponseMaxBytes: -1}))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ReceivePackResponse")
+		assert.Contains(t, err.Error(), "ReceivePackResponseMaxBytes")
 	})
 
 	t.Run("WithLimits is composable with other options", func(t *testing.T) {
@@ -59,11 +59,11 @@ func TestWithLimits(t *testing.T) {
 		// test would catch the lost UserAgent.
 		resolved, err := Resolve(
 			WithUserAgent("ua/1"),
-			WithLimits(Limits{SingleObjectFetch: 1024}),
+			WithLimits(Limits{SingleObjectFetchMaxBytes: 1024}),
 		)
 		require.NoError(t, err)
 		assert.Equal(t, "ua/1", resolved.UserAgent)
-		assert.Equal(t, int64(1024), resolved.Limits.SingleObjectFetch)
+		assert.Equal(t, int64(1024), resolved.Limits.SingleObjectFetchMaxBytes)
 	})
 
 	t.Run("WithLimits called twice keeps the last value", func(t *testing.T) {
@@ -71,13 +71,13 @@ func TestWithLimits(t *testing.T) {
 		// callers that pass two slices of options expect the latest
 		// to win, matching the precedent set by other With* helpers.
 		resolved, err := Resolve(
-			WithLimits(Limits{SingleObjectFetch: 1}),
-			WithLimits(Limits{MultiObjectFetch: 2}),
+			WithLimits(Limits{SingleObjectFetchMaxBytes: 1}),
+			WithLimits(Limits{MultiObjectFetchMaxBytes: 2}),
 		)
 		require.NoError(t, err)
-		assert.Equal(t, int64(0), resolved.Limits.SingleObjectFetch,
+		assert.Equal(t, int64(0), resolved.Limits.SingleObjectFetchMaxBytes,
 			"second WithLimits must overwrite the first, not merge")
-		assert.Equal(t, int64(2), resolved.Limits.MultiObjectFetch)
+		assert.Equal(t, int64(2), resolved.Limits.MultiObjectFetchMaxBytes)
 	})
 
 	t.Run("rejection short-circuits subsequent options", func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestWithLimits(t *testing.T) {
 		called := false
 		tail := func(*Options) error { called = true; return nil }
 
-		_, err := Resolve(WithLimits(Limits{SingleObjectFetch: -1}), tail)
+		_, err := Resolve(WithLimits(Limits{SingleObjectFetchMaxBytes: -1}), tail)
 		require.Error(t, err)
 		assert.False(t, called, "options after a failing one must not run")
 	})

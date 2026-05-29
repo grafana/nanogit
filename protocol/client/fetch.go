@@ -32,7 +32,8 @@ type FetchOptions struct {
 	// stream the server returns) before the parser starts consuming it.
 	// 0 disables the cap. High-level callers select an appropriate value
 	// from options.Limits based on whether the fetch targets a single
-	// object (Limits.SingleObjectFetch) or many (Limits.MultiObjectFetch).
+	// object (Limits.SingleObjectFetchMaxBytes) or many
+	// (Limits.MultiObjectFetchMaxBytes).
 	MaxResponseBytes int64
 }
 

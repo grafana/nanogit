@@ -36,11 +36,11 @@ func incompressibleBytes(n int) string {
 //   - the zero-value Limits keeps fetching unbounded, so existing
 //     embedders are not silently capped by this change
 var _ = Describe("Byte limits (DoS protection)", func() {
-	Context("SingleObjectFetch cap", func() {
+	Context("SingleObjectFetchMaxBytes cap", func() {
 		It("returns ErrResponseTooLarge from GetBlob when the blob exceeds the cap", func() {
 			By("Setting up a client with a tight single-object cap")
 			cappedClient, _, local, _ := QuickSetup(options.WithLimits(options.Limits{
-				SingleObjectFetch: 256,
+				SingleObjectFetchMaxBytes: 256,
 			}))
 
 			By("Pushing a blob whose post-zlib size is comfortably larger than the cap")
@@ -76,7 +76,7 @@ var _ = Describe("Byte limits (DoS protection)", func() {
 		It("does not interfere with normal-sized blobs", func() {
 			By("Setting up a client with a generous single-object cap")
 			client, _, local, _ := QuickSetup(options.WithLimits(options.Limits{
-				SingleObjectFetch: 10 * 1024 * 1024, // 10 MiB
+				SingleObjectFetchMaxBytes: 10 * 1024 * 1024, // 10 MiB
 			}))
 
 			payload := []byte("hello world")
@@ -99,7 +99,7 @@ var _ = Describe("Byte limits (DoS protection)", func() {
 		})
 	})
 
-	Context("MultiObjectFetch cap", func() {
+	Context("MultiObjectFetchMaxBytes cap", func() {
 		It("returns ErrResponseTooLarge from GetFlatTree when the tree exceeds the cap", func() {
 			// GetFlatTree's initial fetch is shallow + blob:none, so
 			// the response (commit + root tree) is on the order of a
@@ -108,7 +108,7 @@ var _ = Describe("Byte limits (DoS protection)", func() {
 			// minimal commit + tree pair.
 			By("Setting up a client with a very tight multi-object cap")
 			cappedClient, _, local, _ := QuickSetup(options.WithLimits(options.Limits{
-				MultiObjectFetch: 128,
+				MultiObjectFetchMaxBytes: 128,
 			}))
 
 			By("Creating a tree with a few files so the tree object has multiple entries")
@@ -147,11 +147,11 @@ var _ = Describe("Byte limits (DoS protection)", func() {
 		})
 	})
 
-	Context("RefsMetadata cap", func() {
+	Context("RefsMetadataMaxBytes cap", func() {
 		It("returns ErrResponseTooLarge from ListRefs when the ref list exceeds the cap", func() {
 			By("Setting up a client with a tight refs cap")
 			cappedClient, _, local, _ := QuickSetup(options.WithLimits(options.Limits{
-				RefsMetadata: 64,
+				RefsMetadataMaxBytes: 64,
 			}))
 
 			By("Creating extra refs so the ls-refs response is non-trivial")

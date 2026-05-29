@@ -147,7 +147,7 @@ func TestDetectProtocolVersionFromReaderSurfacesLimitErr(t *testing.T) {
 	// *ErrResponseTooLarge to the caller. Without the typed error, an
 	// oversize info/refs response with no decisive bytes would silently
 	// look like an incompatible server — exactly the failure mode
-	// operators tuning RefsMetadata need to distinguish.
+	// operators tuning RefsMetadataMaxBytes need to distinguish.
 	bigBody := strings.Repeat("x", 4096)
 	_, err := detectProtocolVersionFromReader(strings.NewReader(bigBody), 64)
 	require.Error(t, err)
@@ -196,7 +196,7 @@ func TestCompatibilityReadLimit(t *testing.T) {
 		// An explicit positive value is the operator telling us what
 		// they want — even if it is below the unlimited-fallback
 		// floor. The floor only applies when the caller leaves
-		// RefsMetadata at zero (unlimited).
+		// RefsMetadataMaxBytes at zero (unlimited).
 		require.Equal(t, int64(1024), compatibilityReadLimit(1024))
 	})
 

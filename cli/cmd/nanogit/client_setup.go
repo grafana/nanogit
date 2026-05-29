@@ -110,10 +110,10 @@ func setupClient(ctx context.Context, repoURL string, extra ...options.Option) (
 // can skip applying WithLimits and preserve the library's default behavior.
 func limitsFromGlobalFlags() (options.Limits, bool) {
 	l := options.Limits{
-		SingleObjectFetch:   globalMaxBytesSingleObject,
-		MultiObjectFetch:    globalMaxBytesMultiObject,
-		RefsMetadata:        globalMaxBytesRefs,
-		ReceivePackResponse: globalMaxBytesReceivePack,
+		SingleObjectFetchMaxBytes:   globalMaxBytesSingleObject,
+		MultiObjectFetchMaxBytes:    globalMaxBytesMultiObject,
+		RefsMetadataMaxBytes:        globalMaxBytesRefs,
+		ReceivePackResponseMaxBytes: globalMaxBytesReceivePack,
 	}
 	any := globalMaxBytesSingleObject != 0 ||
 		globalMaxBytesMultiObject != 0 ||

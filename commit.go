@@ -437,9 +437,9 @@ func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtr
 	// fetch by shape. noExtraObjects=false (NewStagedWriter init) lets
 	// the server return associated tree objects for cache warmup, so the
 	// response shape is multi-object and the larger budget applies.
-	maxBytes := c.limits.SingleObjectFetch
+	maxBytes := c.limits.SingleObjectFetchMaxBytes
 	if !noExtraObjects {
-		maxBytes = c.limits.MultiObjectFetch
+		maxBytes = c.limits.MultiObjectFetchMaxBytes
 	}
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
@@ -693,7 +693,7 @@ func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash
 		Deepen:           perPage,
 		Done:             true,
 		NoExtraObjects:   false, // we want to read other commits
-		MaxResponseBytes: c.limits.MultiObjectFetch,
+		MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
@@ -855,7 +855,7 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 			Shallow:          true,
 			Done:             true,
 			NoExtraObjects:   false, // let's read of other tree objects if possible
-			MaxResponseBytes: c.limits.MultiObjectFetch,
+			MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 		})
 		if err != nil {
 			logger.Debug("Failed to fetch commit", "commitHash", commitHash.String(), "error", err)

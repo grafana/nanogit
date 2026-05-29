@@ -9,17 +9,17 @@ import "fmt"
 // A zero value in any field means "no limit". Negative values are rejected.
 func WithLimits(l Limits) Option {
 	return func(o *Options) error {
-		if l.SingleObjectFetch < 0 {
-			return fmt.Errorf("Limits.SingleObjectFetch is negative: %d", l.SingleObjectFetch)
+		if l.SingleObjectFetchMaxBytes < 0 {
+			return fmt.Errorf("Limits.SingleObjectFetchMaxBytes is negative: %d", l.SingleObjectFetchMaxBytes)
 		}
-		if l.MultiObjectFetch < 0 {
-			return fmt.Errorf("Limits.MultiObjectFetch is negative: %d", l.MultiObjectFetch)
+		if l.MultiObjectFetchMaxBytes < 0 {
+			return fmt.Errorf("Limits.MultiObjectFetchMaxBytes is negative: %d", l.MultiObjectFetchMaxBytes)
 		}
-		if l.RefsMetadata < 0 {
-			return fmt.Errorf("Limits.RefsMetadata is negative: %d", l.RefsMetadata)
+		if l.RefsMetadataMaxBytes < 0 {
+			return fmt.Errorf("Limits.RefsMetadataMaxBytes is negative: %d", l.RefsMetadataMaxBytes)
 		}
-		if l.ReceivePackResponse < 0 {
-			return fmt.Errorf("Limits.ReceivePackResponse is negative: %d", l.ReceivePackResponse)
+		if l.ReceivePackResponseMaxBytes < 0 {
+			return fmt.Errorf("Limits.ReceivePackResponseMaxBytes is negative: %d", l.ReceivePackResponseMaxBytes)
 		}
 		o.Limits = l
 		return nil

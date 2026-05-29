@@ -30,7 +30,7 @@ func hugePktLineBody() []byte {
 	return []byte(b.String())
 }
 
-func TestLsRefsHonorsRefsMetadataLimit(t *testing.T) {
+func TestLsRefsHonorsRefsMetadataMaxBytesLimit(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -40,7 +40,7 @@ func TestLsRefsHonorsRefsMetadataLimit(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	rc, err := NewRawClient(server.URL+"/repo",
-		options.WithLimits(options.Limits{RefsMetadata: 128}))
+		options.WithLimits(options.Limits{RefsMetadataMaxBytes: 128}))
 	require.NoError(t, err)
 
 	_, err = rc.LsRefs(context.Background(), LsRefsOptions{})

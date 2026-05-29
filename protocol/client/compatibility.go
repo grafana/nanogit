@@ -69,13 +69,13 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 	}
 
 	// Parse the response to detect protocol version. Use the configured
-	// RefsMetadata cap, but enforce a 1 MB safety floor: protocol detection
-	// only ever needs to read the first capability advertisement, so an
-	// embedder asking for "no limit" still gets bounded behavior here.
-	version, err := detectProtocolVersionFromReader(res.Body, compatibilityReadLimit(c.limits.RefsMetadata))
+	// RefsMetadataMaxBytes cap, but enforce a 1 MB safety floor: protocol
+	// detection only ever needs to read the first capability advertisement,
+	// so an embedder asking for "no limit" still gets bounded behavior here.
+	version, err := detectProtocolVersionFromReader(res.Body, compatibilityReadLimit(c.limits.RefsMetadataMaxBytes))
 	if err != nil {
 		// Surface limit-breach errors verbatim (errors.As-recoverable
-		// to *ErrResponseTooLarge) so operators tuning RefsMetadata
+		// to *ErrResponseTooLarge) so operators tuning RefsMetadataMaxBytes
 		// can tell a too-tight cap apart from a genuinely
 		// incompatible server.
 		return false, fmt.Errorf("detect protocol version: %w", err)
@@ -94,18 +94,18 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 }
 
 // compatibilityFloor is the byte cap applied to protocol-detection reads
-// when the caller leaves RefsMetadata at "no limit". Protocol detection
-// only needs the first capability advertisement, so a 1 MiB floor keeps
-// that path bounded by default. Once the caller configures any positive
-// RefsMetadata value it is honored verbatim — including values smaller
-// than the floor — because an explicitly configured cap is the operator
-// telling us what they want.
+// when the caller leaves RefsMetadataMaxBytes at "no limit". Protocol
+// detection only needs the first capability advertisement, so a 1 MiB floor
+// keeps that path bounded by default. Once the caller configures any
+// positive RefsMetadataMaxBytes value it is honored verbatim — including
+// values smaller than the floor — because an explicitly configured cap is
+// the operator telling us what they want.
 const compatibilityFloor = 1024 * 1024
 
 // compatibilityReadLimit returns the byte cap to apply to a protocol
-// detection read given the configured RefsMetadata limit. A configured
-// value of 0 ("no limit") falls back to compatibilityFloor; any positive
-// value is honored as-is.
+// detection read given the configured RefsMetadataMaxBytes limit. A
+// configured value of 0 ("no limit") falls back to compatibilityFloor; any
+// positive value is honored as-is.
 func compatibilityReadLimit(refsMetadata int64) int64 {
 	if refsMetadata <= 0 {
 		return compatibilityFloor

@@ -483,7 +483,7 @@ func (c *httpClient) fetchBlobBatch(ctx context.Context, entries []FlatTreeEntry
 		Want:             hashes,
 		Done:             true,
 		NoExtraObjects:   true,
-		MaxResponseBytes: c.limits.MultiObjectFetch,
+		MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch %d blobs: %w", len(hashes), err)

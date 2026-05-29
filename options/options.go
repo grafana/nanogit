@@ -46,18 +46,18 @@ type Options struct {
 //
 // Negative values are rejected at construction time (see WithLimits).
 type Limits struct {
-	// SingleObjectFetch caps responses to fetches that target a single
-	// object (GetBlob, GetTree, GetCommit, ...).
-	SingleObjectFetch int64
-	// MultiObjectFetch caps responses to fetches that may return many
-	// objects (GetFlatTree, ListCommits, CompareCommits, Clone).
-	MultiObjectFetch int64
-	// RefsMetadata caps ref-listing and protocol-detection responses
-	// (ListRefs, GetRef, smart-info / capability advertisement).
-	RefsMetadata int64
-	// ReceivePackResponse caps the server's reply to a receive-pack push
-	// (CreateRef, UpdateRef, DeleteRef, staged Push).
-	ReceivePackResponse int64
+	// SingleObjectFetchMaxBytes caps responses to fetches that target a
+	// single object (GetBlob, GetTree, GetCommit, ...).
+	SingleObjectFetchMaxBytes int64
+	// MultiObjectFetchMaxBytes caps responses to fetches that may return
+	// many objects (GetFlatTree, ListCommits, CompareCommits, Clone).
+	MultiObjectFetchMaxBytes int64
+	// RefsMetadataMaxBytes caps ref-listing and protocol-detection
+	// responses (ListRefs, GetRef, smart-info / capability advertisement).
+	RefsMetadataMaxBytes int64
+	// ReceivePackResponseMaxBytes caps the server's reply to a
+	// receive-pack push (CreateRef, UpdateRef, DeleteRef, staged Push).
+	ReceivePackResponseMaxBytes int64
 }
 
 type Option func(*Options) error

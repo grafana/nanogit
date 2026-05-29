@@ -48,10 +48,10 @@ func TestProvidersByteLimits(t *testing.T) {
 	headRef, err := resolveAnyDefaultBranch(ctx, baseClient)
 	require.NoError(t, err)
 
-	t.Run("RefsMetadata cap surfaces ErrResponseTooLarge from ListRefs", func(t *testing.T) {
+	t.Run("RefsMetadataMaxBytes cap surfaces ErrResponseTooLarge from ListRefs", func(t *testing.T) {
 		client, err := nanogit.NewHTTPClient(repoURL,
 			authOpt,
-			options.WithLimits(options.Limits{RefsMetadata: 64}),
+			options.WithLimits(options.Limits{RefsMetadataMaxBytes: 64}),
 		)
 		require.NoError(t, err)
 
@@ -64,10 +64,10 @@ func TestProvidersByteLimits(t *testing.T) {
 		require.Equal(t, int64(64), tooLarge.Limit)
 	})
 
-	t.Run("SingleObjectFetch cap surfaces ErrResponseTooLarge from GetCommit", func(t *testing.T) {
+	t.Run("SingleObjectFetchMaxBytes cap surfaces ErrResponseTooLarge from GetCommit", func(t *testing.T) {
 		c, err := nanogit.NewHTTPClient(repoURL,
 			authOpt,
-			options.WithLimits(options.Limits{SingleObjectFetch: 128}),
+			options.WithLimits(options.Limits{SingleObjectFetchMaxBytes: 128}),
 		)
 		require.NoError(t, err)
 
@@ -80,10 +80,10 @@ func TestProvidersByteLimits(t *testing.T) {
 		require.Equal(t, int64(128), tooLarge.Limit)
 	})
 
-	t.Run("MultiObjectFetch cap surfaces ErrResponseTooLarge from GetFlatTree", func(t *testing.T) {
+	t.Run("MultiObjectFetchMaxBytes cap surfaces ErrResponseTooLarge from GetFlatTree", func(t *testing.T) {
 		c, err := nanogit.NewHTTPClient(repoURL,
 			authOpt,
-			options.WithLimits(options.Limits{MultiObjectFetch: 256}),
+			options.WithLimits(options.Limits{MultiObjectFetchMaxBytes: 256}),
 		)
 		require.NoError(t, err)
 
@@ -100,10 +100,10 @@ func TestProvidersByteLimits(t *testing.T) {
 		c, err := nanogit.NewHTTPClient(repoURL,
 			authOpt,
 			options.WithLimits(options.Limits{
-				SingleObjectFetch:   1 << 30, // 1 GiB
-				MultiObjectFetch:    1 << 30,
-				RefsMetadata:        1 << 20, // 1 MiB
-				ReceivePackResponse: 1 << 20,
+				SingleObjectFetchMaxBytes:   1 << 30, // 1 GiB
+				MultiObjectFetchMaxBytes:    1 << 30,
+				RefsMetadataMaxBytes:        1 << 20, // 1 MiB
+				ReceivePackResponseMaxBytes: 1 << 20,
 			}),
 		)
 		require.NoError(t, err)

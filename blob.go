@@ -41,7 +41,7 @@ func (c *httpClient) GetBlob(ctx context.Context, blobID hash.Hash) (*Blob, erro
 		Want:             []hash.Hash{blobID},
 		Done:             true,
 		NoExtraObjects:   true, // we only need that single blob
-		MaxResponseBytes: c.limits.SingleObjectFetch,
+		MaxResponseBytes: c.limits.SingleObjectFetchMaxBytes,
 	})
 	if err != nil {
 		// TODO: handle this at the client level

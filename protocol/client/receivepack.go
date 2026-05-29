@@ -127,7 +127,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	// runs alongside the underlying body close. Today the wrapper just
 	// forwards Close to res.Body, so the observable behavior is the
 	// same — the consistency is what matters.
-	body := newLimitedReadCloser(res.Body, c.limits.ReceivePackResponse, "receive-pack")
+	body := newLimitedReadCloser(res.Body, c.limits.ReceivePackResponseMaxBytes, "receive-pack")
 	defer func() {
 		if closeErr := body.Close(); closeErr != nil && err == nil {
 			err = fmt.Errorf("error closing response body: %w", closeErr)
