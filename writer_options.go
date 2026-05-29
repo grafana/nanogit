@@ -70,7 +70,7 @@ func WithGPGSigner(armoredKey []byte) WriterOption {
 	}
 }
 
-// WithSSHSigner signs every commit with an SSH private key.
+// WithSSHSigner signs every commit with an unencrypted SSH private key.
 func WithSSHSigner(privateKey []byte) WriterOption {
 	return func(opts *WriterOptions) error {
 		signer, err := signature.NewSSHSigner(privateKey)
@@ -82,7 +82,7 @@ func WithSSHSigner(privateKey []byte) WriterOption {
 	}
 }
 
-// WithSMIMESigner signs every commit with an S/MIME (X.509) key and certificate.
+// WithSMIMESigner signs every commit with an unencrypted S/MIME (X.509) PEM key and certificate.
 func WithSMIMESigner(privateKey, certificate []byte) WriterOption {
 	return func(opts *WriterOptions) error {
 		signer, err := signature.NewSMIMESigner(privateKey, certificate)

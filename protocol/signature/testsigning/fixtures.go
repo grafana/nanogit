@@ -38,18 +38,18 @@ type SMIME struct {
 
 func LoadGPG(t testing.TB) *GPG {
 	t.Helper()
-	armoredPublic := read(t, "gpg.pub.asc")
-	entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredPublic))
+	armoredKey := read(t, "gpg.key.asc")
+	entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredKey))
 	if err != nil {
-		t.Fatalf("parse gpg pub: %v", err)
+		t.Fatalf("parse gpg key: %v", err)
 	}
 	if len(entities) == 0 {
-		t.Fatalf("gpg pub fixture contained no entities")
+		t.Fatalf("gpg key fixture contained no entities")
 	}
 	return &GPG{
 		Entity:        entities[0],
-		ArmoredKey:    read(t, "gpg.key.asc"),
-		ArmoredPublic: armoredPublic,
+		ArmoredKey:    armoredKey,
+		ArmoredPublic: read(t, "gpg.pub.asc"),
 		KeyPath:       fixturePath("gpg.key.asc"),
 	}
 }
