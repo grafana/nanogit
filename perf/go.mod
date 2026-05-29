@@ -6,7 +6,7 @@ require (
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/go-git/go-billy/v5 v5.9.0
 	github.com/go-git/go-git/v5 v5.19.1
-	github.com/grafana/nanogit v1.0.0
+	github.com/grafana/nanogit v0.3.7
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
 )

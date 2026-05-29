@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/signature"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
 func TestGPGSigner_RoundTrip(t *testing.T) {

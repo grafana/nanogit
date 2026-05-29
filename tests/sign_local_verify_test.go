@@ -11,108 +11,100 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/signature"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
 const signerEmail = "signer@test.invalid"
 
-func TestSignLocalVerify_GPG(t *testing.T) {
+// TestSignLocalVerify signs a commit with each format and verifies it with the
+// local git/gpgsm tooling. One subtest per format, mirroring
+// sign_providers_verify_test.go.
+func TestSignLocalVerify(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping local git verify in short mode")
 	}
-	requireBins(t, "git", "gpg")
 
-	gnupghome := mkShortTempDir(t, "ng-gpg-")
-	t.Setenv("GNUPGHOME", gnupghome)
+	t.Run("gpg", func(t *testing.T) {
+		requireBins(t, "git", "gpg")
+		t.Setenv("GNUPGHOME", mkShortTempDir(t, "ng-gpg-"))
 
-	gpg := testsigning.LoadGPG(t)
-	runOK(t, "", "gpg", "--batch", "--import", gpg.KeyPath)
-	signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
-	require.NoError(t, err)
-	commit := signEmptyCommit(t, signer)
-	commitBytes := commit.Build()
+		gpg := testsigning.LoadGPG(t)
+		runOK(t, "", "gpg", "--batch", "--import", gpg.KeyPath)
+		signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
+		require.NoError(t, err)
+		repo, _, sha := signAndStore(t, signer)
 
-	tmp := t.TempDir()
-	repo := initBareRepo(t, tmp)
-	commitSHA := writeGitObject(t, repo, "commit", commitBytes)
+		out, err := runIn(repo, "git", "verify-commit", "--raw", sha)
+		require.NoError(t, err, "verify-commit output:\n%s", out)
+		require.Contains(t, out, "GOODSIG", "expected GOODSIG status in verify-commit --raw output")
+	})
 
-	gitSHA, err := computeHash(commitBytes)
-	require.NoError(t, err)
-	require.Equal(t, gitSHA, commitSHA)
+	t.Run("ssh", func(t *testing.T) {
+		requireBins(t, "git", "ssh-keygen")
+		k := testsigning.LoadSSH(t)
 
-	out, err := runIn(repo, "git", "verify-commit", "--raw", commitSHA)
-	require.NoError(t, err, "verify-commit output:\n%s", out)
-	require.Contains(t, out, "GOODSIG", "expected GOODSIG status in verify-commit --raw output")
+		allowed := filepath.Join(t.TempDir(), "allowed_signers")
+		require.NoError(t, os.WriteFile(allowed,
+			[]byte(signerEmail+" namespaces=\"git\" "+string(k.PublicLine)), 0o644))
+
+		signer, err := signature.NewSSHSigner(k.PrivateKey)
+		require.NoError(t, err)
+		repo, _, sha := signAndStore(t, signer)
+
+		out, err := runIn(repo, "git",
+			"-c", "gpg.format=ssh",
+			"-c", "gpg.ssh.allowedSignersFile="+allowed,
+			"verify-commit", "--raw", sha)
+		require.NoError(t, err, "verify-commit output:\n%s", out)
+		require.Contains(t, out, "Good \"git\" signature")
+	})
+
+	t.Run("smime", func(t *testing.T) {
+		requireBins(t, "git", "gpgsm")
+		gnupghome := mkShortTempDir(t, "ng-gpgsm-")
+		t.Setenv("GNUPGHOME", gnupghome)
+		require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "gpg-agent.conf"),
+			[]byte("allow-mark-trusted\n"), 0o600))
+
+		s := testsigning.LoadSMIME(t)
+		runOK(t, "", "gpgsm", "--batch", "--import", s.CertPath)
+		fp := extractGPGSMFingerprint(t, runOut(t, "", "gpgsm", "--batch", "--with-colons", "--list-keys"))
+		require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "trustlist.txt"),
+			[]byte(fp+" S\n"), 0o600))
+
+		signer, err := signature.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+		require.NoError(t, err)
+		_, commit, _ := signAndStore(t, signer)
+
+		tmp := t.TempDir()
+		sigPath := filepath.Join(tmp, "sig.pem")
+		dataPath := filepath.Join(tmp, "unsigned.bin")
+		require.NoError(t, os.WriteFile(sigPath, []byte(commit.Signature), 0o600))
+		unsigned := *commit
+		unsigned.Signature = ""
+		require.NoError(t, os.WriteFile(dataPath, unsigned.Build(), 0o600))
+
+		out, err := runIn("", "gpgsm", "--status-fd=1", "--verify", sigPath, dataPath)
+		require.NoError(t, err, "gpgsm --verify output:\n%s", out)
+		require.Contains(t, out, "GOODSIG")
+	})
 }
 
-func TestSignLocalVerify_SSH(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping local git verify in short mode")
-	}
-	requireBins(t, "git", "ssh-keygen")
+// signAndStore signs an empty commit, writes it to a fresh bare repo, and
+// asserts nanogit's hash matches git's stored object hash.
+func signAndStore(t *testing.T, signer signature.Signer) (repo string, c *protocol.PackfileCommit, sha string) {
+	t.Helper()
+	c = signEmptyCommit(t, signer)
+	repo = initBareRepo(t, t.TempDir())
+	sha = writeGitObject(t, repo, "commit", c.Build())
 
-	tmp := t.TempDir()
-	k := testsigning.LoadSSH(t)
-
-	allowed := filepath.Join(tmp, "allowed_signers")
-	require.NoError(t, os.WriteFile(allowed,
-		[]byte(signerEmail+" namespaces=\"git\" "+string(k.PublicLine)), 0o644))
-
-	signer, err := signature.NewSSHSigner(k.PrivateKey)
+	want, err := computeHash(c.Build())
 	require.NoError(t, err)
-	commit := signEmptyCommit(t, signer)
-	repo := initBareRepo(t, tmp)
-	commitSHA := writeGitObject(t, repo, "commit", commit.Build())
-
-	out, err := runIn(repo, "git",
-		"-c", "gpg.format=ssh",
-		"-c", "gpg.ssh.allowedSignersFile="+allowed,
-		"verify-commit", "--raw", commitSHA)
-	require.NoError(t, err, "verify-commit output:\n%s", out)
-	require.Contains(t, out, "Good \"git\" signature")
-}
-
-func TestSignLocalVerify_SMIME(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping local git verify in short mode")
-	}
-	requireBins(t, "git", "gpgsm")
-
-	gnupghome := mkShortTempDir(t, "ng-gpgsm-")
-	t.Setenv("GNUPGHOME", gnupghome)
-
-	require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "gpg-agent.conf"),
-		[]byte("allow-mark-trusted\n"), 0o600))
-
-	s := testsigning.LoadSMIME(t)
-	runOK(t, "", "gpgsm", "--batch", "--import", s.CertPath)
-
-	fpRaw := runOut(t, "", "gpgsm", "--batch", "--with-colons", "--list-keys")
-	fp := extractGPGSMFingerprint(t, fpRaw)
-	require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "trustlist.txt"),
-		[]byte(fp+" S\n"), 0o600))
-
-	signer, err := signature.NewSMIMESigner(s.KeyPEM, s.CertPEM)
-	require.NoError(t, err)
-	commit := signEmptyCommit(t, signer)
-
-	repo := initBareRepo(t, t.TempDir())
-	_ = writeGitObject(t, repo, "commit", commit.Build())
-
-	tmp := t.TempDir()
-	sigPath := filepath.Join(tmp, "sig.pem")
-	dataPath := filepath.Join(tmp, "unsigned.bin")
-	require.NoError(t, os.WriteFile(sigPath, []byte(commit.Signature), 0o600))
-	unsigned := *commit
-	unsigned.Signature = ""
-	require.NoError(t, os.WriteFile(dataPath, unsigned.Build(), 0o600))
-
-	out, err := runIn("", "gpgsm", "--status-fd=1", "--verify", sigPath, dataPath)
-	require.NoError(t, err, "gpgsm --verify output:\n%s", out)
-	require.Contains(t, out, "GOODSIG")
+	require.Equal(t, want, sha)
+	return repo, c, sha
 }
 
 func signEmptyCommit(t *testing.T, signer signature.Signer) *protocol.PackfileCommit {

@@ -13,8 +13,8 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
 func TestSignGiteaVerify_GPG(t *testing.T) {
@@ -33,7 +33,6 @@ func TestSignGiteaVerify_GPG(t *testing.T) {
 	require.NoError(t, err)
 
 	gpg := testsigning.LoadGPG(t)
-	const signerEmail = "signer@test.invalid"
 	setUserPrimaryEmail(t, server.URL(), user, signerEmail)
 	uploadGPGKey(t, server.URL(), user.Token, gpg.ArmoredPublic)
 

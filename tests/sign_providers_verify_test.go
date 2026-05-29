@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v68/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit"
@@ -76,6 +75,8 @@ func TestSignProvidersVerify(t *testing.T) {
 		s.getVerification = s.gitlabVerification
 	case "bitbucket":
 		t.Log("skipping verification for bitbucket")
+	default:
+		t.Fatalf("unsupported TEST_PROVIDER %q (want github/gitlab/bitbucket)", s.Provider)
 	}
 
 	u, err := url.Parse(s.Repo)
@@ -160,20 +161,39 @@ func (s *signTest) push(t *testing.T, opt nanogit.WriterOption) string {
 
 func (s *signTest) githubVerification(t *testing.T, sha string) *verification {
 	t.Helper()
-	gh := github.NewClient(nil).WithAuthToken(s.Token)
-	commit, _, err := gh.Repositories.GetCommit(t.Context(), s.owner, s.repo, sha, nil)
+	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s", s.owner, s.repo, sha)
+	req, err := http.NewRequestWithContext(t.Context(), "GET", endpoint, nil)
 	require.NoError(t, err)
-	v := commit.GetCommit().GetVerification()
+	req.Header.Set("Authorization", "Bearer "+s.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "github commit lookup: %s", body)
+
+	var got struct {
+		Commit struct {
+			Verification struct {
+				Verified  bool   `json:"verified"`
+				Reason    string `json:"reason"`
+				Signature string `json:"signature"`
+			} `json:"verification"`
+		} `json:"commit"`
+	}
+	require.NoError(t, json.Unmarshal(body, &got))
+
+	v := got.Commit.Verification
 	var typ string
 	switch {
-	case strings.Contains(v.GetSignature(), "-----BEGIN PGP SIGNATURE-----"):
+	case strings.Contains(v.Signature, "-----BEGIN PGP SIGNATURE-----"):
 		typ = sigPGP
-	case strings.Contains(v.GetSignature(), "-----BEGIN SSH SIGNATURE-----"):
+	case strings.Contains(v.Signature, "-----BEGIN SSH SIGNATURE-----"):
 		typ = sigSSH
-	case strings.Contains(v.GetSignature(), "-----BEGIN SIGNED MESSAGE-----"):
+	case strings.Contains(v.Signature, "-----BEGIN SIGNED MESSAGE-----"):
 		typ = sigX509
 	}
-	return &verification{Type: typ, Verified: v.GetVerified(), Reason: v.GetReason()}
+	return &verification{Type: typ, Verified: v.Verified, Reason: v.Reason}
 }
 
 func (s *signTest) gitlabVerification(t *testing.T, sha string) *verification {

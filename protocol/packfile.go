@@ -22,6 +22,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/protocol/signature"
 )
 
 // ErrPackfileWriterCleanedUp is returned when trying to use a PackfileWriter after cleanup has been called.
@@ -430,15 +431,10 @@ func (c *PackfileCommit) Build() []byte {
 	fmt.Fprintf(&data, "committer %s\n", c.Committer.String())
 	if c.Signature != "" {
 		// Git uses the gpgsig header for GPG, SSH, and X.509 signatures alike.
-		lines := strings.Split(c.Signature, "\n")
+		// Continuation lines are folded with a leading space.
 		data.WriteString("gpgsig ")
-		data.WriteString(lines[0])
+		data.WriteString(strings.ReplaceAll(c.Signature, "\n", "\n "))
 		data.WriteByte('\n')
-		for _, line := range lines[1:] {
-			data.WriteByte(' ')
-			data.WriteString(line)
-			data.WriteByte('\n')
-		}
 	}
 	data.WriteString("\n")
 	data.WriteString(c.Message)
@@ -1035,9 +1031,7 @@ func (w *PackfileWriter) HasObjects() bool {
 
 // AddCommit adds a commit object to the packfile. If signer is non-nil the
 // commit is signed before hashing, so its hash reflects the signature.
-func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer interface {
-	Sign(data []byte) (string, error)
-}) (hash.Hash, error) {
+func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer signature.Signer) (hash.Hash, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return hash.Hash{}, err
 	}

@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/perf/clients"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
 // signVariant is one (client, format) combination to benchmark.
