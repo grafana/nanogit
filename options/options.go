@@ -45,18 +45,25 @@ type Options struct {
 // means "no limit" so the zero Limits preserves nanogit's historic behavior.
 //
 // Negative values are rejected at construction time (see WithLimits).
+// All three read-side caps govern the git-upload-pack endpoint (which
+// carries both the fetch and ls-refs commands in protocol v2); they are
+// split by operation rather than by endpoint because their expected
+// response sizes differ by orders of magnitude. ReceivePackResponseMaxBytes
+// is the lone write-side cap and governs git-receive-pack.
 type Limits struct {
-	// SingleObjectFetchMaxBytes caps responses to fetches that target a
-	// single object (GetBlob, GetTree, GetCommit, ...).
+	// SingleObjectFetchMaxBytes caps the git-upload-pack response for
+	// fetches that target a single object (GetBlob, GetTree, GetCommit, ...).
 	SingleObjectFetchMaxBytes int64
-	// MultiObjectFetchMaxBytes caps responses to fetches that may return
-	// many objects (GetFlatTree, ListCommits, CompareCommits, Clone).
+	// MultiObjectFetchMaxBytes caps the git-upload-pack response for
+	// fetches that may return many objects (GetFlatTree, ListCommits,
+	// CompareCommits, Clone).
 	MultiObjectFetchMaxBytes int64
 	// RefsMetadataMaxBytes caps ref-listing and protocol-detection
-	// responses (ListRefs, GetRef, smart-info / capability advertisement).
+	// responses, which also ride git-upload-pack (ls-refs command) and the
+	// smart-info / capability advertisement (ListRefs, GetRef).
 	RefsMetadataMaxBytes int64
-	// ReceivePackResponseMaxBytes caps the server's reply to a
-	// receive-pack push (CreateRef, UpdateRef, DeleteRef, staged Push).
+	// ReceivePackResponseMaxBytes caps the git-receive-pack reply to a
+	// push (CreateRef, UpdateRef, DeleteRef, staged Push).
 	ReceivePackResponseMaxBytes int64
 }
 
