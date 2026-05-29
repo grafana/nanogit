@@ -2,7 +2,7 @@
 # Run from tests/performance directory
 
 .PHONY: help test-perf test-perf-consistency test-perf-simple test-perf-nanogit test-perf-gogit test-perf-cli
-.PHONY: test-perf-file-ops test-perf-compare test-perf-tree test-perf-bulk test-perf-all test-perf-setup
+.PHONY: test-perf-file-ops test-perf-compare test-perf-tree test-perf-bulk test-perf-all test-perf-setup test-perf-signing
 .PHONY: test-perf-small test-perf-medium test-perf-large test-perf-xlarge
 .PHONY: test-perf-tree-small test-perf-tree-medium test-perf-tree-large test-perf-tree-xlarge
 .PHONY: test-perf-bulk-small test-perf-bulk-medium test-perf-bulk-large test-perf-bulk-xlarge
@@ -28,6 +28,7 @@ help:
 	@echo "  test-perf-compare   - Commit comparison performance"
 	@echo "  test-perf-tree      - Tree listing performance"
 	@echo "  test-perf-bulk      - Bulk operations performance"
+	@echo "  test-perf-signing   - Signed commit overhead (GPG/SSH/S/MIME)"
 	@echo ""
 	@echo "Client-Specific:"
 	@echo "  test-perf-nanogit   - Test nanogit client only"
@@ -92,6 +93,10 @@ test-perf-file-ops:
 test-perf-compare:
 	@echo "Running commit comparison performance tests..."
 	RUN_PERFORMANCE_TESTS=true NANOGIT_PROFILE_MODE=true go test -v -timeout 10m -run TestCompareCommitsPerformance .
+
+test-perf-signing:
+	@echo "Running signed commit performance tests (GPG/SSH/S/MIME)..."
+	RUN_PERFORMANCE_TESTS=true go test -v -timeout 15m -run TestSignedCommitPerformance .
 
 test-perf-tree:
 	@echo "Running tree listing performance tests..."

@@ -61,7 +61,11 @@ func WithAutoStorage() WriterOption {
 // WithGPGSigner signs every commit with an unencrypted armored OpenPGP key.
 func WithGPGSigner(armoredKey []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.signer = protocol.NewGPGSigner(armoredKey)
+		signer, err := protocol.NewGPGSigner(armoredKey)
+		if err != nil {
+			return err
+		}
+		opts.signer = signer
 		return nil
 	}
 }
@@ -69,7 +73,11 @@ func WithGPGSigner(armoredKey []byte) WriterOption {
 // WithSSHSigner signs every commit with an SSH private key.
 func WithSSHSigner(privateKey []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.signer = protocol.NewSSHSigner(privateKey)
+		signer, err := protocol.NewSSHSigner(privateKey)
+		if err != nil {
+			return err
+		}
+		opts.signer = signer
 		return nil
 	}
 }
@@ -77,7 +85,11 @@ func WithSSHSigner(privateKey []byte) WriterOption {
 // WithSMIMESigner signs every commit with an S/MIME (X.509) key and certificate.
 func WithSMIMESigner(privateKey, certificate []byte) WriterOption {
 	return func(opts *WriterOptions) error {
-		opts.signer = protocol.NewSMIMESigner(privateKey, certificate)
+		signer, err := protocol.NewSMIMESigner(privateKey, certificate)
+		if err != nil {
+			return err
+		}
+		opts.signer = signer
 		return nil
 	}
 }

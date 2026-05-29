@@ -12,11 +12,19 @@ import (
 )
 
 // NanogitClient implements the GitClient interface using nanogit
-type NanogitClient struct{}
+type NanogitClient struct {
+	signOpts []nanogit.WriterOption
+}
 
 // NewNanogitClient creates a new nanogit client
 func NewNanogitClient() *NanogitClient {
 	return &NanogitClient{}
+}
+
+// SetSignerOptions configures writer options (e.g. WithGPGSigner) applied to
+// every commit.
+func (c *NanogitClient) SetSignerOptions(opts ...nanogit.WriterOption) {
+	c.signOpts = opts
 }
 
 // createClient gets a client for the repository, creating one if needed
@@ -83,7 +91,7 @@ func (c *NanogitClient) CreateFile(ctx context.Context, repoURL, path, content, 
 	}
 
 	// Create staged writer
-	writer, err := client.NewStagedWriter(ctx, mainRef)
+	writer, err := client.NewStagedWriter(ctx, mainRef, c.signOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to create staged writer: %w", err)
 	}

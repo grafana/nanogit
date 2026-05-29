@@ -19,54 +19,56 @@ type Signer interface {
 	Sign(c *PackfileCommit) error
 }
 
-// NewGPGSigner signs with an unencrypted armored OpenPGP private key.
-func NewGPGSigner(armoredKey []byte) Signer {
-	return &gpgSigner{armoredKey: armoredKey}
+// NewGPGSigner signs with an unencrypted armored OpenPGP private key. The key is
+// parsed once here and reused for every Sign call.
+func NewGPGSigner(armoredKey []byte) (Signer, error) {
+	entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredKey))
+	if err != nil {
+		return nil, fmt.Errorf("read armored signing key: %w", err)
+	}
+	if len(entities) == 0 {
+		return nil, fmt.Errorf("no entities found in signing key")
+	}
+	entity := entities[0]
+	if entity.PrivateKey == nil {
+		return nil, fmt.Errorf("signing key has no private component")
+	}
+	if entity.PrivateKey.Encrypted {
+		return nil, fmt.Errorf("signing key is passphrase-protected")
+	}
+	return &gpgSigner{entity: entity}, nil
 }
 
 type gpgSigner struct {
-	armoredKey []byte
+	entity *openpgp.Entity
 }
 
 func (s *gpgSigner) Sign(c *PackfileCommit) error {
 	c.Signature = ""
-	entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(s.armoredKey))
-	if err != nil {
-		return fmt.Errorf("read armored signing key: %w", err)
-	}
-	if len(entities) == 0 {
-		return fmt.Errorf("no entities found in signing key")
-	}
-	signer := entities[0]
-	if signer.PrivateKey == nil {
-		return fmt.Errorf("signing key has no private component")
-	}
-	if signer.PrivateKey.Encrypted {
-		return fmt.Errorf("signing key is passphrase-protected")
-	}
 	var sig strings.Builder
-	if err := openpgp.ArmoredDetachSign(&sig, signer, bytes.NewReader(c.Build()), nil); err != nil {
+	if err := openpgp.ArmoredDetachSign(&sig, s.entity, bytes.NewReader(c.Build()), nil); err != nil {
 		return fmt.Errorf("sign commit: %w", err)
 	}
 	c.Signature = strings.TrimRight(sig.String(), "\n")
 	return nil
 }
 
-// NewSSHSigner signs with an unencrypted OpenSSH or PEM private key.
-func NewSSHSigner(privateKey []byte) Signer {
-	return &sshSigner{privateKey: privateKey}
+// NewSSHSigner signs with an unencrypted OpenSSH or PEM private key. The key is
+// parsed once here and reused for every Sign call.
+func NewSSHSigner(privateKey []byte) (Signer, error) {
+	signer, err := ssh.ParsePrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("parse ssh private key: %w", err)
+	}
+	return &sshSigner{signer: signer}, nil
 }
 
 type sshSigner struct {
-	privateKey []byte
+	signer ssh.Signer
 }
 
 func (s *sshSigner) Sign(c *PackfileCommit) error {
 	c.Signature = ""
-	signer, err := ssh.ParsePrivateKey(s.privateKey)
-	if err != nil {
-		return fmt.Errorf("parse ssh private key: %w", err)
-	}
 
 	digest := sha512.Sum512(c.Build())
 	signedData := append([]byte("SSHSIG"), ssh.Marshal(struct {
@@ -75,14 +77,15 @@ func (s *sshSigner) Sign(c *PackfileCommit) error {
 
 	// SSHSIG requires SHA-2 for RSA keys; ssh-rsa (SHA-1) is rejected by verifiers.
 	var sig *ssh.Signature
-	if signer.PublicKey().Type() == ssh.KeyAlgoRSA {
-		as, ok := signer.(ssh.AlgorithmSigner)
+	var err error
+	if s.signer.PublicKey().Type() == ssh.KeyAlgoRSA {
+		as, ok := s.signer.(ssh.AlgorithmSigner)
 		if !ok {
 			return fmt.Errorf("rsa key does not implement ssh.AlgorithmSigner")
 		}
 		sig, err = as.SignWithAlgorithm(rand.Reader, signedData, ssh.KeyAlgoRSASHA512)
 	} else {
-		sig, err = signer.Sign(rand.Reader, signedData)
+		sig, err = s.signer.Sign(rand.Reader, signedData)
 	}
 	if err != nil {
 		return fmt.Errorf("ssh sign: %w", err)
@@ -94,7 +97,7 @@ func (s *sshSigner) Sign(c *PackfileCommit) error {
 		PubKey, Namespace, Reserved, HashAlgo, Signed string
 	}{
 		[6]byte{'S', 'S', 'H', 'S', 'I', 'G'}, 1,
-		string(signer.PublicKey().Marshal()), "git", "", "sha512", string(ssh.Marshal(sig)),
+		string(s.signer.PublicKey().Marshal()), "git", "", "sha512", string(ssh.Marshal(sig)),
 	})
 
 	armored := pem.EncodeToMemory(&pem.Block{Type: "SSH SIGNATURE", Bytes: payload})
@@ -103,32 +106,33 @@ func (s *sshSigner) Sign(c *PackfileCommit) error {
 }
 
 // NewSMIMESigner signs with a PEM-encoded S/MIME (X.509) key and certificate.
-func NewSMIMESigner(privateKey, certificate []byte) Signer {
-	return &smimeSigner{privateKey: privateKey, certificate: certificate}
+// Both are parsed once here and reused for every Sign call.
+func NewSMIMESigner(privateKey, certificate []byte) (Signer, error) {
+	cert, err := parsePEMCertificate(certificate)
+	if err != nil {
+		return nil, fmt.Errorf("parse certificate: %w", err)
+	}
+	key, err := parsePEMPrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("parse private key: %w", err)
+	}
+	return &smimeSigner{cert: cert, key: key}, nil
 }
 
 type smimeSigner struct {
-	privateKey  []byte
-	certificate []byte
+	cert *x509.Certificate
+	key  any
 }
 
 func (s *smimeSigner) Sign(c *PackfileCommit) error {
 	c.Signature = ""
-	cert, err := parsePEMCertificate(s.certificate)
-	if err != nil {
-		return fmt.Errorf("parse certificate: %w", err)
-	}
-	key, err := parsePEMPrivateKey(s.privateKey)
-	if err != nil {
-		return fmt.Errorf("parse private key: %w", err)
-	}
 
 	sd, err := pkcs7.NewSignedData(c.Build())
 	if err != nil {
 		return fmt.Errorf("new signed data: %w", err)
 	}
 	sd.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
-	if err := sd.AddSigner(cert, key, pkcs7.SignerInfoConfig{}); err != nil {
+	if err := sd.AddSigner(s.cert, s.key, pkcs7.SignerInfoConfig{}); err != nil {
 		return fmt.Errorf("add signer: %w", err)
 	}
 	sd.Detach()
@@ -142,27 +146,42 @@ func (s *smimeSigner) Sign(c *PackfileCommit) error {
 	return nil
 }
 
+// parsePEMCertificate returns the first CERTIFICATE block, skipping comments and
+// any other block types that PEM inputs commonly include.
 func parsePEMCertificate(data []byte) (*x509.Certificate, error) {
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("no PEM block found")
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			return nil, fmt.Errorf("no CERTIFICATE PEM block found")
+		}
+		if block.Type == "CERTIFICATE" {
+			return x509.ParseCertificate(block.Bytes)
+		}
 	}
-	return x509.ParseCertificate(block.Bytes)
 }
 
+// parsePEMPrivateKey returns the first private-key block, skipping comments and
+// any other block types that PEM inputs commonly include.
 func parsePEMPrivateKey(data []byte) (any, error) {
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("no PEM block found")
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			return nil, fmt.Errorf("no supported PRIVATE KEY PEM block found")
+		}
+		if !strings.Contains(block.Type, "PRIVATE KEY") {
+			continue
+		}
+		if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+			return key, nil
+		}
+		if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+			return key, nil
+		}
+		if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
+			return key, nil
+		}
+		return nil, fmt.Errorf("unsupported private key format")
 	}
-	if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
-		return key, nil
-	}
-	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
-		return key, nil
-	}
-	if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
-		return key, nil
-	}
-	return nil, fmt.Errorf("unsupported private key format")
 }

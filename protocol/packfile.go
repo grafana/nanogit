@@ -413,7 +413,8 @@ type PackfileCommit struct {
 	// Signature, when non-empty, is an armored block embedded as the gpgsig header by Build.
 	Signature string
 	// Fields contains any fields beyond the fields that are statically defined.
-	// If a field is statically defined, it SHOULD not show up here.
+	// If a field is statically defined, it SHOULD not show up here. Note that
+	// Build does not serialize these, so they don't round-trip.
 	Fields map[string][]byte
 }
 

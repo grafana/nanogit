@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/internal/testsigning"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -357,13 +358,17 @@ func TestStagedWriter_Commit_SignerInvoked(t *testing.T) {
 func TestSignerOptions(t *testing.T) {
 	t.Parallel()
 
+	gpg := testsigning.LoadGPG(t)
+	sshKey := testsigning.LoadSSH(t)
+	smime := testsigning.LoadSMIME(t)
+
 	cases := []struct {
 		name string
 		opt  WriterOption
 	}{
-		{"gpg", WithGPGSigner([]byte("k"))},
-		{"ssh", WithSSHSigner([]byte("k"))},
-		{"smime", WithSMIMESigner([]byte("k"), []byte("c"))},
+		{"gpg", WithGPGSigner(gpg.ArmoredKey)},
+		{"ssh", WithSSHSigner(sshKey.PrivateKey)},
+		{"smime", WithSMIMESigner(smime.KeyPEM, smime.CertPEM)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -182,6 +182,11 @@ func generateRepositoryContent(ctx context.Context, workDir string, spec RepoSpe
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
+	// Force the branch to main regardless of the local init.defaultBranch
+	if err := runGitCommand(ctx, workDir, "branch", "-M", "main"); err != nil {
+		return fmt.Errorf("failed to rename branch to main: %w", err)
+	}
+
 	// Generate additional commits
 	for i := 1; i < spec.CommitCount; i++ {
 		changes := generateCommitChanges(spec, i)

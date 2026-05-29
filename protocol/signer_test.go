@@ -25,14 +25,16 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
-	require.NoError(t, protocol.NewGPGSigner(gpg.ArmoredKey).Sign(c))
+	signer, err := protocol.NewGPGSigner(gpg.ArmoredKey)
+	require.NoError(t, err)
+	require.NoError(t, signer.Sign(c))
 	require.NotEmpty(t, c.Signature)
 	require.False(t, strings.HasSuffix(c.Signature, "\n"), "trailing newline must be stripped")
 
 	signed := c.Build()
 	require.Contains(t, string(signed), "gpgsig -----BEGIN PGP SIGNATURE-----")
 
-	_, err := openpgp.CheckArmoredDetachedSignature(
+	_, err = openpgp.CheckArmoredDetachedSignature(
 		openpgp.EntityList{gpg.Entity},
 		bytes.NewReader(unsigned),
 		strings.NewReader(c.Signature),
@@ -44,7 +46,7 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 func TestGPGSigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	err := protocol.NewGPGSigner([]byte("not a key")).Sign(newTestCommit("msg"))
+	_, err := protocol.NewGPGSigner([]byte("not a key"))
 	require.Error(t, err)
 }
 
@@ -55,7 +57,9 @@ func TestSSHSigner_RoundTrip(t *testing.T) {
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
-	require.NoError(t, protocol.NewSSHSigner(k.PrivateKey).Sign(c))
+	signer, err := protocol.NewSSHSigner(k.PrivateKey)
+	require.NoError(t, err)
+	require.NoError(t, signer.Sign(c))
 	require.Contains(t, c.Signature, "-----BEGIN SSH SIGNATURE-----")
 
 	verifySSHSig(t, k.PublicKey, unsigned, c.Signature)
@@ -64,7 +68,7 @@ func TestSSHSigner_RoundTrip(t *testing.T) {
 func TestSSHSigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	err := protocol.NewSSHSigner([]byte("not a key")).Sign(newTestCommit("msg"))
+	_, err := protocol.NewSSHSigner([]byte("not a key"))
 	require.Error(t, err)
 }
 
@@ -75,7 +79,9 @@ func TestSMIMESigner_RoundTrip(t *testing.T) {
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
-	require.NoError(t, protocol.NewSMIMESigner(s.KeyPEM, s.CertPEM).Sign(c))
+	signer, err := protocol.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+	require.NoError(t, err)
+	require.NoError(t, signer.Sign(c))
 	require.Contains(t, c.Signature, "-----BEGIN SIGNED MESSAGE-----")
 
 	block, _ := pem.Decode([]byte(c.Signature))
@@ -89,7 +95,7 @@ func TestSMIMESigner_RoundTrip(t *testing.T) {
 func TestSMIMESigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	err := protocol.NewSMIMESigner([]byte("not a key"), []byte("not a cert")).Sign(newTestCommit("msg"))
+	_, err := protocol.NewSMIMESigner([]byte("not a key"), []byte("not a cert"))
 	require.Error(t, err)
 }
 

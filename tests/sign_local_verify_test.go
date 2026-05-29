@@ -29,7 +29,9 @@ func TestSignLocalVerify_GPG(t *testing.T) {
 
 	gpg := testsigning.LoadGPG(t)
 	runOK(t, "", "gpg", "--batch", "--import", gpg.KeyPath)
-	commit := signEmptyCommit(t, protocol.NewGPGSigner(gpg.ArmoredKey))
+	signer, err := protocol.NewGPGSigner(gpg.ArmoredKey)
+	require.NoError(t, err)
+	commit := signEmptyCommit(t, signer)
 	commitBytes := commit.Build()
 
 	tmp := t.TempDir()
@@ -58,7 +60,9 @@ func TestSignLocalVerify_SSH(t *testing.T) {
 	require.NoError(t, os.WriteFile(allowed,
 		[]byte(signerEmail+" namespaces=\"git\" "+string(k.PublicLine)), 0o644))
 
-	commit := signEmptyCommit(t, protocol.NewSSHSigner(k.PrivateKey))
+	signer, err := protocol.NewSSHSigner(k.PrivateKey)
+	require.NoError(t, err)
+	commit := signEmptyCommit(t, signer)
 	repo := initBareRepo(t, tmp)
 	commitSHA := writeGitObject(t, repo, "commit", commit.Build())
 
@@ -90,7 +94,9 @@ func TestSignLocalVerify_SMIME(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "trustlist.txt"),
 		[]byte(fp+" S\n"), 0o600))
 
-	commit := signEmptyCommit(t, protocol.NewSMIMESigner(s.KeyPEM, s.CertPEM))
+	signer, err := protocol.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+	require.NoError(t, err)
+	commit := signEmptyCommit(t, signer)
 
 	repo := initBareRepo(t, t.TempDir())
 	_ = writeGitObject(t, repo, "commit", commit.Build())

@@ -22,9 +22,10 @@ type GPG struct {
 }
 
 type SSH struct {
-	PublicKey  ssh.PublicKey
-	PrivateKey []byte
-	PublicLine []byte
+	PublicKey      ssh.PublicKey
+	PrivateKey     []byte
+	PublicLine     []byte
+	PrivateKeyPath string
 }
 
 type SMIME struct {
@@ -32,6 +33,7 @@ type SMIME struct {
 	CertPEM     []byte
 	KeyPEM      []byte
 	CertPath    string
+	KeyPath     string
 }
 
 func LoadGPG(t testing.TB) GPG {
@@ -65,7 +67,7 @@ func LoadSSH(t testing.TB) SSH {
 	if err != nil {
 		t.Fatalf("parse ssh pub: %v", err)
 	}
-	return SSH{PublicKey: pub, PrivateKey: priv, PublicLine: pubLine}
+	return SSH{PublicKey: pub, PrivateKey: priv, PublicLine: pubLine, PrivateKeyPath: fixturePath("ssh.ed25519")}
 }
 
 func LoadSMIME(t testing.TB) SMIME {
@@ -85,7 +87,7 @@ func LoadSMIME(t testing.TB) SMIME {
 	if err != nil {
 		t.Fatalf("parse smime cert: %v", err)
 	}
-	return SMIME{Certificate: cert, CertPEM: certPEM, KeyPEM: keyPEM, CertPath: certPath}
+	return SMIME{Certificate: cert, CertPEM: certPEM, KeyPEM: keyPEM, CertPath: certPath, KeyPath: fixturePath("smime.key.pem")}
 }
 
 func read(t testing.TB, name string) []byte {
