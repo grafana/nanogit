@@ -431,7 +431,6 @@ func (c *PackfileCommit) Build() []byte {
 	fmt.Fprintf(&data, "committer %s\n", c.Committer.String())
 	if c.Signature != "" {
 		// Git uses the gpgsig header for GPG, SSH, and X.509 signatures alike.
-		// Continuation lines are folded with a leading space.
 		data.WriteString("gpgsig ")
 		data.WriteString(strings.ReplaceAll(c.Signature, "\n", "\n "))
 		data.WriteByte('\n')

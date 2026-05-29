@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -95,7 +96,7 @@ func TestSignProvidersVerify(t *testing.T) {
 	require.NoError(t, client.CreateRef(ctx, nanogit.Ref{Name: "refs/heads/" + s.branch, Hash: mainRef.Hash}))
 	if s.Cleanup {
 		t.Cleanup(func() {
-			if err := client.DeleteRef(ctx, "refs/heads/"+s.branch); err != nil {
+			if err := client.DeleteRef(context.WithoutCancel(ctx), "refs/heads/"+s.branch); err != nil {
 				t.Logf("cleanup: delete branch %s: %v", s.branch, err)
 			}
 		})
@@ -169,7 +170,8 @@ func (s *signTest) githubVerification(t *testing.T, sha string) *verification {
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "github commit lookup: %s", body)
 
 	var got struct {
@@ -206,7 +208,8 @@ func (s *signTest) gitlabVerification(t *testing.T, sha string) *verification {
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "gitlab signature lookup: %s", body)
 
 	var got struct {

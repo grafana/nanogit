@@ -19,6 +19,7 @@ make help                  # See all available targets
 
 - **Consistency Tests**: Verify all clients produce identical results
 - **Performance Benchmarks**: Measure duration and memory across repository sizes
+- **Signed Commits**: Measure GPG/SSH/S/MIME signing overhead across clients
 - **Client-Specific**: Focus on individual Git implementations
 
 ### Repository Sizes
@@ -37,6 +38,7 @@ make help                  # See all available targets
 | `test-perf-file-ops` | File operations | ~8 min |
 | `test-perf-tree` | Tree listing | ~4 min |
 | `test-perf-bulk` | Bulk operations | ~7 min |
+| `test-perf-signing` | Signed commit overhead | ~5 min |
 | `test-perf-small` | Small repos only | ~3 min |
 | `test-perf-all` | Everything | ~20 min |
 

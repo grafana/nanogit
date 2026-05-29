@@ -296,6 +296,7 @@ make test-perf-all
 - `test-perf-file-ops` - File operations benchmarks (~8 min)
 - `test-perf-tree` - Tree listing performance (~4 min)
 - `test-perf-bulk` - Bulk operations performance (~7 min)
+- `test-perf-signing` - Signed commit overhead, GPG/SSH/S/MIME (~5 min)
 - `test-perf-small` - All tests on small repositories only (~3 min)
 
 **Requirements**:

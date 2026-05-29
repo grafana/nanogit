@@ -16,11 +16,24 @@ import (
 	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
-// signVariant is one (client, format) combination to benchmark.
+const (
+	fmtUnsigned = "unsigned"
+	fmtGPG      = "gpg"
+	fmtSSH      = "ssh"
+	fmtSMIME    = "smime"
+)
+
+// signVariant is one (client, scenario) combination to benchmark.
 type signVariant struct {
 	client   string
 	scenario string
 	create   func(ctx context.Context, repoURL, path, content, message string) error
+}
+
+type signPerf struct {
+	ctx   context.Context
+	suite *BenchmarkSuite
+	repo  *Repository
 }
 
 func TestSignedCommitPerformance(t *testing.T) {
@@ -28,41 +41,43 @@ func TestSignedCommitPerformance(t *testing.T) {
 		t.Skip("Performance tests disabled. Set RUN_PERFORMANCE_TESTS=true to run.")
 	}
 
-	ctx := context.Background()
 	suite := getGlobalSuite()
 	require.NotNil(t, suite, "Global suite not initialized - TestMain should have set this up")
-
 	repo := suite.GetRepository("small")
 	if repo == nil {
 		t.Skip("small repository not available")
 	}
 
-	baseline := []signVariant{
-		{"nanogit", "unsigned", clients.NewNanogitClient().CreateFile},
-		{"go-git", "unsigned", clients.NewGoGitClient().CreateFile},
-		{"git-cli", "unsigned", newGitCLI(t).CreateFile},
-	}
-	signed := buildSignedVariants(t)
-
-	record := func(op string, variants []signVariant) {
-		for _, v := range variants {
-			for i := 0; i < 3; i++ {
-				i := i
-				suite.collector.RecordOperation(v.client, op, v.scenario, "small", 0, func() error {
-					path := fmt.Sprintf("sign-perf/%s-%s-%d.txt", v.client, v.scenario, i)
-					return v.create(ctx, repo.AuthURL(), path, "content", "perf signing")
-				})
-			}
-		}
-	}
-
-	record("CreateFile", baseline)
-	record("CreateFileSigned", signed)
+	s := &signPerf{ctx: t.Context(), suite: suite, repo: repo}
+	s.record(t, "CreateFile", s.baselineVariants(t))
+	s.record(t, "CreateFileSigned", s.signedVariants(t))
 
 	require.NoError(t, suite.collector.SaveReport("./reports"))
 }
 
-func buildSignedVariants(t *testing.T) []signVariant {
+func (s *signPerf) record(t *testing.T, op string, variants []signVariant) {
+	t.Helper()
+	for _, v := range variants {
+		for i := 0; i < 3; i++ {
+			i := i
+			s.suite.collector.RecordOperation(v.client, op, v.scenario, "small", 0, func() error {
+				path := fmt.Sprintf("sign-perf/%s-%s-%d.txt", v.client, v.scenario, i)
+				return v.create(s.ctx, s.repo.AuthURL(), path, "content", "perf signing")
+			})
+		}
+	}
+}
+
+func (s *signPerf) baselineVariants(t *testing.T) []signVariant {
+	t.Helper()
+	return []signVariant{
+		{"nanogit", fmtUnsigned, clients.NewNanogitClient().CreateFile},
+		{"go-git", fmtUnsigned, clients.NewGoGitClient().CreateFile},
+		{"git-cli", fmtUnsigned, newGitCLI(t).CreateFile},
+	}
+}
+
+func (s *signPerf) signedVariants(t *testing.T) []signVariant {
 	t.Helper()
 	gpg := testsigning.LoadGPG(t)
 	sshKey := testsigning.LoadSSH(t)
@@ -78,15 +93,15 @@ func buildSignedVariants(t *testing.T) []signVariant {
 	ngSMIME := clients.NewNanogitClient()
 	ngSMIME.SetSignerOptions(nanogit.WithSMIMESigner(smime.KeyPEM, smime.CertPEM))
 	variants = append(variants,
-		signVariant{"nanogit", "gpg", ngGPG.CreateFile},
-		signVariant{"nanogit", "ssh", ngSSH.CreateFile},
-		signVariant{"nanogit", "smime", ngSMIME.CreateFile},
+		signVariant{"nanogit", fmtGPG, ngGPG.CreateFile},
+		signVariant{"nanogit", fmtSSH, ngSSH.CreateFile},
+		signVariant{"nanogit", fmtSMIME, ngSMIME.CreateFile},
 	)
 
 	// go-git signs OpenPGP only.
 	ggGPG := clients.NewGoGitClient()
 	ggGPG.SetSignKey(gpg.Entity)
-	variants = append(variants, signVariant{"go-git", "gpg", ggGPG.CreateFile})
+	variants = append(variants, signVariant{"go-git", fmtGPG, ggGPG.CreateFile})
 
 	// git CLI signs all three via gpg / ssh-keygen / gpgsm.
 	if _, err := exec.LookPath("gpg"); err == nil {
@@ -98,7 +113,7 @@ func buildSignedVariants(t *testing.T) []signVariant {
 			"-c", "commit.gpgsign=true",
 			"-c", "gpg.program=gpg",
 		}, []string{"GNUPGHOME=" + home})
-		variants = append(variants, signVariant{"git-cli", "gpg", cli.CreateFile})
+		variants = append(variants, signVariant{"git-cli", fmtGPG, cli.CreateFile})
 	}
 	if _, err := exec.LookPath("ssh-keygen"); err == nil {
 		cli := newGitCLI(t)
@@ -108,7 +123,7 @@ func buildSignedVariants(t *testing.T) []signVariant {
 			"-c", "commit.gpgsign=true",
 			"-c", "gpg.ssh.program=ssh-keygen",
 		}, nil)
-		variants = append(variants, signVariant{"git-cli", "ssh", cli.CreateFile})
+		variants = append(variants, signVariant{"git-cli", fmtSSH, cli.CreateFile})
 	}
 	if _, hasGpgsm := exec.LookPath("gpgsm"); hasGpgsm == nil {
 		if _, hasSSL := exec.LookPath("openssl"); hasSSL == nil {
@@ -120,7 +135,7 @@ func buildSignedVariants(t *testing.T) []signVariant {
 				"-c", "user.signingkey=" + fpr,
 				"-c", "commit.gpgsign=true",
 			}, []string{"GNUPGHOME=" + home})
-			variants = append(variants, signVariant{"git-cli", "smime", cli.CreateFile})
+			variants = append(variants, signVariant{"git-cli", fmtSMIME, cli.CreateFile})
 		}
 	}
 

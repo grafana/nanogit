@@ -103,7 +103,8 @@ func giteaCommitVerification(t *testing.T, baseURL, token, owner, repo, sha stri
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "gitea commit lookup: %s", body)
 
 	var got struct {
@@ -124,7 +125,8 @@ func doOK(t *testing.T, req *http.Request, what string) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		out, _ := io.ReadAll(resp.Body)
+		out, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
 		t.Fatalf("%s: %s: %s", what, resp.Status, out)
 	}
 }

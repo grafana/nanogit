@@ -36,14 +36,9 @@ type SMIME struct {
 	KeyPath     string
 }
 
-func LoadGPG(t testing.TB) GPG {
+func LoadGPG(t testing.TB) *GPG {
 	t.Helper()
 	armoredPublic := read(t, "gpg.pub.asc")
-	keyPath := fixturePath("gpg.key.asc")
-	armoredKey, err := os.ReadFile(keyPath)
-	if err != nil {
-		t.Fatalf("read fixture gpg.key.asc: %v", err)
-	}
 	entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredPublic))
 	if err != nil {
 		t.Fatalf("parse gpg pub: %v", err)
@@ -51,42 +46,48 @@ func LoadGPG(t testing.TB) GPG {
 	if len(entities) == 0 {
 		t.Fatalf("gpg pub fixture contained no entities")
 	}
-	return GPG{
+	return &GPG{
 		Entity:        entities[0],
-		ArmoredKey:    armoredKey,
+		ArmoredKey:    read(t, "gpg.key.asc"),
 		ArmoredPublic: armoredPublic,
-		KeyPath:       keyPath,
+		KeyPath:       fixturePath("gpg.key.asc"),
 	}
 }
 
-func LoadSSH(t testing.TB) SSH {
+func LoadSSH(t testing.TB) *SSH {
 	t.Helper()
-	priv := read(t, "ssh.ed25519")
 	pubLine := read(t, "ssh.ed25519.pub")
 	pub, _, _, _, err := ssh.ParseAuthorizedKey(pubLine)
 	if err != nil {
 		t.Fatalf("parse ssh pub: %v", err)
 	}
-	return SSH{PublicKey: pub, PrivateKey: priv, PublicLine: pubLine, PrivateKeyPath: fixturePath("ssh.ed25519")}
+	return &SSH{
+		PublicKey:      pub,
+		PrivateKey:     read(t, "ssh.ed25519"),
+		PublicLine:     pubLine,
+		PrivateKeyPath: fixturePath("ssh.ed25519"),
+	}
 }
 
-func LoadSMIME(t testing.TB) SMIME {
+func LoadSMIME(t testing.TB) *SMIME {
 	t.Helper()
-	certPath := fixturePath("smime.cert.pem")
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		t.Fatalf("read fixture smime.cert.pem: %v", err)
-	}
-	keyPEM := read(t, "smime.key.pem")
+	certPEM := read(t, "smime.cert.pem")
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		t.Fatalf("smime cert fixture has no PEM block")
+		return nil
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		t.Fatalf("parse smime cert: %v", err)
 	}
-	return SMIME{Certificate: cert, CertPEM: certPEM, KeyPEM: keyPEM, CertPath: certPath, KeyPath: fixturePath("smime.key.pem")}
+	return &SMIME{
+		Certificate: cert,
+		CertPEM:     certPEM,
+		KeyPEM:      read(t, "smime.key.pem"),
+		CertPath:    fixturePath("smime.cert.pem"),
+		KeyPath:     fixturePath("smime.key.pem"),
+	}
 }
 
 func read(t testing.TB, name string) []byte {
