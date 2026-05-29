@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/internal/testsigning"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/perf/clients"
 )
 
@@ -64,9 +64,9 @@ func TestSignedCommitPerformance(t *testing.T) {
 
 func buildSignedVariants(t *testing.T) []signVariant {
 	t.Helper()
-	gpg := testsigning.LoadGPG(t)
-	sshKey := testsigning.LoadSSH(t)
-	smime := testsigning.LoadSMIME(t)
+	gpg := gittest.LoadGPG(t)
+	sshKey := gittest.LoadSSH(t)
+	smime := gittest.LoadSMIME(t)
 
 	var variants []signVariant
 

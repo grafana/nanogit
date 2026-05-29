@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/nanogit/internal/testsigning"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -280,13 +280,12 @@ type mockSigner struct {
 	gotBytes  []byte
 }
 
-func (m *mockSigner) Sign(c *protocol.PackfileCommit) error {
-	m.gotBytes = append([]byte(nil), c.Build()...)
+func (m *mockSigner) Sign(data []byte) (string, error) {
+	m.gotBytes = append([]byte(nil), data...)
 	if m.err != nil {
-		return m.err
+		return "", m.err
 	}
-	c.Signature = m.signature
-	return nil
+	return m.signature, nil
 }
 
 func TestStagedWriter_Commit_SignerError(t *testing.T) {
@@ -358,9 +357,9 @@ func TestStagedWriter_Commit_SignerInvoked(t *testing.T) {
 func TestSignerOptions(t *testing.T) {
 	t.Parallel()
 
-	gpg := testsigning.LoadGPG(t)
-	sshKey := testsigning.LoadSSH(t)
-	smime := testsigning.LoadSMIME(t)
+	gpg := gittest.LoadGPG(t)
+	sshKey := gittest.LoadSSH(t)
+	smime := gittest.LoadSMIME(t)
 
 	cases := []struct {
 		name string

@@ -11,9 +11,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/nanogit/internal/testsigning"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/protocol/signature"
 )
 
 const signerEmail = "signer@test.invalid"
@@ -27,9 +28,9 @@ func TestSignLocalVerify_GPG(t *testing.T) {
 	gnupghome := mkShortTempDir(t, "ng-gpg-")
 	t.Setenv("GNUPGHOME", gnupghome)
 
-	gpg := testsigning.LoadGPG(t)
+	gpg := gittest.LoadGPG(t)
 	runOK(t, "", "gpg", "--batch", "--import", gpg.KeyPath)
-	signer, err := protocol.NewGPGSigner(gpg.ArmoredKey)
+	signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
 	require.NoError(t, err)
 	commit := signEmptyCommit(t, signer)
 	commitBytes := commit.Build()
@@ -54,13 +55,13 @@ func TestSignLocalVerify_SSH(t *testing.T) {
 	requireBins(t, "git", "ssh-keygen")
 
 	tmp := t.TempDir()
-	k := testsigning.LoadSSH(t)
+	k := gittest.LoadSSH(t)
 
 	allowed := filepath.Join(tmp, "allowed_signers")
 	require.NoError(t, os.WriteFile(allowed,
 		[]byte(signerEmail+" namespaces=\"git\" "+string(k.PublicLine)), 0o644))
 
-	signer, err := protocol.NewSSHSigner(k.PrivateKey)
+	signer, err := signature.NewSSHSigner(k.PrivateKey)
 	require.NoError(t, err)
 	commit := signEmptyCommit(t, signer)
 	repo := initBareRepo(t, tmp)
@@ -86,7 +87,7 @@ func TestSignLocalVerify_SMIME(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "gpg-agent.conf"),
 		[]byte("allow-mark-trusted\n"), 0o600))
 
-	s := testsigning.LoadSMIME(t)
+	s := gittest.LoadSMIME(t)
 	runOK(t, "", "gpgsm", "--batch", "--import", s.CertPath)
 
 	fpRaw := runOut(t, "", "gpgsm", "--batch", "--with-colons", "--list-keys")
@@ -94,7 +95,7 @@ func TestSignLocalVerify_SMIME(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "trustlist.txt"),
 		[]byte(fp+" S\n"), 0o600))
 
-	signer, err := protocol.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+	signer, err := signature.NewSMIMESigner(s.KeyPEM, s.CertPEM)
 	require.NoError(t, err)
 	commit := signEmptyCommit(t, signer)
 
@@ -114,7 +115,7 @@ func TestSignLocalVerify_SMIME(t *testing.T) {
 	require.Contains(t, out, "GOODSIG")
 }
 
-func signEmptyCommit(t *testing.T, signer protocol.Signer) *protocol.PackfileCommit {
+func signEmptyCommit(t *testing.T, signer signature.Signer) *protocol.PackfileCommit {
 	t.Helper()
 	emptyTree, err := hash.FromHex("4b825dc642cb6eb9a060e54bf8d69288fbee4904")
 	require.NoError(t, err)
@@ -127,7 +128,9 @@ func signEmptyCommit(t *testing.T, signer protocol.Signer) *protocol.PackfileCom
 		Author: ident, Committer: ident,
 		Message: "verify roundtrip\n",
 	}
-	require.NoError(t, signer.Sign(c))
+	sig, err := signer.Sign(c.Build())
+	require.NoError(t, err)
+	c.Signature = sig
 	return c
 }
 
@@ -157,7 +160,7 @@ func computeHash(commitBytes []byte) (string, error) {
 
 func extractGPGSMFingerprint(t *testing.T, colons string) string {
 	t.Helper()
-	for _, line := range strings.Split(colons, "\n") {
+	for line := range strings.SplitSeq(colons, "\n") {
 		if strings.HasPrefix(line, "fpr:") {
 			cols := strings.Split(line, ":")
 			require.Greater(t, len(cols), 9, "unexpected fpr line: %q", line)

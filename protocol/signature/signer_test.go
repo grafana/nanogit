@@ -1,4 +1,4 @@
-package protocol_test
+package signature_test
 
 import (
 	"bytes"
@@ -13,31 +13,34 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/grafana/nanogit/internal/testsigning"
+	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/protocol/signature"
 )
 
 func TestGPGSigner_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	gpg := testsigning.LoadGPG(t)
+	gpg := gittest.LoadGPG(t)
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
-	signer, err := protocol.NewGPGSigner(gpg.ArmoredKey)
+	signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
 	require.NoError(t, err)
-	require.NoError(t, signer.Sign(c))
-	require.NotEmpty(t, c.Signature)
-	require.False(t, strings.HasSuffix(c.Signature, "\n"), "trailing newline must be stripped")
+	sig, err := signer.Sign(unsigned)
+	require.NoError(t, err)
+	require.NotEmpty(t, sig)
+	require.False(t, strings.HasSuffix(sig, "\n"), "trailing newline must be stripped")
 
+	c.Signature = sig
 	signed := c.Build()
 	require.Contains(t, string(signed), "gpgsig -----BEGIN PGP SIGNATURE-----")
 
 	_, err = openpgp.CheckArmoredDetachedSignature(
 		openpgp.EntityList{gpg.Entity},
 		bytes.NewReader(unsigned),
-		strings.NewReader(c.Signature),
+		strings.NewReader(sig),
 		nil,
 	)
 	require.NoError(t, err)
@@ -46,45 +49,47 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 func TestGPGSigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := protocol.NewGPGSigner([]byte("not a key"))
+	_, err := signature.NewGPGSigner([]byte("not a key"))
 	require.Error(t, err)
 }
 
 func TestSSHSigner_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	k := testsigning.LoadSSH(t)
+	k := gittest.LoadSSH(t)
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
-	signer, err := protocol.NewSSHSigner(k.PrivateKey)
+	signer, err := signature.NewSSHSigner(k.PrivateKey)
 	require.NoError(t, err)
-	require.NoError(t, signer.Sign(c))
-	require.Contains(t, c.Signature, "-----BEGIN SSH SIGNATURE-----")
+	sig, err := signer.Sign(unsigned)
+	require.NoError(t, err)
+	require.Contains(t, sig, "-----BEGIN SSH SIGNATURE-----")
 
-	verifySSHSig(t, k.PublicKey, unsigned, c.Signature)
+	verifySSHSig(t, k.PublicKey, unsigned, sig)
 }
 
 func TestSSHSigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := protocol.NewSSHSigner([]byte("not a key"))
+	_, err := signature.NewSSHSigner([]byte("not a key"))
 	require.Error(t, err)
 }
 
 func TestSMIMESigner_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	s := testsigning.LoadSMIME(t)
+	s := gittest.LoadSMIME(t)
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
-	signer, err := protocol.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+	signer, err := signature.NewSMIMESigner(s.KeyPEM, s.CertPEM)
 	require.NoError(t, err)
-	require.NoError(t, signer.Sign(c))
-	require.Contains(t, c.Signature, "-----BEGIN SIGNED MESSAGE-----")
+	sig, err := signer.Sign(unsigned)
+	require.NoError(t, err)
+	require.Contains(t, sig, "-----BEGIN SIGNED MESSAGE-----")
 
-	block, _ := pem.Decode([]byte(c.Signature))
+	block, _ := pem.Decode([]byte(sig))
 	require.NotNil(t, block)
 	p7, err := pkcs7.Parse(block.Bytes)
 	require.NoError(t, err)
@@ -95,7 +100,7 @@ func TestSMIMESigner_RoundTrip(t *testing.T) {
 func TestSMIMESigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := protocol.NewSMIMESigner([]byte("not a key"), []byte("not a cert"))
+	_, err := signature.NewSMIMESigner([]byte("not a key"), []byte("not a cert"))
 	require.Error(t, err)
 }
 

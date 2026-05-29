@@ -1035,7 +1035,9 @@ func (w *PackfileWriter) HasObjects() bool {
 
 // AddCommit adds a commit object to the packfile. If signer is non-nil the
 // commit is signed before hashing, so its hash reflects the signature.
-func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer Signer) (hash.Hash, error) {
+func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer interface {
+	Sign(data []byte) (string, error)
+}) (hash.Hash, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return hash.Hash{}, err
 	}
@@ -1048,9 +1050,11 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 		Message:   message,
 	}
 	if signer != nil {
-		if err := signer.Sign(c); err != nil {
+		sig, err := signer.Sign(c.Build())
+		if err != nil {
 			return hash.Hash{}, fmt.Errorf("sign commit: %w", err)
 		}
+		c.Signature = sig
 	}
 	out := c.Build()
 
