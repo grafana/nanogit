@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/signature"
@@ -22,7 +22,7 @@ import (
 func TestGPGSigner_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	gpg := gittest.LoadGPG(t)
+	gpg := testsigning.LoadGPG(t)
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
@@ -56,7 +56,7 @@ func TestGPGSigner_Errors(t *testing.T) {
 func TestSSHSigner_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	k := gittest.LoadSSH(t)
+	k := testsigning.LoadSSH(t)
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 
@@ -79,7 +79,7 @@ func TestSSHSigner_Errors(t *testing.T) {
 func TestSMIMESigner_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	s := gittest.LoadSMIME(t)
+	s := testsigning.LoadSMIME(t)
 	c := newTestCommit("msg")
 	unsigned := c.Build()
 

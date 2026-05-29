@@ -1,4 +1,5 @@
-package gittest
+// Package testsigning loads the shared GPG, SSH, and S/MIME test keys.
+package testsigning
 
 import (
 	"bytes"
@@ -100,5 +101,5 @@ func read(t testing.TB, name string) []byte {
 
 func fixturePath(name string) string {
 	_, here, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(here), "..", "tests", "testdata", "signing", name)
+	return filepath.Join(filepath.Dir(here), "testdata", name)
 }

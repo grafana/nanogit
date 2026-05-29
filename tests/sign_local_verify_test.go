@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/signature"
@@ -28,7 +28,7 @@ func TestSignLocalVerify_GPG(t *testing.T) {
 	gnupghome := mkShortTempDir(t, "ng-gpg-")
 	t.Setenv("GNUPGHOME", gnupghome)
 
-	gpg := gittest.LoadGPG(t)
+	gpg := testsigning.LoadGPG(t)
 	runOK(t, "", "gpg", "--batch", "--import", gpg.KeyPath)
 	signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestSignLocalVerify_SSH(t *testing.T) {
 	requireBins(t, "git", "ssh-keygen")
 
 	tmp := t.TempDir()
-	k := gittest.LoadSSH(t)
+	k := testsigning.LoadSSH(t)
 
 	allowed := filepath.Join(tmp, "allowed_signers")
 	require.NoError(t, os.WriteFile(allowed,
@@ -87,7 +87,7 @@ func TestSignLocalVerify_SMIME(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(gnupghome, "gpg-agent.conf"),
 		[]byte("allow-mark-trusted\n"), 0o600))
 
-	s := gittest.LoadSMIME(t)
+	s := testsigning.LoadSMIME(t)
 	runOK(t, "", "gpgsm", "--batch", "--import", s.CertPath)
 
 	fpRaw := runOut(t, "", "gpgsm", "--batch", "--with-colons", "--list-keys")

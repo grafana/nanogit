@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/nanogit/gittest"
+	"github.com/grafana/nanogit/protocol/signature/testsigning"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -357,9 +357,9 @@ func TestStagedWriter_Commit_SignerInvoked(t *testing.T) {
 func TestSignerOptions(t *testing.T) {
 	t.Parallel()
 
-	gpg := gittest.LoadGPG(t)
-	sshKey := gittest.LoadSSH(t)
-	smime := gittest.LoadSMIME(t)
+	gpg := testsigning.LoadGPG(t)
+	sshKey := testsigning.LoadSSH(t)
+	smime := testsigning.LoadSMIME(t)
 
 	cases := []struct {
 		name string
