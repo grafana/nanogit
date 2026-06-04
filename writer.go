@@ -12,7 +12,7 @@ import (
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/signature"
+	"github.com/grafana/nanogit/protocol/signing"
 	"github.com/grafana/nanogit/storage"
 )
 
@@ -178,7 +178,7 @@ type stagedWriter struct {
 	isCleanedUp bool
 	// Deferred tree building optimization: track which directory paths need tree rebuilding
 	dirtyPaths map[string]bool
-	signer     signature.Signer
+	signer     signing.Signer
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.

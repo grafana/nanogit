@@ -1,4 +1,4 @@
-package signature_test
+package signing_test
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/signature"
+	"github.com/grafana/nanogit/protocol/signing"
 	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
@@ -26,7 +26,7 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 	c := newTestCommit("msg")
 	unsigned := c.Build(false)
 
-	signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
+	signer, err := signing.NewGPGSigner(gpg.ArmoredKey)
 	require.NoError(t, err)
 	sig, err := signer.Sign(unsigned)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 func TestGPGSigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := signature.NewGPGSigner([]byte("not a key"))
+	_, err := signing.NewGPGSigner([]byte("not a key"))
 	require.Error(t, err)
 }
 
@@ -60,7 +60,7 @@ func TestSSHSigner_RoundTrip(t *testing.T) {
 	c := newTestCommit("msg")
 	unsigned := c.Build(false)
 
-	signer, err := signature.NewSSHSigner(k.PrivateKey)
+	signer, err := signing.NewSSHSigner(k.PrivateKey)
 	require.NoError(t, err)
 	sig, err := signer.Sign(unsigned)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestSSHSigner_RoundTrip(t *testing.T) {
 func TestSSHSigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := signature.NewSSHSigner([]byte("not a key"))
+	_, err := signing.NewSSHSigner([]byte("not a key"))
 	require.Error(t, err)
 }
 
@@ -83,7 +83,7 @@ func TestSMIMESigner_RoundTrip(t *testing.T) {
 	c := newTestCommit("msg")
 	unsigned := c.Build(false)
 
-	signer, err := signature.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+	signer, err := signing.NewSMIMESigner(s.KeyPEM, s.CertPEM)
 	require.NoError(t, err)
 	sig, err := signer.Sign(unsigned)
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestSMIMESigner_RoundTrip(t *testing.T) {
 func TestSMIMESigner_Errors(t *testing.T) {
 	t.Parallel()
 
-	_, err := signature.NewSMIMESigner([]byte("not a key"), []byte("not a cert"))
+	_, err := signing.NewSMIMESigner([]byte("not a key"), []byte("not a cert"))
 	require.Error(t, err)
 }
 

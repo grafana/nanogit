@@ -13,7 +13,7 @@ import (
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/signature"
+	"github.com/grafana/nanogit/protocol/signing"
 	"github.com/grafana/nanogit/protocol/signature/testsigning"
 )
 
@@ -27,7 +27,7 @@ func TestSignLocalVerify(t *testing.T) {
 	t.Run("gpg", func(t *testing.T) {
 		requireBins(t, "git", "gpg")
 		gpg := testsigning.LoadGPG(t)
-		signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
+		signer, err := signing.NewGPGSigner(gpg.ArmoredKey)
 		require.NoError(t, err)
 		repo, sha := signAndStore(t, signer)
 
@@ -40,7 +40,7 @@ func TestSignLocalVerify(t *testing.T) {
 	t.Run("ssh", func(t *testing.T) {
 		requireBins(t, "git", "ssh-keygen")
 		k := testsigning.LoadSSH(t)
-		signer, err := signature.NewSSHSigner(k.PrivateKey)
+		signer, err := signing.NewSSHSigner(k.PrivateKey)
 		require.NoError(t, err)
 		repo, sha := signAndStore(t, signer)
 
@@ -55,7 +55,7 @@ func TestSignLocalVerify(t *testing.T) {
 	})
 }
 
-func signAndStore(t *testing.T, signer signature.Signer) (repo, sha string) {
+func signAndStore(t *testing.T, signer signing.Signer) (repo, sha string) {
 	t.Helper()
 	emptyTree, err := hash.FromHex("4b825dc642cb6eb9a060e54bf8d69288fbee4904")
 	require.NoError(t, err)

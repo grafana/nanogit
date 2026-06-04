@@ -22,7 +22,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/signature"
+	"github.com/grafana/nanogit/protocol/signing"
 )
 
 // ErrPackfileWriterCleanedUp is returned when trying to use a PackfileWriter after cleanup has been called.
@@ -1028,7 +1028,7 @@ func (w *PackfileWriter) HasObjects() bool {
 
 // AddCommit adds a commit object to the packfile. If signer is non-nil the
 // commit is signed before hashing, so its hash reflects the signature.
-func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer signature.Signer) (hash.Hash, error) {
+func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer signing.Signer) (hash.Hash, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return hash.Hash{}, err
 	}

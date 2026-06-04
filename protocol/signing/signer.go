@@ -1,5 +1,5 @@
 // Package signature provides commit signers for GPG, SSH, and S/MIME keys.
-package signature
+package signing
 
 var (
 	_ Signer = (*gpgSigner)(nil)
