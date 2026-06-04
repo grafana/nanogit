@@ -24,7 +24,7 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 
 	gpg := testsigning.LoadGPG(t)
 	c := newTestCommit("msg")
-	unsigned := c.Build()
+	unsigned := c.Build(false)
 
 	signer, err := signature.NewGPGSigner(gpg.ArmoredKey)
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestGPGSigner_RoundTrip(t *testing.T) {
 	require.False(t, strings.HasSuffix(sig, "\n"), "trailing newline must be stripped")
 
 	c.Signature = sig
-	signed := c.Build()
+	signed := c.Build(true)
 	require.Contains(t, string(signed), "gpgsig -----BEGIN PGP SIGNATURE-----")
 
 	_, err = openpgp.CheckArmoredDetachedSignature(
@@ -58,7 +58,7 @@ func TestSSHSigner_RoundTrip(t *testing.T) {
 
 	k := testsigning.LoadSSH(t)
 	c := newTestCommit("msg")
-	unsigned := c.Build()
+	unsigned := c.Build(false)
 
 	signer, err := signature.NewSSHSigner(k.PrivateKey)
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestSMIMESigner_RoundTrip(t *testing.T) {
 
 	s := testsigning.LoadSMIME(t)
 	c := newTestCommit("msg")
-	unsigned := c.Build()
+	unsigned := c.Build(false)
 
 	signer, err := signature.NewSMIMESigner(s.KeyPEM, s.CertPEM)
 	require.NoError(t, err)

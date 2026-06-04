@@ -61,10 +61,11 @@ func signAndStore(t *testing.T, signer signature.Signer) (repo, sha string) {
 	require.NoError(t, err)
 	ident := &protocol.Identity{Name: "Nanogit Signer", Email: signerEmail, Timestamp: 1234567890, Timezone: "+0000"}
 	c := &protocol.PackfileCommit{Tree: emptyTree, Parent: hash.Zero, Author: ident, Committer: ident, Message: "verify roundtrip\n"}
-	sig, err := signer.Sign(c.Build())
+	unsignedBytes := c.Build(false)
+	sig, err := signer.Sign(unsignedBytes)
 	require.NoError(t, err)
 	c.Signature = sig
-	signed := c.Build()
+	signed := c.Build(true)
 
 	repo = filepath.Join(t.TempDir(), "repo.git")
 	run(t, "", "git", "init", "--bare", repo)

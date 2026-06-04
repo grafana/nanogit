@@ -419,9 +419,7 @@ type PackfileCommit struct {
 	Fields map[string][]byte
 }
 
-// Build serializes the commit to canonical Git bytes. With Signature unset it
-// yields the bytes to sign; set Signature and call again for the final commit.
-func (c *PackfileCommit) Build() []byte {
+func (c *PackfileCommit) Build(includeSig bool) []byte {
 	var data bytes.Buffer
 	fmt.Fprintf(&data, "tree %s\n", c.Tree.String())
 	if !c.Parent.Is(hash.Zero) {
@@ -429,7 +427,7 @@ func (c *PackfileCommit) Build() []byte {
 	}
 	fmt.Fprintf(&data, "author %s\n", c.Author.String())
 	fmt.Fprintf(&data, "committer %s\n", c.Committer.String())
-	if c.Signature != "" {
+	if includeSig && c.Signature != "" {
 		// Git uses the gpgsig header for GPG, SSH, and X.509 signatures alike.
 		data.WriteString("gpgsig ")
 		data.WriteString(strings.ReplaceAll(c.Signature, "\n", "\n "))
@@ -1042,14 +1040,15 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 		Committer: committer,
 		Message:   message,
 	}
-	if signer != nil {
-		sig, err := signer.Sign(c.Build())
+	if signer != nil && c.Signature == "" {
+		unsignedBytes := c.Build( /*includeSig=*/ false)
+		sig, err := signer.Sign(unsignedBytes)
 		if err != nil {
 			return hash.Hash{}, fmt.Errorf("sign commit: %w", err)
 		}
 		c.Signature = sig
 	}
-	out := c.Build()
+	out := c.Build( /*includeSig=*/ true)
 
 	// Compute hash immediately
 	h, err := Object(w.algo, ObjectTypeCommit, out)

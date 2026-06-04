@@ -461,7 +461,7 @@ func TestPackfileObjectToCommit_SignedCommitMessage(t *testing.T) {
 		Message:   "the real message\n",
 		Signature: "-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQ\nABCDEF123456\n-----END PGP SIGNATURE-----",
 	}
-	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: pc.Build()}
+	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: pc.Build(true)}
 	require.NoError(t, obj.Parse())
 
 	commit, err := packfileObjectToCommit(obj)
