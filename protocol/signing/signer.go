@@ -1,4 +1,4 @@
-// Package signature provides commit signers for GPG, SSH, and S/MIME keys.
+// Package signing provides commit signers for GPG, SSH, and S/MIME keys.
 package signing
 
 var (

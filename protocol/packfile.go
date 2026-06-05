@@ -411,11 +411,10 @@ type PackfileCommit struct {
 	Committer *Identity
 	Parent    hash.Hash
 	Message   string
-	// Signature, when non-empty, is an armored block embedded as the gpgsig header by Build.
+	// Signature, when non-empty, is an armored block embedded as the gpgsig header.
 	Signature string
 	// Fields contains any fields beyond the fields that are statically defined.
-	// If a field is statically defined, it SHOULD not show up here. Note that
-	// Build does not serialize these, so they don't round-trip.
+	// If a field is statically defined, it SHOULD not show up here.
 	Fields map[string][]byte
 }
 
@@ -1026,8 +1025,7 @@ func (w *PackfileWriter) HasObjects() bool {
 	return len(w.objectHashes) > 0
 }
 
-// AddCommit adds a commit object to the packfile. If signer is non-nil the
-// commit is signed before hashing, so its hash reflects the signature.
+// AddCommit adds a commit object to the packfile.
 func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer signing.Signer) (hash.Hash, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return hash.Hash{}, err
