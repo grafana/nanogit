@@ -177,8 +177,8 @@ jobs:
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            GH_REPO_USER=github:GH_REPO_USER
-            GH_REPO_TOKEN=github:GH_REPO_TOKEN
+            REPO_USER=github:REPO_USER
+            REPO_TOKEN=github:REPO_TOKEN
       - name: Cache Go modules
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
@@ -194,8 +194,8 @@ jobs:
         env:
           CGO_ENABLED: 1
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
-          TEST_USER: ${{ env.GH_REPO_USER }}
-          TEST_TOKEN: ${{ env.GH_REPO_TOKEN }}
+          TEST_USER: ${{ env.REPO_USER }}
+          TEST_TOKEN: ${{ env.REPO_TOKEN }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -223,8 +223,8 @@ jobs:
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
-            GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
+            REPO_USER=gitlab:REPO_USER
+            REPO_TOKEN=gitlab:REPO_TOKEN
       - name: Cache Go modules
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
@@ -240,8 +240,8 @@ jobs:
         env:
           CGO_ENABLED: 1
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
-          TEST_USER: ${{ env.GITLAB_REPO_USER }}
-          TEST_TOKEN: ${{ env.GITLAB_REPO_TOKEN }}
+          TEST_USER: ${{ env.REPO_USER }}
+          TEST_TOKEN: ${{ env.REPO_TOKEN }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -268,8 +268,8 @@ jobs:
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
-            BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
+            REPO_USER=bitbucket:REPO_USER
+            REPO_TOKEN=bitbucket:REPO_TOKEN
       - name: Cache Go modules
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
@@ -285,8 +285,8 @@ jobs:
         env:
           CGO_ENABLED: 1
           TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
-          TEST_USER: ${{ env.BITBUCKET_REPO_USER }}
-          TEST_TOKEN: ${{ env.BITBUCKET_REPO_TOKEN }}
+          TEST_USER: ${{ env.REPO_USER }}
+          TEST_TOKEN: ${{ env.REPO_TOKEN }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
