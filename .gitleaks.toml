@@ -3,8 +3,8 @@ title = "nanogit gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Test-only signing fixtures used by the signing tests. These are ephemeral keys for an unregistrable @test.invalid identity and sign nothing trusted; regenerated only when the tests need fresh material."
 paths = [
-    '''^protocol/signature/testsigning/.*$''',
+    '''^protocol/signing/testsigning/.*$''',
 ]

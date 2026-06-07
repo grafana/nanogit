@@ -13,7 +13,7 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/perf/clients"
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 )
 
 const (

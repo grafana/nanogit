@@ -351,7 +351,7 @@ jobs:
       - name: Run TruffleHog
         uses: trufflesecurity/trufflehog@afd5336caad0f61da51750ffe39869974b27b0db
         with:
-          extra_args: --results=verified,unknown --exclude-globs='protocol/signature/testsigning/**'
+          extra_args: --results=verified,unknown --exclude-globs='protocol/signing/testsigning/**'
 
   deps:
     name: Dependencies

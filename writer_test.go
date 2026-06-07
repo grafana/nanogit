@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/client"
 	"github.com/grafana/nanogit/protocol/hash"
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 	"github.com/grafana/nanogit/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -14,7 +14,7 @@ import (
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/protocol/signing"
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 )
 
 const signerEmail = "signer@test.invalid"

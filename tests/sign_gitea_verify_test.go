@@ -14,7 +14,7 @@ import (
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/options"
-	"github.com/grafana/nanogit/protocol/signature/testsigning"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 )
 
 func TestSignGiteaVerify_GPG(t *testing.T) {
