@@ -131,7 +131,7 @@ func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, m
 
 	// Commit
 	commitArgs := append(append([]string{}, c.signConfig...), "commit", "-m", message)
-	if _, err := c.runGitCommand(ctx, repoPath, commitArgs...); err != nil {
+	if _, err := c.runGitCommandWithOutput(ctx, repoPath, commitArgs...); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
