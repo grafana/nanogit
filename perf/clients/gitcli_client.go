@@ -14,15 +14,7 @@ import (
 
 // GitCLIClient implements the GitClient interface using git CLI commands
 type GitCLIClient struct {
-	workDir    string   // Base directory for git operations
-	signConfig []string // -c flags prepended to commit when signing
-	env        []string // extra environment (e.g. GNUPGHOME) for git commands
-}
-
-// SetSigning configures the -c flags and environment used to sign commits.
-func (c *GitCLIClient) SetSigning(signConfig, env []string) {
-	c.signConfig = signConfig
-	c.env = env
+	workDir string // Base directory for git operations
 }
 
 // NewGitCLIClient creates a new git CLI client
@@ -87,9 +79,6 @@ func (c *GitCLIClient) cloneRepoOptimized(ctx context.Context, repoURL string, s
 func (c *GitCLIClient) runGitCommand(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = repoPath
-	if len(c.env) > 0 {
-		cmd.Env = append(os.Environ(), c.env...)
-	}
 	return cmd.Output()
 }
 
@@ -97,9 +86,6 @@ func (c *GitCLIClient) runGitCommand(ctx context.Context, repoPath string, args 
 func (c *GitCLIClient) runGitCommandWithOutput(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = repoPath
-	if len(c.env) > 0 {
-		cmd.Env = append(os.Environ(), c.env...)
-	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return output, fmt.Errorf("git %s failed: %s (output: %s)", strings.Join(args, " "), err.Error(), string(output))
@@ -130,8 +116,7 @@ func (c *GitCLIClient) CreateFile(ctx context.Context, repoURL, path, content, m
 	}
 
 	// Commit
-	commitArgs := append(append([]string{}, c.signConfig...), "commit", "-m", message)
-	if _, err := c.runGitCommandWithOutput(ctx, repoPath, commitArgs...); err != nil {
+	if _, err := c.runGitCommand(ctx, repoPath, "commit", "-m", message); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 

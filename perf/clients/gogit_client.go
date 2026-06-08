@@ -15,15 +15,12 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
-
-	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
 // GoGitClient implements the GitClient interface using go-git with optimizations
 type GoGitClient struct {
-	auths   map[string]*http.BasicAuth // Cache auth info by URL
-	mutex   sync.RWMutex               // Protect concurrent access to auth cache
-	signKey *openpgp.Entity            // GPG signing key; nil means unsigned
+	auths map[string]*http.BasicAuth // Cache auth info by URL
+	mutex sync.RWMutex               // Protect concurrent access to auth cache
 }
 
 // NewGoGitClient creates a new go-git client
@@ -31,12 +28,6 @@ func NewGoGitClient() *GoGitClient {
 	return &GoGitClient{
 		auths: make(map[string]*http.BasicAuth),
 	}
-}
-
-// SetSignKey configures the GPG entity used to sign every commit. go-git
-// only supports OpenPGP signing.
-func (c *GoGitClient) SetSignKey(e *openpgp.Entity) {
-	c.signKey = e
 }
 
 // Name returns the client name
@@ -175,7 +166,6 @@ func (c *GoGitClient) CreateFile(ctx context.Context, repoURL, path, content, me
 			Name:  "Performance Test",
 			Email: "test@example.com",
 		},
-		SignKey: c.signKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
@@ -226,7 +216,6 @@ func (c *GoGitClient) UpdateFile(ctx context.Context, repoURL, path, content, me
 			Name:  "Performance Test",
 			Email: "test@example.com",
 		},
-		SignKey: c.signKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
@@ -268,7 +257,6 @@ func (c *GoGitClient) DeleteFile(ctx context.Context, repoURL, path, message str
 			Name:  "Performance Test",
 			Email: "test@example.com",
 		},
-		SignKey: c.signKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
@@ -465,7 +453,6 @@ func (c *GoGitClient) BulkCreateFiles(ctx context.Context, repoURL string, files
 			Name:  "Performance Test",
 			Email: "test@example.com",
 		},
-		SignKey: c.signKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to commit bulk changes: %w", err)
