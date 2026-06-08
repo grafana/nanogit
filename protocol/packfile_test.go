@@ -315,7 +315,7 @@ func TestParseCommit_GPGSig(t *testing.T) {
 		Signature: signature,
 	}
 
-	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build(true)}
+	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
 	require.NoError(t, obj.Parse())
 
 	require.Equal(t, signature, obj.Commit.Signature)

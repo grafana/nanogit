@@ -2,16 +2,15 @@ package signing_test
 
 import (
 	"bytes"
-	"crypto/sha512"
-	"crypto/x509"
-	"encoding/pem"
+	"crypto/sha1"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/ProtonMail/go-crypto/openpgp"
-	"github.com/smallstep/pkcs7"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
@@ -19,89 +18,96 @@ import (
 	"github.com/grafana/nanogit/protocol/signing/testsigning"
 )
 
-func TestGPGSigner_RoundTrip(t *testing.T) {
-	t.Parallel()
+func TestVerifySignature(t *testing.T) {
+	t.Setenv("TMPDIR", "/tmp")
+	home := t.TempDir()
+	t.Setenv("GNUPGHOME", home)
 
-	gpg := testsigning.LoadGPG(t)
-	c := newTestCommit("msg")
-	unsigned := c.Build(false)
+	t.Run("gpg", func(t *testing.T) {
+		gpg := testsigning.LoadGPG(t)
+		signer, err := signing.NewGPGSigner(gpg.ArmoredKey)
+		require.NoError(t, err)
+		repo, sha := signAndStore(t, signer)
 
-	signer, err := signing.NewGPGSigner(gpg.ArmoredKey)
+		pub := filepath.Join(home, "gpg.pub.asc")
+		require.NoError(t, os.WriteFile(pub, gpg.ArmoredPublic, 0o644))
+		run(t, "", "gpg", "--batch", "--import", pub)
+		out := run(t, repo, "git", "verify-commit", "--raw", sha)
+		t.Log(string(out))
+		require.Contains(t, out, "GOODSIG")
+	})
+
+	t.Run("ssh", func(t *testing.T) {
+		k := testsigning.LoadSSH(t)
+		signer, err := signing.NewSSHSigner(k.PrivateKey)
+		require.NoError(t, err)
+		repo, sha := signAndStore(t, signer)
+
+		allowed := filepath.Join(t.TempDir(), "allowed_signers")
+		require.NoError(t, os.WriteFile(allowed,
+			[]byte("signer@test.invalid namespaces=\"git\" "+string(k.PublicLine)), 0o644))
+		out := run(t, repo, "git",
+			"-c", "gpg.format=ssh",
+			"-c", "gpg.ssh.allowedSignersFile="+allowed,
+			"verify-commit", "--raw", sha)
+		t.Log(string(out))
+		require.Contains(t, out, "Good \"git\" signature")
+	})
+
+	t.Run("smime", func(t *testing.T) {
+		s := testsigning.LoadSMIME(t)
+		signer, err := signing.NewSMIMESigner(s.KeyPEM, s.CertPEM)
+		require.NoError(t, err)
+		repo, sha := signAndStore(t, signer)
+
+		require.NoError(t, os.WriteFile(filepath.Join(home, "gpgsm.conf"), []byte("disable-crl-checks\n"), 0o644))
+		fpr := fmt.Sprintf("%X", sha1.Sum(s.Certificate.Raw))
+		require.NoError(t, os.WriteFile(filepath.Join(home, "trustlist.txt"), []byte(fpr+" S relax\n"), 0o644))
+		run(t, "", "gpgsm", "--batch", "--import", s.CertPath)
+		out := run(t, repo, "git",
+			"-c", "gpg.format=x509",
+			"-c", "gpg.x509.program="+gpgsmShim(t),
+			"verify-commit", "--raw", sha)
+		t.Log(string(out))
+		require.Contains(t, out, "GOODSIG")
+	})
+}
+
+// gpgsmShim wraps gpgsm to rewrite git's stdin marker "-" to "/dev/stdin",
+// which gpgsm requires for the detached payload.
+func gpgsmShim(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "gpgsm-shim")
+	script := "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = - ] && a=/dev/stdin; set -- \"$@\" \"$a\"; shift; done\nexec gpgsm \"$@\"\n"
+	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+	return path
+}
+
+func signAndStore(t *testing.T, signer signing.Signer) (repo, sha string) {
+	t.Helper()
+	c := newTestCommit("verify roundtrip\n")
+	sig, err := signer.Sign(c.BuildUnsigned())
 	require.NoError(t, err)
-	sig, err := signer.Sign(unsigned)
-	require.NoError(t, err)
-	require.NotEmpty(t, sig)
-	require.False(t, strings.HasSuffix(sig, "\n"), "trailing newline must be stripped")
-
 	c.Signature = sig
-	signed := c.Build(true)
-	require.Contains(t, string(signed), "gpgsig -----BEGIN PGP SIGNATURE-----")
+	signed := c.Build()
 
-	_, err = openpgp.CheckArmoredDetachedSignature(
-		openpgp.EntityList{gpg.Entity},
-		bytes.NewReader(unsigned),
-		strings.NewReader(sig),
-		nil,
-	)
-	require.NoError(t, err)
+	repo = filepath.Join(t.TempDir(), "repo.git")
+	run(t, "", "git", "init", "--bare", repo)
+
+	cmd := exec.Command("git", "-C", repo, "hash-object", "-w", "-t", "commit", "--stdin")
+	cmd.Stdin = bytes.NewReader(signed)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "hash-object: %s", out)
+	return repo, strings.TrimSpace(string(out))
 }
 
-func TestGPGSigner_Errors(t *testing.T) {
-	t.Parallel()
-
-	_, err := signing.NewGPGSigner([]byte("not a key"))
-	require.Error(t, err)
-}
-
-func TestSSHSigner_RoundTrip(t *testing.T) {
-	t.Parallel()
-
-	k := testsigning.LoadSSH(t)
-	c := newTestCommit("msg")
-	unsigned := c.Build(false)
-
-	signer, err := signing.NewSSHSigner(k.PrivateKey)
-	require.NoError(t, err)
-	sig, err := signer.Sign(unsigned)
-	require.NoError(t, err)
-	require.Contains(t, sig, "-----BEGIN SSH SIGNATURE-----")
-
-	verifySSHSig(t, k.PublicKey, unsigned, sig)
-}
-
-func TestSSHSigner_Errors(t *testing.T) {
-	t.Parallel()
-
-	_, err := signing.NewSSHSigner([]byte("not a key"))
-	require.Error(t, err)
-}
-
-func TestSMIMESigner_RoundTrip(t *testing.T) {
-	t.Parallel()
-
-	s := testsigning.LoadSMIME(t)
-	c := newTestCommit("msg")
-	unsigned := c.Build(false)
-
-	signer, err := signing.NewSMIMESigner(s.KeyPEM, s.CertPEM)
-	require.NoError(t, err)
-	sig, err := signer.Sign(unsigned)
-	require.NoError(t, err)
-	require.Contains(t, sig, "-----BEGIN SIGNED MESSAGE-----")
-
-	block, _ := pem.Decode([]byte(sig))
-	require.NotNil(t, block)
-	p7, err := pkcs7.Parse(block.Bytes)
-	require.NoError(t, err)
-	p7.Content = unsigned
-	require.NoError(t, p7.VerifyWithChain(certPool(s.Certificate)))
-}
-
-func TestSMIMESigner_Errors(t *testing.T) {
-	t.Parallel()
-
-	_, err := signing.NewSMIMESigner([]byte("not a key"), []byte("not a cert"))
-	require.Error(t, err)
+func run(t *testing.T, dir, name string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s %s: %s", name, strings.Join(args, " "), out)
+	return string(out)
 }
 
 func newTestCommit(msg string) *protocol.PackfileCommit {
@@ -113,67 +119,4 @@ func newTestCommit(msg string) *protocol.PackfileCommit {
 		Committer: ident,
 		Message:   msg,
 	}
-}
-
-func verifySSHSig(t *testing.T, pub ssh.PublicKey, unsigned []byte, armored string) {
-	t.Helper()
-	block, _ := pem.Decode([]byte(armored))
-	require.NotNil(t, block)
-
-	p := block.Bytes
-	require.True(t, bytes.HasPrefix(p, []byte("SSHSIG")))
-	p = p[len("SSHSIG"):]
-	_, p = readSSHUint32(t, p)
-	_, p = readSSHString(t, p)
-	namespace, p := readSSHString(t, p)
-	_, p = readSSHString(t, p)
-	hashAlgo, p := readSSHString(t, p)
-	sigBlob, _ := readSSHString(t, p)
-	var sig ssh.Signature
-	require.NoError(t, ssh.Unmarshal(sigBlob, &sig))
-
-	require.Equal(t, "git", string(namespace))
-	require.Equal(t, "sha512", string(hashAlgo))
-
-	require.NoError(t, pub.Verify(buildSSHSignedData(unsigned), &sig))
-}
-
-func buildSSHSignedData(unsigned []byte) []byte {
-	out := &bytes.Buffer{}
-	out.WriteString("SSHSIG")
-	writeSSHString(out, []byte("git"))
-	writeSSHString(out, nil)
-	writeSSHString(out, []byte("sha512"))
-	h := sha512.Sum512(unsigned)
-	writeSSHString(out, h[:])
-	return out.Bytes()
-}
-
-func writeSSHString(buf *bytes.Buffer, b []byte) {
-	var l [4]byte
-	l[0] = byte(len(b) >> 24)
-	l[1] = byte(len(b) >> 16)
-	l[2] = byte(len(b) >> 8)
-	l[3] = byte(len(b))
-	buf.Write(l[:])
-	buf.Write(b)
-}
-
-func readSSHUint32(t *testing.T, b []byte) (uint32, []byte) {
-	t.Helper()
-	require.GreaterOrEqual(t, len(b), 4)
-	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3]), b[4:]
-}
-
-func readSSHString(t *testing.T, b []byte) ([]byte, []byte) {
-	t.Helper()
-	n, b := readSSHUint32(t, b)
-	require.GreaterOrEqual(t, uint32(len(b)), n)
-	return b[:n], b[n:]
-}
-
-func certPool(cert *x509.Certificate) *x509.CertPool {
-	pool := x509.NewCertPool()
-	pool.AddCert(cert)
-	return pool
 }

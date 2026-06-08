@@ -418,7 +418,19 @@ type PackfileCommit struct {
 	Fields map[string][]byte
 }
 
-func (c *PackfileCommit) Build(includeSig bool) []byte {
+// Build returns the canonical commit object, including the gpgsig header
+// when a signature is present.
+func (c *PackfileCommit) Build() []byte {
+	return c.build(true)
+}
+
+// BuildUnsigned returns the commit object without the gpgsig header,
+// i.e. the payload that gets signed.
+func (c *PackfileCommit) BuildUnsigned() []byte {
+	return c.build(false)
+}
+
+func (c *PackfileCommit) build(includeSig bool) []byte {
 	var data bytes.Buffer
 	fmt.Fprintf(&data, "tree %s\n", c.Tree.String())
 	if !c.Parent.Is(hash.Zero) {
@@ -1039,14 +1051,14 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 		Message:   message,
 	}
 	if signer != nil && c.Signature == "" {
-		unsignedBytes := c.Build( /*includeSig=*/ false)
+		unsignedBytes := c.BuildUnsigned()
 		sig, err := signer.Sign(unsignedBytes)
 		if err != nil {
 			return hash.Hash{}, fmt.Errorf("sign commit: %w", err)
 		}
 		c.Signature = sig
 	}
-	out := c.Build( /*includeSig=*/ true)
+	out := c.Build()
 
 	// Compute hash immediately
 	h, err := Object(w.algo, ObjectTypeCommit, out)
