@@ -8,11 +8,17 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"testing"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"golang.org/x/crypto/ssh"
 )
+
+// TestingT is the subset of testing.TB used to load fixtures. It is satisfied
+// by both *testing.T and Ginkgo's GinkgoT().
+type TestingT interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
 
 type GPG struct {
 	Entity        *openpgp.Entity
@@ -36,7 +42,7 @@ type SMIME struct {
 	KeyPath     string
 }
 
-func LoadGPG(t testing.TB) *GPG {
+func LoadGPG(t TestingT) *GPG {
 	t.Helper()
 	armoredKey := read(t, "gpg.key.asc")
 	entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredKey))
@@ -54,7 +60,7 @@ func LoadGPG(t testing.TB) *GPG {
 	}
 }
 
-func LoadSSH(t testing.TB) *SSH {
+func LoadSSH(t TestingT) *SSH {
 	t.Helper()
 	pubLine := read(t, "ssh.ed25519.pub")
 	pub, _, _, _, err := ssh.ParseAuthorizedKey(pubLine)
@@ -69,7 +75,7 @@ func LoadSSH(t testing.TB) *SSH {
 	}
 }
 
-func LoadSMIME(t testing.TB) *SMIME {
+func LoadSMIME(t TestingT) *SMIME {
 	t.Helper()
 	certPEM := read(t, "smime.cert.pem")
 	block, _ := pem.Decode(certPEM)
@@ -90,7 +96,7 @@ func LoadSMIME(t testing.TB) *SMIME {
 	}
 }
 
-func read(t testing.TB, name string) []byte {
+func read(t TestingT, name string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(fixturePath(name))
 	if err != nil {

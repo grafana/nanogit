@@ -1,4 +1,4 @@
-package integration_test
+package signing_test
 
 import (
 	"bytes"
@@ -19,11 +19,7 @@ import (
 
 const signerEmail = "signer@test.invalid"
 
-func TestSignLocalVerify(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping local git verify in short mode")
-	}
-
+func TestVerifyWithGit(t *testing.T) {
 	t.Run("gpg", func(t *testing.T) {
 		requireBins(t, "git", "gpg")
 		gpg := testsigning.LoadGPG(t)

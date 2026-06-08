@@ -1,132 +1,59 @@
 package integration_test
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol/signing/testsigning"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestSignGiteaVerify_GPG(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping gitea verify in short mode")
-	}
+var _ = Describe("Commit Signing Verification", func() {
+	It("reports a GPG-signed commit as verified", func() {
+		const signerEmail = "signer@test.invalid"
 
-	ctx := t.Context()
-	server, err := gittest.NewServer(ctx)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = server.Cleanup() })
+		gpg := testsigning.LoadGPG(GinkgoT())
 
-	user, err := server.CreateUser(ctx)
-	require.NoError(t, err)
-	user.Token, err = server.CreateToken(ctx, user.Username)
-	require.NoError(t, err)
+		user, err := gitServer.CreateUser(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		user.Token, err = gitServer.CreateToken(ctx, user.Username)
+		Expect(err).NotTo(HaveOccurred())
 
-	gpg := testsigning.LoadGPG(t)
-	setUserPrimaryEmail(t, server.URL(), user, signerEmail)
-	uploadGPGKey(t, server.URL(), user.Token, gpg.ArmoredPublic)
+		Expect(gitServer.SetUserPrimaryEmail(ctx, user, signerEmail)).To(Succeed())
+		Expect(gitServer.UploadGPGKey(ctx, user.Token, gpg.ArmoredPublic)).To(Succeed())
 
-	repo, err := server.CreateRepo(ctx, "signing-verify", user)
-	require.NoError(t, err)
-	local, err := gittest.NewLocalRepo(ctx)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = local.Cleanup() })
-	conn, err := local.InitWithRemote(user, repo)
-	require.NoError(t, err)
+		repo, err := gitServer.CreateRepo(ctx, gittest.RandomRepoName(), user)
+		Expect(err).NotTo(HaveOccurred())
+		local, err := gittest.NewLocalRepo(ctx, gittest.WithRepoLogger(logger))
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(func() { Expect(local.Cleanup()).To(Succeed()) })
+		connInfo, err := local.InitWithRemote(user, repo)
+		Expect(err).NotTo(HaveOccurred())
 
-	client, err := nanogit.NewHTTPClient(conn.URL,
-		options.WithBasicAuth(conn.Username, conn.Password))
-	require.NoError(t, err)
-	ref, err := client.GetRef(ctx, "refs/heads/main")
-	require.NoError(t, err)
+		client, err := nanogit.NewHTTPClient(connInfo.URL,
+			options.WithBasicAuth(connInfo.Username, connInfo.Password))
+		Expect(err).NotTo(HaveOccurred())
+		ref, err := client.GetRef(ctx, "refs/heads/main")
+		Expect(err).NotTo(HaveOccurred())
 
-	writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithGPGSigner(gpg.ArmoredKey))
-	require.NoError(t, err)
-	_, err = writer.CreateBlob(ctx, "sign-test.txt", []byte("hi"))
-	require.NoError(t, err)
-	when := time.Now()
-	ident := nanogit.Author{Name: "Nanogit Signer", Email: signerEmail, Time: when}
-	commit, err := writer.Commit(ctx, "signed commit\n", ident,
-		nanogit.Committer{Name: ident.Name, Email: ident.Email, Time: when})
-	require.NoError(t, err)
-	require.NoError(t, writer.Push(ctx))
+		writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithGPGSigner(gpg.ArmoredKey))
+		Expect(err).NotTo(HaveOccurred())
+		_, err = writer.CreateBlob(ctx, "sign-test.txt", []byte("hi"))
+		Expect(err).NotTo(HaveOccurred())
+		when := time.Now()
+		ident := nanogit.Author{Name: "Nanogit Signer", Email: signerEmail, Time: when}
+		commit, err := writer.Commit(ctx, "signed commit\n", ident,
+			nanogit.Committer{Name: ident.Name, Email: ident.Email, Time: when})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(writer.Push(ctx)).To(Succeed())
 
-	verified, reason := giteaCommitVerification(t, server.URL(), user.Token,
-		user.Username, repo.Name, commit.Hash.String())
-	require.True(t, verified, "Gitea reported the commit as unverified (reason: %q)", reason)
-}
-
-func setUserPrimaryEmail(t *testing.T, baseURL string, user *gittest.User, email string) {
-	t.Helper()
-	body, err := json.Marshal(map[string]any{
-		"email":      email,
-		"source_id":  0,
-		"login_name": user.Username,
+		verified, reason, err := gitServer.CommitVerification(ctx, user.Token,
+			user.Username, repo.Name, commit.Hash.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(verified).To(BeTrue(), "Gitea reported the commit as unverified (reason: %q)", reason)
 	})
-	require.NoError(t, err)
-	req, err := http.NewRequestWithContext(t.Context(), "PATCH",
-		baseURL+"/api/v1/admin/users/"+user.Username, bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(user.Username, user.Password)
-	doOK(t, req, "set primary email")
-	user.Email = email
-}
-
-func uploadGPGKey(t *testing.T, baseURL, token string, armoredPublic []byte) {
-	t.Helper()
-	body, err := json.Marshal(map[string]string{"armored_public_key": string(armoredPublic)})
-	require.NoError(t, err)
-	req, err := http.NewRequestWithContext(t.Context(), "POST", baseURL+"/api/v1/user/gpg_keys", bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", token)
-	doOK(t, req, "upload gpg key")
-}
-
-func giteaCommitVerification(t *testing.T, baseURL, token, owner, repo, sha string) (bool, string) {
-	t.Helper()
-	url := fmt.Sprintf("%s/api/v1/repos/%s/%s/git/commits/%s?verification=true", baseURL, owner, repo, sha)
-	req, err := http.NewRequestWithContext(t.Context(), "GET", url, nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", token)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode, "gitea commit lookup: %s", body)
-
-	var got struct {
-		Commit struct {
-			Verification struct {
-				Verified bool   `json:"verified"`
-				Reason   string `json:"reason"`
-			} `json:"verification"`
-		} `json:"commit"`
-	}
-	require.NoError(t, json.Unmarshal(body, &got))
-	return got.Commit.Verification.Verified, got.Commit.Verification.Reason
-}
-
-func doOK(t *testing.T, req *http.Request, what string) {
-	t.Helper()
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		out, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		t.Fatalf("%s: %s: %s", what, resp.Status, out)
-	}
-}
+})
