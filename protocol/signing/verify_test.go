@@ -28,7 +28,9 @@ func TestVerifyWithGit(t *testing.T) {
 		repo, sha := signAndStore(t, signer)
 
 		t.Setenv("GNUPGHOME", t.TempDir())
-		run(t, "", "gpg", "--batch", "--import", gpg.KeyPath)
+		pub := filepath.Join(t.TempDir(), "gpg.pub.asc")
+		require.NoError(t, os.WriteFile(pub, gpg.ArmoredPublic, 0o644))
+		run(t, "", "gpg", "--batch", "--import", pub)
 		out := run(t, repo, "git", "verify-commit", "--raw", sha)
 		require.Contains(t, out, "GOODSIG")
 	})
