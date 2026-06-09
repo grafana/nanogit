@@ -10,6 +10,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var _ Signer = (*sshSigner)(nil)
+
 // NewSSHSigner signs with an unencrypted OpenSSH or PEM private key. The key is
 // parsed once here and reused for every Sign call.
 func NewSSHSigner(privateKey []byte) (Signer, error) {

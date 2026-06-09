@@ -8,6 +8,8 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
+var _ Signer = (*gpgSigner)(nil)
+
 // NewGPGSigner signs with an unencrypted armored OpenPGP private key. The key is
 // parsed once here and reused for every Sign call.
 func NewGPGSigner(armoredKey []byte) (Signer, error) {

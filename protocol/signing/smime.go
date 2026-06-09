@@ -9,6 +9,8 @@ import (
 	"github.com/smallstep/pkcs7"
 )
 
+var _ Signer = (*smimeSigner)(nil)
+
 // NewSMIMESigner signs with a PEM-encoded S/MIME (X.509) key and certificate.
 // Both are parsed once here and reused for every Sign call.
 func NewSMIMESigner(privateKey, certificate []byte) (Signer, error) {
