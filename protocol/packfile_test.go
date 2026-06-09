@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -323,3 +324,81 @@ func TestParseCommit_GPGSig(t *testing.T) {
 	require.Equal(t, "a@b", obj.Commit.Author.Email)
 	require.Empty(t, obj.Commit.Fields)
 }
+
+func TestPackfileCommit_Build(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+
+	t.Run("omits parent when zero", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n"}
+		require.NotContains(t, string(c.Build()), "parent ")
+	})
+
+	t.Run("includes parent when set", func(t *testing.T) {
+		t.Parallel()
+		parent := hash.MustFromHex("1234567890123456789012345678901234567890")
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: parent, Author: ident, Committer: ident, Message: "m\n"}
+		require.Contains(t, string(c.Build()), "parent "+parent.String()+"\n")
+	})
+
+	t.Run("folds multi-line gpgsig with leading space", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n", Signature: "line1\nline2"}
+		require.Contains(t, string(c.Build()), "gpgsig line1\n line2\n")
+	})
+
+	t.Run("BuildUnsigned drops gpgsig", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n", Signature: "sig"}
+		require.NotContains(t, string(c.BuildUnsigned()), "gpgsig")
+		require.Contains(t, string(c.Build()), "gpgsig")
+	})
+}
+
+func TestAddCommit_Signing(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+
+	t.Run("nil signer leaves commit unsigned", func(t *testing.T) {
+		t.Parallel()
+		w := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+		h, err := w.AddCommit(hash.Zero, hash.Zero, ident, ident, "m\n", nil)
+		require.NoError(t, err)
+
+		want := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n"}
+		wantHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeCommit, want.Build())
+		require.NoError(t, err)
+		require.Equal(t, wantHash, h)
+	})
+
+	t.Run("signer embeds signature in hash", func(t *testing.T) {
+		t.Parallel()
+		w := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+		h, err := w.AddCommit(hash.Zero, hash.Zero, ident, ident, "m\n", fakeSigner{sig: "fake-sig"})
+		require.NoError(t, err)
+
+		want := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n", Signature: "fake-sig"}
+		wantHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeCommit, want.Build())
+		require.NoError(t, err)
+		require.Equal(t, wantHash, h)
+	})
+
+	t.Run("propagates signer error", func(t *testing.T) {
+		t.Parallel()
+		w := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+		_, err := w.AddCommit(hash.Zero, hash.Zero, ident, ident, "m\n", fakeSigner{err: errFakeSign})
+		require.ErrorIs(t, err, errFakeSign)
+	})
+}
+
+var errFakeSign = errors.New("fake sign error")
+
+type fakeSigner struct {
+	sig string
+	err error
+}
+
+func (f fakeSigner) Sign([]byte) (string, error) { return f.sig, f.err }
