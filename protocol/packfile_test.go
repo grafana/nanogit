@@ -302,27 +302,49 @@ func TestBuildTreeObject_GitlinkSortsAsFile(t *testing.T) {
 		"gitlink (mode 0o160000) must sort as a file, not as a directory")
 }
 
-func TestParseCommit_GPGSig(t *testing.T) {
+func TestParseCommit_Signature(t *testing.T) {
 	t.Parallel()
 
 	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
-	signature := "-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQ\nABCDEFGH123456\n-----END PGP SIGNATURE-----"
-	c := &protocol.PackfileCommit{
-		Tree:      hash.Zero,
-		Parent:    hash.Zero,
-		Author:    ident,
-		Committer: ident,
-		Message:   "signed commit\n",
-		Signature: signature,
-	}
 
-	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
-	require.NoError(t, obj.Parse())
+	t.Run("round-trips a multi-line gpgsig", func(t *testing.T) {
+		t.Parallel()
+		signature := "-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQ\nABCDEFGH123456\n-----END PGP SIGNATURE-----"
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "signed commit\n", Signature: signature}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, signature, obj.Commit.Signature)
+		require.Equal(t, "signed commit\n", obj.Commit.Message)
+		require.Equal(t, "a@b", obj.Commit.Author.Email)
+		require.Empty(t, obj.Commit.Fields)
+	})
 
-	require.Equal(t, signature, obj.Commit.Signature)
-	require.Equal(t, "signed commit\n", obj.Commit.Message)
-	require.Equal(t, "a@b", obj.Commit.Author.Email)
-	require.Empty(t, obj.Commit.Fields)
+	t.Run("unsigned commit has empty signature", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "no sig\n"}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Empty(t, obj.Commit.Signature)
+		require.Equal(t, "no sig\n", obj.Commit.Message)
+	})
+
+	t.Run("gpgsig coexists with other headers", func(t *testing.T) {
+		t.Parallel()
+		raw := "tree " + hash.Zero.String() + "\n" +
+			"author " + ident.String() + "\n" +
+			"committer " + ident.String() + "\n" +
+			"encoding UTF-8\n" +
+			"gpgsig -----BEGIN SSH SIGNATURE-----\n" +
+			" AAAAlinetwo\n" +
+			" -----END SSH SIGNATURE-----\n" +
+			"\n" +
+			"body\n"
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: []byte(raw)}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, "-----BEGIN SSH SIGNATURE-----\nAAAAlinetwo\n-----END SSH SIGNATURE-----", obj.Commit.Signature)
+		require.Equal(t, []byte("UTF-8"), obj.Commit.Fields["encoding"])
+		require.Equal(t, "body\n", obj.Commit.Message)
+	})
 }
 
 func TestPackfileCommit_Build(t *testing.T) {
