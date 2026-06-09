@@ -106,10 +106,11 @@ func newRepo(repoName string, user *User, host, port string) *RemoteRepository {
 
 // Config holds configuration for test utilities.
 type Config struct {
-	Logger       Logger
-	StartTimeout time.Duration
-	GiteaImage   string
-	GiteaVersion string
+	Logger         Logger
+	StartTimeout   time.Duration
+	GiteaImage     string
+	GiteaVersion   string
+	TrustedSSHKeys []string
 }
 
 // defaultConfig returns a Config with sensible defaults.
@@ -118,6 +119,6 @@ func defaultConfig() *Config {
 		Logger:       NoopLogger(),
 		StartTimeout: 30 * time.Second,
 		GiteaImage:   "gitea/gitea",
-		GiteaVersion: "1.22", // Pinned to stable version to prevent supply chain attacks
+		GiteaVersion: "1.26", // Pinned to stable version to prevent supply chain attacks
 	}
 }

@@ -19,7 +19,7 @@ func TestSSHSignerVerify(t *testing.T) {
 
 	allowed := filepath.Join(t.TempDir(), "allowed_signers")
 	require.NoError(t, os.WriteFile(allowed,
-		[]byte("signer@test.invalid namespaces=\"git\" "+string(k.PublicLine)), 0o644))
+		[]byte(testsigning.SignerEmail+" namespaces=\"git\" "+string(k.PublicLine)), 0o644))
 	out := run(t, repo, "git",
 		"-c", "gpg.format=ssh",
 		"-c", "gpg.ssh.allowedSignersFile="+allowed,

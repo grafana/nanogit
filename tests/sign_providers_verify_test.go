@@ -17,6 +17,7 @@ import (
 
 	"github.com/grafana/nanogit"
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 )
 
 const (
@@ -154,7 +155,7 @@ func (s *signTest) push(t *testing.T, opt nanogit.WriterOption) string {
 	_, err = writer.CreateBlob(ctx, fmt.Sprintf("sign-test-%s.txt", t.Name()), []byte(t.Name()))
 	require.NoError(t, err)
 	when := time.Now()
-	ident := nanogit.Author{Name: "Nanogit Signer", Email: s.Email, Time: when}
+	ident := nanogit.Author{Name: testsigning.SignerName, Email: s.Email, Time: when}
 	commit, err := writer.Commit(ctx, fmt.Sprintf("signed commit (%s)\n", t.Name()), ident,
 		nanogit.Committer{Name: ident.Name, Email: ident.Email, Time: when})
 	require.NoError(t, err)

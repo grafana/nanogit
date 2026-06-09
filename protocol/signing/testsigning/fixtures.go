@@ -7,6 +7,13 @@ import (
 	"runtime"
 )
 
+// SignerName and SignerEmail are the identity embedded in every signing
+// fixture (GPG UID, S/MIME subject, SSH key comment).
+const (
+	SignerName  = "Nanogit Signer"
+	SignerEmail = "nanogit@grafana.test"
+)
+
 // TestingT is the subset of testing.TB used to load fixtures. It is satisfied
 // by both *testing.T and Ginkgo's GinkgoT().
 type TestingT interface {

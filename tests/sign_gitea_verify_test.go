@@ -13,16 +13,13 @@ import (
 )
 
 var _ = Describe("Commit Signing Verification", func() {
-	const signerEmail = "signer@test.invalid"
-
-	verifySignedCommit := func(signer nanogit.WriterOption, uploadKey func(token string)) {
+	verifySignedCommit := func(signer nanogit.WriterOption, setup func(user *gittest.User)) {
 		user, err := gitServer.CreateUser(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		user.Token, err = gitServer.CreateToken(ctx, user.Username)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(gitServer.SetUserPrimaryEmail(ctx, user, signerEmail)).To(Succeed())
-		uploadKey(user.Token)
+		setup(user)
 
 		repo, err := gitServer.CreateRepo(ctx, gittest.RandomRepoName(), user)
 		Expect(err).NotTo(HaveOccurred())
@@ -43,7 +40,7 @@ var _ = Describe("Commit Signing Verification", func() {
 		_, err = writer.CreateBlob(ctx, "sign-test.txt", []byte("hi"))
 		Expect(err).NotTo(HaveOccurred())
 		when := time.Now()
-		ident := nanogit.Author{Name: "Nanogit Signer", Email: signerEmail, Time: when}
+		ident := nanogit.Author{Name: testsigning.SignerName, Email: testsigning.SignerEmail, Time: when}
 		commit, err := writer.Commit(ctx, "signed commit\n", ident,
 			nanogit.Committer{Name: ident.Name, Email: ident.Email, Time: when})
 		Expect(err).NotTo(HaveOccurred())
@@ -57,15 +54,14 @@ var _ = Describe("Commit Signing Verification", func() {
 
 	It("reports a GPG-signed commit as verified", func() {
 		gpg := testsigning.LoadGPG(GinkgoT())
-		verifySignedCommit(nanogit.WithGPGSigner(gpg.ArmoredKey), func(token string) {
-			Expect(gitServer.UploadGPGKey(ctx, token, gpg.ArmoredPublic)).To(Succeed())
+		verifySignedCommit(nanogit.WithGPGSigner(gpg.ArmoredKey), func(user *gittest.User) {
+			Expect(gitServer.SetUserPrimaryEmail(ctx, user, testsigning.SignerEmail)).To(Succeed())
+			Expect(gitServer.UploadGPGKey(ctx, user.Token, gpg.ArmoredPublic)).To(Succeed())
 		})
 	})
 
 	It("reports an SSH-signed commit as verified", func() {
 		ssh := testsigning.LoadSSH(GinkgoT())
-		verifySignedCommit(nanogit.WithSSHSigner(ssh.PrivateKey), func(token string) {
-			Expect(gitServer.UploadSSHKey(ctx, token, ssh.PublicLine)).To(Succeed())
-		})
+		verifySignedCommit(nanogit.WithSSHSigner(ssh.PrivateKey), func(user *gittest.User) {})
 	})
 })
