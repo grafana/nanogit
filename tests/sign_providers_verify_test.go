@@ -135,7 +135,9 @@ func TestSignProvidersVerify(t *testing.T) {
 			return
 		}
 		v := s.getVerification(t, sha)
-		// Verified is not asserted: our test cert is self-signed, so providers report it untrusted.
+		// Only the signature type is asserted, not Verified: S/MIME verification requires a cert
+		// chaining to a CA in the provider's trust store (GitHub uses the Mozilla/Debian roots).
+		// Our test cert is self-signed, so the commit signs fine but providers mark it untrusted.
 		require.Equal(t, sigX509, v.Type)
 	})
 }
