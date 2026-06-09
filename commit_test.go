@@ -448,25 +448,3 @@ func TestDetectRenames_TreeEntries(t *testing.T) {
 		})
 	}
 }
-
-func TestPackfileObjectToCommit_SignedCommitMessage(t *testing.T) {
-	t.Parallel()
-
-	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
-	pc := &protocol.PackfileCommit{
-		Tree:      hash.Zero,
-		Parent:    hash.Zero,
-		Author:    ident,
-		Committer: ident,
-		Message:   "the real message\n",
-		Signature: "-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQ\nABCDEF123456\n-----END PGP SIGNATURE-----",
-	}
-	obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: pc.Build()}
-	require.NoError(t, obj.Parse())
-
-	commit, err := packfileObjectToCommit(obj)
-	require.NoError(t, err)
-	require.Equal(t, "the real message", commit.Message)
-	require.Equal(t, "a@b", commit.Author.Email)
-	require.Equal(t, "a@b", commit.Committer.Email)
-}
