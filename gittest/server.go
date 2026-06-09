@@ -117,6 +117,8 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 	// Build environment variables
 	env := map[string]string{
 		"GITEA__database__DB_TYPE":                "sqlite3",
+		"GITEA__database__SQLITE_JOURNAL_MODE":    "WAL",
+		"GITEA__database__SQLITE_TIMEOUT":         "10000",
 		"GITEA__server__ROOT_URL":                 "http://localhost:3000/",
 		"GITEA__server__HTTP_PORT":                "3000",
 		"GITEA__service__DISABLE_REGISTRATION":    "true",
