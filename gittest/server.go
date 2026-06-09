@@ -448,6 +448,27 @@ func (s *Server) UploadGPGKey(ctx context.Context, token string, armoredPublic [
 	return doOK(req, "upload gpg key")
 }
 
+// UploadSSHKey uploads a public SSH key to the authenticated user's account,
+// which Gitea uses to verify SSH-signed commits.
+func (s *Server) UploadSSHKey(ctx context.Context, token string, publicKey []byte) error {
+	body, err := json.Marshal(map[string]string{
+		"title": "nanogit-signing-key",
+		"key":   strings.TrimSpace(string(publicKey)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", s.URL()+"/api/v1/user/keys", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", token)
+
+	return doOK(req, "upload ssh key")
+}
+
 // CommitVerification reports whether the given commit is verified by the server,
 // along with the reason the server provides.
 func (s *Server) CommitVerification(ctx context.Context, token, owner, repo, sha string) (bool, string, error) {

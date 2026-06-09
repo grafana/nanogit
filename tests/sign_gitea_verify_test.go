@@ -13,18 +13,16 @@ import (
 )
 
 var _ = Describe("Commit Signing Verification", func() {
-	It("reports a GPG-signed commit as verified", func() {
-		const signerEmail = "signer@test.invalid"
+	const signerEmail = "signer@test.invalid"
 
-		gpg := testsigning.LoadGPG(GinkgoT())
-
+	verifySignedCommit := func(signer nanogit.WriterOption, uploadKey func(token string)) {
 		user, err := gitServer.CreateUser(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		user.Token, err = gitServer.CreateToken(ctx, user.Username)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(gitServer.SetUserPrimaryEmail(ctx, user, signerEmail)).To(Succeed())
-		Expect(gitServer.UploadGPGKey(ctx, user.Token, gpg.ArmoredPublic)).To(Succeed())
+		uploadKey(user.Token)
 
 		repo, err := gitServer.CreateRepo(ctx, gittest.RandomRepoName(), user)
 		Expect(err).NotTo(HaveOccurred())
@@ -40,7 +38,7 @@ var _ = Describe("Commit Signing Verification", func() {
 		ref, err := client.GetRef(ctx, "refs/heads/main")
 		Expect(err).NotTo(HaveOccurred())
 
-		writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithGPGSigner(gpg.ArmoredKey))
+		writer, err := client.NewStagedWriter(ctx, ref, signer)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = writer.CreateBlob(ctx, "sign-test.txt", []byte("hi"))
 		Expect(err).NotTo(HaveOccurred())
@@ -55,5 +53,19 @@ var _ = Describe("Commit Signing Verification", func() {
 			user.Username, repo.Name, commit.Hash.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(verified).To(BeTrue(), "Gitea reported the commit as unverified (reason: %q)", reason)
+	}
+
+	It("reports a GPG-signed commit as verified", func() {
+		gpg := testsigning.LoadGPG(GinkgoT())
+		verifySignedCommit(nanogit.WithGPGSigner(gpg.ArmoredKey), func(token string) {
+			Expect(gitServer.UploadGPGKey(ctx, token, gpg.ArmoredPublic)).To(Succeed())
+		})
+	})
+
+	It("reports an SSH-signed commit as verified", func() {
+		ssh := testsigning.LoadSSH(GinkgoT())
+		verifySignedCommit(nanogit.WithSSHSigner(ssh.PrivateKey), func(token string) {
+			Expect(gitServer.UploadSSHKey(ctx, token, ssh.PublicLine)).To(Succeed())
+		})
 	})
 })
