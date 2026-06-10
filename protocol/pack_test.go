@@ -823,6 +823,117 @@ func TestParsePackNewErrorTypes(t *testing.T) {
 	})
 }
 
+func TestParserRejectsOversizedPktLine(t *testing.T) {
+	t.Parallel()
+
+	// trackingReader records how many bytes were actually read so we can
+	// assert that the parser did NOT pull the (fake) 65535-byte payload
+	// into memory after rejecting the length header.
+	type trackingReader struct {
+		buf  *bytes.Buffer
+		read int
+	}
+
+	readWith := func(payloadSize int, hexLen string) (int, error) {
+		t.Helper()
+		// 4-byte hex length, no body — readPacketLength only reads the
+		// header, and we want to confirm the parser bails before trying
+		// to read any payload bytes.
+		buf := bytes.NewBuffer([]byte(hexLen))
+		// Pad with arbitrary garbage to simulate a body the parser must
+		// NOT consume.
+		buf.Write(bytes.Repeat([]byte{'x'}, payloadSize))
+		tr := &trackingReader{buf: buf}
+		reader := readerFunc(func(p []byte) (int, error) {
+			n, err := tr.buf.Read(p)
+			tr.read += n
+			return n, err
+		})
+		parser := protocol.NewParser(reader)
+		_, err := parser.Next()
+		return tr.read, err
+	}
+
+	t.Run("length 65521 is rejected (just over the cap)", func(t *testing.T) {
+		// 0xFFF1 = 65521, one above MaxPktLineSize (65520).
+		bytesRead, err := readWith(100, "fff1")
+		require.Error(t, err)
+
+		var tooLarge *protocol.ErrPktLineTooLarge
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, uint64(65521), tooLarge.Length)
+		require.Equal(t, uint64(protocol.MaxPktLineSize), tooLarge.Max)
+
+		// errors.Is should match the sentinel.
+		require.True(t, errors.Is(err, protocol.ErrPktLineTooLargeSentinel))
+
+		// Crucially, the parser must not have read any payload bytes.
+		require.Equal(t, 4, bytesRead, "parser should bail after the 4-byte length header")
+	})
+
+	t.Run("length 65535 is rejected (max representable)", func(t *testing.T) {
+		bytesRead, err := readWith(100, "ffff")
+		require.Error(t, err)
+
+		var tooLarge *protocol.ErrPktLineTooLarge
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, uint64(65535), tooLarge.Length)
+
+		require.Equal(t, 4, bytesRead)
+	})
+
+	t.Run("length 65520 is accepted (exactly at the cap)", func(t *testing.T) {
+		// Build a real well-formed packet of length 65520 and ensure it
+		// parses without triggering the new check.
+		payload := bytes.Repeat([]byte{'a'}, protocol.MaxPktLineDataSize)
+		hdr := fmt.Sprintf("%04x", protocol.MaxPktLineSize)
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString(hdr)
+		buf.Write(payload)
+
+		parser := protocol.NewParser(buf)
+		got, err := parser.Next()
+		require.NoError(t, err)
+		require.Equal(t, payload, got)
+	})
+}
+
+// readerFunc adapts a function into an io.Reader for use in tests.
+type readerFunc func(p []byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
+
+func TestErrPktLineTooLarge(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Error formats length and max", func(t *testing.T) {
+		// Pin the exact stringification: operators read this in logs
+		// and pre-existing alerting rules may match the prefix.
+		e := &protocol.ErrPktLineTooLarge{Length: 70000, Max: protocol.MaxPktLineSize}
+		require.Equal(t,
+			"pkt-line length 70000 exceeds protocol max 65520",
+			e.Error())
+	})
+
+	t.Run("errors.Is matches the sentinel", func(t *testing.T) {
+		e := &protocol.ErrPktLineTooLarge{Length: 1, Max: 0}
+		require.True(t, errors.Is(e, protocol.ErrPktLineTooLargeSentinel))
+		// Unwrap returns the sentinel.
+		require.Same(t, protocol.ErrPktLineTooLargeSentinel, e.Unwrap())
+	})
+
+	t.Run("errors.As recovers the typed error", func(t *testing.T) {
+		// Wrap once with fmt.Errorf to simulate the path taken when
+		// the parser returns the error and a higher layer adds
+		// context (e.g. fmt.Errorf("parse: %w", err)).
+		wrapped := fmt.Errorf("parse: %w", &protocol.ErrPktLineTooLarge{Length: 99999, Max: 65520})
+		var typed *protocol.ErrPktLineTooLarge
+		require.True(t, errors.As(wrapped, &typed))
+		require.Equal(t, uint64(99999), typed.Length)
+		require.Equal(t, uint64(65520), typed.Max)
+	})
+}
+
 // TestParsePack_UnpackTrailingWhitespace covers bug-fix: "unpack ok\n"
 // and "unpack ok\r\n" (with trailing whitespace permitted by
 // gitprotocol-common) must be accepted as success, not rejected as
