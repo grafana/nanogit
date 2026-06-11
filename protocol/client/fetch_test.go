@@ -2,7 +2,6 @@ package client
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +42,7 @@ func TestFetch_CorruptPackfile(t *testing.T) {
 	want, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
 	require.NoError(t, err)
 
-	_, err = client.Fetch(context.Background(), FetchOptions{Want: []hash.Hash{want}, Done: true})
+	_, err = client.Fetch(t.Context(), FetchOptions{Want: []hash.Hash{want}, Done: true})
 	require.ErrorContains(t, err, "reading packfile object 1")
 	require.ErrorContains(t, err, "zlib: invalid header")
 }

@@ -142,16 +142,16 @@ func TestReadObject_RefDeltaShortRead(t *testing.T) {
 	pack.Write(zlibCompress(t, deltaPayload))                                // zlib stream
 	pack.Write(make([]byte, 20))                                             // trailer checksum
 
-	pr, err := protocol.ParsePackfile(context.Background(), iotest.OneByteReader(bytes.NewReader(pack.Bytes())))
+	pr, err := protocol.ParsePackfile(t.Context(), iotest.OneByteReader(bytes.NewReader(pack.Bytes())))
 	require.NoError(t, err)
 
-	entry, err := pr.ReadObject(context.Background())
+	entry, err := pr.ReadObject(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, entry.Object)
 	require.Equal(t, protocol.ObjectTypeBlob, entry.Object.Type)
 	require.Equal(t, baseHash, entry.Object.Hash)
 
-	entry, err = pr.ReadObject(context.Background())
+	entry, err = pr.ReadObject(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, entry.Object)
 	require.Equal(t, protocol.ObjectTypeRefDelta, entry.Object.Type)
@@ -172,10 +172,10 @@ func TestReadObject_TooLarge(t *testing.T) {
 	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
 	pack.Write(objectHeader(protocol.ObjectTypeBlob, protocol.MaxUnpackedObjectSize+1))
 
-	pr, err := protocol.ParsePackfile(context.Background(), &pack)
+	pr, err := protocol.ParsePackfile(t.Context(), &pack)
 	require.NoError(t, err)
 
-	_, err = pr.ReadObject(context.Background())
+	_, err = pr.ReadObject(t.Context())
 	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
 }
 
