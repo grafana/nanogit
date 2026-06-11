@@ -2,8 +2,10 @@ package protocol_test
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"crypto"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -112,6 +114,52 @@ func TestGolden(t *testing.T) {
 			require.ErrorIs(t, err, io.EOF)
 		})
 	}
+}
+
+func TestReadObject_TooLarge(t *testing.T) {
+	t.Parallel()
+
+	var pack bytes.Buffer
+	pack.WriteString("PACK")
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
+	pack.Write(objectHeader(protocol.ObjectTypeBlob, protocol.MaxUnpackedObjectSize+1))
+
+	pr, err := protocol.ParsePackfile(t.Context(), &pack)
+	require.NoError(t, err)
+
+	_, err = pr.ReadObject(t.Context())
+	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
+}
+
+func TestReadObject_MaxSizeObject(t *testing.T) {
+	t.Parallel()
+
+	bigData := bytes.Repeat([]byte{'a'}, protocol.MaxUnpackedObjectSize)
+	smallData := []byte("hello")
+	smallHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeBlob, smallData)
+	require.NoError(t, err)
+
+	var pack bytes.Buffer
+	pack.WriteString("PACK")
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+	pack.Write(objectHeader(protocol.ObjectTypeBlob, len(bigData)))
+	pack.Write(zlibCompress(t, bigData))
+	pack.Write(objectHeader(protocol.ObjectTypeBlob, len(smallData)))
+	pack.Write(zlibCompress(t, smallData))
+	pack.Write(make([]byte, 20))
+
+	pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(pack.Bytes()))
+	require.NoError(t, err)
+
+	entry, err := pr.ReadObject(t.Context())
+	require.NoError(t, err)
+	require.Len(t, entry.Object.Data, protocol.MaxUnpackedObjectSize)
+
+	entry, err = pr.ReadObject(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, smallHash, entry.Object.Hash)
 }
 
 func loadGolden(t *testing.T, name string) []byte {
@@ -424,3 +472,26 @@ type fakeSigner struct {
 }
 
 func (f fakeSigner) Sign([]byte) (string, error) { return f.sig, f.err }
+
+func objectHeader(objType protocol.ObjectType, size int) []byte {
+	b := byte(objType)<<4 | byte(size&0xF)
+	size >>= 4
+	var out []byte
+	for size > 0 {
+		out = append(out, b|0x80)
+		b = byte(size & 0x7F)
+		size >>= 7
+	}
+	return append(out, b)
+}
+
+func zlibCompress(t *testing.T, data []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zw := zlib.NewWriter(&buf)
+	_, err := zw.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
+}
