@@ -2,13 +2,16 @@ package protocol_test
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"crypto"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
 	"path"
 	"testing"
+	"testing/iotest"
 
 	"github.com/stretchr/testify/require"
 
@@ -112,6 +115,68 @@ func TestGolden(t *testing.T) {
 			require.ErrorIs(t, err, io.EOF)
 		})
 	}
+}
+
+func TestReadObject_RefDeltaShortRead(t *testing.T) {
+	t.Parallel()
+
+	baseData := []byte("some base object data here")
+	baseHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeBlob, baseData)
+	require.NoError(t, err)
+
+	deltaPayload := []byte{
+		byte(len(baseData)), // 1a: source size 26
+		5,                   // 05: target size 5
+		5,                   // 05: insert the next 5 bytes
+		'h', 'e', 'l', 'l', 'o',
+	}
+
+	var pack bytes.Buffer
+	pack.WriteString("PACK")                                                 // 50 41 43 4b
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))     // 00 00 00 02: version 2
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))     // 00 00 00 02: 2 objects
+	pack.Write(objectHeader(protocol.ObjectTypeBlob, len(baseData)))         // ba 01: blob, size 26
+	pack.Write(zlibCompress(t, baseData))                                    // zlib stream
+	pack.Write(objectHeader(protocol.ObjectTypeRefDelta, len(deltaPayload))) // 78: ref-delta, size 8
+	pack.Write(baseHash[:])                                                  // 20-byte base object hash
+	pack.Write(zlibCompress(t, deltaPayload))                                // zlib stream
+	pack.Write(make([]byte, 20))                                             // trailer checksum
+
+	pr, err := protocol.ParsePackfile(context.Background(), iotest.OneByteReader(bytes.NewReader(pack.Bytes())))
+	require.NoError(t, err)
+
+	entry, err := pr.ReadObject(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, entry.Object)
+	require.Equal(t, protocol.ObjectTypeBlob, entry.Object.Type)
+	require.Equal(t, baseHash, entry.Object.Hash)
+
+	entry, err = pr.ReadObject(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, entry.Object)
+	require.Equal(t, protocol.ObjectTypeRefDelta, entry.Object.Type)
+	require.NotNil(t, entry.Object.Delta)
+	require.Equal(t, baseHash.String(), entry.Object.Delta.Parent)
+
+	resolved, err := protocol.ApplyDelta(baseData, entry.Object.Delta)
+	require.NoError(t, err)
+	require.Equal(t, []byte("hello"), resolved)
+}
+
+func TestReadObject_TooLarge(t *testing.T) {
+	t.Parallel()
+
+	var pack bytes.Buffer
+	pack.WriteString("PACK")
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
+	pack.Write(objectHeader(protocol.ObjectTypeBlob, protocol.MaxUnpackedObjectSize+1))
+
+	pr, err := protocol.ParsePackfile(context.Background(), &pack)
+	require.NoError(t, err)
+
+	_, err = pr.ReadObject(context.Background())
+	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
 }
 
 func loadGolden(t *testing.T, name string) []byte {
@@ -424,3 +489,26 @@ type fakeSigner struct {
 }
 
 func (f fakeSigner) Sign([]byte) (string, error) { return f.sig, f.err }
+
+func objectHeader(objType protocol.ObjectType, size int) []byte {
+	b := byte(objType)<<4 | byte(size&0xF)
+	size >>= 4
+	var out []byte
+	for size > 0 {
+		out = append(out, b|0x80)
+		b = byte(size & 0x7F)
+		size >>= 7
+	}
+	return append(out, b)
+}
+
+func zlibCompress(t *testing.T, data []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zw := zlib.NewWriter(&buf)
+	_, err := zw.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
+}

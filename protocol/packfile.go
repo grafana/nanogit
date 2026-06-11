@@ -155,6 +155,7 @@ const (
 	ErrUnsupportedPackfileVersion = strError("the version of the packfile payload is unsupported")
 	ErrUnsupportedObjectType      = strError("the type of the object is unsupported")
 	ErrInflatedDataIncorrectSize  = strError("the data is the wrong size post-inflation")
+	ErrObjectTooLarge             = strError("the object size exceeds the maximum unpacked object size")
 )
 
 // MaxUnpackedObjectSize is the maximum size of an unpacked object.
@@ -562,6 +563,10 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
+	if size < 0 || size > MaxUnpackedObjectSize {
+		return entry, fmt.Errorf("%w (%d bytes)", ErrObjectTooLarge, size)
+	}
+
 	err := p.processObjectByType(entry.Object, size, buf[0])
 	if err != nil {
 		return entry, err
@@ -623,7 +628,7 @@ func (p *PackfileReader) parseObjectContent(obj *PackfileObject) error {
 // processRefDelta handles reference delta objects
 func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	ref := make([]byte, p.algo.Size())
-	if _, err := p.reader.Read(ref); err != nil {
+	if _, err := io.ReadFull(p.reader, ref); err != nil {
 		return err
 	}
 
@@ -662,8 +667,7 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	}
 
 	// TODO(mem): this should be limited to the size the packet says it
-	// carries, and we should limit that size above (i.e. if the packet
-	// says it's carrying a huge amount of data we should bail out).
+	// carries.
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
 
 	// Use pooled buffer if size is reasonable, otherwise allocate directly
