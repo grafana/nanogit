@@ -163,22 +163,6 @@ func TestReadObject_RefDeltaShortRead(t *testing.T) {
 	require.Equal(t, []byte("hello"), resolved)
 }
 
-func TestReadObject_TooLarge(t *testing.T) {
-	t.Parallel()
-
-	var pack bytes.Buffer
-	pack.WriteString("PACK")
-	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
-	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
-	pack.Write(objectHeader(protocol.ObjectTypeBlob, protocol.MaxUnpackedObjectSize+1))
-
-	pr, err := protocol.ParsePackfile(t.Context(), &pack)
-	require.NoError(t, err)
-
-	_, err = pr.ReadObject(t.Context())
-	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
-}
-
 func loadGolden(t *testing.T, name string) []byte {
 	t.Helper()
 

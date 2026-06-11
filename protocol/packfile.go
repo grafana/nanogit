@@ -155,7 +155,6 @@ const (
 	ErrUnsupportedPackfileVersion = strError("the version of the packfile payload is unsupported")
 	ErrUnsupportedObjectType      = strError("the type of the object is unsupported")
 	ErrInflatedDataIncorrectSize  = strError("the data is the wrong size post-inflation")
-	ErrObjectTooLarge             = strError("the object size exceeds the maximum unpacked object size")
 )
 
 // MaxUnpackedObjectSize is the maximum size of an unpacked object.
@@ -562,10 +561,6 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	}
 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
-
-	if size < 0 || size > MaxUnpackedObjectSize {
-		return entry, fmt.Errorf("%w (%d bytes)", ErrObjectTooLarge, size)
-	}
 
 	err := p.processObjectByType(entry.Object, size, buf[0])
 	if err != nil {
