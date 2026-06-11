@@ -662,7 +662,8 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	}
 
 	// TODO(mem): this should be limited to the size the packet says it
-	// carries.
+	// carries, and we should limit that size above (i.e. if the packet
+	// says it's carrying a huge amount of data we should bail out).
 	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
 
 	// Use pooled buffer if size is reasonable, otherwise allocate directly
