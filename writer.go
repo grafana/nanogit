@@ -12,6 +12,7 @@ import (
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/protocol/signing"
 	"github.com/grafana/nanogit/storage"
 )
 
@@ -126,16 +127,17 @@ func (c *httpClient) NewStagedWriter(ctx context.Context, ref Ref, options ...Wr
 	}
 	writer := protocol.NewPackfileWriter(crypto.SHA1, protocolStorageMode, caps...)
 	return &stagedWriter{
-		client:            c,
-		ref:               ref,
-		writer:            writer,
-		lastCommit:        commit,
-		lastTree:          treeObj,
-		objStorage:        objStorage,
-		treeEntries:       entries,
-		submoduleEntries:  submodules,
-		storageMode:       protocolStorageMode,
-		dirtyPaths:        make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
+		client:           c,
+		ref:              ref,
+		writer:           writer,
+		lastCommit:       commit,
+		lastTree:         treeObj,
+		objStorage:       objStorage,
+		treeEntries:      entries,
+		submoduleEntries: submodules,
+		storageMode:      protocolStorageMode,
+		dirtyPaths:       make(map[string]bool), // Initialize dirty paths tracking for deferred tree building
+		signer:           opts.signer,
 	}, nil
 }
 
@@ -176,6 +178,7 @@ type stagedWriter struct {
 	isCleanedUp bool
 	// Deferred tree building optimization: track which directory paths need tree rebuilding
 	dirtyPaths map[string]bool
+	signer     signing.Signer
 }
 
 // checkCleanupState returns an error if the writer has been cleaned up.
@@ -921,7 +924,7 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		Timezone:  committer.Time.Format("-0700"),
 	}
 
-	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message)
+	commitHash, err := w.writer.AddCommit(w.lastTree.Hash, w.lastCommit.Hash, &authorIdentity, &committerIdentity, message, w.signer)
 	if err != nil {
 		return nil, fmt.Errorf("create commit object: %w", err)
 	}

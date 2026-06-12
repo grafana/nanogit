@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 func TestParsePackfile(t *testing.T) {
@@ -299,3 +301,126 @@ func TestBuildTreeObject_GitlinkSortsAsFile(t *testing.T) {
 		actualOrder,
 		"gitlink (mode 0o160000) must sort as a file, not as a directory")
 }
+
+func TestParseCommit_Signature(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+
+	t.Run("round-trips a multi-line gpgsig", func(t *testing.T) {
+		t.Parallel()
+		signature := "-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQ\nABCDEFGH123456\n-----END PGP SIGNATURE-----"
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "signed commit\n", Signature: signature}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, signature, obj.Commit.Signature)
+		require.Equal(t, "signed commit\n", obj.Commit.Message)
+		require.Equal(t, "a@b", obj.Commit.Author.Email)
+		require.Empty(t, obj.Commit.Fields)
+	})
+
+	t.Run("unsigned commit has empty signature", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "no sig\n"}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Empty(t, obj.Commit.Signature)
+		require.Equal(t, "no sig\n", obj.Commit.Message)
+	})
+
+	t.Run("gpgsig coexists with other headers", func(t *testing.T) {
+		t.Parallel()
+		raw := "tree " + hash.Zero.String() + "\n" +
+			"author " + ident.String() + "\n" +
+			"committer " + ident.String() + "\n" +
+			"encoding UTF-8\n" +
+			"gpgsig -----BEGIN SSH SIGNATURE-----\n" +
+			" AAAAlinetwo\n" +
+			" -----END SSH SIGNATURE-----\n" +
+			"\n" +
+			"body\n"
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: []byte(raw)}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, "-----BEGIN SSH SIGNATURE-----\nAAAAlinetwo\n-----END SSH SIGNATURE-----", obj.Commit.Signature)
+		require.Equal(t, []byte("UTF-8"), obj.Commit.Fields["encoding"])
+		require.Equal(t, "body\n", obj.Commit.Message)
+	})
+}
+
+func TestPackfileCommit_Build(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+
+	t.Run("omits parent when zero", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n"}
+		require.NotContains(t, string(c.Build()), "parent ")
+	})
+
+	t.Run("includes parent when set", func(t *testing.T) {
+		t.Parallel()
+		parent := hash.MustFromHex("1234567890123456789012345678901234567890")
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: parent, Author: ident, Committer: ident, Message: "m\n"}
+		require.Contains(t, string(c.Build()), "parent "+parent.String()+"\n")
+	})
+
+	t.Run("folds multi-line gpgsig with leading space", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n", Signature: "line1\nline2"}
+		require.Contains(t, string(c.Build()), "gpgsig line1\n line2\n")
+	})
+
+	t.Run("BuildUnsigned drops gpgsig", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n", Signature: "sig"}
+		require.NotContains(t, string(c.BuildUnsigned()), "gpgsig")
+		require.Contains(t, string(c.Build()), "gpgsig")
+	})
+}
+
+func TestAddCommit_Signing(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+
+	t.Run("nil signer leaves commit unsigned", func(t *testing.T) {
+		t.Parallel()
+		w := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+		h, err := w.AddCommit(hash.Zero, hash.Zero, ident, ident, "m\n", nil)
+		require.NoError(t, err)
+
+		want := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n"}
+		wantHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeCommit, want.Build())
+		require.NoError(t, err)
+		require.Equal(t, wantHash, h)
+	})
+
+	t.Run("signer embeds signature in hash", func(t *testing.T) {
+		t.Parallel()
+		w := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+		h, err := w.AddCommit(hash.Zero, hash.Zero, ident, ident, "m\n", fakeSigner{sig: "fake-sig"})
+		require.NoError(t, err)
+
+		want := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n", Signature: "fake-sig"}
+		wantHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeCommit, want.Build())
+		require.NoError(t, err)
+		require.Equal(t, wantHash, h)
+	})
+
+	t.Run("propagates signer error", func(t *testing.T) {
+		t.Parallel()
+		w := protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory)
+		_, err := w.AddCommit(hash.Zero, hash.Zero, ident, ident, "m\n", fakeSigner{err: errFakeSign})
+		require.ErrorIs(t, err, errFakeSign)
+	})
+}
+
+var errFakeSign = errors.New("fake sign error")
+
+type fakeSigner struct {
+	sig string
+	err error
+}
+
+func (f fakeSigner) Sign([]byte) (string, error) { return f.sig, f.err }

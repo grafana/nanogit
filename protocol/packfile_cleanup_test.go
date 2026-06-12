@@ -28,7 +28,7 @@ func TestNewPackfileWriter_Capabilities(t *testing.T) {
 		require.NoError(t, err)
 		writer.AddObject(treeObj)
 		author := &Identity{Name: "a", Email: "a@b", Timestamp: 0, Timezone: "+0000"}
-		_, err = writer.AddCommit(treeObj.Hash, hash.Zero, author, author, "msg")
+		_, err = writer.AddCommit(treeObj.Hash, hash.Zero, author, author, "msg", nil)
 		require.NoError(t, err)
 
 		var buf bytes.Buffer

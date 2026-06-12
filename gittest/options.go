@@ -33,6 +33,14 @@ func WithGiteaVersion(version string) ServerOption {
 	}
 }
 
+// WithTrustedSSHKeys configures SSH public keys whose signatures Gitea trusts
+// for commit verification, regardless of the committer.
+func WithTrustedSSHKeys(keys ...string) ServerOption {
+	return func(c *Config) {
+		c.TrustedSSHKeys = keys
+	}
+}
+
 // repoConfig holds configuration for LocalRepo.
 type repoConfig struct {
 	logger   Logger
