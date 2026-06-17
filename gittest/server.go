@@ -117,6 +117,8 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 	// Build environment variables
 	env := map[string]string{
 		"GITEA__database__DB_TYPE":                "sqlite3",
+		"GITEA__database__SQLITE_JOURNAL_MODE":    "WAL",
+		"GITEA__database__SQLITE_TIMEOUT":         "10000",
 		"GITEA__server__ROOT_URL":                 "http://localhost:3000/",
 		"GITEA__server__HTTP_PORT":                "3000",
 		"GITEA__service__DISABLE_REGISTRATION":    "true",
@@ -133,6 +135,10 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 		// progress (e.g. hook stderr surfaced as remote: messages).
 		"GITEA__security__DISABLE_GIT_HOOKS": "false",
 		"GITEA__mailer__ENABLED":             "false",
+	}
+
+	if len(cfg.TrustedSSHKeys) > 0 {
+		env["GITEA__repository_0X2E_signing__TRUSTED_SSH_KEYS"] = strings.Join(cfg.TrustedSSHKeys, ",")
 	}
 
 	// Start Gitea container
@@ -402,5 +408,99 @@ func (s *Server) Cleanup() error {
 	}
 	s.cleanupFuncs = nil
 
+	return nil
+}
+
+// SetUserPrimaryEmail sets the primary email address for a user via the admin API.
+// The user's Email field is updated to match on success.
+func (s *Server) SetUserPrimaryEmail(ctx context.Context, user *User, email string) error {
+	body, err := json.Marshal(map[string]any{
+		"email":      email,
+		"source_id":  0,
+		"login_name": user.Username,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", s.URL()+"/api/v1/admin/users/"+user.Username, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(user.Username, user.Password)
+
+	if err := doOK(req, "set primary email"); err != nil {
+		return err
+	}
+	user.Email = email
+	return nil
+}
+
+// UploadGPGKey uploads an armored public GPG key to the authenticated user's account.
+func (s *Server) UploadGPGKey(ctx context.Context, token string, armoredPublic []byte) error {
+	body, err := json.Marshal(map[string]string{"armored_public_key": string(armoredPublic)})
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", s.URL()+"/api/v1/user/gpg_keys", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", token)
+
+	return doOK(req, "upload gpg key")
+}
+
+// CommitVerification reports whether the given commit is verified by the server,
+// along with the reason the server provides.
+func (s *Server) CommitVerification(ctx context.Context, token, owner, repo, sha string) (bool, string, error) {
+	url := fmt.Sprintf("%s/api/v1/repos/%s/%s/git/commits/%s?verification=true", s.URL(), owner, repo, sha)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Authorization", token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to execute HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to read response body: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, "", fmt.Errorf("commit lookup failed (status %d): %s", resp.StatusCode, body)
+	}
+
+	var got struct {
+		Commit struct {
+			Verification struct {
+				Verified bool   `json:"verified"`
+				Reason   string `json:"reason"`
+			} `json:"verification"`
+		} `json:"commit"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		return false, "", fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	return got.Commit.Verification.Verified, got.Commit.Verification.Reason, nil
+}
+
+func doOK(req *http.Request, what string) error {
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		out, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s: %s: %s", what, resp.Status, out)
+	}
 	return nil
 }

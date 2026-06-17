@@ -220,35 +220,30 @@ func allWantedObjectsCollected(pendingWanted map[string]bool) bool {
 	return pendingWanted != nil && len(pendingWanted) == 0
 }
 
-// classifyReadObjectErr decides whether a non-nil error from ReadObject
-// must abort processPackfileResponse. A non-nil return is the error to
-// propagate; nil means the caller should break out of the read loop and
-// finalize whatever was already collected. Splitting this out keeps
-// processPackfileResponse's cyclomatic complexity manageable while
-// preserving the DoS-protection contract:
+// classifyReadObjectErr decides what to do with a non-EOF error from
+// ReadObject. A non-nil return is the error to propagate (it aborts
+// processPackfileResponse); a nil return means the caller should swallow the
+// error and break out of the read loop, finalizing whatever was collected.
 //
-//   - *ErrResponseTooLarge propagates UNLESS the fetch is a NoExtraObjects
-//     request that already collected every wanted object — in that case the
-//     cap fired on bytes we don't need, and surfacing it would turn
-//     successful single-object lookups into false negatives under servers
-//     that over-send.
-//   - Every other error (zlib problems, unexpected EOF, malformed delta
-//     data) is tolerated: packfile parsing has pre-existing leniencies that
-//     downstream batched flows depend on, and tightening those is a separate
-//     refactor.
+// The default is to propagate, wrapped with the 1-based object position so
+// the message points at the offending object — corrupt packfiles, short
+// reads, and oversize objects all surface as hard errors. The one exception
+// preserves the DoS-protection contract: when a NoExtraObjects fetch has
+// already collected every requested object, an *ErrResponseTooLarge fired on
+// the trailing bytes is on data the caller never asked for, so surfacing it
+// would turn a successful single-object lookup into a false negative against
+// a server that over-sends. pendingWanted is the deletion-tracked map
+// maintained by the read loop: nil means the fetch isn't NoExtraObjects (so
+// the swallow path is disabled), empty means every wanted hash has been seen.
 //
-// pendingWanted is the deletion-tracked map maintained by the read loop:
-// nil means the fetch isn't NoExtraObjects (so the swallow path is
-// disabled), empty means every wanted hash has been seen.
-func classifyReadObjectErr(err error, pendingWanted map[string]bool) error {
+// objectsRead is the count of objects successfully read before this error,
+// so the reported position is objectsRead+1.
+func classifyReadObjectErr(err error, pendingWanted map[string]bool, objectsRead int) error {
 	var tooLarge *ErrResponseTooLarge
-	if !errors.As(err, &tooLarge) {
+	if errors.As(err, &tooLarge) && allWantedObjectsCollected(pendingWanted) {
 		return nil
 	}
-	if allWantedObjectsCollected(pendingWanted) {
-		return nil
-	}
-	return fmt.Errorf("read packfile object: %w", err)
+	return fmt.Errorf("reading packfile object %d: %w", objectsRead+1, err)
 }
 
 // processPackfileResponse processes the packfile response and extracts objects
@@ -268,20 +263,35 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	// Collect delta objects for later resolution
 	var deltas []*protocol.PackfileObject
 
-	var objectCount, totalDelta int
+	var count, objectCount, totalDelta int
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			if terr := classifyReadObjectErr(err, pendingWantedHashes); terr != nil {
+			// io.EOF is the natural end of the packfile stream.
+			if errors.Is(err, io.EOF) {
+				logger.Debug("Finished reading objects", "totalObjects", objectCount, "totalDeltas", totalDelta)
+				break
+			}
+			// Anything else propagates — corrupt packfile, short
+			// read, oversize object — UNLESS it's a cap breach on
+			// trailing bytes after every wanted object was already
+			// collected (see classifyReadObjectErr).
+			if terr := classifyReadObjectErr(err, pendingWantedHashes, count); terr != nil {
 				return terr
 			}
-			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "totalDeltas", totalDelta)
+			logger.Debug("Cap reached after all wanted objects collected; stopping early",
+				"totalObjects", objectCount, "totalDeltas", totalDelta)
+			// Drop deltas queued before the swallow for the same
+			// reason the early-break path does (bases may be in the
+			// unread tail).
+			deltas = nil
 			break
 		}
 
 		if obj.Object == nil {
 			break
 		}
+		count++
 
 		// Collect delta objects for later resolution instead of skipping them
 		if obj.Object.Type == protocol.ObjectTypeRefDelta {

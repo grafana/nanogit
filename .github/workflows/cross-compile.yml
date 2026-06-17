@@ -40,11 +40,11 @@ jobs:
     name: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} ${{ matrix.GOARM || '' }}
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.3-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - name: Install Git
         run: apk add --no-cache git
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Ensure builds
         env:
           GOOS: ${{ matrix.GOOS }}

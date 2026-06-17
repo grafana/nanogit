@@ -1,13 +1,18 @@
 package client
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/nanogit/protocol/hash"
 )
 
 func TestAllWantedObjectsCollected(t *testing.T) {
@@ -36,13 +41,22 @@ func TestAllWantedObjectsCollected(t *testing.T) {
 func TestClassifyReadObjectErr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("non-cap error is tolerated as natural EOF", func(t *testing.T) {
-		// zlib / unexpected-EOF / malformed-delta errors keep the
-		// pre-existing tolerance: returning nil here lets the caller
-		// break out of the read loop and finalize whatever was
-		// already collected. Tightening this is a separate refactor.
-		err := classifyReadObjectErr(io.ErrUnexpectedEOF, nil)
-		assert.NoError(t, err)
+	t.Run("non-cap error propagates with object position", func(t *testing.T) {
+		// Corrupt packfiles, short reads, and malformed delta data
+		// all surface as hard errors now (matching the strict
+		// packfile-parser behavior). The 1-based position points at
+		// the offending object.
+		err := classifyReadObjectErr(io.ErrUnexpectedEOF, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "reading packfile object 1")
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("object position is objectsRead+1", func(t *testing.T) {
+		zlibErr := errors.New("zlib: invalid header")
+		err := classifyReadObjectErr(zlibErr, nil, 4)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "reading packfile object 5")
 	})
 
 	t.Run("cap error propagates when wanted objects are missing", func(t *testing.T) {
@@ -54,7 +68,7 @@ func TestClassifyReadObjectErr(t *testing.T) {
 		capErr := &ErrResponseTooLarge{Limit: 100, Op: "fetch"}
 		wanted := map[string]bool{"a": true}
 
-		err := classifyReadObjectErr(capErr, wanted)
+		err := classifyReadObjectErr(capErr, wanted, 0)
 		require.Error(t, err)
 
 		var tooLarge *ErrResponseTooLarge
@@ -73,17 +87,18 @@ func TestClassifyReadObjectErr(t *testing.T) {
 		capErr := &ErrResponseTooLarge{Limit: 100, Op: "fetch"}
 		empty := map[string]bool{}
 
-		err := classifyReadObjectErr(capErr, empty)
+		err := classifyReadObjectErr(capErr, empty, 3)
 		assert.NoError(t, err)
 	})
 
-	t.Run("non-cap zlib-style error is still tolerated alongside the cap branch", func(t *testing.T) {
-		// Defense in depth: the cap-vs-pending check must not
-		// short-circuit non-cap errors. zlib problems, etc., still
-		// fall through the early-return and let the caller break
-		// out of the read loop without an artificial error.
+	t.Run("non-cap error still propagates even when wanted set is empty", func(t *testing.T) {
+		// The swallow exception is scoped to *ErrResponseTooLarge.
+		// A corrupt packfile must surface as an error regardless of
+		// how many wanted objects were collected first.
 		zlibErr := errors.New("zlib: invalid header")
-		assert.NoError(t, classifyReadObjectErr(zlibErr, map[string]bool{"a": true}))
+		err := classifyReadObjectErr(zlibErr, map[string]bool{}, 1)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "reading packfile object 2")
 	})
 
 	t.Run("wrapped cap error is still recognized", func(t *testing.T) {
@@ -94,10 +109,10 @@ func TestClassifyReadObjectErr(t *testing.T) {
 		wrapped := fmt.Errorf("read object: %w", capErr)
 
 		// Pending set empty → swallow
-		assert.NoError(t, classifyReadObjectErr(wrapped, map[string]bool{}))
+		assert.NoError(t, classifyReadObjectErr(wrapped, map[string]bool{}, 0))
 
 		// Pending set non-empty → propagate
-		err := classifyReadObjectErr(wrapped, map[string]bool{"x": true})
+		err := classifyReadObjectErr(wrapped, map[string]bool{"x": true}, 0)
 		require.Error(t, err)
 		var tooLarge *ErrResponseTooLarge
 		assert.True(t, errors.As(err, &tooLarge))
@@ -154,4 +169,39 @@ func TestShouldTerminateEarly(t *testing.T) {
 		// 'b' still pending until actually seen.
 		assert.True(t, shouldTerminateEarly(wanted, "b"))
 	})
+}
+
+func TestFetch_CorruptPackfile(t *testing.T) {
+	t.Parallel()
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	pack := []byte("PACK" +
+		"\x00\x00\x00\x02" + // version 2
+		"\x00\x00\x00\x01" + // 1 object
+		"\x33" + // blob, size 3
+		"\xff\xff") // invalid zlib stream
+	writePkt(append([]byte{1}, pack...))
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := w.Write(body.Bytes()); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewRawClient(server.URL + "/repo")
+	require.NoError(t, err)
+
+	want, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+
+	_, err = client.Fetch(t.Context(), FetchOptions{Want: []hash.Hash{want}, Done: true})
+	require.ErrorContains(t, err, "reading packfile object 1")
+	require.ErrorContains(t, err, "zlib: invalid header")
 }
