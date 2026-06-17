@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"errors"
 	"fmt"
 	"io"
 
@@ -207,8 +208,11 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
-			logger.Debug("Finished reading objects", "error", err, "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
-			break
+			if errors.Is(err, io.EOF) {
+				logger.Debug("Finished reading objects", "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
+				break
+			}
+			return fmt.Errorf("reading packfile object %d: %w", count+1, err)
 		}
 
 		if obj.Object == nil {

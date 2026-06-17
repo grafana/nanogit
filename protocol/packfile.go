@@ -623,7 +623,7 @@ func (p *PackfileReader) parseObjectContent(obj *PackfileObject) error {
 // processRefDelta handles reference delta objects
 func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	ref := make([]byte, p.algo.Size())
-	if _, err := p.reader.Read(ref); err != nil {
+	if _, err := io.ReadFull(p.reader, ref); err != nil {
 		return err
 	}
 
