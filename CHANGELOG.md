@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/grafana/nanogit/compare/v0.17.3...v0.18.0) (2026-06-10)
+
+
+### Features
+
+* signed commit support (GPG, SSH, S/MIME) ([#298](https://github.com/grafana/nanogit/issues/298)) ([fe53235](https://github.com/grafana/nanogit/commit/fe532354328184112dbb4ec948d5408f2ab17ba5))
+
 ## [0.17.3](https://github.com/grafana/nanogit/compare/v0.17.2...v0.17.3) (2026-06-05)
 
 
