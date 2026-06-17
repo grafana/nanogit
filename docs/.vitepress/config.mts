@@ -84,5 +84,15 @@ export default defineConfig({
       dark: 'github-dark'
     },
     lineNumbers: true
+  },
+
+  vite: {
+    build: {
+      // esbuild 0.28 errors when asked to lower destructuring for the
+      // legacy browser target Vite injects by default. Modern browsers all
+      // support destructuring natively, so target esnext to skip the
+      // unnecessary (and unsupported) transform.
+      target: 'esnext'
+    }
   }
 })

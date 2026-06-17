@@ -155,6 +155,7 @@ const (
 	ErrUnsupportedPackfileVersion = strError("the version of the packfile payload is unsupported")
 	ErrUnsupportedObjectType      = strError("the type of the object is unsupported")
 	ErrInflatedDataIncorrectSize  = strError("the data is the wrong size post-inflation")
+	ErrObjectTooLarge             = strError("the object size exceeds the maximum unpacked object size")
 )
 
 // MaxUnpackedObjectSize is the maximum size of an unpacked object.
@@ -562,6 +563,10 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
+	if size < 0 || size > MaxUnpackedObjectSize {
+		return entry, fmt.Errorf("%w (%d bytes)", ErrObjectTooLarge, size)
+	}
+
 	err := p.processObjectByType(entry.Object, size, buf[0])
 	if err != nil {
 		return entry, err
@@ -637,34 +642,11 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 }
 
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
-	// Reuse zlib reader for performance - avoid creating new reader for each object
-	if p.zlibReader == nil {
-		var err error
-		p.zlibReader, err = getPooledZlibReader(p.reader)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Reset the reader for the next zlib stream
-		if resetter, ok := p.zlibReader.(zlib.Resetter); ok {
-			if err := resetter.Reset(p.reader, nil); err != nil {
-				return nil, err
-			}
-		} else {
-			// Fallback: close and recreate using pool
-			_ = p.zlibReader.Close()
-			var err error
-			p.zlibReader, err = getPooledZlibReader(p.reader)
-			if err != nil {
-				return nil, err
-			}
-		}
+	if err := p.resetZlibReader(); err != nil {
+		return nil, err
 	}
 
-	// TODO(mem): this should be limited to the size the packet says it
-	// carries, and we should limit that size above (i.e. if the packet
-	// says it's carrying a huge amount of data we should bail out).
-	lr := io.LimitReader(p.zlibReader, MaxUnpackedObjectSize)
+	lr := io.LimitReader(p.zlibReader, int64(sz)+1)
 
 	// Use pooled buffer if size is reasonable, otherwise allocate directly
 	var data []byte
@@ -699,7 +681,10 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	defer discardBufferPool.Put(discardBuf) //nolint:staticcheck
 
 	for {
-		_, err := lr.Read(discardBuf)
+		n, err := lr.Read(discardBuf)
+		if n > 0 {
+			return nil, ErrInflatedDataIncorrectSize
+		}
 		if err != nil {
 			if err == io.EOF {
 				break // This is expected - we've consumed the entire zlib stream
@@ -717,6 +702,27 @@ func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// resetZlibReader prepares the reusable zlib reader for the next stream,
+// avoiding a new reader allocation for each object.
+func (p *PackfileReader) resetZlibReader() error {
+	if p.zlibReader == nil {
+		var err error
+		p.zlibReader, err = getPooledZlibReader(p.reader)
+		return err
+	}
+
+	// Reset the reader for the next zlib stream
+	if resetter, ok := p.zlibReader.(zlib.Resetter); ok {
+		return resetter.Reset(p.reader, nil)
+	}
+
+	// Fallback: close and recreate using pool
+	_ = p.zlibReader.Close()
+	var err error
+	p.zlibReader, err = getPooledZlibReader(p.reader)
+	return err
 }
 
 // calculateObjectHash computes the hash of an object using a reusable hasher for performance

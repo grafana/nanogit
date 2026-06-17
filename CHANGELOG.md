@@ -7,10 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.18.1](https://github.com/grafana/nanogit/compare/v0.18.0...v0.18.1) (2026-06-16)
 
-
 ### Bug Fixes
 
 * handle short reads of ref-delta base hash in packfile parser ([#343](https://github.com/grafana/nanogit/issues/343)) ([b6b82b2](https://github.com/grafana/nanogit/commit/b6b82b272335c30a9c46c8b4e8f441f8b3888a21))
+
+## [0.18.0](https://github.com/grafana/nanogit/compare/v0.17.3...v0.18.0) (2026-06-10)
+
+### Features
+
+* signed commit support (GPG, SSH, S/MIME) ([#298](https://github.com/grafana/nanogit/issues/298)) ([fe53235](https://github.com/grafana/nanogit/commit/fe532354328184112dbb4ec948d5408f2ab17ba5))
+
+## [0.17.3](https://github.com/grafana/nanogit/compare/v0.17.2...v0.17.3) (2026-06-05)
+
+### Bug Fixes
+
+* **security/high:** update module go.opentelemetry.io/otel/sdk to v1.43.0 [security] ([#328](https://github.com/grafana/nanogit/issues/328)) ([3a3c2e2](https://github.com/grafana/nanogit/commit/3a3c2e2fdd39d6d0b11a384270fcff80018bc6d9))
 
 ## [0.17.2](https://github.com/grafana/nanogit/compare/v0.17.1...v0.17.2) (2026-05-28)
 * **docs:** pin esbuild to 0.27.5 and bump pages actions to v5 ([#324](https://github.com/grafana/nanogit/issues/324)) ([e15255a](https://github.com/grafana/nanogit/commit/e15255aada2b1f5d48b4abf0dba7b16fc8c462a4)), closes [#320](https://github.com/grafana/nanogit/issues/320) [#321](https://github.com/grafana/nanogit/issues/321)
