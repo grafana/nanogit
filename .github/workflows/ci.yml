@@ -129,7 +129,7 @@ jobs:
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
-          token: ${{ env.CODECOV_TOKEN }}
+          token: ${{ fromJSON(steps.get-secrets.outputs.secrets).CODECOV_TOKEN }}
 
   test-integration:
     name: Integration Tests
@@ -200,13 +200,13 @@ jobs:
           CGO_ENABLED: 1
           TEST_PROVIDER: github
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
-          TEST_USER: ${{ env.REPO_USER }}
-          TEST_TOKEN: ${{ env.REPO_TOKEN }}
-          TEST_SIGN_EMAIL: ${{ env.SIGN_EMAIL }}
-          TEST_GPG_KEY: ${{ env.SIGN_GPG_KEY }}
-          TEST_SSH_KEY: ${{ env.SIGN_SSH_KEY }}
-          TEST_SMIME_KEY: ${{ env.SIGN_SMIME_KEY }}
-          TEST_SMIME_CERT: ${{ env.SIGN_SMIME_CERT }}
+          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
+          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -257,13 +257,13 @@ jobs:
           CGO_ENABLED: 1
           TEST_PROVIDER: gitlab
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
-          TEST_USER: ${{ env.REPO_USER }}
-          TEST_TOKEN: ${{ env.REPO_TOKEN }}
-          TEST_SIGN_EMAIL: ${{ env.SIGN_EMAIL }}
-          TEST_GPG_KEY: ${{ env.SIGN_GPG_KEY }}
-          TEST_SSH_KEY: ${{ env.SIGN_SSH_KEY }}
-          TEST_SMIME_KEY: ${{ env.SIGN_SMIME_KEY }}
-          TEST_SMIME_CERT: ${{ env.SIGN_SMIME_CERT }}
+          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
+          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -313,13 +313,13 @@ jobs:
           CGO_ENABLED: 1
           TEST_PROVIDER: bitbucket
           TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
-          TEST_USER: ${{ env.REPO_USER }}
-          TEST_TOKEN: ${{ env.REPO_TOKEN }}
-          TEST_SIGN_EMAIL: ${{ env.SIGN_EMAIL }}
-          TEST_GPG_KEY: ${{ env.SIGN_GPG_KEY }}
-          TEST_SSH_KEY: ${{ env.SIGN_SSH_KEY }}
-          TEST_SMIME_KEY: ${{ env.SIGN_SMIME_KEY }}
-          TEST_SMIME_CERT: ${{ env.SIGN_SMIME_CERT }}
+          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
+          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
