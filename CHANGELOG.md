@@ -5,6 +5,110 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/grafana/nanogit/compare/v1.0.0...v1.1.0) (2026-06-17)
+
+
+### Features
+
+* add cat-file command to CLI ([#226](https://github.com/grafana/nanogit/issues/226)) ([187f951](https://github.com/grafana/nanogit/commit/187f9517f45a4422c017f86f6006c5c1f36908bb))
+* add directory/tree rename detection support ([#245](https://github.com/grafana/nanogit/issues/245)) ([1b15b53](https://github.com/grafana/nanogit/commit/1b15b53e2c9ddf8fc1c75600abe213f9c230f084))
+* add Git protocol v1 detection with explicit error handling ([#208](https://github.com/grafana/nanogit/issues/208)) ([25127d8](https://github.com/grafana/nanogit/commit/25127d82690441c5cd87b2f1ecae58849a6e6e03)), closes [/github.com/grafana/nanogit/pull/208/changes#r2932449765](https://github.com/grafana//github.com/grafana/nanogit/pull/208/changes/issues/r2932449765) [/github.com/grafana/nanogit/pull/208/changes#r2932449792](https://github.com/grafana//github.com/grafana/nanogit/pull/208/changes/issues/r2932449792)
+* add gittest package for Git testing ([#184](https://github.com/grafana/nanogit/issues/184)) ([e67387b](https://github.com/grafana/nanogit/commit/e67387b0ce71e767bd61b3902700154cc8d102bc))
+* add GoReleaser for multi-platform CLI binaries ([#216](https://github.com/grafana/nanogit/issues/216)) ([f8fd097](https://github.com/grafana/nanogit/commit/f8fd097adc5d4199e453ff6b95aa12fe83f0f85c))
+* add ls-remote command to CLI ([#224](https://github.com/grafana/nanogit/issues/224)) ([7e1affc](https://github.com/grafana/nanogit/commit/7e1affc9bf45c05059cbc2daf6da506b9511aae8))
+* add ls-tree command to CLI ([#225](https://github.com/grafana/nanogit/issues/225)) ([0353cfb](https://github.com/grafana/nanogit/commit/0353cfb64de0bcdf4761b25d7ef7f2ec936e1046))
+* add nanogit CLI foundation ([#214](https://github.com/grafana/nanogit/issues/214)) ([39dfbe1](https://github.com/grafana/nanogit/commit/39dfbe176b91e3078e1fb71356b94ce4f2c09fc0))
+* add optional rename detection to CompareCommits ([#243](https://github.com/grafana/nanogit/issues/243)) ([806d935](https://github.com/grafana/nanogit/commit/806d93592070e984557f54728de980b517589d41)), closes [/github.com/grafana/nanogit/pull/243#discussion_r2952738499](https://github.com/grafana//github.com/grafana/nanogit/pull/243/issues/discussion_r2952738499) [/github.com/grafana/nanogit/pull/243#discussion_r2952738633](https://github.com/grafana//github.com/grafana/nanogit/pull/243/issues/discussion_r2952738633)
+* add pluggable retry mechanism with HTTP-aware retry logic ([#122](https://github.com/grafana/nanogit/issues/122)) ([174052c](https://github.com/grafana/nanogit/commit/174052cda9138f98ce4d2540d0555d39a5b13f6c)), closes [grafana/git-ui-sync-project#634](https://github.com/grafana/git-ui-sync-project/issues/634)
+* add ServerUnavailableError for HTTP 5xx status codes ([#120](https://github.com/grafana/nanogit/issues/120)) ([659c7b9](https://github.com/grafana/nanogit/commit/659c7b9e1935ddf3681d6d0d1e5bd3c036201f3d)), closes [grafana/git-ui-sync-project#634](https://github.com/grafana/git-ui-sync-project/issues/634)
+* add Type and OldType fields to CommitFile ([#252](https://github.com/grafana/nanogit/issues/252)) ([2353a24](https://github.com/grafana/nanogit/commit/2353a240f74cf3416391802e9347dee838003b51))
+* allow overriding receive-pack capabilities (library + CLI) ([#269](https://github.com/grafana/nanogit/issues/269)) ([aa2831f](https://github.com/grafana/nanogit/commit/aa2831f76a8f15c6f8755e192f2a4baab4950e86)), closes [#270](https://github.com/grafana/nanogit/issues/270) [#270](https://github.com/grafana/nanogit/issues/270)
+* **cli:** add check command to verify server protocol compatibility ([#232](https://github.com/grafana/nanogit/issues/232)) ([4a22c62](https://github.com/grafana/nanogit/commit/4a22c623e798350b4abf0e3012c5caebcb87ffc8))
+* **cli:** add clone command with path filtering support ([#227](https://github.com/grafana/nanogit/issues/227)) ([bdeaa69](https://github.com/grafana/nanogit/commit/bdeaa6974c66a0081a77e7ab86a027e237e128dd))
+* **cli:** add NANOGIT_REPO env var for default repository URL ([#275](https://github.com/grafana/nanogit/issues/275)) ([62c565d](https://github.com/grafana/nanogit/commit/62c565d80b3660fbed52c323d617a172afcbe0b8))
+* **cli:** add put-file write command and verbose/trace logging ([#271](https://github.com/grafana/nanogit/issues/271)) ([5ce8b23](https://github.com/grafana/nanogit/commit/5ce8b233cf2e09400a2b6c7d8041465638d54106))
+* **cli:** align with git CLI behavior for better compatibility ([#229](https://github.com/grafana/nanogit/issues/229)) ([81bf650](https://github.com/grafana/nanogit/commit/81bf650a5fa8cc3e4659fb4ee2abbc3afff4a575))
+* expose structured HTTP auth and permission errors ([#182](https://github.com/grafana/nanogit/issues/182)) ([0f6a60d](https://github.com/grafana/nanogit/commit/0f6a60dced124aacdf6e6a9fa0a7e0ecc4e4cf91))
+* implement clean multi-module architecture  ([#193](https://github.com/grafana/nanogit/issues/193)) ([4333e09](https://github.com/grafana/nanogit/commit/4333e0981724fef43789e3d57089881be54e21d2)), closes [/github.com/grafana/nanogit/pull/193#discussion_r2863229325](https://github.com/grafana//github.com/grafana/nanogit/pull/193/issues/discussion_r2863229325)
+* opt-in receive-pack capability negotiation ([#279](https://github.com/grafana/nanogit/issues/279)) ([8051dc7](https://github.com/grafana/nanogit/commit/8051dc71bc5e2da428fe7b10dc2400a530f3c84a))
+* **options:** add WithoutGitSuffix option to skip .git URL suffix ([#207](https://github.com/grafana/nanogit/issues/207)) ([4e59ab7](https://github.com/grafana/nanogit/commit/4e59ab7e72d14496370ba8a3a0ef6fea441f6302))
+* signed commit support (GPG, SSH, S/MIME) ([#298](https://github.com/grafana/nanogit/issues/298)) ([fe53235](https://github.com/grafana/nanogit/commit/fe532354328184112dbb4ec948d5408f2ab17ba5))
+* surface side-band channel-2 progress in receive-pack errors ([#284](https://github.com/grafana/nanogit/issues/284)) ([c10af65](https://github.com/grafana/nanogit/commit/c10af650b61c74c810069f3867c44ccf70c330f5)), closes [#270](https://github.com/grafana/nanogit/issues/270)
+
+
+### Bug Fixes
+
+* add manual trigger support to GoReleaser workflow ([#220](https://github.com/grafana/nanogit/issues/220)) ([393fc70](https://github.com/grafana/nanogit/commit/393fc70ddf32cf3a96cd76c319ebe3efbcb54276))
+* **ci:** commit CHANGELOG before GoReleaser runs ([#231](https://github.com/grafana/nanogit/issues/231)) ([f9cfac0](https://github.com/grafana/nanogit/commit/f9cfac041ace758480654c572ebf066d0b1bcb43))
+* **ci:** configure Renovate to ignore internal workspace modules ([#234](https://github.com/grafana/nanogit/issues/234)) ([ccc2260](https://github.com/grafana/nanogit/commit/ccc22604dabc3b18aab56d9edd3815cc4df976e1))
+* **ci:** disable GoReleaser changelog to prevent duplicate release notes ([#248](https://github.com/grafana/nanogit/issues/248)) ([77b042b](https://github.com/grafana/nanogit/commit/77b042bf8ec05b56da309b6be86053d3f09eefa8))
+* **ci:** update actions/setup-go to v6.3.0 ([#230](https://github.com/grafana/nanogit/issues/230)) ([6ae2ec1](https://github.com/grafana/nanogit/commit/6ae2ec159c0882a50be22397a91a105e0a69c534))
+* clarify cleanup error comment in Push after successful push ([#177](https://github.com/grafana/nanogit/issues/177)) ([5a3c8d4](https://github.com/grafana/nanogit/commit/5a3c8d4b5d1c0dcc134d83f5fd35465eedafc1bd)), closes [#175](https://github.com/grafana/nanogit/issues/175)
+* configure Git safe directory in container environment ([#223](https://github.com/grafana/nanogit/issues/223)) ([5bd37b1](https://github.com/grafana/nanogit/commit/5bd37b1bd19ba5ad4ae6696032b003629058d9c2))
+* **deps:** override esbuild to fix CORS vulnerability (GHSA-67mh-4wv8-2f99) ([#217](https://github.com/grafana/nanogit/issues/217)) ([f457151](https://github.com/grafana/nanogit/commit/f457151940f18519621053c4faf2c04862bb16c4)), closes [#4](https://github.com/grafana/nanogit/issues/4) [#4](https://github.com/grafana/nanogit/issues/4)
+* **deps:** update module github.com/go-git/go-billy/v5 to v5.7.0 ([#129](https://github.com/grafana/nanogit/issues/129)) ([d43778c](https://github.com/grafana/nanogit/commit/d43778c9d357f8682095021db7f3a53291fded20))
+* **deps:** update module github.com/go-git/go-billy/v5 to v5.8.0 ([#198](https://github.com/grafana/nanogit/issues/198)) ([1b6ff88](https://github.com/grafana/nanogit/commit/1b6ff889c7eb00529f6ac9f36d0ae0581cf4099a))
+* **deps:** update module github.com/go-git/go-git/v5 to v5.16.5 [security] ([#143](https://github.com/grafana/nanogit/issues/143)) ([6ce6e56](https://github.com/grafana/nanogit/commit/6ce6e567bd5c08320b850ec0308cfe6bc94924c9))
+* **deps:** update module github.com/go-git/go-git/v5 to v5.17.0 ([#199](https://github.com/grafana/nanogit/issues/199)) ([93d0242](https://github.com/grafana/nanogit/commit/93d0242e24811ed52349e7cbd35f41820a3c2aa4))
+* **deps:** update module github.com/go-git/go-git/v5 to v5.17.1 [security] ([#263](https://github.com/grafana/nanogit/issues/263)) ([f66f760](https://github.com/grafana/nanogit/commit/f66f760e16628ef982797478abd2590ddb27d651))
+* **deps:** update module github.com/go-git/go-git/v5 to v5.18.0 [security] ([#268](https://github.com/grafana/nanogit/issues/268)) ([5deb68c](https://github.com/grafana/nanogit/commit/5deb68c20e20995725227e3c2369336b46f753b2))
+* **deps:** update module github.com/grafana/nanogit to v0.3.0 ([#138](https://github.com/grafana/nanogit/issues/138)) ([a4bd85f](https://github.com/grafana/nanogit/commit/a4bd85fdeecdebc0e21f4d2fb725c67ee4718a09))
+* **deps:** update module github.com/grafana/nanogit to v0.3.5 ([#164](https://github.com/grafana/nanogit/issues/164)) ([8ddb831](https://github.com/grafana/nanogit/commit/8ddb83140e071e3a90463fe5c631bbc87e486d4a))
+* **deps:** update module github.com/grafana/nanogit to v0.3.7 ([#174](https://github.com/grafana/nanogit/issues/174)) ([bea0b7b](https://github.com/grafana/nanogit/commit/bea0b7b5977b8d33c737bea0a08339764d848b89))
+* **deps:** update module github.com/grafana/nanogit/gittest to v0.3.7 ([#190](https://github.com/grafana/nanogit/issues/190)) ([4576860](https://github.com/grafana/nanogit/commit/45768604cc61541eed085ec6df9c5b4ba6eb5434))
+* **deps:** update module github.com/klauspost/compress to v1.18.4 ([#130](https://github.com/grafana/nanogit/issues/130)) ([f27c451](https://github.com/grafana/nanogit/commit/f27c451e52637e7858dd5c9461bc266a6af3e40c))
+* **deps:** update module github.com/klauspost/compress to v1.18.6 ([#319](https://github.com/grafana/nanogit/issues/319)) ([bcd1626](https://github.com/grafana/nanogit/commit/bcd162661bca0a1565ed2cbbe252dd0ce291ea56))
+* **deps:** update module github.com/maxbrunsfeld/counterfeiter/v6 to v6.12.2 ([#310](https://github.com/grafana/nanogit/issues/310)) ([50f8820](https://github.com/grafana/nanogit/commit/50f882009455aa4fb4195432f5e80cf6f19dad2e))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.28.1 ([#149](https://github.com/grafana/nanogit/issues/149)) ([ce05965](https://github.com/grafana/nanogit/commit/ce05965bcfc32abf91e1b18937cfc0bfc56792be))
+* **deps:** update module github.com/onsi/gomega to v1.39.1 ([#150](https://github.com/grafana/nanogit/issues/150)) ([cf2665e](https://github.com/grafana/nanogit/commit/cf2665e104e9232b7a97f7a2e94524de3e90053a))
+* **deps:** update module github.com/spf13/cobra to v1.10.2 ([#238](https://github.com/grafana/nanogit/issues/238)) ([faa6093](https://github.com/grafana/nanogit/commit/faa60932f212c3c0147b2704f693154baf3d25c6))
+* **deps:** update module github.com/stretchr/testify to v1.11.1 ([#156](https://github.com/grafana/nanogit/issues/156)) ([b70d055](https://github.com/grafana/nanogit/commit/b70d05568da35ff429801b183cb6813db97806e1))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.40.0 ([#157](https://github.com/grafana/nanogit/issues/157)) ([e1155db](https://github.com/grafana/nanogit/commit/e1155dbef6a56154992c1b6e98bb26e23a4f354a))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.41.0 ([#213](https://github.com/grafana/nanogit/issues/213)) ([20e54d6](https://github.com/grafana/nanogit/commit/20e54d632e5471158f291b3136a668536701f8e5))
+* **deps:** update module github.com/testcontainers/testcontainers-go to v0.42.0 ([#316](https://github.com/grafana/nanogit/issues/316)) ([51bcaf3](https://github.com/grafana/nanogit/commit/51bcaf3df770b869ad5dfed11a33e71b5e2eb75e))
+* **deps:** update module golang.org/x/crypto to v0.53.0 ([#342](https://github.com/grafana/nanogit/issues/342)) ([0d323e0](https://github.com/grafana/nanogit/commit/0d323e02b6bc1b53a678f4a08803bbb23d50fca4))
+* **deps:** update module golang.org/x/sync to v0.20.0 ([#203](https://github.com/grafana/nanogit/issues/203)) ([5857213](https://github.com/grafana/nanogit/commit/58572136d273e44dffc29bb1554c3702beb3b87f))
+* **docs:** pin esbuild to 0.27.5 and bump pages actions to v5 ([#324](https://github.com/grafana/nanogit/issues/324)) ([e15255a](https://github.com/grafana/nanogit/commit/e15255aada2b1f5d48b4abf0dba7b16fc8c462a4)), closes [#320](https://github.com/grafana/nanogit/issues/320) [#321](https://github.com/grafana/nanogit/issues/321)
+* enable CI checks on CHANGELOG PRs ([#113](https://github.com/grafana/nanogit/issues/113)) ([41a1797](https://github.com/grafana/nanogit/commit/41a17974ba1c7cce4c5bee52bc69800257334a3d))
+* enforce declared object size limits in packfile parser ([#344](https://github.com/grafana/nanogit/issues/344)) ([0b07599](https://github.com/grafana/nanogit/commit/0b075998a46f4623f83c296b75420fe8b24fbbab))
+* **gittest:** address security and stability issues ([#186](https://github.com/grafana/nanogit/issues/186)) ([c4bf8a2](https://github.com/grafana/nanogit/commit/c4bf8a2d1fc9441166cb299b086210d7d9d27c79)), closes [#184](https://github.com/grafana/nanogit/issues/184)
+* handle short reads of ref-delta base hash in packfile parser ([#343](https://github.com/grafana/nanogit/issues/343)) ([b6b82b2](https://github.com/grafana/nanogit/commit/b6b82b272335c30a9c46c8b4e8f441f8b3888a21))
+* handle submodule (gitlink) entries correctly in tree operations ([#165](https://github.com/grafana/nanogit/issues/165)) ([244d4d0](https://github.com/grafana/nanogit/commit/244d4d04b79a26b601f75c5100aab7b1991849f5))
+* integrate GoReleaser into release workflow ([#222](https://github.com/grafana/nanogit/issues/222)) ([c449b59](https://github.com/grafana/nanogit/commit/c449b599ebb0e9585a6e27b23bc77a3f3770cfb8)), closes [#14](https://github.com/grafana/nanogit/issues/14)
+* Premature Clean up in Push ([#175](https://github.com/grafana/nanogit/issues/175)) ([ebb89f7](https://github.com/grafana/nanogit/commit/ebb89f7b1806e09ad60842f3fb5d2ce115b9ec90)), closes [/github.com/grafana/nanogit/pull/175#discussion_r2852762981](https://github.com/grafana//github.com/grafana/nanogit/pull/175/issues/discussion_r2852762981) [/github.com/grafana/nanogit/pull/175#discussion_r2853500369](https://github.com/grafana//github.com/grafana/nanogit/pull/175/issues/discussion_r2853500369)
+* preserve submodules in StagedWriter tree rebuilds ([#282](https://github.com/grafana/nanogit/issues/282)) ([6b236f3](https://github.com/grafana/nanogit/commit/6b236f3083b5de19bd48d251d90838d376b2c6c7)), closes [grafana/grafana#123891](https://github.com/grafana/grafana/issues/123891) [grafana/grafana#123891](https://github.com/grafana/grafana/issues/123891)
+* **protocol:** don't treat sideband channel 2 fatal: as a fatal error ([#289](https://github.com/grafana/nanogit/issues/289)) ([633960d](https://github.com/grafana/nanogit/commit/633960d388dea9c3a720133a5ae47fe5f00e99ac))
+* **security/high/:** update security esbuild to v0.28.1 [security] ([#347](https://github.com/grafana/nanogit/issues/347)) ([a0f1a25](https://github.com/grafana/nanogit/commit/a0f1a25531a4a545a2d186ca6ea4780bedac1fdb))
+* **security/high:** update module github.com/go-git/go-billy/v5 to v5.9.0 [security] ([#299](https://github.com/grafana/nanogit/issues/299)) ([a7f8377](https://github.com/grafana/nanogit/commit/a7f8377958f4744d3f83f47cb51b382d0e8647fb))
+* **security/high:** update module github.com/go-git/go-git/v5 to v5.19.1 [security] ([#300](https://github.com/grafana/nanogit/issues/300)) ([9348dbc](https://github.com/grafana/nanogit/commit/9348dbc3577d1e38ff38edca875e1d12fdc98ed0))
+* **security/high:** update module go.opentelemetry.io/otel/sdk to v1.43.0 [security] ([#328](https://github.com/grafana/nanogit/issues/328)) ([3a3c2e2](https://github.com/grafana/nanogit/commit/3a3c2e2fdd39d6d0b11a384270fcff80018bc6d9))
+* **security/unknown/:** update security github.com/cloudflare/circl to v1.6.3 [security] ([#340](https://github.com/grafana/nanogit/issues/340)) ([8a1fd2e](https://github.com/grafana/nanogit/commit/8a1fd2ee904bd92c53bc897f055c7f143b78b34b))
+* **security/unknown:** update module golang.org/x/crypto to v0.52.0 [security] ([#301](https://github.com/grafana/nanogit/issues/301)) ([dbf16f3](https://github.com/grafana/nanogit/commit/dbf16f317be76571d3e43617c0483cafcd1d16a9))
+* **security/unknown:** update module golang.org/x/net to v0.55.0 [security] ([#302](https://github.com/grafana/nanogit/issues/302)) ([6d5ca01](https://github.com/grafana/nanogit/commit/6d5ca013b8528d953da3edc5979fc7432052f7aa))
+* **security/unknown:** update module golang.org/x/sys to v0.44.0 [security] ([#303](https://github.com/grafana/nanogit/issues/303)) ([3493b6d](https://github.com/grafana/nanogit/commit/3493b6d1f63ecb45eab4c52e34ad5a770479630c))
+* **security:** upgrade to Go 1.25.10 to address GO-2026-4971 ([#323](https://github.com/grafana/nanogit/issues/323)) ([6646278](https://github.com/grafana/nanogit/commit/66462788450f0992f129c036e25f88e99511ffd9))
+* **security:** upgrade to Go 1.25.8 to address standard library vulnerabilities ([#209](https://github.com/grafana/nanogit/issues/209)) ([ac9dd9f](https://github.com/grafana/nanogit/commit/ac9dd9fcfc848a3d90a548e58e30d5badebc7345))
+* **security:** upgrade to Go 1.25.9 to address stdlib vulnerabilities ([#272](https://github.com/grafana/nanogit/issues/272)) ([33be959](https://github.com/grafana/nanogit/commit/33be95986b8d5f31bb4935118d97aff5eb4c7471))
+* unwrap side-band channel 1 and validate unpack ok on receive-pack ([#270](https://github.com/grafana/nanogit/issues/270)) ([326b592](https://github.com/grafana/nanogit/commit/326b5923fdd10a5d0694feed74a058dc8763f567)), closes [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#269](https://github.com/grafana/nanogit/issues/269) [#2](https://github.com/grafana/nanogit/issues/2)
+
+
+### Performance Improvements
+
+* optimize banner image size for faster loading ([#119](https://github.com/grafana/nanogit/issues/119)) ([d643ee8](https://github.com/grafana/nanogit/commit/d643ee880f07248b218a3c970e4ff90360568527))
+
+
+### Documentation
+
+* Add GitHub Pages documentation site with MkDocs ([#116](https://github.com/grafana/nanogit/issues/116)) ([d8268a3](https://github.com/grafana/nanogit/commit/d8268a3cf4f1f3320aab482a6da378331da354c2))
+* add GitHub stars badge to documentation homepage ([#124](https://github.com/grafana/nanogit/issues/124)) ([5eb2c5d](https://github.com/grafana/nanogit/commit/5eb2c5dc283b8d100901d56865017059a01969ae))
+* add logo and banner images for branding ([#118](https://github.com/grafana/nanogit/issues/118)) ([0e7275c](https://github.com/grafana/nanogit/commit/0e7275c2b91efb29ceaca4e72ae92b17c4519577))
+* add server compatibility check guide ([#274](https://github.com/grafana/nanogit/issues/274)) ([3463873](https://github.com/grafana/nanogit/commit/3463873aaa6d3ca54bb77b19fca6f5b2ec86fa37))
+* document v0.x.x initial version strategy ([#111](https://github.com/grafana/nanogit/issues/111)) ([6e88621](https://github.com/grafana/nanogit/commit/6e886217dc058330715bae3972b49b5c46712d85))
+* migrate from MkDocs to VitePress for modern UI ([#117](https://github.com/grafana/nanogit/issues/117)) ([ebe3af6](https://github.com/grafana/nanogit/commit/ebe3af6abf3f036ca9ab792f36281a88861aa65a))
+* prioritize pre-built binary installation for CLI ([#218](https://github.com/grafana/nanogit/issues/218)) ([e167ef9](https://github.com/grafana/nanogit/commit/e167ef9d0d24fc8e243fb58507de80b7b64f6d21))
+* remove SECURITY.md ([#134](https://github.com/grafana/nanogit/issues/134)) ([66130f7](https://github.com/grafana/nanogit/commit/66130f71cf74d30fa73de8d4abe6fa587bce97b6))
+* Update CHANGELOG for initial release preparation ([#114](https://github.com/grafana/nanogit/issues/114)) ([6dd7a24](https://github.com/grafana/nanogit/commit/6dd7a24c9b88deca40f296ea91d160b5783ad2fe))
+
 ## [0.18.1](https://github.com/grafana/nanogit/compare/v0.18.0...v0.18.1) (2026-06-16)
 
 ### Bug Fixes
