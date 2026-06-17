@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/options"
 	"github.com/spf13/cobra"
 )
 
@@ -25,13 +24,19 @@ func init() {
 }
 
 var lsRemoteCmd = &cobra.Command{
-	Use:   "ls-remote <repository>",
+	Use:   "ls-remote [<repository>]",
 	Short: "List references in a remote repository",
 	Long: `List references (branches and tags) from a remote Git repository.
+
+The repository argument is optional when NANOGIT_REPO is set.
 
 Examples:
   # List all references
   nanogit ls-remote https://github.com/grafana/nanogit.git
+
+  # Use NANOGIT_REPO env var instead of repeating the URL
+  export NANOGIT_REPO=https://github.com/grafana/nanogit.git
+  nanogit ls-remote
 
   # List only branches
   nanogit ls-remote https://github.com/grafana/nanogit.git --heads
@@ -49,41 +54,16 @@ Examples:
   # With custom username
   nanogit ls-remote https://github.com/user/private-repo.git --username myuser --token <token>
   NANOGIT_USERNAME=myuser NANOGIT_TOKEN=<token> nanogit ls-remote https://github.com/user/private-repo.git`,
-	Args: cobra.ExactArgs(1),
+	Args: repoArgs(1),
 	RunE: runLsRemote,
 }
 
 func runLsRemote(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
-	ctx := context.Background()
+	repoURL, _ := resolveRepoURL(args, 1)
 
-	// Get authentication credentials from flags or environment
-	token := globalToken
-	if token == "" {
-		token = os.Getenv("NANOGIT_TOKEN")
-	}
-
-	username := globalUsername
-	if username == "" {
-		username = os.Getenv("NANOGIT_USERNAME")
-	}
-	if username == "" {
-		// Default to "git" as username
-		username = "git"
-	}
-
-	// Create client with optional authentication
-	var client nanogit.Client
-	var err error
-	if token != "" {
-		client, err = nanogit.NewHTTPClient(repoURL,
-			options.WithBasicAuth(username, token),
-			options.WithoutGitSuffix())
-	} else {
-		client, err = nanogit.NewHTTPClient(repoURL, options.WithoutGitSuffix())
-	}
+	ctx, client, err := setupClient(context.Background(), repoURL)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+		return err
 	}
 
 	// List all references

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/grafana/nanogit/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,6 +42,57 @@ func TestWithHTTPClient(t *testing.T) {
 			require.Equal(t, tt.httpClient, o.HTTPClient)
 		})
 	}
+}
+
+func TestWithReceivePackCapabilities(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unset by default", func(t *testing.T) {
+		o := &Options{}
+		require.Nil(t, o.ReceivePackCapabilities)
+	})
+
+	t.Run("replaces the set with what the caller passes", func(t *testing.T) {
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("custom")}
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		require.Equal(t, caps, o.ReceivePackCapabilities)
+	})
+
+	t.Run("copies the slice so caller mutations don't leak", func(t *testing.T) {
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2}
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		caps[0] = protocol.CapQuiet
+		require.Equal(t, protocol.CapReportStatusV2, o.ReceivePackCapabilities[0])
+	})
+}
+
+func TestWithCapabilityNegotiation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unset by default", func(t *testing.T) {
+		o := &Options{}
+		require.False(t, o.NegotiateCapabilities)
+	})
+
+	t.Run("sets the flag when applied", func(t *testing.T) {
+		o := &Options{}
+		require.NoError(t, WithCapabilityNegotiation()(o))
+		require.True(t, o.NegotiateCapabilities)
+	})
+
+	t.Run("composes with WithReceivePackCapabilities", func(t *testing.T) {
+		// WithReceivePackCapabilities provides the desired set;
+		// WithCapabilityNegotiation flags that the set should be intersected
+		// with the server's advertisement at push time. Both fields coexist.
+		o := &Options{}
+		caps := []protocol.Capability{protocol.CapReportStatusV2, protocol.CapAgent("custom")}
+		require.NoError(t, WithReceivePackCapabilities(caps...)(o))
+		require.NoError(t, WithCapabilityNegotiation()(o))
+		require.Equal(t, caps, o.ReceivePackCapabilities)
+		require.True(t, o.NegotiateCapabilities)
+	})
 }
 
 func TestWithUserAgent(t *testing.T) {

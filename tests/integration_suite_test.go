@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,6 +26,12 @@ var (
 		Success(msg string, keysAndValues ...any)
 	}
 	ctx context.Context
+
+	// quickSetupExtraOpts is prepended to the per-call extraOpts in QuickSetup.
+	// Outer Describe/Context blocks set this in BeforeEach to parameterize an
+	// entire tree of specs (e.g. once with WithCapabilityNegotiation and once
+	// without) without having to thread the option through every call site.
+	quickSetupExtraOpts []options.Option
 )
 
 func TestIntegrationSuite(t *testing.T) {
@@ -42,9 +49,12 @@ var _ = BeforeSuite(func() {
 	baseLogger := gittest.NewWriterLogger(GinkgoWriter)
 	logger = gittest.NewStructuredLogger(baseLogger)
 
+	ssh := testsigning.LoadSSH(GinkgoT())
+
 	var err error
 	gitServer, err = gittest.NewServer(context.Background(),
 		gittest.WithLogger(baseLogger),
+		gittest.WithTrustedSSHKeys(string(ssh.PublicLine)),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -62,7 +72,7 @@ var _ = AfterSuite(func() {
 })
 
 // QuickSetup provides a complete test setup with client, remote repo, local repo, and user
-func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo, *gittest.User) {
+func QuickSetup(extraOpts ...options.Option) (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo, *gittest.User) {
 	user, err := gitServer.CreateUser(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -82,9 +92,16 @@ func QuickSetup() (nanogit.Client, *gittest.RemoteRepository, *gittest.LocalRepo
 	connInfo, err := local.InitWithRemote(user, repo)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Create nanogit client from connection info
-	client, err := nanogit.NewHTTPClient(connInfo.URL,
-		options.WithBasicAuth(connInfo.Username, connInfo.Password))
+	// Create nanogit client from connection info. The package-level
+	// quickSetupExtraOpts is applied first so per-call extraOpts can still
+	// override (e.g. an outer Describe sets WithCapabilityNegotiation while
+	// an inner spec adds WithReceivePackCapabilities).
+	clientOpts := []options.Option{
+		options.WithBasicAuth(connInfo.Username, connInfo.Password),
+	}
+	clientOpts = append(clientOpts, quickSetupExtraOpts...)
+	clientOpts = append(clientOpts, extraOpts...)
+	client, err := nanogit.NewHTTPClient(connInfo.URL, clientOpts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	return client, repo, local, user

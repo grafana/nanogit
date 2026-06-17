@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/grafana/nanogit"
-	"github.com/grafana/nanogit/options"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +14,7 @@ func init() {
 }
 
 var checkCmd = &cobra.Command{
-	Use:   "check <repository>",
+	Use:   "check [<repository>]",
 	Short: "Check if a Git server is compatible with nanogit",
 	Long: `Check if a Git server supports Git protocol v2, which is required by nanogit.
 
@@ -26,49 +24,31 @@ before attempting other operations. nanogit requires Git Smart HTTP Protocol v2.
 Many modern Git hosting providers support protocol v2, but some older servers or
 certain cloud providers may only support protocol v1.
 
+The repository argument is optional when NANOGIT_REPO is set.
+
 Examples:
   # Check repository compatibility
   nanogit check https://example.com/repo.git
+
+  # Use NANOGIT_REPO env var instead of repeating the URL
+  export NANOGIT_REPO=https://example.com/repo.git
+  nanogit check
 
   # Check with authentication
   nanogit check https://example.com/private-repo.git --token <token>
 
   # Output as JSON
   nanogit --json check https://example.com/repo.git`,
-	Args: cobra.ExactArgs(1),
+	Args: repoArgs(1),
 	RunE: runCheck,
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
-	ctx := context.Background()
+	repoURL, _ := resolveRepoURL(args, 1)
 
-	// Get authentication credentials from flags or environment
-	token := globalToken
-	if token == "" {
-		token = os.Getenv("NANOGIT_TOKEN")
-	}
-
-	username := globalUsername
-	if username == "" {
-		username = os.Getenv("NANOGIT_USERNAME")
-	}
-	if username == "" {
-		username = "git"
-	}
-
-	// Create client with optional authentication
-	var client nanogit.Client
-	var err error
-	if token != "" {
-		client, err = nanogit.NewHTTPClient(repoURL,
-			options.WithBasicAuth(username, token),
-			options.WithoutGitSuffix())
-	} else {
-		client, err = nanogit.NewHTTPClient(repoURL, options.WithoutGitSuffix())
-	}
+	ctx, client, err := setupClient(context.Background(), repoURL)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+		return err
 	}
 
 	// Check server compatibility

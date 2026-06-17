@@ -158,10 +158,11 @@ func TestLsRemoteCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
+		envRepo     string
 		expectError bool
 	}{
 		{
-			name:        "no arguments returns error",
+			name:        "no arguments returns error without env",
 			args:        []string{},
 			expectError: true,
 		},
@@ -175,6 +176,12 @@ func TestLsRemoteCommand(t *testing.T) {
 			args:        []string{"https://github.com/grafana/nanogit"},
 			expectError: false, // Will fail when trying to connect, but args validation passes
 		},
+		{
+			name:        "no arguments accepted when NANOGIT_REPO is set",
+			args:        []string{},
+			envRepo:     "https://github.com/grafana/nanogit",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -185,6 +192,8 @@ func TestLsRemoteCommand(t *testing.T) {
 			globalJSON = false
 			globalToken = ""
 			globalUsername = ""
+
+			t.Setenv("NANOGIT_REPO", tt.envRepo)
 
 			// Test argument validation
 			lsRemoteCmd.SetArgs(tt.args)

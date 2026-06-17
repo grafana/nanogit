@@ -15,10 +15,11 @@ func TestCheckCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
+		envRepo     string
 		expectError bool
 	}{
 		{
-			name:        "no arguments returns error",
+			name:        "no arguments returns error without env",
 			args:        []string{},
 			expectError: true,
 		},
@@ -32,6 +33,12 @@ func TestCheckCommand(t *testing.T) {
 			args:        []string{"https://github.com/grafana/nanogit.git"},
 			expectError: false,
 		},
+		{
+			name:        "no arguments accepted when NANOGIT_REPO is set",
+			args:        []string{},
+			envRepo:     "https://github.com/grafana/nanogit.git",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -40,6 +47,8 @@ func TestCheckCommand(t *testing.T) {
 			globalJSON = false
 			globalUsername = ""
 			globalToken = ""
+
+			t.Setenv("NANOGIT_REPO", tt.envRepo)
 
 			// Test argument validation
 			checkCmd.SetArgs(tt.args)

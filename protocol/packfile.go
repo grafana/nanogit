@@ -22,6 +22,7 @@ import (
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/protocol/signing"
 )
 
 // ErrPackfileWriterCleanedUp is returned when trying to use a PackfileWriter after cleanup has been called.
@@ -262,6 +263,8 @@ func (e *PackfileObject) parseCommit() error {
 func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Builder, error) {
 	writingMsg := false
 	msg := &strings.Builder{}
+	var sig []string
+	header := ""
 
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -277,18 +280,33 @@ func (e *PackfileObject) parseCommitHeaders(reader *bufio.Reader) (*strings.Buil
 			continue
 		}
 
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
+		raw := bytes.TrimSuffix(line, []byte("\n"))
+		if len(raw) == 0 {
 			writingMsg = true
 			continue
 		}
 
-		err = e.parseCommitField(line)
-		if err != nil {
+		if raw[0] == ' ' {
+			if header == "gpgsig" {
+				sig = append(sig, string(raw[1:]))
+			}
+			continue
+		}
+
+		command, data, _ := bytes.Cut(raw, []byte(" "))
+		header = string(command)
+		if header == "gpgsig" {
+			sig = append(sig, string(data))
+			continue
+		}
+		if err := e.parseCommitField(raw); err != nil {
 			return nil, err
 		}
 	}
 
+	if len(sig) > 0 {
+		e.Commit.Signature = strings.Join(sig, "\n")
+	}
 	return msg, nil
 }
 
@@ -379,9 +397,12 @@ type PackfileTreeEntry struct {
 // PackfileCommit represents a single commit within a packfile.
 //
 // The wire-format looks as follows:
-//   - A set of attribute fields delimited by '\n's. They are a name, a space (0x20), and a value.
+//   - A set of attribute fields delimited by '\n's. Each is a name, a space
+//     (0x20), and a value.
+//   - An optional signature header (canonically named "gpgsig"); continuation
+//     lines are folded with a leading space.
 //   - An empty line (i.e. just \n).
-//   - The commit message. A PGP signature is optionally included here, which will then have a '\n \n\n' at the end of it.
+//   - The commit message.
 //
 // Resource: https://github.com/go-git/go-git/blob/63343bf5f918ea5384ae63bfd22bb36689fa0151/plumbing/object/commit.go#L185-L275
 type PackfileCommit struct {
@@ -390,11 +411,42 @@ type PackfileCommit struct {
 	Committer *Identity
 	Parent    hash.Hash
 	Message   string
+	// Signature, when non-empty, is an armored block embedded as the gpgsig header.
+	Signature string
 	// Fields contains any fields beyond the fields that are statically defined.
 	// If a field is statically defined, it SHOULD not show up here.
 	Fields map[string][]byte
+}
 
-	// There is also a gpgsig field.
+// Build returns the canonical commit object, including the gpgsig header
+// when a signature is present.
+func (c *PackfileCommit) Build() []byte {
+	return c.build(true)
+}
+
+// BuildUnsigned returns the commit object without the gpgsig header,
+// i.e. the payload that gets signed.
+func (c *PackfileCommit) BuildUnsigned() []byte {
+	return c.build(false)
+}
+
+func (c *PackfileCommit) build(includeSig bool) []byte {
+	var data bytes.Buffer
+	fmt.Fprintf(&data, "tree %s\n", c.Tree.String())
+	if !c.Parent.Is(hash.Zero) {
+		fmt.Fprintf(&data, "parent %s\n", c.Parent.String())
+	}
+	fmt.Fprintf(&data, "author %s\n", c.Author.String())
+	fmt.Fprintf(&data, "committer %s\n", c.Committer.String())
+	if includeSig && c.Signature != "" {
+		// Git uses the gpgsig header for GPG, SSH, and X.509 signatures alike.
+		data.WriteString("gpgsig ")
+		data.WriteString(strings.ReplaceAll(c.Signature, "\n", "\n "))
+		data.WriteByte('\n')
+	}
+	data.WriteString("\n")
+	data.WriteString(c.Message)
+	return data.Bytes()
 }
 
 type PackfileTrailer struct {
@@ -571,7 +623,7 @@ func (p *PackfileReader) parseObjectContent(obj *PackfileObject) error {
 // processRefDelta handles reference delta objects
 func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 	ref := make([]byte, p.algo.Size())
-	if _, err := p.reader.Read(ref); err != nil {
+	if _, err := io.ReadFull(p.reader, ref); err != nil {
 		return err
 	}
 
@@ -793,6 +845,9 @@ type PackfileWriter struct {
 	isCleanedUp bool
 	// The hash algorithm to use (SHA1 or SHA256)
 	algo crypto.Hash
+	// Capabilities advertised on the ref update command. Empty means
+	// DefaultReceivePackCapabilities() is used.
+	capabilities []Capability
 }
 
 const (
@@ -802,13 +857,22 @@ const (
 	MemoryBytesThreshold = 5 * 1024 * 1024
 )
 
-// NewPackfileWriter creates a new PackfileWriter with the specified hash algorithm and storage mode.
-func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode) *PackfileWriter {
+// NewPackfileWriter creates a new PackfileWriter with the specified hash
+// algorithm and storage mode. When caps is empty, WritePackfile uses
+// DefaultReceivePackCapabilities() for the ref update command; otherwise the given
+// capabilities replace the default set. The capability slice is copied so
+// later caller mutations cannot change what this writer advertises.
+func NewPackfileWriter(algo crypto.Hash, storageMode PackfileStorageMode, caps ...Capability) *PackfileWriter {
+	var capsCopy []Capability
+	if len(caps) > 0 {
+		capsCopy = append([]Capability(nil), caps...)
+	}
 	return &PackfileWriter{
 		objectHashes:  make(map[string]bool),
 		memoryObjects: make([]PackfileObject, 0),
 		storageMode:   storageMode,
 		algo:          algo,
+		capabilities:  capsCopy,
 	}
 }
 
@@ -894,18 +958,20 @@ func (w *PackfileWriter) AddBlob(data []byte) (hash.Hash, error) {
 // The tree represents a directory structure with file modes and hashes.
 func BuildTreeObject(algo crypto.Hash, entries []PackfileTreeEntry) (PackfileObject, error) {
 	// Sort entries according to Git specification: alphabetically by name,
-	// but directories are treated as if they have a trailing slash
+	// but directories are treated as if they have a trailing slash. Only
+	// real directory trees (exact mode 0o40000) get the trailing-slash
+	// treatment — gitlinks (0o160000) share the 0o40000 bit but are
+	// stored as files for the purposes of canonical tree ordering, so
+	// matching on the bit alone produced incorrectly-sorted trees that
+	// server-side fsck would reject.
 	sort.Slice(entries, func(i, j int) bool {
 		nameI := entries[i].FileName
 		nameJ := entries[j].FileName
 
-		// If entry i is a directory (mode 040000), append "/" for sorting
-		if entries[i].FileMode&0o40000 != 0 {
+		if entries[i].FileMode == 0o40000 {
 			nameI += "/"
 		}
-
-		// If entry j is a directory (mode 040000), append "/" for sorting
-		if entries[j].FileMode&0o40000 != 0 {
+		if entries[j].FileMode == 0o40000 {
 			nameJ += "/"
 		}
 
@@ -972,25 +1038,30 @@ func (w *PackfileWriter) HasObjects() bool {
 }
 
 // AddCommit adds a commit object to the packfile.
-// The commit references a tree and optionally a parent commit.
-func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string) (hash.Hash, error) {
+func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Identity, message string, signer signing.Signer) (hash.Hash, error) {
 	if err := w.checkCleanupState(); err != nil {
 		return hash.Hash{}, err
 	}
 
-	// Build commit data
-	var data bytes.Buffer
-	fmt.Fprintf(&data, "tree %s\n", tree.String())
-	if !parent.Is(hash.Zero) {
-		fmt.Fprintf(&data, "parent %s\n", parent.String())
+	c := &PackfileCommit{
+		Tree:      tree,
+		Parent:    parent,
+		Author:    author,
+		Committer: committer,
+		Message:   message,
 	}
-	fmt.Fprintf(&data, "author %s\n", author.String())
-	fmt.Fprintf(&data, "committer %s\n", committer.String())
-	data.WriteString("\n")
-	data.WriteString(message)
+	if signer != nil && c.Signature == "" {
+		unsignedBytes := c.BuildUnsigned()
+		sig, err := signer.Sign(unsignedBytes)
+		if err != nil {
+			return hash.Hash{}, fmt.Errorf("sign commit: %w", err)
+		}
+		c.Signature = sig
+	}
+	out := c.Build()
 
 	// Compute hash immediately
-	h, err := Object(w.algo, ObjectTypeCommit, data.Bytes())
+	h, err := Object(w.algo, ObjectTypeCommit, out)
 	if err != nil {
 		return hash.Hash{}, fmt.Errorf("computing commit hash: %w", err)
 	}
@@ -1002,16 +1073,10 @@ func (w *PackfileWriter) AddCommit(tree, parent hash.Hash, author, committer *Id
 
 	// Create commit object
 	obj := PackfileObject{
-		Type: ObjectTypeCommit,
-		Data: data.Bytes(),
-		Hash: h,
-		Commit: &PackfileCommit{
-			Tree:      tree,
-			Parent:    parent,
-			Author:    author,
-			Committer: committer,
-			Message:   message,
-		},
+		Type:   ObjectTypeCommit,
+		Data:   out,
+		Hash:   h,
+		Commit: c,
 	}
 
 	// Add to appropriate storage
@@ -1074,10 +1139,15 @@ func (pw *PackfileWriter) validateWriteState() error {
 
 // writeRefUpdate writes the reference update command and flush packet
 func (pw *PackfileWriter) writeRefUpdate(writer io.Writer, refName string, oldRefHash hash.Hash) error {
-	refUpdate := fmt.Sprintf("%s %s %s\000report-status-v2 side-band-64k quiet object-format=sha1 agent=nanogit\n",
+	capabilities, err := FormatCapabilities(pw.capabilities)
+	if err != nil {
+		return fmt.Errorf("capabilities: %w", err)
+	}
+	refUpdate := fmt.Sprintf("%s %s %s\000%s\n",
 		oldRefHash.String(),
 		pw.lastCommitHash.String(),
-		refName)
+		refName,
+		capabilities)
 
 	refUpdateLen := len(refUpdate) + 4
 	refUpdateLine := fmt.Sprintf("%04x%s", refUpdateLen, refUpdate)

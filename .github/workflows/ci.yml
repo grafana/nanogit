@@ -15,7 +15,7 @@ jobs:
     name: Generated Files
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -36,7 +36,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -55,7 +55,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -67,14 +67,14 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
         run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
+          apk add --no-cache git make gcc musl-dev bash curl gpg gpg-agent gpgsm openssh-keygen
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -93,7 +93,7 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -102,15 +102,15 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
         run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
+          apk add --no-cache git make gcc musl-dev bash curl gpg gpg-agent gpgsm openssh-keygen
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a53fc80bc30b0a16a262520465db899fa3af08b7 # get-vault-secrets/v1.3.2
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -125,7 +125,7 @@ jobs:
           CGO_ENABLED: 1
         run: make test-coverage
       - name: Upload coverage
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           fail_ci_if_error: true
           files: ./coverage.txt
@@ -135,14 +135,14 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -162,7 +162,7 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -173,14 +173,19 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a53fc80bc30b0a16a262520465db899fa3af08b7 # get-vault-secrets/v1.3.2
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            GH_REPO_USER=github:GH_REPO_USER
-            GH_REPO_TOKEN=github:GH_REPO_TOKEN
+            REPO_USER=github:REPO_USER
+            REPO_TOKEN=github:REPO_TOKEN
+            SIGN_EMAIL=signing:EMAIL
+            SIGN_GPG_KEY=signing:GPG_KEY
+            SIGN_SSH_KEY=signing:SSH_KEY
+            SIGN_SMIME_KEY=signing:SMIME_KEY
+            SIGN_SMIME_CERT=signing:SMIME_CERT
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -193,9 +198,15 @@ jobs:
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
+          TEST_PROVIDER: github
           TEST_REPO: ${{ vars.GH_REPO_NAME }}
-          TEST_USER: ${{ env.GH_REPO_USER }}
-          TEST_TOKEN: ${{ env.GH_REPO_TOKEN }}
+          TEST_USER: ${{ env.REPO_USER }}
+          TEST_TOKEN: ${{ env.REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ env.SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ env.SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ env.SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ env.SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ env.SIGN_SMIME_CERT }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -208,7 +219,7 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -219,14 +230,19 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a53fc80bc30b0a16a262520465db899fa3af08b7 # get-vault-secrets/v1.3.2
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            GITLAB_REPO_USER=gitlab:GITLAB_REPO_USER
-            GITLAB_REPO_TOKEN=gitlab:GITLAB_REPO_TOKEN
+            REPO_USER=gitlab:REPO_USER
+            REPO_TOKEN=gitlab:REPO_TOKEN
+            SIGN_EMAIL=signing:EMAIL
+            SIGN_GPG_KEY=signing:GPG_KEY
+            SIGN_SSH_KEY=signing:SSH_KEY
+            SIGN_SMIME_KEY=signing:SMIME_KEY
+            SIGN_SMIME_CERT=signing:SMIME_CERT
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -239,9 +255,15 @@ jobs:
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
+          TEST_PROVIDER: gitlab
           TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
-          TEST_USER: ${{ env.GITLAB_REPO_USER }}
-          TEST_TOKEN: ${{ env.GITLAB_REPO_TOKEN }}
+          TEST_USER: ${{ env.REPO_USER }}
+          TEST_TOKEN: ${{ env.REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ env.SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ env.SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ env.SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ env.SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ env.SIGN_SMIME_CERT }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -253,7 +275,7 @@ jobs:
     if: github.repository == 'grafana/nanogit'
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -264,14 +286,19 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@f1614b210386ac420af6807a997ac7f6d96e477a # get-vault-secrets/v1.3.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a53fc80bc30b0a16a262520465db899fa3af08b7 # get-vault-secrets/v1.3.2
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            BITBUCKET_REPO_USER=bitbucket:BITBUCKET_REPO_USER
-            BITBUCKET_REPO_TOKEN=bitbucket:BITBUCKET_REPO_TOKEN
+            REPO_USER=bitbucket:REPO_USER
+            REPO_TOKEN=bitbucket:REPO_TOKEN
+            SIGN_EMAIL=signing:EMAIL
+            SIGN_GPG_KEY=signing:GPG_KEY
+            SIGN_SSH_KEY=signing:SSH_KEY
+            SIGN_SMIME_KEY=signing:SMIME_KEY
+            SIGN_SMIME_CERT=signing:SMIME_CERT
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -284,9 +311,15 @@ jobs:
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
+          TEST_PROVIDER: bitbucket
           TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
-          TEST_USER: ${{ env.BITBUCKET_REPO_USER }}
-          TEST_TOKEN: ${{ env.BITBUCKET_REPO_TOKEN }}
+          TEST_USER: ${{ env.REPO_USER }}
+          TEST_TOKEN: ${{ env.REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ env.SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ env.SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ env.SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ env.SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ env.SIGN_SMIME_CERT }}
         run: |
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
@@ -298,7 +331,7 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -318,13 +351,13 @@ jobs:
       - name: Run TruffleHog
         uses: trufflesecurity/trufflehog@afd5336caad0f61da51750ffe39869974b27b0db
         with:
-          extra_args: --results=verified,unknown
+          extra_args: --results=verified,unknown --exclude-globs='protocol/signing/testsigning/**'
 
   deps:
     name: Dependencies
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -346,7 +379,7 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -360,14 +393,14 @@ jobs:
     name: Clone Performance Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -386,14 +419,14 @@ jobs:
     name: Full Clone Performance Test (1 minute limit)
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/go/pkg/mod
@@ -416,7 +449,7 @@ jobs:
     name: CLI Build
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -434,7 +467,7 @@ jobs:
     name: CLI Format
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies
@@ -453,7 +486,7 @@ jobs:
     name: CLI Lint
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install build dependencies

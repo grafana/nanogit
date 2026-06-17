@@ -84,10 +84,11 @@ Usage:
 
 Flags:
   -h, --help              help for nanogit
-  -v, --version           version for nanogit
+      --version           version for nanogit
       --username string   Authentication username (can also use NANOGIT_USERNAME env var, defaults to 'git')
       --token string      Authentication token (can also use NANOGIT_TOKEN env var)
       --json              Output results in JSON format
+  -v, --verbose           Be verbose (emit Info-level logs to stderr; set NANOGIT_TRACE=1 for Debug/wire detail)
 ```
 
 ### Global Flags
@@ -97,10 +98,33 @@ The following flags are available for all commands:
 - `--username` - Authentication username (defaults to 'git' if not specified)
 - `--token` - Authentication token for private repositories
 - `--json` - Output results in JSON format (where applicable)
+- `-v`, `--verbose` - Emit Info-level logs to stderr (see [Verbose mode](#verbose-mode))
 
 These flags can also be set via environment variables:
 - `NANOGIT_USERNAME` - Authentication username
 - `NANOGIT_TOKEN` - Authentication token
+- `NANOGIT_REPO` - Default repository URL. When set, the `<repository>` positional argument becomes optional for all commands. An explicit positional still overrides it.
+- `NANOGIT_TRACE` - When set (to any non-empty value), emits Debug-level wire/protocol logs to stderr
+
+## Verbose mode
+
+nanogit follows git's verbosity conventions. By default, only Warn and Error messages are emitted on stderr. Two levels of extra output are available:
+
+- **`-v` / `--verbose`** — enables Info-level progress messages on stderr. Behaves like `git push -v`.
+- **`NANOGIT_TRACE=1`** — enables Debug-level wire/protocol detail on stderr. Mirrors git's `GIT_TRACE=1` / `GIT_CURL_VERBOSE=1` environment variables. Works independently of `-v`.
+
+All log output is written to **stderr**, so `stdout` stays clean for piping commit hashes, JSON output, or blob contents.
+
+```bash
+# Info-level progress
+nanogit -v clone https://github.com/grafana/nanogit.git ./tmp
+
+# Full wire trace (Debug-level)
+NANOGIT_TRACE=1 nanogit clone https://github.com/grafana/nanogit.git ./tmp
+
+# Combine with --json: stdout stays valid JSON
+nanogit -v --json ls-tree https://github.com/grafana/nanogit.git main
+```
 
 ## Authentication
 
@@ -128,7 +152,7 @@ nanogit --version
 
 nanogit requires **Git Smart HTTP Protocol v2**. Most modern Git hosting providers support protocol v2, but some older servers or certain cloud providers may only support protocol v1.
 
-Use the `check` command to verify if your Git server is compatible before attempting other operations.
+Use the `check` command to verify if your Git server is compatible before attempting other operations. For a complete round-trip that also exercises the read and write paths, see [Server Compatibility](server-compatibility.md).
 
 ## Commands
 
@@ -343,3 +367,92 @@ Recommended settings:
 - Large repositories: `--batch-size 100 --concurrency 20`
 - Default (balanced): `--batch-size 50 --concurrency 10` (automatic)
 - Constrained environments: `--batch-size 1 --concurrency 1` (sequential)
+
+### put-file
+
+Create or update a file on a branch in a single commit. The command stages the blob, commits, and pushes in one step — there is no separate staging area. The ref argument must resolve to a **branch**; tags and raw commit hashes are rejected because staged writes target branch tips.
+
+Content is read from **stdin** by default, or from a local file with `--from-file`. Author identity must be supplied explicitly (via `--author` or the `NANOGIT_AUTHOR_NAME` / `NANOGIT_AUTHOR_EMAIL` environment variables) — nanogit does not fabricate a default identity. The committer defaults to the author when not overridden.
+
+**Usage**:
+```bash
+nanogit put-file <repository> <ref> <path> [-] [flags]
+```
+
+The optional trailing `-` indicates stdin explicitly; it can also be omitted. When `--from-file` is used, stdin is ignored.
+
+**Flags**:
+- `-m, --message <string>` — commit message (required)
+- `--from-file <path>` — read content from a local file instead of stdin
+- `--author "Name <email>"` — commit author; falls back to `NANOGIT_AUTHOR_NAME` and `NANOGIT_AUTHOR_EMAIL`. Errors out if unresolved (no silent default)
+- `--committer "Name <email>"` — commit committer; falls back to `NANOGIT_COMMITTER_NAME` / `NANOGIT_COMMITTER_EMAIL`, and finally to the author
+- `--receive-pack-capability <token>` — override the capabilities advertised on the receive-pack push (repeatable). When set, the given values **replace** the nanogit defaults entirely. Common tokens: `report-status-v2`, `side-band-64k`, `quiet`, `object-format=sha1`, `agent=<name>`. Arbitrary tokens are passed through to the server unchanged. See [Receive-pack capabilities](server-compatibility.md#receive-pack-capabilities) for the defaults and when to override them.
+
+**Output**: the new commit hash is printed to stdout. With `--json`, a `{"commit": "...", "path": "..."}` object is emitted instead. All log output (including `-v` / `NANOGIT_TRACE`) goes to stderr, so the commit hash is safe to pipe or capture.
+
+**Examples**:
+
+Pipe content on stdin:
+```bash
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" \
+  --author "Jane Doe <jane@example.com>"
+```
+
+Read content from a local file:
+```bash
+nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  --from-file ./local.md \
+  -m "add note" \
+  --author "Jane Doe <jane@example.com>"
+```
+
+Use environment variables for the identity (recommended for scripts/CI):
+```bash
+export NANOGIT_AUTHOR_NAME="Jane Doe"
+export NANOGIT_AUTHOR_EMAIL="jane@example.com"
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note"
+```
+
+Distinct committer identity:
+```bash
+nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" \
+  --author "Jane Doe <jane@example.com>" \
+  --committer "CI Bot <ci@example.com>" \
+  --from-file ./local.md
+```
+
+Observe the protocol layer with verbose/trace output:
+```bash
+# Info-level progress on stderr, commit hash on stdout
+echo "hello" | nanogit -v put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>"
+
+# Full wire-level Debug output
+echo "hello" | NANOGIT_TRACE=1 nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>"
+```
+
+Capture the new commit hash in a script:
+```bash
+commit=$(echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>")
+echo "Pushed commit: $commit"
+```
+
+Override the advertised receive-pack capabilities (e.g. drop `side-band-64k` to work around servers that wrap `report-status` in side-band channel 1):
+```bash
+echo "hello" | nanogit put-file https://github.com/user/repo.git main docs/note.md \
+  -m "add note" --author "Jane Doe <jane@example.com>" \
+  --receive-pack-capability=report-status-v2 \
+  --receive-pack-capability=quiet \
+  --receive-pack-capability=object-format=sha1 \
+  --receive-pack-capability=agent=nanogit
+```
+
+**Notes**:
+- The command is idempotent in the sense that it will `UpdateBlob` if the path already exists on the branch and `CreateBlob` otherwise — callers don't need to know which case applies.
+- If the push fails, the in-memory staged writer is cleaned up automatically. No local state is left behind (nanogit is stateless).
+- `put-file` is a porcelain convenience for testing and demonstrating the nanogit write path. For batched writes across multiple files, use the `StagedWriter` API from the library directly.

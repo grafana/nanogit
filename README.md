@@ -40,7 +40,7 @@ The following features are explicitly not supported:
 
 - `git://` and Git-over-SSH protocols
 - File protocol (local Git operations)
-- Commit signing and signature verification
+- Signature verification
 - Git hooks
 - Git configuration management
 - Direct .git directory access

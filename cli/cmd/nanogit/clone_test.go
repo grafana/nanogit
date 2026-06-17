@@ -51,10 +51,11 @@ func TestCloneCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
+		envRepo     string
 		expectError bool
 	}{
 		{
-			name:        "no arguments returns error",
+			name:        "no arguments returns error without env",
 			args:        []string{},
 			expectError: true,
 		},
@@ -73,6 +74,18 @@ func TestCloneCommand(t *testing.T) {
 			args:        []string{"url", "dest", "extra"},
 			expectError: true,
 		},
+		{
+			name:        "no arguments accepted when NANOGIT_REPO is set",
+			args:        []string{},
+			envRepo:     "https://github.com/grafana/nanogit.git",
+			expectError: false,
+		},
+		{
+			name:        "destination-only accepted when NANOGIT_REPO is set",
+			args:        []string{"./my-repo"},
+			envRepo:     "https://github.com/grafana/nanogit.git",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -85,6 +98,8 @@ func TestCloneCommand(t *testing.T) {
 			cloneBatchSize = 50
 			cloneConcurrency = 10
 
+			t.Setenv("NANOGIT_REPO", tt.envRepo)
+
 			// Test argument validation
 			cloneCmd.SetArgs(tt.args)
 			err := cloneCmd.Args(cloneCmd, tt.args)
@@ -96,6 +111,43 @@ func TestCloneCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveCloneArgs(t *testing.T) {
+	t.Run("no env, single positional", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "")
+		repo, dest := resolveCloneArgs([]string{"https://example.com/repo.git"})
+		assert.Equal(t, "https://example.com/repo.git", repo)
+		assert.Equal(t, ".", dest)
+	})
+
+	t.Run("env, no positional", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "https://env.example.com/repo.git")
+		repo, dest := resolveCloneArgs([]string{})
+		assert.Equal(t, "https://env.example.com/repo.git", repo)
+		assert.Equal(t, ".", dest)
+	})
+
+	t.Run("env, single path-like positional is destination", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "https://env.example.com/repo.git")
+		repo, dest := resolveCloneArgs([]string{"./my-repo"})
+		assert.Equal(t, "https://env.example.com/repo.git", repo)
+		assert.Equal(t, "./my-repo", dest)
+	})
+
+	t.Run("env, single URL-like positional overrides env", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "https://env.example.com/repo.git")
+		repo, dest := resolveCloneArgs([]string{"https://override.example.com/repo.git"})
+		assert.Equal(t, "https://override.example.com/repo.git", repo)
+		assert.Equal(t, ".", dest)
+	})
+
+	t.Run("env, two positionals always URL first", func(t *testing.T) {
+		t.Setenv("NANOGIT_REPO", "https://env.example.com/repo.git")
+		repo, dest := resolveCloneArgs([]string{"https://arg.example.com/repo.git", "./dest"})
+		assert.Equal(t, "https://arg.example.com/repo.git", repo)
+		assert.Equal(t, "./dest", dest)
+	})
 }
 
 func TestCloneFlagsValidation(t *testing.T) {

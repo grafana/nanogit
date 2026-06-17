@@ -19,7 +19,7 @@ jobs:
     name: Build and Upload Binaries
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25.8-alpine@sha256:8e02eb337d9e0ea459e041f1ee5eece41cbb61f1d83e7d883a3e2fb4862063fa
+      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     steps:
       - name: Install dependencies
         run: |
@@ -38,7 +38,7 @@ jobs:
         run: git fetch --force --tags
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7
         with:
           distribution: goreleaser
           version: '~> v2'

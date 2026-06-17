@@ -412,6 +412,7 @@ func TestCreateRef(t *testing.T) {
 							}
 						}
 						w.WriteHeader(http.StatusOK)
+						writeReportStatusUnpackOk(t, w)
 						return
 					}
 					t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -445,6 +446,48 @@ func TestCreateRef(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateRef_WithReceivePackCapabilities(t *testing.T) {
+	refHash, err := hash.FromHex("1234567890123456789012345678901234567890")
+	require.NoError(t, err)
+	refToCreate := Ref{Name: "refs/heads/main", Hash: refHash}
+
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/git-upload-pack":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("0000")) // ref not found
+		case "/git-receive-pack":
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			gotBody = body
+			w.WriteHeader(http.StatusOK)
+			writeReportStatusUnpackOk(t, w)
+		default:
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	// Override with a side-band-free set: callers must spell out every
+	// capability they want on the wire; there is no "subtract" sugar.
+	caps := []protocol.Capability{
+		protocol.CapReportStatusV2,
+		protocol.CapQuiet,
+		protocol.CapObjectFormatSHA1,
+		protocol.CapAgent("nanogit"),
+	}
+	client, err := NewHTTPClient(server.URL, options.WithReceivePackCapabilities(caps...))
+	require.NoError(t, err)
+
+	require.NoError(t, client.CreateRef(context.Background(), refToCreate))
+
+	wantCaps, err := protocol.FormatCapabilities(caps)
+	require.NoError(t, err)
+	require.Contains(t, string(gotBody), wantCaps)
+	require.NotContains(t, string(gotBody), string(protocol.CapSideBand64k))
 }
 
 func TestUpdateRef(t *testing.T) {
@@ -592,6 +635,21 @@ func handleReceivePackRequest(t *testing.T, w http.ResponseWriter, r *http.Reque
 		validateReceivePackBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
+	writeReportStatusUnpackOk(t, w)
+}
+
+// writeReportStatusUnpackOk emits a minimal valid receive-pack report-
+// status response (a single "unpack ok" pkt-line followed by a flush)
+// onto w and surfaces both pkt-line marshal failures and write failures
+// to the test, so handlers can satisfy ReceivePack's positive-validation
+// check in one line without inflating their cyclomatic complexity.
+func writeReportStatusUnpackOk(t *testing.T, w http.ResponseWriter) {
+	t.Helper()
+	pkt, err := protocol.FormatPacks(protocol.PackLine("unpack ok\n"))
+	require.NoError(t, err)
+	if _, err := w.Write(pkt); err != nil {
+		t.Errorf("failed to write response: %v", err)
+	}
 }
 
 // validateReceivePackBody validates the request body for receive-pack requests
@@ -787,6 +845,7 @@ func handleDeleteRefReceivePack(t *testing.T, w http.ResponseWriter, r *http.Req
 		validateDeleteRefBody(t, r, tt)
 	}
 	w.WriteHeader(http.StatusOK)
+	writeReportStatusUnpackOk(t, w)
 }
 
 // validateDeleteRefBody validates the request body for delete ref requests
