@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/nanogit/gittest"
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol/signing/testsigning"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,9 +49,12 @@ var _ = BeforeSuite(func() {
 	baseLogger := gittest.NewWriterLogger(GinkgoWriter)
 	logger = gittest.NewStructuredLogger(baseLogger)
 
+	ssh := testsigning.LoadSSH(GinkgoT())
+
 	var err error
 	gitServer, err = gittest.NewServer(context.Background(),
 		gittest.WithLogger(baseLogger),
+		gittest.WithTrustedSSHKeys(string(ssh.PublicLine)),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
