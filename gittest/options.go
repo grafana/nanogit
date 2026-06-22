@@ -41,24 +41,6 @@ func WithTrustedSSHKeys(keys ...string) ServerOption {
 	}
 }
 
-// userConfig holds configuration for creating a test user.
-type userConfig struct {
-	username *string
-}
-
-// UserOption configures a test user created by Server.CreateUser.
-type UserOption func(*userConfig)
-
-// WithUsername sets the exact username for a test user. This is useful for
-// tests that need stable repository URLs or server-side ownership paths.
-//
-// When this option is not provided, CreateUser generates a unique username.
-func WithUsername(username string) UserOption {
-	return func(c *userConfig) {
-		c.username = &username
-	}
-}
-
 // repoConfig holds configuration for LocalRepo.
 type repoConfig struct {
 	logger   Logger

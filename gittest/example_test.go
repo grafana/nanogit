@@ -97,25 +97,6 @@ func ExampleServer_CreateUser() {
 	// user.Password and user.Token are also available
 }
 
-// ExampleServer_CreateUser_withUsername demonstrates creating a test user with
-// an exact username.
-func ExampleServer_CreateUser_withUsername() {
-	ctx := context.Background()
-
-	server, err := gittest.NewServer(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer server.Cleanup()
-
-	user, err := server.CreateUser(ctx, gittest.WithUsername("alice"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Created user: %s\n", user.Username)
-}
-
 // ExampleServer_CreateRepo demonstrates creating a repository.
 func ExampleServer_CreateRepo() {
 	ctx := context.Background()

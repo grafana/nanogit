@@ -70,9 +70,6 @@ defer server.Cleanup()
 // Create a user
 user, err := server.CreateUser(ctx)
 
-// Create a user with an exact username
-customUser, err := server.CreateUser(ctx, gittest.WithUsername("alice"))
-
 // Create a repository
 repo, err := server.CreateRepo(ctx, "myrepo", user)
 
@@ -88,9 +85,6 @@ url := server.URL()
 - `WithTimeout(duration)` - Set container startup timeout
 - `WithGiteaImage(image)` - Set Docker image name
 - `WithGiteaVersion(version)` - Set Gitea version tag
-
-**User Options:**
-- `WithUsername(username)` - Set the exact username for `CreateUser`
 
 ### LocalRepo
 
