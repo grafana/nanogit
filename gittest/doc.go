@@ -16,6 +16,8 @@
 //	defer server.Cleanup()
 //
 //	user, _ := server.CreateUser(ctx)
+//	// Or use an exact username:
+//	// user, _ := server.CreateUser(ctx, gittest.WithUsername("alice"))
 //	repo, _ := server.CreateRepo(ctx, gittest.RandomRepoName(), user)
 //
 //	local, _ := gittest.NewLocalRepo(ctx)
