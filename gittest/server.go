@@ -193,14 +193,14 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 // CreateUser creates a new test user in the Gitea server.
 //
 // The user is automatically configured with:
-//   - Auto-generated unique username (e.g., "user-1234567890ab")
+//   - Auto-generated unique username, unless WithUsername is provided
 //   - Auto-generated email address
 //   - Auto-generated password
 //   - Admin privileges for repository creation
 //   - Pre-generated access token for authentication
 //
-// The username includes a timestamp and random suffix to prevent collisions
-// in parallel test execution.
+// The generated username includes a timestamp and random suffix to prevent
+// collisions in parallel test execution.
 //
 // Returns the created User with all credentials, or an error if creation fails.
 //
@@ -211,29 +211,22 @@ func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
 //		t.Fatal(err)
 //	}
 //	// user.Username, user.Password, user.Token are now available
-func (s *Server) CreateUser(ctx context.Context) (*User, error) {
-	// Generate a unique suffix using nanosecond timestamp + random bytes
-	// This ensures uniqueness even when tests run in parallel
-	now := time.Now().UnixNano()
-	var randomBytes [4]byte
-	if _, err := rand.Read(randomBytes[:]); err != nil {
-		return nil, fmt.Errorf("failed to generate random bytes: %w", err)
+func (s *Server) CreateUser(ctx context.Context, opts ...UserOption) (*User, error) {
+	suffix, err := randomUserSuffix()
+	if err != nil {
+		return nil, err
 	}
 
-	// Combine timestamp and random data for a unique suffix
-	suffix := fmt.Sprintf("%d%x", now, randomBytes)
-
-	user := &User{
-		Username: fmt.Sprintf("testuser-%s", suffix),
-		Email:    fmt.Sprintf("test-%s@example.com", suffix),
-		Password: fmt.Sprintf("testpass-%s", suffix),
+	user, err := newUser(suffix, opts...)
+	if err != nil {
+		return nil, err
 	}
 	s.logger.Logf("👤 Creating test user '%s'...", user.Username)
 
 	execResult, reader, err := s.container.Exec(ctx, []string{
 		"su", "git", "-c",
 		fmt.Sprintf("gitea admin user create --username %s --email %s --password %s --must-change-password=false --admin",
-			user.Username, user.Email, user.Password),
+			shellQuote(user.Username), shellQuote(user.Email), shellQuote(user.Password)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute user creation command: %w", err)
@@ -252,6 +245,50 @@ func (s *Server) CreateUser(ctx context.Context) (*User, error) {
 
 	s.logger.Logf("✅ Test user '%s' created successfully", user.Username)
 	return user, nil
+}
+
+// randomUserSuffix returns the unique suffix used for generated user fields.
+// Keeping this separate lets CreateUser share one suffix across username,
+// email, and password generation.
+func randomUserSuffix() (string, error) {
+	now := time.Now().UnixNano()
+	var randomBytes [4]byte
+	if _, err := rand.Read(randomBytes[:]); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return fmt.Sprintf("%d%x", now, randomBytes), nil
+}
+
+// newUser builds a User from a generated suffix and caller options before any
+// container commands run. This keeps validation independent from the Gitea CLI.
+func newUser(suffix string, opts ...UserOption) (*User, error) {
+	cfg := userConfig{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+
+	username := fmt.Sprintf("testuser-%s", suffix)
+	if cfg.username != nil {
+		username = *cfg.username
+	}
+	if strings.TrimSpace(username) == "" {
+		return nil, fmt.Errorf("username cannot be empty")
+	}
+
+	return &User{
+		Username: username,
+		Email:    fmt.Sprintf("test-%s@example.com", suffix),
+		Password: fmt.Sprintf("testpass-%s", suffix),
+	}, nil
+}
+
+// shellQuote returns value as a single POSIX shell argument. CreateUser and
+// CreateToken pass command strings through "su -c", so user-controlled values
+// must be quoted before they reach the shell.
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 // CreateToken creates a new access token for the specified user in the Gitea server.
@@ -273,7 +310,7 @@ func (s *Server) CreateToken(ctx context.Context, username string) (string, erro
 
 	execResult, reader, err := s.container.Exec(ctx, []string{
 		"su", "git", "-c",
-		fmt.Sprintf("gitea admin user generate-access-token --username %s --scopes all", username),
+		fmt.Sprintf("gitea admin user generate-access-token --username %s --scopes all", shellQuote(username)),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to execute token generation command: %w", err)

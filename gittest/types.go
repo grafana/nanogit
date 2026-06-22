@@ -8,8 +8,8 @@ import (
 
 // User represents a test user account in the Git server.
 //
-// All fields are automatically generated when created via Server.CreateUser():
-//   - Username: Unique identifier with timestamp suffix (e.g., "user-1234567890ab")
+// Fields are populated when created via Server.CreateUser():
+//   - Username: Generated unique identifier, or exact value from WithUsername
 //   - Email: Auto-generated email address
 //   - Password: Auto-generated password for HTTPS authentication
 //   - Token: Pre-generated access token for API operations
