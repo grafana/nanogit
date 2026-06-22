@@ -10,8 +10,8 @@ import (
 //
 // Fields are populated when created via Server.CreateUser():
 //   - Username: Generated unique identifier, or exact value from WithUsername
-//   - Email: Auto-generated email address
-//   - Password: Auto-generated password for HTTPS authentication
+//   - Email: Auto-generated email address derived from the username
+//   - Password: Auto-generated password derived from the username
 //   - Token: Pre-generated access token for API operations
 //
 // Example:

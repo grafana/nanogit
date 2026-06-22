@@ -247,9 +247,9 @@ func (s *Server) CreateUser(ctx context.Context, opts ...UserOption) (*User, err
 	return user, nil
 }
 
-// randomUserSuffix returns the unique suffix used for generated user fields.
-// Keeping this separate lets CreateUser share one suffix across username,
-// email, and password generation.
+// randomUserSuffix returns the unique suffix used for generated usernames.
+// Keeping this separate makes the default username construction explicit while
+// still allowing callers to provide an exact username.
 func randomUserSuffix() (string, error) {
 	now := time.Now().UnixNano()
 	var randomBytes [4]byte
@@ -279,8 +279,8 @@ func newUser(suffix string, opts ...UserOption) (*User, error) {
 
 	return &User{
 		Username: username,
-		Email:    fmt.Sprintf("test-%s@example.com", suffix),
-		Password: fmt.Sprintf("testpass-%s", suffix),
+		Email:    fmt.Sprintf("%s@example.com", username),
+		Password: fmt.Sprintf("%s-password", username),
 	}, nil
 }
 
