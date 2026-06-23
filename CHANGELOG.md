@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/grafana/nanogit/compare/v1.1.0...v1.2.0) (2026-06-22)
+
+### Features
+
+* Make gitea test user customisable in gittest ([#354](https://github.com/grafana/nanogit/issues/354)) ([d4227c6](https://github.com/grafana/nanogit/commit/d4227c6d0eceb93a5e0e1415b45780c8552fb0e8))
+
 ## [1.1.0](https://github.com/grafana/nanogit/compare/v0.18.1...v1.1.0) (2026-06-17)
 
 > **Note on versioning:** `v1.0.0` was published in error and was never a real
