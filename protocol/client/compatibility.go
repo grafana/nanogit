@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -181,17 +180,12 @@ func detectProtocolVersionFromReader(body io.Reader, limit int64) (protocolVersi
 		return protocolVersionV1, nil
 	}
 
-	// No version indicator seen. If the read failed because the cap
-	// was hit, surface that — the operator's tuning prevented us from
-	// answering. Otherwise we genuinely cannot tell.
-	if readErr != nil {
-		var tooLarge *ErrResponseTooLarge
-		if errors.As(readErr, &tooLarge) {
-			return protocolVersionUnknown, readErr
-		}
-		return protocolVersionUnknown, readErr
-	}
-	return protocolVersionUnknown, nil
+	// No version indicator seen. Surface any read error verbatim so the
+	// caller can distinguish a too-tight cap (*ErrResponseTooLarge, which
+	// stays errors.As-recoverable through the wrap in IsServerCompatible)
+	// from a genuinely undetectable server. With no read error we simply
+	// could not tell.
+	return protocolVersionUnknown, readErr
 }
 
 // isProtocolV2Line checks if a line indicates Git protocol v2.
