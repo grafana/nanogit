@@ -33,7 +33,7 @@ When a PR is merged to `main`:
    - Note: `tests/` module is internal only (no tag needed)
 5. **GitHub Release**: Release is published with auto-generated release notes — these notes are the single source of truth for the changelog
 6. **CLI Binaries Uploaded**: GoReleaser attaches platform binaries to the release
-7. **Docs Rebuild**: Publishing the release triggers the Documentation workflow, which regenerates the changelog page from the GitHub Releases API and deploys it to GitHub Pages
+7. **Docs Rebuild**: The release workflow dispatches the Documentation workflow (`gh workflow run docs.yml`), which regenerates the changelog page from the GitHub Releases API and deploys it to GitHub Pages
 8. **pkg.go.dev Updated**: Go module proxy automatically indexes both public modules
 
 **Note**: There is no `CHANGELOG.md` file in the repository. Release notes live only on the [GitHub Releases](https://github.com/grafana/nanogit/releases) page, and the docs site's [Changelog](https://grafana.github.io/nanogit/changelog) page is generated from them at build time.
@@ -62,13 +62,14 @@ fix: bug 1        → Patch
 
 - **`.releaserc.json`**: Semantic-release configuration
 - **`.github/workflows/release.yml`**: Release automation workflow
-- **`.github/workflows/docs.yml`**: Documentation build/deploy; rebuilds on `release: published` so the changelog page reflects new releases
+- **`.github/workflows/docs.yml`**: Documentation build/deploy; dispatched by the release workflow (via `workflow_dispatch`) so the changelog page reflects new releases
 - **`scripts/prepare-docs.sh`**: Generates `docs/changelog.md` from the GitHub Releases API at docs-build time
 
 ### Workflow Permissions
 
 The release workflow requires only:
 - `contents: write` - To create tags, push commits, publish the GitHub release, and upload GoReleaser assets
+- `actions: write` - To dispatch the Documentation workflow so the changelog page refreshes after a release
 
 `issues: write` and `pull-requests: write` are intentionally **not** granted: `@semantic-release/github` has comments, labels, and fail-issues disabled in `.releaserc.json`, so it only publishes the release.
 
@@ -132,8 +133,8 @@ A release won't be created if:
 **Problem**: A release was published but the docs site's changelog page is stale
 
 **Solutions**:
-1. **Check the Documentation workflow**: A `release: published` event should have triggered it — verify it ran and deployed
-2. **Re-run manually**: Trigger the Documentation workflow via `workflow_dispatch`
+1. **Check the Documentation workflow**: The release workflow's "Refresh documentation changelog" step should have dispatched it — verify it ran and deployed
+2. **Re-run manually**: Trigger the Documentation workflow via `workflow_dispatch` (`gh workflow run docs.yml --ref main`)
 3. **Verify the release is not a draft**: `prepare-docs.sh` skips draft releases
 
 ## Manual Release (Emergency)
