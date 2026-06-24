@@ -123,15 +123,33 @@ jobs:
           BRANCH_NAME="chore/changelog-${NEW_VERSION}"
           echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
 
-          git checkout -b "${BRANCH_NAME}"
-          git add CHANGELOG.md
-          git commit -m "chore: update CHANGELOG for ${NEW_VERSION}"
-          git push origin "${BRANCH_NAME}"
+          if git ls-remote --exit-code --heads origin "${BRANCH_NAME}" >/dev/null; then
+            echo "Error: branch ${BRANCH_NAME} already exists" >&2
+            exit 1
+          fi
 
+          git switch --create "${BRANCH_NAME}" "origin/${{ github.ref_name }}"
+          git push --set-upstream origin "${BRANCH_NAME}"
+
+      - name: Commit CHANGELOG changes
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag && steps.changelog_branch.outputs.has_changes == 'true'
+        uses: planetscale/ghcommit-action@a6b150b81dca5dd027baa898604418eec9e11465
+        with:
+          commit_message: "chore: update CHANGELOG for ${{ steps.new_release.outputs.new_tag }}"
+          repo: ${{ github.repository }}
+          branch: ${{ steps.changelog_branch.outputs.branch_name }}
+          file_pattern: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore local CHANGELOG
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag && steps.changelog_branch.outputs.has_changes == 'true'
+        run: |
           # Return to main and reset CHANGELOG to clean state for GoReleaser
-          git checkout main
+          git switch "${{ github.ref_name }}"
           git checkout HEAD -- CHANGELOG.md
-          echo "✅ CHANGELOG saved to branch ${BRANCH_NAME}, main is now clean for GoReleaser"
+          git diff --quiet CHANGELOG.md
+          echo "✅ CHANGELOG saved to branch ${{ steps.changelog_branch.outputs.branch_name }}, main is now clean for GoReleaser"
 
       - name: Setup Go
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
