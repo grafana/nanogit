@@ -67,8 +67,18 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 		return false, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	// Parse the response to detect protocol version
-	version := detectProtocolVersionFromReader(res.Body)
+	// Parse the response to detect protocol version. Use the configured
+	// RefsMetadataMaxBytes cap, but enforce a 1 MB safety floor: protocol
+	// detection only ever needs to read the first capability advertisement,
+	// so an embedder asking for "no limit" still gets bounded behavior here.
+	version, err := detectProtocolVersionFromReader(res.Body, compatibilityReadLimit(c.limits.RefsMetadataMaxBytes))
+	if err != nil {
+		// Surface limit-breach errors verbatim (errors.As-recoverable
+		// to *ErrResponseTooLarge) so operators tuning RefsMetadataMaxBytes
+		// can tell a too-tight cap apart from a genuinely
+		// incompatible server.
+		return false, fmt.Errorf("detect protocol version: %w", err)
+	}
 
 	switch version {
 	case protocolVersionV2:
@@ -82,18 +92,50 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 	}
 }
 
-// detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response
-// to determine the protocol version. Uses early-exit optimization when v2 is detected.
-func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
-	// Limit read to 1MB to prevent memory exhaustion from malicious servers
-	const maxResponseSize = 1024 * 1024 // 1MB
-	limitedReader := io.LimitReader(body, maxResponseSize)
+// compatibilityFloor is the byte cap applied to protocol-detection reads
+// when the caller leaves RefsMetadataMaxBytes at "no limit". Protocol
+// detection only needs the first capability advertisement, so a 1 MiB floor
+// keeps that path bounded by default. Once the caller configures any
+// positive RefsMetadataMaxBytes value it is honored verbatim — including
+// values smaller than the floor — because an explicitly configured cap is
+// the operator telling us what they want.
+const compatibilityFloor = 1024 * 1024
 
-	// Read all content from body first
-	content, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return protocolVersionUnknown
+// compatibilityReadLimit returns the byte cap to apply to a protocol
+// detection read given the configured RefsMetadataMaxBytes limit. A
+// configured value of 0 ("no limit") falls back to compatibilityFloor; any
+// positive value is honored as-is.
+func compatibilityReadLimit(refsMetadata int64) int64 {
+	if refsMetadata <= 0 {
+		return compatibilityFloor
 	}
+	return refsMetadata
+}
+
+// detectProtocolVersionFromReader parses a Git Smart HTTP info/refs response
+// to determine the protocol version. Uses early-exit optimization when v2 is
+// detected. limit caps the bytes read; a value <= 0 falls back to
+// compatibilityFloor.
+//
+// The cap-vs-detection contract: a v1 or v2 indicator that fits inside the
+// cap is honored regardless of how much extra data follows (large v1 repos
+// have many refs but only need the first one to identify the protocol). The
+// *ErrResponseTooLarge error is surfaced ONLY when the cap is exhausted and
+// neither indicator was seen — i.e. the cap kept us from getting an answer.
+// A successful read that does not match either v1 or v2 is reported via
+// protocolVersionUnknown with a nil error so the caller can distinguish
+// "server is incompatible" from "the cap was too tight to decide".
+func detectProtocolVersionFromReader(body io.Reader, limit int64) (protocolVersion, error) {
+	if limit <= 0 {
+		limit = compatibilityFloor
+	}
+	limitedReader := newLimitedReadCloser(io.NopCloser(body), limit, "compatibility")
+
+	// io.ReadAll on the limited reader returns whatever bytes the
+	// reader produced before erroring, even if the error is
+	// *ErrResponseTooLarge. We parse those bytes first and only let
+	// the cap error escape if the parse couldn't pin down a version.
+	content, readErr := io.ReadAll(limitedReader)
 
 	// Create a buffer reader that we can restart after flush packets
 	reader := bytes.NewReader(content)
@@ -122,7 +164,7 @@ func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 
 		// Check for protocol v2 indicators (early exit)
 		if isProtocolV2Line(line) {
-			return protocolVersionV2
+			return protocolVersionV2, nil
 		}
 
 		// Check for protocol v1 ref advertisement format
@@ -131,11 +173,19 @@ func detectProtocolVersionFromReader(body io.Reader) protocolVersion {
 		}
 	}
 
-	// Determine version based on indicators found
+	// Determine version based on indicators found. A v1 ref line is a
+	// commit to v1 even if more bytes were truncated by the cap: every
+	// additional pkt-line in a v1 advertisement is just another ref.
 	if hasRefLine {
-		return protocolVersionV1
+		return protocolVersionV1, nil
 	}
-	return protocolVersionUnknown
+
+	// No version indicator seen. Surface any read error verbatim so the
+	// caller can distinguish a too-tight cap (*ErrResponseTooLarge, which
+	// stays errors.As-recoverable through the wrap in IsServerCompatible)
+	// from a genuinely undetectable server. With no read error we simply
+	// could not tell.
+	return protocolVersionUnknown, readErr
 }
 
 // isProtocolV2Line checks if a line indicates Git protocol v2.

@@ -107,6 +107,10 @@ type httpClient struct {
 	// receivePackCapabilities is advertised on receive-pack ref update commands.
 	// When nil or empty, protocol.DefaultReceivePackCapabilities() is used.
 	receivePackCapabilities []protocol.Capability
+	// limits caps response bytes per operation class. The high-level
+	// methods read these to populate FetchOptions.MaxResponseBytes per
+	// call so the right cap (single-object vs multi-object) is applied.
+	limits options.Limits
 	// negotiateCaps gates capability negotiation. See
 	// options.WithCapabilityNegotiation.
 	negotiateCaps bool
@@ -170,6 +174,7 @@ func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 	return &httpClient{
 		RawClient:               rawClient,
 		receivePackCapabilities: resolved.ReceivePackCapabilities,
+		limits:                  resolved.Limits,
 		negotiateCaps:           resolved.NegotiateCapabilities,
 	}, nil
 }
