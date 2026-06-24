@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/grafana/nanogit/compare/v1.1.0...v1.2.0) (2026-06-22)
+
+### Features
+
+* Make gitea test user customisable in gittest ([#354](https://github.com/grafana/nanogit/issues/354)) ([d4227c6](https://github.com/grafana/nanogit/commit/d4227c6d0eceb93a5e0e1415b45780c8552fb0e8))
+
+## [1.1.0](https://github.com/grafana/nanogit/compare/v0.18.1...v1.1.0) (2026-06-17)
+
+> **Note on versioning:** `v1.0.0` was published in error and was never a real
+> release. `v1.1.0` is the first release on the supported 1.x line. It carries
+> the full, stable feature set of the 0.x series (documented in the entries
+> below) with **no breaking API changes from `v0.18.1`** — only the fixes listed
+> here have landed since.
+
+### Bug Fixes
+
+* enforce declared object size limits in packfile parser ([#344](https://github.com/grafana/nanogit/issues/344)) ([0b07599](https://github.com/grafana/nanogit/commit/0b075998a46f4623f83c296b75420fe8b24fbbab))
+* **deps:** update golang.org/x/crypto to v0.53.0 ([#342](https://github.com/grafana/nanogit/issues/342)) ([0d323e0](https://github.com/grafana/nanogit/commit/0d323e02b6bc1b53a678f4a08803bbb23d50fca4))
+* **security:** update esbuild to v0.28.1 ([#347](https://github.com/grafana/nanogit/issues/347)) ([a0f1a25](https://github.com/grafana/nanogit/commit/a0f1a25531a4a545a2d186ca6ea4780bedac1fdb))
+* **security:** update github.com/cloudflare/circl to v1.6.3 ([#340](https://github.com/grafana/nanogit/issues/340)) ([8a1fd2e](https://github.com/grafana/nanogit/commit/8a1fd2ee904bd92c53bc897f055c7f143b78b34b))
+
 ## [0.18.1](https://github.com/grafana/nanogit/compare/v0.18.0...v0.18.1) (2026-06-16)
 
 ### Bug Fixes
