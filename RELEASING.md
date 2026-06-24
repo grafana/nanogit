@@ -31,13 +31,12 @@ When a PR is merged to `main`:
    - `v0.5.3` - Main nanogit module
    - `gittest/v0.5.3` - Test utilities module (public)
    - Note: `tests/` module is internal only (no tag needed)
-5. **GitHub Release**: Release is published with auto-generated release notes
-6. **CHANGELOG PR Created**: Workflow creates a new branch with updated CHANGELOG.md
-7. **Auto-Merge Enabled**: PR is set to auto-merge once CI passes
-8. **CHANGELOG PR Merges**: After CI passes, PR merges automatically
-9. **pkg.go.dev Updated**: Go module proxy automatically indexes both public modules
+5. **GitHub Release**: Release is published with auto-generated release notes — these notes are the single source of truth for the changelog
+6. **CLI Binaries Uploaded**: GoReleaser attaches platform binaries to the release
+7. **Docs Rebuild**: Publishing the release triggers the Documentation workflow, which regenerates the changelog page from the GitHub Releases API and deploys it to GitHub Pages
+8. **pkg.go.dev Updated**: Go module proxy automatically indexes both public modules
 
-**Note**: The CHANGELOG update happens via an automated PR (not direct push) to respect branch protection rules. This PR will auto-merge if CI passes and auto-merge is enabled in repository settings.
+**Note**: There is no `CHANGELOG.md` file in the repository. Release notes live only on the [GitHub Releases](https://github.com/grafana/nanogit/releases) page, and the docs site's [Changelog](https://grafana.github.io/nanogit/changelog) page is generated from them at build time.
 
 ### Multiple Commits in a PR
 
@@ -59,29 +58,19 @@ fix: bug 1        → Patch
 
 ## Release Configuration
 
-### Repository Setup (One-Time)
-
-For the automated CHANGELOG PR workflow to work, you must enable auto-merge in your repository:
-
-1. Go to **Settings** → **General**
-2. Scroll to **Pull Requests** section
-3. Check ✅ **Allow auto-merge**
-4. Save changes
-
-Without this setting, CHANGELOG PRs will be created but won't auto-merge.
-
 ### Files
 
 - **`.releaserc.json`**: Semantic-release configuration
 - **`.github/workflows/release.yml`**: Release automation workflow
-- **`CHANGELOG.md`**: Auto-generated changelog (updated via automated PRs)
+- **`.github/workflows/docs.yml`**: Documentation build/deploy; rebuilds on `release: published` so the changelog page reflects new releases
+- **`scripts/prepare-docs.sh`**: Generates `docs/changelog.md` from the GitHub Releases API at docs-build time
 
 ### Workflow Permissions
 
-The release workflow requires:
-- `contents: write` - To create tags, branches, and push commits
-- `issues: write` - To interact with issues (if needed by semantic-release)
-- `pull-requests: write` - To create PRs and enable auto-merge
+The release workflow requires only:
+- `contents: write` - To create tags, push commits, publish the GitHub release, and upload GoReleaser assets
+
+`issues: write` and `pull-requests: write` are intentionally **not** granted: `@semantic-release/github` has comments, labels, and fail-issues disabled in `.releaserc.json`, so it only publishes the release.
 
 ## For Maintainers
 
@@ -104,9 +93,8 @@ After merging to `main`:
 1. CI completes (~5-10 minutes)
 2. Release workflow runs (~2-3 minutes)
 3. New release appears in [Releases](https://github.com/grafana/nanogit/releases)
-4. CHANGELOG PR is created automatically (e.g., `chore/changelog-v0.1.0`)
-5. CHANGELOG PR auto-merges after CI passes (~5-10 minutes)
-6. pkg.go.dev indexes the new version (5-15 minutes)
+4. Documentation workflow rebuilds and redeploys the changelog page from the new release (~2-3 minutes)
+5. pkg.go.dev indexes the new version (5-15 minutes)
 
 ### When No Release Occurs
 
@@ -139,17 +127,14 @@ A release won't be created if:
    - Network issues with npm packages
    - GitHub token permissions
 
-#### CHANGELOG PR Not Auto-Merging
+#### Changelog Page Not Updated
 
-**Problem**: CHANGELOG PR is created but doesn't auto-merge
+**Problem**: A release was published but the docs site's changelog page is stale
 
 **Solutions**:
-1. **Check auto-merge is enabled**: Settings → General → Pull Requests → "Allow auto-merge"
-2. **Verify CI passed**: Check that all CI checks completed successfully on the CHANGELOG PR
-3. **Check branch protection**: Ensure branch protection allows auto-merge
-4. **Manual merge**: If needed, manually merge the CHANGELOG PR
-
-**Note**: The CHANGELOG PR runs full CI checks (including zizmor and other security scans). This is safe because `chore:` commits do not trigger releases per the semantic-release configuration, so no new release cycle is created. All branch protection requirements will be satisfied before auto-merge.
+1. **Check the Documentation workflow**: A `release: published` event should have triggered it — verify it ran and deployed
+2. **Re-run manually**: Trigger the Documentation workflow via `workflow_dispatch`
+3. **Verify the release is not a draft**: `prepare-docs.sh` skips draft releases
 
 ## Manual Release (Emergency)
 
@@ -178,7 +163,7 @@ git push origin v0.1.1
 gh release create v0.1.1 --generate-notes
 ```
 
-**Note**: Manual tags bypass CHANGELOG generation. Prefer fixing the automated process.
+**Note**: `--generate-notes` produces basic notes from PR titles rather than the conventional-commit sections semantic-release creates. Prefer fixing the automated process.
 
 ## Best Practices
 

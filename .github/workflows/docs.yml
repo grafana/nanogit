@@ -19,6 +19,10 @@ on:
       - '.github/workflows/docs.yml'
       - '*.md'
       - 'scripts/prepare-docs.sh'
+  # Rebuild when a release is published so the changelog page (generated from
+  # GitHub Releases) reflects the new release.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -50,20 +54,21 @@ jobs:
         run: npm ci
 
       - name: Prepare documentation files
+        # Reads the public Releases API anonymously — no token required.
         run: ./scripts/prepare-docs.sh
 
       - name: Build documentation
         run: npm run docs:build
 
       - name: Upload artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: docs/.vitepress/dist
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
     permissions:
