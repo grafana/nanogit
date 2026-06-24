@@ -232,13 +232,14 @@ func (r *LocalRepo) Git(args ...string) (string, error) {
 //
 // This convenience method performs a complete setup sequence:
 //  1. Configures git user.name and user.email from the User
-//  2. Adds the remote repository's AuthURL as origin
-//  3. Creates an initial test.txt file with content
-//  4. Commits the file ("Initial commit")
-//  5. Renames branch to main (if needed)
-//  6. Force pushes to origin/main
-//  7. Sets up branch tracking
-//  8. Returns ConnectionInfo with URL and credentials
+//  2. Disables automatic gc so background repacks can't race commits
+//  3. Adds the remote repository's AuthURL as origin
+//  4. Creates an initial test.txt file with content
+//  5. Commits the file ("Initial commit")
+//  6. Renames branch to main (if needed)
+//  7. Force pushes to origin/main
+//  8. Sets up branch tracking
+//  9. Returns ConnectionInfo with URL and credentials
 //
 // This is the fastest way to get a fully functional local + remote repository
 // setup for testing.
@@ -261,6 +262,19 @@ func (r *LocalRepo) InitWithRemote(user *User, remote *RemoteRepository) (*Conne
 		return nil, err
 	}
 	if _, err := r.Git("config", "user.email", user.Email); err != nil {
+		return nil, err
+	}
+	// Disable automatic garbage collection. git commit (and friends) fork a
+	// background "git gc --auto" that repacks loose objects and prunes them;
+	// in tests that create many commits in a tight loop under CI load, that
+	// background repack can race the next add/commit and surface as
+	// "invalid object ... Error building trees" / "bad tree object HEAD".
+	// Test repos are short-lived, so gc buys us nothing — turn it off so the
+	// object store stays stable for the duration of the test.
+	if _, err := r.Git("config", "gc.auto", "0"); err != nil {
+		return nil, err
+	}
+	if _, err := r.Git("config", "maintenance.auto", "false"); err != nil {
 		return nil, err
 	}
 	if _, err := r.Git("remote", "add", "origin", remote.AuthURL); err != nil {
