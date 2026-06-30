@@ -325,12 +325,13 @@ type fetchMetrics struct {
 // fetchInitialCommitObjects performs the initial fetch of commit objects
 func (c *httpClient) fetchInitialCommitObjects(ctx context.Context, commitHash hash.Hash, metrics *fetchMetrics) (map[string]*protocol.PackfileObject, *protocol.PackfileObject, error) {
 	initialObjects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:   true,
-		NoBlobFilter: true,
-		Want:         []hash.Hash{commitHash},
-		Shallow:      true,
-		Deepen:       1,
-		Done:         true,
+		NoProgress:       true,
+		NoBlobFilter:     true,
+		Want:             []hash.Hash{commitHash},
+		Shallow:          true,
+		Deepen:           1,
+		Done:             true,
+		MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "not our ref") {
@@ -469,11 +470,12 @@ func (c *httpClient) processSingleBatch(ctx context.Context, currentBatch []hash
 
 	metrics.totalRequests++
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           currentBatch,
-		Done:           true,
-		NoExtraObjects: false, // we want to fetch all objects in this batch
+		NoProgress:       true,
+		NoBlobFilter:     true,
+		Want:             currentBatch,
+		Done:             true,
+		NoExtraObjects:   false, // we want to fetch all objects in this batch
+		MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "not our ref") {
@@ -772,11 +774,12 @@ func (c *httpClient) completeMissingTrees(
 		metrics.completionFetches++
 
 		objects, err := c.Fetch(ctx, client.FetchOptions{
-			NoProgress:     true,
-			NoBlobFilter:   true,
-			Want:           batch,
-			Done:           true,
-			NoExtraObjects: false,
+			NoProgress:       true,
+			NoBlobFilter:     true,
+			Want:             batch,
+			Done:             true,
+			NoExtraObjects:   false,
+			MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 		})
 		if err != nil {
 			return fmt.Errorf("fetch missing trees batch: %w", err)
@@ -948,11 +951,12 @@ func (c *httpClient) fetchMissingTreeObject(ctx context.Context, treeHash hash.H
 	logger.Debug("Fetching missing tree object individually", "hash", treeHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{treeHash},
-		Done:           true,
-		NoExtraObjects: true, // We only want this specific object
+		NoProgress:       true,
+		NoBlobFilter:     true,
+		Want:             []hash.Hash{treeHash},
+		Done:             true,
+		NoExtraObjects:   true, // We only want this specific object
+		MaxResponseBytes: c.limits.SingleObjectFetchMaxBytes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed: %w", err)
@@ -1031,11 +1035,21 @@ func (c *httpClient) getTree(ctx context.Context, want hash.Hash) (*protocol.Pac
 	logger.Debug("Fetch tree object", "hash", want.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{want},
-		Done:           true,
-		NoExtraObjects: false, // GetFlatTree is called after this one. Let's read all of them
+		NoProgress:   true,
+		NoBlobFilter: true,
+		Want:         []hash.Hash{want},
+		Done:         true,
+		// Both callers (GetTree public API, NewStagedWriter base
+		// tree) want a single tree by hash. NoExtraObjects=true
+		// keeps the wire shape single-object, which both matches
+		// the documented --max-bytes-single-object cap and removes
+		// the previous mismatch where a server could opportunistically
+		// inflate the response and trip a cap meant for a one-object
+		// reply. NewStagedWriter does its own multi-object cache
+		// warmup via getFlatTreeWithSubmodules immediately after, so
+		// the prefetch this once allowed was redundant.
+		NoExtraObjects:   true,
+		MaxResponseBytes: c.limits.SingleObjectFetchMaxBytes,
 	})
 	if err != nil {
 		// TODO: handle this at the client level

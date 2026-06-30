@@ -114,7 +114,7 @@ test: add integration tests for authentication
 **Tools:**
 * Use `git commit` with the format above
 * PR titles don't need to follow this format (only commit messages matter)
-* Our CI will automatically create releases and update the CHANGELOG
+* Our CI will automatically create releases with auto-generated release notes
 
 For more details, see [Conventional Commits specification](https://www.conventionalcommits.org/).
 
@@ -572,10 +572,10 @@ docs/
 │   ├── storage.md              # Storage backend architecture
 │   ├── delta-resolution.md     # Delta resolution implementation
 │   └── performance.md          # Performance characteristics
-└── changelog.md                # Version history (auto-copied from CHANGELOG.md)
+└── changelog.md                # Version history (auto-generated from GitHub Releases)
 ```
 
-**Note**: Only `changelog.md` is copied from the root `CHANGELOG.md` during the build process. All other documentation files live directly in the `docs/` directory. API documentation is on [GoDoc](https://pkg.go.dev/github.com/grafana/nanogit), not duplicated in the site.
+**Note**: `changelog.md` is generated from the [GitHub Releases](https://github.com/grafana/nanogit/releases) API by `scripts/prepare-docs.sh` during the build process (it uses `curl` + `jq`; the repo is public so no authentication is needed). It is gitignored — there is no `CHANGELOG.md` file in the repo. All other documentation files live directly in the `docs/` directory. API documentation is on [GoDoc](https://pkg.go.dev/github.com/grafana/nanogit), not duplicated in the site.
 
 #### Building Documentation Locally
 
@@ -599,7 +599,7 @@ make docs-install
 make docs
 
 # Or use individual targets:
-make docs-prepare    # Copy CHANGELOG.md to docs/
+make docs-prepare    # Generate docs/changelog.md from GitHub Releases (curl + jq)
 make docs-serve      # Serve at http://localhost:5173
 make docs-build      # Build static site
 make docs-preview    # Preview built site

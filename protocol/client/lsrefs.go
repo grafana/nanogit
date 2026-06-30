@@ -43,6 +43,8 @@ func (c *rawClient) LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.
 		return nil, fmt.Errorf("send ls-refs command: %w", err)
 	}
 
+	refsReader = newLimitedReadCloser(refsReader, c.limits.RefsMetadataMaxBytes, "ls-refs")
+
 	defer func() {
 		if closeErr := refsReader.Close(); closeErr != nil && err == nil {
 			err = fmt.Errorf("error closing refs reader: %w", closeErr)
