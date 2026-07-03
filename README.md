@@ -33,6 +33,7 @@ So we built nanogit around the constraints Git Sync actually has:
 - **Provider-agnostic** — talks the Git wire protocol over HTTPS, so any compliant provider works without bespoke integrations.
 - **Stateless** — no local `.git`, no per-tenant working tree. Every operation completes over HTTPS, which fits Grafana Cloud's horizontally scaled, multitenant backend.
 - **Lean and fast** — parses only what Git Sync needs. Streaming packfiles, path filtering, shallow reads, and delta handling keep it fast and memory-efficient on Grafana-scale repositories, where an operation usually touches a subpath rather than the whole repo.
+- **Operational control** — speaking the Git protocol directly lets Grafana control exactly how it talks to each provider: how many requests it makes and how large each response is (to stay within provider rate limits and byte budgets), what objects get cached and reused across operations, and how many round trips a sync costs. Hosted provider APIs and general-purpose clients don't expose that level of control.
 - **Safe and controllable** — a focused, embeddable library with a minimal surface area is easier to secure and operate than a general-purpose tool, and it needs only token auth (no SSH key management).
 
 nanogit is open source and usable on its own, but its design — and the performance numbers below — come directly from this workload: doing the Git plumbing behind Git Sync efficiently, safely, and for many tenants at scale.
