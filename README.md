@@ -47,6 +47,17 @@ The following features are explicitly not supported:
 - "Dumb" servers
 - Complex permissions (all objects use mode 0644)
 
+## Why Git Protocol v2 Only?
+
+nanogit speaks **only** Git Smart HTTP Protocol v2. It does not implement the legacy v1 protocol (neither the original "smart" v1 negotiation nor the "dumb" HTTP protocol), and it will not silently fall back to it. This is a deliberate design decision, not a missing feature:
+
+- **Stateless by design** — Protocol v2 replaces v1's stateful, multi-round `want`/`have` negotiation with a command-oriented request model that completes in a single stateless HTTP round trip. That maps directly onto nanogit's stateless, serverless-friendly architecture. v1's negotiation assumes connection state that nanogit deliberately does not keep.
+- **Server-side ref filtering** — v2's `ls-refs` command lets the client request only the references it needs (via `ref-prefix`). v1 dumps the *entire* ref advertisement on every `info/refs` request, which is wasteful for repositories with thousands of branches and tags — exactly the multitenant, large-repo case nanogit targets.
+- **Smaller surface area** — Supporting both protocols would double the negotiation and parsing code paths. Minimal surface area is a core design principle: less code means fewer bugs and a smaller attack surface.
+- **Broad (not universal) provider support** — Protocol v2 has been available since Git 2.18 (2018) and the default fetch protocol since Git 2.26 (2020). GitHub, GitLab, and Bitbucket all support it. The notable exception is **Azure DevOps / Azure Repos**, which only speaks protocol v1 — nanogit cannot talk to it, and there is no fallback. For nanogit's target audience (cloud-native services talking to modern hosted Git), the trade-off is worth it: v1 support would add complexity to serve a shrinking set of servers.
+
+When a server only speaks v1, `nanogit check` reports it as incompatible and every operation fails fast rather than silently degrading. Always run it against a new provider before integrating. See the [Server Compatibility guide](https://grafana.github.io/nanogit/getting-started/server-compatibility/) for how to verify support.
+
 ## Why nanogit?
 
 While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, nanogit is designed for cloud-native, multitenant environments requiring minimal, stateless operations.
