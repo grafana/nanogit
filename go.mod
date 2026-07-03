@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.19.0
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.12.2
 	github.com/smallstep/pkcs7 v0.2.1
 	github.com/stretchr/testify v1.11.1
