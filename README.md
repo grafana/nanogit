@@ -38,7 +38,7 @@ So we built nanogit around the constraints Git Sync actually has:
 
 nanogit is open source and usable on its own, but its design — and the performance numbers below — come directly from this workload: doing the Git plumbing behind Git Sync efficiently, safely, and for many tenants at scale.
 
-## Used by
+## Known usage
 
 - **[grafana/grafana](https://github.com/grafana/grafana)** — nanogit is the Git engine behind [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) provisioning (`apps/provisioning/pkg/repository/git`). It resolves refs, reads and writes dashboards and folders, stages commits, and pushes to each tenant's repository over HTTPS.
 - **[grafana/grafana-bench](https://github.com/grafana/grafana-bench)** — nanogit is the **default Git driver** for fetching the test-suite repository before a benchmark run. grafana-bench pulls its k6/Playwright suites from Git; nanogit's lightweight, HTTP-only client with parallel object fetching and sparse/subpath checkout pulls large monorepos faster and with less overhead than the alternative go-git driver, keeping benchmark setup fast and repeatable. (go-git stays available via `--git-driver gogit` when SSH or full Git features are needed.)
