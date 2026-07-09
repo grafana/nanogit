@@ -48,9 +48,11 @@ type Commit struct {
 	// Tree is the hash of the root tree object that represents the state
 	// of the repository at the time of the commit
 	Tree hash.Hash
-	// Parent is the hash of the parent commit
-	// TODO: Merge commits can have multiple parents, but currently only single parent is supported
+	// Parent is the hash of the first parent commit, or hash.Zero for root commits
 	Parent hash.Hash
+	// Parents contains the hashes of all parent commits in order.
+	// Merge commits have more than one entry; root commits have none.
+	Parents []hash.Hash
 	// Author is the person who created the changes in the commit
 	Author Author
 	// Committer is the person who created the commit object
@@ -228,9 +230,9 @@ func (c *httpClient) CompareCommits(ctx context.Context, baseCommit, headCommit 
 // Additional optimizations considered:
 // - Could use byte enum for common modes (0o100644, 0o100755, 0o040000) + overflow field
 type entryInfo struct {
-	hash     hash.Hash
-	mode     uint16              // uint16 is sufficient for Git file modes (max 0o160000)
-	objType  protocol.ObjectType // Git object type (blob, tree, etc.)
+	hash    hash.Hash
+	mode    uint16              // uint16 is sufficient for Git file modes (max 0o160000)
+	objType protocol.ObjectType // Git object type (blob, tree, etc.)
 }
 
 // compareTrees recursively compares two trees and collects changes between them.
@@ -519,9 +521,10 @@ func packfileObjectToCommit(commit *protocol.PackfileObject) (*Commit, error) {
 	}
 
 	return &Commit{
-		Hash:   commit.Hash,
-		Tree:   commit.Commit.Tree,
-		Parent: commit.Commit.Parent,
+		Hash:    commit.Hash,
+		Tree:    commit.Commit.Tree,
+		Parent:  commit.Commit.Parent,
+		Parents: commit.Commit.Parents,
 		Author: Author{
 			Name:  commit.Commit.Author.Name,
 			Email: commit.Commit.Author.Email,

@@ -359,9 +359,15 @@ func (e *PackfileObject) parseAuthor(data string) error {
 
 // parseParent parses the parent field
 func (e *PackfileObject) parseParent(data string) error {
-	var err error
-	e.Commit.Parent, err = hash.FromHex(data)
-	return err
+	parent, err := hash.FromHex(data)
+	if err != nil {
+		return err
+	}
+	if len(e.Commit.Parents) == 0 {
+		e.Commit.Parent = parent
+	}
+	e.Commit.Parents = append(e.Commit.Parents, parent)
+	return nil
 }
 
 // parseCustomField stores custom fields in the Fields map
@@ -410,8 +416,12 @@ type PackfileCommit struct {
 	Tree      hash.Hash
 	Author    *Identity
 	Committer *Identity
-	Parent    hash.Hash
-	Message   string
+	// Parent is the first parent of the commit, or hash.Zero for root commits.
+	Parent hash.Hash
+	// Parents contains all parents of the commit in order. Merge commits
+	// have more than one entry; root commits have none.
+	Parents []hash.Hash
+	Message string
 	// Signature, when non-empty, is an armored block embedded as the gpgsig header.
 	Signature string
 	// Fields contains any fields beyond the fields that are statically defined.
@@ -434,7 +444,11 @@ func (c *PackfileCommit) BuildUnsigned() []byte {
 func (c *PackfileCommit) build(includeSig bool) []byte {
 	var data bytes.Buffer
 	fmt.Fprintf(&data, "tree %s\n", c.Tree.String())
-	if !c.Parent.Is(hash.Zero) {
+	if len(c.Parents) > 0 {
+		for _, parent := range c.Parents {
+			fmt.Fprintf(&data, "parent %s\n", parent.String())
+		}
+	} else if !c.Parent.Is(hash.Zero) {
 		fmt.Fprintf(&data, "parent %s\n", c.Parent.String())
 	}
 	fmt.Fprintf(&data, "author %s\n", c.Author.String())

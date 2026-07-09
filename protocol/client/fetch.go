@@ -19,9 +19,14 @@ type FetchOptions struct {
 	NoProgress   bool
 	NoBlobFilter bool
 	Want         []hash.Hash
-	Done         bool // not sure why we need this one
-	Deepen       int
-	Shallow      bool
+	// Have lists commits the client already has. The server excludes every
+	// object reachable from them, so the response packfile contains only
+	// objects reachable from Want but not from Have. Combine with Done to
+	// receive the packfile in a single round trip without negotiation.
+	Have    []hash.Hash
+	Done    bool // not sure why we need this one
+	Deepen  int
+	Shallow bool
 
 	// NoExtraObjects stops reading the packfile once all wanted objects have been found.
 	// This can significantly improve performance when fetching specific objects from large repositories,
@@ -147,6 +152,10 @@ func (c *rawClient) addWantPacks(packs []protocol.Pack, opts FetchOptions) []pro
 
 // addOptionalPacks adds optional pack lines and finishes the pack
 func (c *rawClient) addOptionalPacks(packs []protocol.Pack, opts FetchOptions) []protocol.Pack {
+	for _, have := range opts.Have {
+		packs = append(packs, protocol.PackLine(fmt.Sprintf("have %s\n", have.String())))
+	}
+
 	if opts.Deepen > 0 {
 		packs = append(packs, protocol.PackLine(fmt.Sprintf("deepen %d\n", opts.Deepen)))
 	}
@@ -171,6 +180,7 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 		"options", map[string]interface{}{
 			"noProgress":     opts.NoProgress,
 			"noBlobFilter":   opts.NoBlobFilter,
+			"haveCount":      len(opts.Have),
 			"deepen":         opts.Deepen,
 			"shallow":        opts.Shallow,
 			"done":           opts.Done,

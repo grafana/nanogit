@@ -246,6 +246,21 @@ type FakeClient struct {
 		result1 []nanogit.Ref
 		result2 error
 	}
+	MergeBaseStub        func(context.Context, hash.Hash, hash.Hash) (hash.Hash, error)
+	mergeBaseMutex       sync.RWMutex
+	mergeBaseArgsForCall []struct {
+		arg1 context.Context
+		arg2 hash.Hash
+		arg3 hash.Hash
+	}
+	mergeBaseReturns struct {
+		result1 hash.Hash
+		result2 error
+	}
+	mergeBaseReturnsOnCall map[int]struct {
+		result1 hash.Hash
+		result2 error
+	}
 	NewStagedWriterStub        func(context.Context, nanogit.Ref, ...nanogit.WriterOption) (nanogit.StagedWriter, error)
 	newStagedWriterMutex       sync.RWMutex
 	newStagedWriterArgsForCall []struct {
@@ -1385,6 +1400,72 @@ func (fake *FakeClient) ListRefsReturnsOnCall(i int, result1 []nanogit.Ref, resu
 	}
 	fake.listRefsReturnsOnCall[i] = struct {
 		result1 []nanogit.Ref
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) MergeBase(arg1 context.Context, arg2 hash.Hash, arg3 hash.Hash) (hash.Hash, error) {
+	fake.mergeBaseMutex.Lock()
+	ret, specificReturn := fake.mergeBaseReturnsOnCall[len(fake.mergeBaseArgsForCall)]
+	fake.mergeBaseArgsForCall = append(fake.mergeBaseArgsForCall, struct {
+		arg1 context.Context
+		arg2 hash.Hash
+		arg3 hash.Hash
+	}{arg1, arg2, arg3})
+	stub := fake.MergeBaseStub
+	fakeReturns := fake.mergeBaseReturns
+	fake.recordInvocation("MergeBase", []interface{}{arg1, arg2, arg3})
+	fake.mergeBaseMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeClient) MergeBaseCallCount() int {
+	fake.mergeBaseMutex.RLock()
+	defer fake.mergeBaseMutex.RUnlock()
+	return len(fake.mergeBaseArgsForCall)
+}
+
+func (fake *FakeClient) MergeBaseCalls(stub func(context.Context, hash.Hash, hash.Hash) (hash.Hash, error)) {
+	fake.mergeBaseMutex.Lock()
+	defer fake.mergeBaseMutex.Unlock()
+	fake.MergeBaseStub = stub
+}
+
+func (fake *FakeClient) MergeBaseArgsForCall(i int) (context.Context, hash.Hash, hash.Hash) {
+	fake.mergeBaseMutex.RLock()
+	defer fake.mergeBaseMutex.RUnlock()
+	argsForCall := fake.mergeBaseArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeClient) MergeBaseReturns(result1 hash.Hash, result2 error) {
+	fake.mergeBaseMutex.Lock()
+	defer fake.mergeBaseMutex.Unlock()
+	fake.MergeBaseStub = nil
+	fake.mergeBaseReturns = struct {
+		result1 hash.Hash
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) MergeBaseReturnsOnCall(i int, result1 hash.Hash, result2 error) {
+	fake.mergeBaseMutex.Lock()
+	defer fake.mergeBaseMutex.Unlock()
+	fake.MergeBaseStub = nil
+	if fake.mergeBaseReturnsOnCall == nil {
+		fake.mergeBaseReturnsOnCall = make(map[int]struct {
+			result1 hash.Hash
+			result2 error
+		})
+	}
+	fake.mergeBaseReturnsOnCall[i] = struct {
+		result1 hash.Hash
 		result2 error
 	}{result1, result2}
 }

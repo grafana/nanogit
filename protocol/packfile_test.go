@@ -442,6 +442,47 @@ func TestParseCommit_Signature(t *testing.T) {
 	})
 }
 
+func TestParseCommit_MultipleParents(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+	parent1 := hash.MustFromHex("1111111111111111111111111111111111111111")
+	parent2 := hash.MustFromHex("2222222222222222222222222222222222222222")
+
+	t.Run("root commit has no parents", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Author: ident, Committer: ident, Message: "m\n"}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, hash.Zero, obj.Commit.Parent)
+		require.Empty(t, obj.Commit.Parents)
+	})
+
+	t.Run("single parent populates both fields", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: parent1, Author: ident, Committer: ident, Message: "m\n"}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, parent1, obj.Commit.Parent)
+		require.Equal(t, []hash.Hash{parent1}, obj.Commit.Parents)
+	})
+
+	t.Run("merge commit keeps all parents in order", func(t *testing.T) {
+		t.Parallel()
+		raw := "tree " + hash.Zero.String() + "\n" +
+			"parent " + parent1.String() + "\n" +
+			"parent " + parent2.String() + "\n" +
+			"author " + ident.String() + "\n" +
+			"committer " + ident.String() + "\n" +
+			"\n" +
+			"merge\n"
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: []byte(raw)}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, parent1, obj.Commit.Parent)
+		require.Equal(t, []hash.Hash{parent1, parent2}, obj.Commit.Parents)
+	})
+}
+
 func TestPackfileCommit_Build(t *testing.T) {
 	t.Parallel()
 
@@ -458,6 +499,15 @@ func TestPackfileCommit_Build(t *testing.T) {
 		parent := hash.MustFromHex("1234567890123456789012345678901234567890")
 		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: parent, Author: ident, Committer: ident, Message: "m\n"}
 		require.Contains(t, string(c.Build()), "parent "+parent.String()+"\n")
+	})
+
+	t.Run("includes all parents when Parents set", func(t *testing.T) {
+		t.Parallel()
+		parent1 := hash.MustFromHex("1111111111111111111111111111111111111111")
+		parent2 := hash.MustFromHex("2222222222222222222222222222222222222222")
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parents: []hash.Hash{parent1, parent2}, Author: ident, Committer: ident, Message: "m\n"}
+		out := string(c.Build())
+		require.Contains(t, out, "parent "+parent1.String()+"\nparent "+parent2.String()+"\n")
 	})
 
 	t.Run("folds multi-line gpgsig with leading space", func(t *testing.T) {

@@ -52,6 +52,10 @@ var (
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrInvalidAuthor = errors.New("invalid author information")
 
+	// ErrNoMergeBase is returned when two commits have no common ancestor.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrNoMergeBase = errors.New("no merge base found")
+
 	// ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	// It is re-exported from the protocol/client package to avoid import cycles.

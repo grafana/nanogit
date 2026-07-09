@@ -94,6 +94,7 @@ type Client interface {
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash, opts ...CompareCommitsOption) ([]CommitFile, error)
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
+	MergeBase(ctx context.Context, a, b hash.Hash) (hash.Hash, error)
 	// Clone operations
 	Clone(ctx context.Context, opts CloneOptions) (*CloneResult, error)
 	// Write operations
