@@ -357,11 +357,19 @@ func (e *PackfileObject) parseAuthor(data string) error {
 	return nil
 }
 
-// parseParent parses the parent field
+// parseParent parses a parent field. Commits may list multiple parent lines
+// (merge commits), so each parsed parent is appended to Parents while Parent
+// tracks the first one for backward compatibility.
 func (e *PackfileObject) parseParent(data string) error {
-	var err error
-	e.Commit.Parent, err = hash.FromHex(data)
-	return err
+	h, err := hash.FromHex(data)
+	if err != nil {
+		return err
+	}
+	if len(e.Commit.Parents) == 0 {
+		e.Commit.Parent = h
+	}
+	e.Commit.Parents = append(e.Commit.Parents, h)
+	return nil
 }
 
 // parseCustomField stores custom fields in the Fields map
@@ -410,8 +418,14 @@ type PackfileCommit struct {
 	Tree      hash.Hash
 	Author    *Identity
 	Committer *Identity
-	Parent    hash.Hash
-	Message   string
+	// Parent is the first parent of the commit, kept for backward compatibility.
+	// For merge commits it holds the first parent; use Parents for the full list.
+	Parent hash.Hash
+	// Parents holds all parents in the order they appear in the commit object.
+	// A root commit has no parents; a regular commit has one; a merge commit has
+	// two or more. Parent mirrors Parents[0] when Parents is non-empty.
+	Parents []hash.Hash
+	Message string
 	// Signature, when non-empty, is an armored block embedded as the gpgsig header.
 	Signature string
 	// Fields contains any fields beyond the fields that are statically defined.
@@ -434,7 +448,14 @@ func (c *PackfileCommit) BuildUnsigned() []byte {
 func (c *PackfileCommit) build(includeSig bool) []byte {
 	var data bytes.Buffer
 	fmt.Fprintf(&data, "tree %s\n", c.Tree.String())
-	if !c.Parent.Is(hash.Zero) {
+	// Prefer the full Parents list (populated when parsing merge commits) and
+	// fall back to the single Parent field used by writer-created commits, so
+	// commit hashes for objects nanogit builds itself stay byte-for-byte stable.
+	if len(c.Parents) > 0 {
+		for _, p := range c.Parents {
+			fmt.Fprintf(&data, "parent %s\n", p.String())
+		}
+	} else if !c.Parent.Is(hash.Zero) {
 		fmt.Fprintf(&data, "parent %s\n", c.Parent.String())
 	}
 	fmt.Fprintf(&data, "author %s\n", c.Author.String())

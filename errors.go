@@ -44,6 +44,16 @@ var (
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrEmptyPath = errors.New("empty path")
 
+	// ErrNoMergeBase is returned when two commits share no common ancestor
+	// (for example, histories from unrelated roots).
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrNoMergeBase = errors.New("no merge base found")
+
+	// ErrMergeBaseLimitExceeded is returned when MergeBase walks more commits
+	// than its configured budget without finding a common ancestor.
+	// This error should only be used with errors.Is() for comparison, not for type assertions.
+	ErrMergeBaseLimitExceeded = errors.New("merge base search limit exceeded")
+
 	// ErrEmptyRefName is returned when a ref name is empty.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	ErrEmptyRefName = errors.New("empty ref name")

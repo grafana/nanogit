@@ -442,10 +442,63 @@ func TestParseCommit_Signature(t *testing.T) {
 	})
 }
 
+func TestParseCommit_Parents(t *testing.T) {
+	t.Parallel()
+
+	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+	p1 := hash.MustFromHex("1111111111111111111111111111111111111111")
+	p2 := hash.MustFromHex("2222222222222222222222222222222222222222")
+
+	t.Run("single parent populates Parent and Parents", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: p1, Author: ident, Committer: ident, Message: "m\n"}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, p1, obj.Commit.Parent)
+		require.Equal(t, []hash.Hash{p1}, obj.Commit.Parents)
+	})
+
+	t.Run("merge commit keeps every parent", func(t *testing.T) {
+		t.Parallel()
+		// Two parent lines are how Git encodes a merge commit; the parser must
+		// preserve both while keeping Parent pointing at the first.
+		raw := "tree " + hash.Zero.String() + "\n" +
+			"parent " + p1.String() + "\n" +
+			"parent " + p2.String() + "\n" +
+			"author " + ident.String() + "\n" +
+			"committer " + ident.String() + "\n" +
+			"\n" +
+			"merge\n"
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: []byte(raw)}
+		require.NoError(t, obj.Parse())
+		require.Equal(t, p1, obj.Commit.Parent, "Parent mirrors the first parent")
+		require.Equal(t, []hash.Hash{p1, p2}, obj.Commit.Parents)
+	})
+
+	t.Run("root commit has no parents", func(t *testing.T) {
+		t.Parallel()
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parent: hash.Zero, Author: ident, Committer: ident, Message: "m\n"}
+		obj := &protocol.PackfileObject{Type: protocol.ObjectTypeCommit, Data: c.Build()}
+		require.NoError(t, obj.Parse())
+		require.True(t, obj.Commit.Parent.Is(hash.Zero))
+		require.Empty(t, obj.Commit.Parents)
+	})
+}
+
 func TestPackfileCommit_Build(t *testing.T) {
 	t.Parallel()
 
 	ident := &protocol.Identity{Name: "A", Email: "a@b", Timestamp: 1234567890, Timezone: "+0000"}
+
+	t.Run("emits all parents for merge commits", func(t *testing.T) {
+		t.Parallel()
+		p1 := hash.MustFromHex("1111111111111111111111111111111111111111")
+		p2 := hash.MustFromHex("2222222222222222222222222222222222222222")
+		c := &protocol.PackfileCommit{Tree: hash.Zero, Parents: []hash.Hash{p1, p2}, Author: ident, Committer: ident, Message: "m\n"}
+		got := string(c.Build())
+		require.Contains(t, got, "parent "+p1.String()+"\n")
+		require.Contains(t, got, "parent "+p2.String()+"\n")
+	})
 
 	t.Run("omits parent when zero", func(t *testing.T) {
 		t.Parallel()
