@@ -288,6 +288,53 @@ func (m *mockSigner) Sign(data []byte) (string, error) {
 	return m.signature, nil
 }
 
+func TestStagedWriter_Commit_UnchangedTree(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	content := []byte("unchanged")
+
+	blobHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeBlob, content)
+	require.NoError(t, err)
+	treeObj, err := protocol.BuildTreeObject(crypto.SHA1, []protocol.PackfileTreeEntry{{
+		FileMode: 0o100644,
+		FileName: "dashboard.json",
+		Hash:     blobHash.String(),
+	}})
+	require.NoError(t, err)
+
+	parentHash := hash.MustFromHex("1234567890123456789012345678901234567890")
+	writer := &stagedWriter{
+		client:     &httpClient{RawClient: &mockRawClient{}},
+		ref:        Ref{Name: "refs/heads/main", Hash: parentHash},
+		writer:     protocol.NewPackfileWriter(crypto.SHA1, protocol.PackfileStorageMemory),
+		objStorage: storage.NewInMemoryStorage(ctx),
+		treeEntries: map[string]*FlatTreeEntry{
+			"dashboard.json": {
+				Path: "dashboard.json",
+				Hash: blobHash,
+				Type: protocol.ObjectTypeBlob,
+				Mode: 0o100644,
+			},
+		},
+		dirtyPaths:  make(map[string]bool),
+		storageMode: protocol.PackfileStorageMemory,
+		lastTree:    &treeObj,
+		lastCommit:  &Commit{Hash: parentHash, Tree: treeObj.Hash, Parent: hash.Zero},
+	}
+
+	updatedHash, err := writer.UpdateBlob(ctx, "dashboard.json", content)
+	require.NoError(t, err)
+	require.Equal(t, blobHash, updatedHash)
+
+	when := time.Unix(1234567890, 0).UTC()
+	commit, err := writer.Commit(ctx, "no-op update",
+		Author{Name: "A", Email: "a@b", Time: when},
+		Committer{Name: "A", Email: "a@b", Time: when})
+	require.ErrorIs(t, err, ErrNothingToCommit)
+	require.Nil(t, commit)
+	require.Equal(t, parentHash, writer.lastCommit.Hash)
+}
+
 func TestStagedWriter_Commit_SignerError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -305,7 +352,7 @@ func TestStagedWriter_Commit_SignerError(t *testing.T) {
 		dirtyPaths:  make(map[string]bool),
 		storageMode: protocol.PackfileStorageMemory,
 		lastTree:    &treeObj,
-		lastCommit:  &Commit{Hash: hash.Zero, Tree: treeObj.Hash, Parent: hash.Zero},
+		lastCommit:  &Commit{Hash: hash.Zero, Tree: hash.Zero, Parent: hash.Zero},
 		signer:      &mockSigner{err: sentinel},
 	}
 
@@ -336,7 +383,7 @@ func TestStagedWriter_Commit_SignerInvoked(t *testing.T) {
 		dirtyPaths:  make(map[string]bool),
 		storageMode: protocol.PackfileStorageMemory,
 		lastTree:    &treeObj,
-		lastCommit:  &Commit{Hash: hash.Zero, Tree: treeObj.Hash, Parent: hash.Zero},
+		lastCommit:  &Commit{Hash: hash.Zero, Tree: hash.Zero, Parent: hash.Zero},
 		signer:      m,
 	}
 
