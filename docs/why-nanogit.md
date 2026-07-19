@@ -34,5 +34,5 @@ Using nanogit in your project? [Open an issue or PR](https://github.com/grafana/
 ## Learn more
 
 - [Overview](index.md) — what nanogit is, when to use it, and how it compares to go-git
-- [Architecture Overview](architecture/overview.md) — design principles, including [why protocol v2 only](architecture/overview.md#why-protocol-v2-only-and-not-v1)
+- [Architecture Overview](architecture/overview.md) — design principles, including [why protocol v2 only](architecture/protocol-v2.md)
 - [Performance](architecture/performance.md) — benchmark methodology and results against go-git and the git CLI

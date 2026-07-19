@@ -5,7 +5,7 @@ nanogit requires **Git Smart HTTP Protocol v2**. Before integrating it into your
 If any step fails, nanogit is not the right fit for that server and you'll want to fall back to the standard `git` CLI or a provider that supports protocol v2.
 
 ::: info Why v2 only?
-nanogit does not implement the legacy v1 protocol and will not fall back to it. v2's stateless, command-oriented model matches nanogit's stateless architecture, lets it request only the refs it needs, and keeps the codebase small. v2 is the Git default (2.26+) and is supported by GitHub, GitLab, and Bitbucket. See [Why protocol v2 only](../architecture/overview.md#why-protocol-v2-only-and-not-v1) for the full rationale.
+nanogit does not implement the legacy v1 protocol and will not fall back to it. v2's stateless, command-oriented model matches nanogit's stateless architecture, lets it request only the refs it needs, and keeps the codebase small. v2 is the Git default (2.26+) and is supported by GitHub, GitLab, and Bitbucket. See [Why Git Protocol v2 Only?](../architecture/protocol-v2.md) for the full rationale.
 :::
 
 ::: warning Azure DevOps is not supported

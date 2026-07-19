@@ -48,6 +48,7 @@ export default defineConfig({
         text: 'Architecture',
         items: [
           { text: 'Overview', link: '/architecture/overview' },
+          { text: 'Why Protocol v2 Only', link: '/architecture/protocol-v2' },
           { text: 'Storage Backend', link: '/architecture/storage' },
           { text: 'Retry Mechanism', link: '/architecture/retry' },
           { text: 'Delta Resolution', link: '/architecture/delta-resolution' },

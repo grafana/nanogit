@@ -18,5 +18,6 @@ Want to learn how Git works? The following resources are useful:
 
 ## Related
 
-- [Architecture Overview](architecture/overview.md) — how nanogit maps these protocols onto a stateless client, including [why protocol v2 only](architecture/overview.md#why-protocol-v2-only-and-not-v1)
+- [Architecture Overview](architecture/overview.md) — how nanogit maps these protocols onto a stateless client
+- [Why Git Protocol v2 Only?](architecture/protocol-v2.md) — the design decision behind nanogit's protocol support
 - [Delta Resolution](architecture/delta-resolution.md) — how nanogit resolves packfile deltas

@@ -46,7 +46,7 @@ nanogit is deliberately narrow. Reach for the `git` CLI or [go-git](https://gith
 - **Signature verification** — nanogit can sign commits but does not verify signatures
 - **Fine-grained file permissions** — all files are written with mode 0644
 
-See [why protocol v2 only](architecture/overview.md#why-protocol-v2-only-and-not-v1) for the rationale behind the strictest of these constraints.
+See [Why Git Protocol v2 Only?](architecture/protocol-v2.md) for the rationale behind the strictest of these constraints.
 
 ## How is it different from go-git?
 
