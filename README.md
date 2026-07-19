@@ -14,93 +14,59 @@
   📚 <strong><a href="https://grafana.github.io/nanogit">Read the full documentation at grafana.github.io/nanogit</a></strong>
 </p>
 
-## Overview
+## What is nanogit?
 
-nanogit is a lightweight, cloud-native Git implementation designed for applications that need efficient Git operations over HTTPS without the complexity and resource overhead of traditional Git implementations.
+nanogit is a lightweight Git client library for Go, built for services that read from and write to Git repositories over HTTPS — with no local clone, no `.git` directory, and no `git` binary. It speaks the [Git Smart HTTP Protocol v2](https://git-scm.com/docs/protocol-v2) directly, so it works with GitHub, GitLab, Bitbucket, Gitea, and any other server that supports protocol v2.
 
-## Why we built nanogit in the first place
+Grafana built nanogit to power [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/), which syncs dashboards with tenants' own Git repositories from inside Grafana's multitenant backend — a workload where cloning every repository to disk is not an option. Read the full story in [Why nanogit exists](docs/why-nanogit.md).
 
-nanogit was created by Grafana to power [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) — the [Observability as Code](https://grafana.com/docs/grafana/latest/as-code/) feature that lets you store Grafana dashboards and folders as files in your own Git repository and manage them as code: auditable, reviewable, and reproducible, editing in the UI and opening pull requests without leaving Grafana.
+- **Stateless** — reads and writes Git objects directly over HTTPS; nothing is persisted locally, so there is no per-repository state to store, clean up, or keep consistent across replicas
+- **Works with any protocol v2 server** — one code path for GitHub, GitLab, Bitbucket, Gitea, and self-hosted servers; token-based auth, no SSH key management
+- **Essential operations** — refs, blobs, trees, commits, diffs, staged writes, and shallow clones with glob-based path filtering
+- **Memory-efficient** — streaming packfile processing and configurable memory/disk/auto writing modes for bulk operations
+- **Fast** — orders of magnitude faster and leaner than a full Git implementation for common server-side operations ([benchmarks below](#how-is-it-different-from-go-git))
+- **Commit signing** — sign commits with GPG, SSH, or S/MIME keys
+- **Pluggable** — object storage (caching) and [retry policies](https://grafana.github.io/nanogit/architecture/retry) are injected via context, with sensible defaults
 
-Git Sync needed a real Git engine embedded in Grafana's backend, and none of the obvious options fit:
+## When should I use it?
 
-- **A GitHub API wasn't enough.** The goal grew from "sync with GitHub" to "sync with any Git provider." That means speaking the standard Git Smart HTTP protocol directly, so GitLab, Bitbucket, and self-hosted servers work without provider-specific code.
-- **The `git` CLI and libgit2** assume a local `.git` working directory. Maintaining a checkout per tenant, and shelling out to a binary, is impractical and hard to reason about operationally in a shared, multitenant backend.
-- **[go-git](https://github.com/go-git/go-git)** is mature, but its abstraction and overhead were too heavy for this use case. It is built around local-disk operations and full clones — stateful and memory-heavy once multiplied across thousands of tenants and large repositories.
+Use nanogit when your code runs **server-side and talks to Git over HTTPS**:
 
-So we built nanogit around the constraints Git Sync actually has:
+- **GitOps and as-code services** — sync configuration, dashboards, or manifests between your application and users' repositories
+- **Bots and automation** — commit generated files, open changes, or mirror content without shelling out to `git`
+- **Multitenant platforms** — operate on thousands of repositories without maintaining a checkout per tenant
+- **Serverless and containers** — environments with little or no persistent disk
+- **CI tooling** — fetch only the subpaths you need from large repositories using path-filtered, shallow clones
 
-- **Provider-agnostic** — talks the Git wire protocol over HTTPS, so any compliant provider works without bespoke integrations.
-- **Stateless — no clones, no `.git`** — a defining goal was to avoid full clones and never persist a `.git` directory or per-tenant working tree. nanogit reads and writes objects directly over HTTPS, so there is no local repository state to store, clean up, or keep consistent across a horizontally scaled, multitenant backend.
-- **Lean and fast** — parses only what Git Sync needs. Streaming packfiles, path filtering, shallow reads, and delta handling keep it fast and memory-efficient on Grafana-scale repositories, where an operation usually touches a subpath rather than the whole repo.
-- **Operational control** — speaking the Git protocol directly lets Grafana control exactly how it talks to each provider: how many requests it makes and how large each response is (to stay within provider rate limits and byte budgets), what objects get cached and reused across operations, and how many round trips a sync costs. Hosted provider APIs and general-purpose clients don't expose that level of control.
-- **Safe and controllable** — a focused, embeddable library with a minimal surface area is easier to secure and operate than a general-purpose tool, and it needs only token auth (no SSH key management).
+## When should I not use it?
 
-nanogit is open source and usable on its own, but its design — and the performance numbers below — come directly from this workload: doing the Git plumbing behind Git Sync efficiently, safely, and for many tenants at scale.
+nanogit is deliberately narrow. Reach for the `git` CLI or [go-git](https://github.com/go-git/go-git) instead when you need:
 
-## Known usage
+- **Local development workflows** — working trees, the index, `.git` directories, or repositories on disk
+- **Full Git functionality** — merges, rebases, blame, hooks, or Git configuration management
+- **Other transports** — SSH, `git://`, or local file access; nanogit is HTTPS-only
+- **Protocol v1 or "dumb" HTTP servers** — nanogit requires Smart HTTP protocol v2 and does not fall back. Notably, **Azure DevOps / Azure Repos only speaks v1 and is not supported.** Run [`nanogit check`](https://grafana.github.io/nanogit/getting-started/server-compatibility/) against a new provider before integrating
+- **Signature verification** — nanogit can sign commits but does not verify signatures
+- **Fine-grained file permissions** — all files are written with mode 0644
 
-- **[grafana/grafana](https://github.com/grafana/grafana)** — nanogit is the Git engine behind [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) provisioning (`apps/provisioning/pkg/repository/git`). It resolves refs, reads and writes dashboards and folders, stages commits, and pushes to each tenant's repository over HTTPS.
-- **[grafana/grafana-bench](https://github.com/grafana/grafana-bench)** — nanogit is the **default Git driver** for fetching the test-suite repository before a benchmark run. grafana-bench pulls its k6/Playwright suites from Git; nanogit's lightweight, HTTP-only client with parallel object fetching and sparse/subpath checkout pulls large monorepos faster and with less overhead than the alternative go-git driver, keeping benchmark setup fast and repeatable. (go-git stays available via `--git-driver gogit` when SSH or full Git features are needed.)
+See [why protocol v2 only](https://grafana.github.io/nanogit/architecture/overview#why-protocol-v2-only-and-not-v1) for the rationale behind the strictest of these constraints.
 
-## Features
+## How is it different from go-git?
 
-- **HTTPS-only Git operations** - Works with any Git service supporting Smart HTTP Protocol v2 (GitHub, GitLab, Bitbucket, etc.), eliminating the need for SSH key management in cloud environments
+[go-git](https://github.com/go-git/go-git) is a mature, full-featured Git implementation. nanogit trades that breadth for a small, stateless core optimized for cloud services:
 
-- **Stateless architecture** - No local .git directory dependency, making it perfect for serverless functions, containers, and microservices where persistent local state isn't available or desired
+| Feature        | nanogit                                                 | go-git                 |
+| -------------- | ------------------------------------------------------- | ---------------------- |
+| Protocol       | HTTPS only (Smart HTTP v2)                              | All protocols          |
+| Storage        | Stateless; pluggable object storage and writing modes   | Local disk operations  |
+| Cloning        | Shallow, with glob-based path filtering                 | Full repository clones |
+| Scope          | Essential operations only                               | Full Git functionality |
+| Use case       | Cloud services, multitenant backends                    | General purpose        |
+| Resource usage | Minimal footprint                                       | Full Git features      |
 
-- **Memory-optimized design** - Streaming packfile operations and configurable writing modes minimize memory usage, crucial for bulk operations and memory-constrained environments
+Because it never materializes a full repository, nanogit is dramatically faster and lighter for typical server-side operations. From the [benchmark suite](perf/) comparing both libraries across repository sizes:
 
-- **Flexible storage architecture** - Pluggable object storage and configurable writing modes allow optimization for different deployment patterns, from high-performance in-memory operations to memory-efficient disk-based processing
-
-- **Cloud-native authentication** - Built-in support for Basic Auth and API tokens, designed for automated workflows and CI/CD systems without interactive authentication
-
-- **Essential Git operations** - Focused on core functionality (read/write objects, commit operations, diffing) without the complexity of full Git implementations, reducing attack surface and resource requirements
-
-- **High performance** - Significantly faster than traditional Git implementations for common cloud operations, with up to 300x speed improvements for certain scenarios
-
-## Non-Goals
-
-The following features are explicitly not supported:
-
-- `git://` and Git-over-SSH protocols
-- File protocol (local Git operations)
-- Signature verification
-- Git hooks
-- Git configuration management
-- Direct .git directory access
-- "Dumb" servers
-- Complex permissions (all objects use mode 0644)
-
-## Why Git Protocol v2 Only?
-
-nanogit speaks **only** Git Smart HTTP Protocol v2. It does not implement the legacy v1 protocol (neither the original "smart" v1 negotiation nor the "dumb" HTTP protocol), and it will not silently fall back to it. This is a deliberate design decision, not a missing feature:
-
-- **Stateless by design** — Protocol v2 replaces v1's stateful, multi-round `want`/`have` negotiation with a command-oriented request model that completes in a single stateless HTTP round trip. That maps directly onto nanogit's stateless, serverless-friendly architecture. v1's negotiation assumes connection state that nanogit deliberately does not keep.
-- **Server-side ref filtering** — v2's `ls-refs` command lets the client request only the references it needs (via `ref-prefix`). v1 dumps the *entire* ref advertisement on every `info/refs` request, which is wasteful for repositories with thousands of branches and tags — exactly the multitenant, large-repo case nanogit targets.
-- **Smaller surface area** — Supporting both protocols would double the negotiation and parsing code paths. Minimal surface area is a core design principle: less code means fewer bugs and a smaller attack surface.
-- **Broad (not universal) provider support** — Protocol v2 has been available since Git 2.18 (2018) and the default fetch protocol since Git 2.26 (2020). GitHub, GitLab, and Bitbucket all support it. The notable exception is **Azure DevOps / Azure Repos**, which only speaks protocol v1 — nanogit cannot talk to it, and there is no fallback. For nanogit's target audience (cloud-native services talking to modern hosted Git), the trade-off is worth it: v1 support would add complexity to serve a shrinking set of servers.
-
-When a server only speaks v1, `nanogit check` reports it as incompatible and every operation fails fast rather than silently degrading. Always run it against a new provider before integrating. See the [Server Compatibility guide](https://grafana.github.io/nanogit/getting-started/server-compatibility/) for how to verify support.
-
-## Why nanogit?
-
-While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, nanogit is designed for cloud-native, multitenant environments requiring minimal, stateless operations.
-
-| Feature        | nanogit                                                | go-git                 |
-| -------------- | ------------------------------------------------------ | ---------------------- |
-| Protocol       | HTTPS-only                                             | All protocols          |
-| Storage        | Stateless, configurable object storage + writing modes | Local disk operations  |
-| Cloning        | Path filtering with glob patterns, shallow clones      | Full repository clones |
-| Scope          | Essential operations only                              | Full Git functionality |
-| Use Case       | Cloud services, multitenant                            | General purpose        |
-| Resource Usage | Minimal footprint                                      | Full Git features      |
-
-Choose nanogit for lightweight cloud services requiring stateless operations and minimal resources. Use go-git when you need full Git functionality, local operations, or advanced features.
-
-This are some of the performance differences between nanogit and go-git in some of the measured scenarios:
-
-| Scenario                                  | Speed       | Memory Usage |
+| Scenario                                  | Speed       | Memory usage |
 | ----------------------------------------- | ----------- | ------------ |
 | CreateFile (XL repo)                      | 306x faster | 186x less    |
 | UpdateFile (XL repo)                      | 291x faster | 178x less    |
@@ -109,362 +75,139 @@ This are some of the performance differences between nanogit and go-git in some 
 | CompareCommits (XL repo)                  | 60x faster  | 96x less     |
 | GetFlatTree (XL repo)                     | 258x faster | 160x less    |
 
-For detailed performance metrics, see the [latest performance report](perf/LAST_REPORT.md) and [performance analysis](docs/architecture/performance.md).
+See the [latest performance report](perf/LAST_REPORT.md) and the [performance analysis](docs/architecture/performance.md) for methodology and full results.
 
-## Getting Started
+## Is it production-ready?
 
-### Prerequisites
+**Yes.** nanogit is the Git engine behind [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) in [grafana/grafana](https://github.com/grafana/grafana), reading and writing dashboards across tenants' repositories in production, and the default Git driver in [grafana-bench](https://github.com/grafana/grafana-bench). See [who uses nanogit](docs/why-nanogit.md#who-uses-nanogit).
 
-- Go 1.25 or later.
-- Git (for development)
+Releases follow [semantic versioning](https://semver.org/): the v1 API is stable, and breaking changes only land in major versions. The project is actively developed by Grafana Labs.
 
-### Installation
+## Try it in 5 minutes
 
-#### Go Library
-
-Install the latest version:
+Install the library (requires **Go 1.25+**):
 
 ```bash
 go get github.com/grafana/nanogit@latest
 ```
 
-Or install a specific version:
+Read a file from a repository, then commit and push a new one — no clone involved:
 
-```bash
-go get github.com/grafana/nanogit@v0.x.x # Replace v0.x.x with the latest released version
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/grafana/nanogit"
+	"github.com/grafana/nanogit/options"
+)
+
+func main() {
+	if err := run(context.Background()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
+	// Any repository you can reach over HTTPS. Use a scratch repo to try the write path.
+	client, err := nanogit.NewHTTPClient(
+		"https://github.com/you/scratch-repo.git",
+		options.WithBasicAuth("git", os.Getenv("GIT_TOKEN")),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Read a file straight from the server.
+	ref, err := client.GetRef(ctx, "refs/heads/main")
+	if err != nil {
+		return err
+	}
+	commit, err := client.GetCommit(ctx, ref.Hash)
+	if err != nil {
+		return err
+	}
+	blob, err := client.GetBlobByPath(ctx, commit.Tree, "README.md")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("README.md at %s is %d bytes\n", ref.Hash, len(blob.Content))
+
+	// Stage a file, commit it, and push — entirely over HTTPS.
+	writer, err := client.NewStagedWriter(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if _, err := writer.CreateBlob(ctx, "hello/from-nanogit.txt", []byte("pushed without a checkout\n")); err != nil {
+		return err
+	}
+
+	author := nanogit.Author{Name: "You", Email: "you@example.com", Time: time.Now()}
+	committer := nanogit.Committer{Name: "You", Email: "you@example.com", Time: time.Now()}
+	if _, err := writer.Commit(ctx, "Add from-nanogit.txt", author, committer); err != nil {
+		return err
+	}
+	return writer.Push(ctx)
+}
 ```
 
-See all available versions on the [releases page](https://github.com/grafana/nanogit/releases).
+From here, the [Quick Start guide](https://grafana.github.io/nanogit/getting-started/quick-start/) covers cloning with path filtering, writing modes, retries, and authentication options.
 
-#### Command-Line Interface
+### Try the CLI
 
-nanogit provides a CLI for terminal-based Git operations. Download pre-built binaries from the [releases page](https://github.com/grafana/nanogit/releases) or install using Go.
-
-**Download pre-built binary** (recommended):
-
-```bash
-# Linux (amd64)
-wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Linux_x86_64.tar.gz
-tar -xzf nanogit_Linux_x86_64.tar.gz
-sudo mv nanogit /usr/local/bin/
-
-# macOS (Apple Silicon)
-wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Darwin_arm64.tar.gz
-tar -xzf nanogit_Darwin_arm64.tar.gz
-sudo mv nanogit /usr/local/bin/
-
-# macOS (Intel)
-wget https://github.com/grafana/nanogit/releases/latest/download/nanogit_Darwin_x86_64.tar.gz
-tar -xzf nanogit_Darwin_x86_64.tar.gz
-sudo mv nanogit /usr/local/bin/
-
-# Windows (PowerShell)
-Invoke-WebRequest -Uri "https://github.com/grafana/nanogit/releases/latest/download/nanogit_Windows_x86_64.zip" -OutFile "nanogit.zip"
-Expand-Archive nanogit.zip
-Move-Item nanogit\nanogit.exe C:\Windows\System32\
-```
-
-**Or install using Go**:
+nanogit ships a small CLI — primarily a testing and demonstration tool for the library. Install it with Go or grab a [pre-built binary](https://github.com/grafana/nanogit/releases/latest):
 
 ```bash
 go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
+
+# Is this server compatible with nanogit?
+nanogit check https://github.com/grafana/nanogit.git
+
+# List refs, inspect trees, read and write files
+nanogit ls-remote https://github.com/grafana/nanogit.git
+nanogit cat-file https://github.com/grafana/nanogit.git main README.md
 ```
 
-See the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/) for more details.
-
-### Usage
-
-```go
-// Create client with authentication
-client, err := nanogit.NewHTTPClient(
-    "https://github.com/user/repo.git",
-    options.WithBasicAuth("username", "token"),
-)
-
-// Get main branch and create staged writer
-ref, err := client.GetRef(ctx, "refs/heads/main")
-writer, err := client.NewStagedWriter(ctx, ref)
-
-// Create and update files
-writer.CreateBlob(ctx, "docs/new-feature.md", []byte("# New Feature"))
-writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
-
-// Commit changes with proper author/committer info
-author := nanogit.Author{
-    Name:  "John Doe",
-    Email: "john@example.com",
-    Time:  time.Now(),
-}
-committer := nanogit.Committer{
-    Name:  "Deploy Bot",
-    Email: "deploy@example.com",
-    Time:  time.Now(),
-}
-
-commit, err := writer.Commit(ctx, "Add feature and update docs", author, committer)
-writer.Push(ctx)
-```
-
-### Cloning Repositories with Path Filtering
-
-nanogit provides efficient cloning with flexible path filtering, ideal for CI environments where only specific directories are needed:
-
-```go
-// First, get the commit hash for the branch you want to clone
-ref, err := client.GetRef(ctx, "main")
-if err != nil {
-    return err
-}
-
-// Clone specific directories only (perfect for CI with no caching)
-result, err := client.Clone(ctx, nanogit.CloneOptions{
-    Path:         "/tmp/my-repo",        // Local filesystem path (required)
-    Hash:         ref.Hash,              // Commit hash (required)
-    IncludePaths: []string{"src/**", "docs/**"}, // Include only these paths
-    ExcludePaths: []string{"*.tmp", "node_modules/**"}, // Exclude these paths
-})
-if err != nil {
-    return err
-}
-
-// result.Commit contains the commit information
-// result.FlatTree contains filtered file tree
-// Files are automatically written to result.Path
-fmt.Printf("Cloned %d of %d files to %s\n",
-    result.FilteredFiles, result.TotalFiles, result.Path)
-```
-
-Key clone features:
-
-- **Path filtering**: Use glob patterns to include/exclude specific files and directories
-- **Filesystem output**: Automatically writes filtered files to specified local path
-- **Shallow clones**: Fetch only the latest commit to minimize bandwidth
-- **Branch isolation**: Clone only specific branches to reduce transfer time
-- **CI optimized**: Perfect for build environments with no persistent storage
-- **Performance tuning**: Configurable batch fetching and concurrency for optimal performance
-
-#### Performance Optimization Options
-
-The Clone operation supports two key performance optimization options to significantly improve cloning speed:
-
-```go
-// Clone with performance optimizations
-result, err := client.Clone(ctx, nanogit.CloneOptions{
-    Path:         "/tmp/my-repo",
-    Hash:         ref.Hash,
-    IncludePaths: []string{"pkg/api/**"},
-    BatchSize:    50,      // Fetch 50 blobs per network request
-    Concurrency:  8,       // Use 8 concurrent workers
-})
-```
-
-**BatchSize** - Controls how many blobs to fetch in a single network request:
-
-- **Value 0 or 1**: Fetches blobs individually (backward compatible, default behavior)
-- **Values > 1**: Enables batch fetching, reducing network round trips by 50-70%
-- Automatically falls back to individual fetching if a blob is missing from a batch response
-- Recommended for repositories with many files to minimize network overhead
-- Recommended value: 20-100 depending on average blob size and network conditions
-
-**Concurrency** - Controls parallel blob fetching:
-
-- **Value 0 or 1**: Sequential fetching (backward compatible, default behavior)
-- **Values > 1**: Enables concurrent fetching using worker pools
-- Works with both batch fetching (fetches multiple batches in parallel) and individual fetching
-- Recommended value: 4-10 depending on network conditions and server capacity
-- Can improve performance by 2-3x on high-latency networks
-
-**Performance Impact**: Combined optimization (BatchSize=50, Concurrency=8) can achieve 5-10x speedup compared to default sequential fetching, making it ideal for CI/CD environments and large repository operations.
-
-### Configurable Writing Modes
-
-nanogit provides flexible writing modes to optimize memory usage during write operations:
-
-```go
-// Auto mode (default) - smart memory/disk switching
-writer, err := client.NewStagedWriter(ctx, ref)
-
-// Memory mode - maximum performance
-writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithMemoryStorage())
-
-// Disk mode - minimal memory usage for bulk operations
-writer, err := client.NewStagedWriter(ctx, ref, nanogit.WithDiskStorage())
-```
-
-For detailed information about writing modes, performance characteristics, and use cases, see [Storage Architecture Documentation](docs/architecture/storage.md).
-
-### Retry Mechanism
-
-nanogit includes a pluggable retry mechanism, making operations more robust against transient network errors and server issues. The retry mechanism follows the same pattern as storage options, using context-based injection.
-
-#### Basic Usage
-
-By default, no retries are performed (backward compatible). To enable retries, inject a retrier into the context:
-
-```go
-import "github.com/grafana/nanogit/retry"
-
-// Create a retrier with default settings (3 attempts, exponential backoff)
-retrier := retry.NewExponentialBackoffRetrier()
-ctx = retry.ToContext(ctx, retrier)
-
-// All HTTP operations will now use retry logic
-client, err := nanogit.NewHTTPClient(repo, options...)
-ref, err := client.GetRef(ctx, "main")
-```
-
-#### Built-in Retrier
-
-The `ExponentialBackoffRetrier` provides configurable exponential backoff retry logic:
-
-```go
-// Customize retry behavior
-retrier := retry.NewExponentialBackoffRetrier().
-    WithMaxAttempts(5).                    // Retry up to 5 times
-    WithInitialDelay(200 * time.Millisecond). // Start with 200ms delay
-    WithMaxDelay(10 * time.Second).        // Cap at 10 seconds
-    WithMultiplier(2.0).                   // Double delay each retry
-    WithJitter()                          // Add random jitter
-
-ctx = retry.ToContext(ctx, retrier)
-```
-
-#### Custom Retrier
-
-You can implement your own retry logic by implementing the `Retrier` interface:
-
-```go
-type MyRetrier struct {
-    // Your custom fields
-}
-
-func (r *MyRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
-    // Your retry logic
-    return true
-}
-
-func (r *MyRetrier) Wait(ctx context.Context, attempt int) error {
-    // Your backoff logic
-    return nil
-}
-
-func (r *MyRetrier) MaxAttempts() int {
-    return 3
-}
-
-// Use your custom retrier
-ctx = retry.ToContext(ctx, &MyRetrier{})
-```
-
-#### What Gets Retried
-
-The retry mechanism automatically retries on:
-
-- **Network timeout errors**
-- **5xx server errors**: Server unavailable errors (for GET requests only)
-- **Temporary errors**: Any error marked as temporary
-
-The retry mechanism does **not** retry on:
-
-- **4xx client errors**: Bad requests, authentication failures, etc.
-- **Context cancellation**: When the context is cancelled or deadline exceeded
-- **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body (`io.Reader`) is consumed when the request is sent and cannot be re-read
-
-#### Retry Behavior by Request Type
-
-- **GET requests** (SmartInfo): Retry on network errors and 5xx status codes
-- **POST requests** (UploadPack, ReceivePack): Retry only on network errors (before response is received)
-
-This limitation exists because POST request bodies are consumed during the HTTP request and cannot be re-read for retries.
-
-## Storage Architecture
-
-nanogit features a flexible two-layer storage architecture that separates concerns and allows independent optimization:
-
-1. **Writing modes**: Control temporary storage during packfile creation (memory/disk/auto)
-2. **Object storage**: Handle long-term caching and retrieval of Git objects (pluggable backends)
-
-### Object Storage and Caching
-
-nanogit provides context-based object storage with pluggable backends. The default in-memory implementation is optimized for stateless operations, but you can implement custom backends for persistent caching:
-
-```go
-// Custom storage example
-ctx = storage.ToContext(ctx, myRedisStorage)
-client, err := nanogit.NewHTTPClient(repo, options...)
-```
-
-This enables sharing Git object cache across multiple repositories, persistent caching across service restarts, and optimization for specific deployment patterns.
-
-For detailed information about storage architecture, writing modes, and custom implementations, see [Storage Architecture Documentation](STORAGE_ARCHITECTURE.md).
-
-## Testing
-
-### Unit Testing with Mocks
-
-nanogit includes generated mocks for easy unit testing. The mocks are generated using [counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) and provide comprehensive test doubles for both the `Client` and `StagedWriter` interfaces.
-
-For detailed testing examples and instructions, see [CONTRIBUTING.md](CONTRIBUTING.md#testing-with-mocks). You can also find complete working examples in [mocks/example_test.go](mocks/example_test.go).
-
-### Integration Testing with gittest
-
-The `gittest` package provides utilities for testing Git operations with a containerized Gitea server:
-
-```bash
-go get github.com/grafana/nanogit/gittest@latest
-```
-
-See [gittest README](gittest/README.md) for API documentation and examples.
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and set up your development environment.
-
-## Code of Conduct
-
-This project follows the [Grafana Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
-
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE.md) - see the LICENSE file for details.
-
-## Project Status
-
-This project is currently in active development. While it's open source, it's important to note that it was initially created as part of a hackathon. We're working to make it production-ready, but please use it with appropriate caution.
+See the [CLI documentation](https://grafana.github.io/nanogit/getting-started/cli/) for all commands and platform-specific downloads.
 
 ## Documentation
 
 Comprehensive documentation is available at **[grafana.github.io/nanogit](https://grafana.github.io/nanogit)**:
 
-- **[Getting Started](https://grafana.github.io/nanogit/getting-started/installation/)** - Installation and quick start guide
-- **[Architecture](https://grafana.github.io/nanogit/architecture/overview/)** - Design principles, storage backend, performance
-- **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API documentation
-- **[Changelog](https://grafana.github.io/nanogit/changelog/)** - Version history and release notes
+- **[Quick Start](https://grafana.github.io/nanogit/getting-started/quick-start/)** — reading, writing, cloning, retries, and authentication
+- **[Server Compatibility](https://grafana.github.io/nanogit/getting-started/server-compatibility/)** — verify a Git server works with nanogit in four CLI commands
+- **[Architecture](https://grafana.github.io/nanogit/architecture/overview/)** — design principles, [storage backends](docs/architecture/storage.md), [retry mechanism](docs/architecture/retry.md), and [performance](docs/architecture/performance.md)
+- **[Why nanogit exists](docs/why-nanogit.md)** — the Git Sync story and who uses nanogit
+- **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** — complete API documentation
+- **[Changelog](https://grafana.github.io/nanogit/changelog/)** — version history and release notes
 
-## Resources
+## Testing your integration
 
-Want to learn how Git works? The following resources are useful:
+nanogit ships the tooling to test code that depends on it:
 
-- [Git on the Server - The Protocols](https://git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols)
-- [Git Protocol v2](https://git-scm.com/docs/protocol-v2)
-- [Pack Protocol](https://git-scm.com/docs/pack-protocol)
-- [Git HTTP Backend](https://git-scm.com/docs/git-http-backend)
-- [HTTP Protocol](https://git-scm.com/docs/http-protocol)
-- [Git Protocol HTTP](https://git-scm.com/docs/gitprotocol-http)
-- [Git Protocol v2](https://git-scm.com/docs/gitprotocol-v2)
-- [Git Protocol Pack](https://git-scm.com/docs/gitprotocol-pack)
-- [Git Protocol Common](https://git-scm.com/docs/gitprotocol-common)
+- **Unit tests** — generated mocks for the `Client` and `StagedWriter` interfaces, with [working examples](mocks/example_test.go)
+- **Integration tests** — the [`gittest` package](gittest/README.md) spins up a real containerized Gitea server via Testcontainers: `go get github.com/grafana/nanogit/gittest@latest`
+
+See the [Testing Guide](https://grafana.github.io/nanogit/testing-guide) for patterns and best practices.
+
+## Contributing
+
+We welcome contributions! Please see the [Contributing Guide](CONTRIBUTING.md) for how to submit pull requests, report issues, and set up your development environment. This project follows the [Grafana Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE.md).
 
 ## Security
 
-If you find a security vulnerability, please report it to us according to [our security policy](https://github.com/grafana/.github/blob/main/SECURITY.md).
+If you find a security vulnerability, please report it according to [our security policy](https://github.com/grafana/.github/blob/main/SECURITY.md).
 
 ## Support
 
 - GitHub Issues: [Create an issue](https://github.com/grafana/nanogit/issues)
 - Community: [Grafana Community Forums](https://community.grafana.com)
-
-## Acknowledgments
-
-- The Grafana team for their support and guidance
-- The open source community for their valuable feedback and contributions

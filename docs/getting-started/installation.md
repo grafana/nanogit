@@ -20,10 +20,10 @@ go get github.com/grafana/nanogit@latest
 To install a specific version:
 
 ```bash
-go get github.com/grafana/nanogit@v0.x.x
+go get github.com/grafana/nanogit@v1.4.0
 ```
 
-Replace `v0.x.x` with the version you want to install. See all available versions on the [releases page](https://github.com/grafana/nanogit/releases).
+See all available versions on the [releases page](https://github.com/grafana/nanogit/releases).
 
 ## Verifying Installation
 
@@ -39,4 +39,4 @@ This should display the installed version.
 
 - [Quick Start Guide](quick-start.md) - Get started with basic usage
 - [API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit) - Explore the full API
-- [Examples](https://github.com/grafana/nanogit/tree/main/examples) - See working code examples
+- [CLI](cli.md) - Try nanogit from the terminal

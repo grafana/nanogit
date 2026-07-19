@@ -30,6 +30,12 @@ export default defineConfig({
 
     sidebar: [
       {
+        text: 'About',
+        items: [
+          { text: 'Why nanogit exists', link: '/why-nanogit' }
+        ]
+      },
+      {
         text: 'Getting Started',
         items: [
           { text: 'Installation', link: '/getting-started/installation' },
@@ -43,6 +49,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/architecture/overview' },
           { text: 'Storage Backend', link: '/architecture/storage' },
+          { text: 'Retry Mechanism', link: '/architecture/retry' },
           { text: 'Delta Resolution', link: '/architecture/delta-resolution' },
           { text: 'Performance', link: '/architecture/performance' }
         ]
@@ -50,6 +57,8 @@ export default defineConfig({
       {
         text: 'More',
         items: [
+          { text: 'Testing Guide', link: '/testing-guide' },
+          { text: 'Learn how Git works', link: '/how-git-works' },
           { text: 'Changelog', link: '/changelog' }
         ]
       }
