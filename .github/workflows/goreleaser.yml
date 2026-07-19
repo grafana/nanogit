@@ -19,7 +19,7 @@ jobs:
     name: Build and Upload Binaries
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
+      image: golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2
     steps:
       - name: Install dependencies
         run: |
