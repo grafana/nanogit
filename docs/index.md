@@ -7,7 +7,6 @@
   <a href="https://github.com/grafana/nanogit/stargazers"><img src="https://img.shields.io/github/stars/grafana/nanogit?style=social" alt="GitHub Stars"></a>
   <a href="https://github.com/grafana/nanogit/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/grafana/nanogit" alt="License"></a>
   <a href="https://github.com/grafana/nanogit/actions/workflows/ci.yml"><img src="https://github.com/grafana/nanogit/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <a href="https://goreportcard.com/report/github.com/grafana/nanogit"><img src="https://goreportcard.com/badge/github.com/grafana/nanogit" alt="Go Report Card"></a>
   <a href="https://pkg.go.dev/github.com/grafana/nanogit"><img src="https://pkg.go.dev/badge/github.com/grafana/nanogit.svg" alt="Go Reference"></a>
   <a href="https://codecov.io/gh/grafana/nanogit"><img src="https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg" alt="codecov"></a>
 </p>
