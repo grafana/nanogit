@@ -8,7 +8,11 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on PR branches, but never on main: the release
+  # workflow's wait-for-ci gate requires every check on the merge commit to
+  # conclude success/skipped, so cancelling an in-flight main run (e.g. when
+  # two PRs merge in quick succession) fails the release for that commit.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   generate:
