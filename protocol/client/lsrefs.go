@@ -9,6 +9,8 @@ import (
 	"github.com/grafana/nanogit/protocol"
 )
 
+// LsRefsOptions controls an ls-refs command. Prefix, when non-empty, limits
+// the results to refs whose names start with it (e.g. "refs/heads/").
 type LsRefsOptions struct {
 	Prefix string
 }

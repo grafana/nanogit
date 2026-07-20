@@ -37,11 +37,12 @@ import (
 // rebuilt — i.e., when nothing under that parent changed. So these tests
 // deliberately exercise the two scenarios the bug actually breaks:
 //
-//   1. Submodule at the repository root: ANY edit always re-marks the
-//      root tree dirty, so the submodule is dropped.
-//   2. Submodule as a sibling of the modified blob (same parent
-//      directory): that directory is dirty, so the submodule sibling
-//      gets dropped.
+//  1. Submodule at the repository root: ANY edit always re-marks the
+//     root tree dirty, so the submodule is dropped.
+//  2. Submodule as a sibling of the modified blob (same parent
+//     directory): that directory is dirty, so the submodule sibling
+//     gets dropped.
+//
 // As with the main writer Describe, the submodule preservation specs run
 // once with the default static capability set and once with capability
 // negotiation enabled, so the gitlink-preservation invariants hold under

@@ -9,14 +9,24 @@ import (
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
+// InMemoryStorageOption configures an InMemoryStorage created by NewInMemoryStorage.
 type InMemoryStorageOption func(*InMemoryStorage)
 
+// WithTTL enables time-based expiry: objects not accessed within ttl are
+// eligible for removal. When ttl > 0, NewInMemoryStorage starts a background
+// goroutine that sweeps expired objects every ttl. The goroutine stops only
+// when the context passed to NewInMemoryStorage is canceled, so pass a
+// cancelable context to avoid leaking it.
 func WithTTL(ttl time.Duration) InMemoryStorageOption {
 	return func(s *InMemoryStorage) {
 		s.ttl = ttl
 	}
 }
 
+// InMemoryStorage is a thread-safe, map-backed PackfileStorage. It is the
+// default storage nanogit uses when none is present in the context (see
+// FromContextOrInMemory). Entries live until deleted, or until they expire
+// when built with WithTTL.
 type InMemoryStorage struct {
 	objects    map[string]*protocol.PackfileObject
 	lastAccess map[string]time.Time
@@ -24,6 +34,9 @@ type InMemoryStorage struct {
 	mu         sync.RWMutex
 }
 
+// NewInMemoryStorage returns an empty InMemoryStorage. If WithTTL is given
+// with a positive duration, ctx bounds the lifetime of the background
+// cleanup goroutine started here; otherwise ctx is unused.
 func NewInMemoryStorage(ctx context.Context, opts ...InMemoryStorageOption) *InMemoryStorage {
 	s := &InMemoryStorage{
 		objects:    make(map[string]*protocol.PackfileObject),
@@ -41,6 +54,8 @@ func NewInMemoryStorage(ctx context.Context, opts ...InMemoryStorageOption) *InM
 	return s
 }
 
+// Get returns the object stored under key, refreshing its last-access time
+// when a TTL is configured.
 func (s *InMemoryStorage) Get(key hash.Hash) (*protocol.PackfileObject, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -55,6 +70,7 @@ func (s *InMemoryStorage) Get(key hash.Hash) (*protocol.PackfileObject, bool) {
 	return obj, ok
 }
 
+// GetByType returns the object stored under key only if it has the given type.
 func (s *InMemoryStorage) GetByType(key hash.Hash, objType protocol.ObjectType) (*protocol.PackfileObject, bool) {
 	obj, ok := s.Get(key)
 	if !ok {
@@ -82,6 +98,7 @@ func (s *InMemoryStorage) LastAccess(key hash.Hash) (time.Time, bool) {
 	return t, ok
 }
 
+// GetAllKeys returns the hashes of all stored objects.
 func (s *InMemoryStorage) GetAllKeys() []hash.Hash {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -93,6 +110,7 @@ func (s *InMemoryStorage) GetAllKeys() []hash.Hash {
 	return keys
 }
 
+// Add stores the given objects, keyed by their hashes.
 func (s *InMemoryStorage) Add(objs ...*protocol.PackfileObject) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -107,6 +125,7 @@ func (s *InMemoryStorage) Add(objs ...*protocol.PackfileObject) {
 	}
 }
 
+// Delete removes the object stored under key.
 func (s *InMemoryStorage) Delete(key hash.Hash) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,6 +137,7 @@ func (s *InMemoryStorage) Delete(key hash.Hash) {
 	}
 }
 
+// Len returns the number of stored objects.
 func (s *InMemoryStorage) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
