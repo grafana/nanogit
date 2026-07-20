@@ -10,6 +10,14 @@ nanogit operates without requiring a local .git directory, making it ideal for s
 ### HTTPS-Only Protocol
 Focuses exclusively on Git Smart HTTP Protocol v2, eliminating the complexity of supporting multiple transport protocols and simplifying authentication in cloud environments.
 
+#### Why protocol v2 only (and not v1)?
+nanogit implements Git Smart HTTP Protocol **v2** and intentionally does not implement the legacy v1 protocol. `IsServerCompatible` (see `protocol/client/compatibility.go`) detects the server's protocol version up front and treats a v1-only server as incompatible rather than falling back. The reasons are architectural, not incidental:
+
+- **Statelessness.** v2 replaced v1's stateful, multi-round `want`/`have` negotiation with a command-oriented model that completes in a single stateless HTTP round trip. That matches nanogit's stateless design (no local `.git`, no persistent connection state); v1's negotiation assumes connection state nanogit deliberately does not keep.
+- **Server-side ref filtering.** v2's `ls-refs` command lets the client ask for only the refs it needs via `ref-prefix`. v1 advertises *every* ref on each `info/refs` request, which does not scale for the large, multitenant repositories nanogit targets.
+- **Minimal surface area.** Supporting both wire protocols would double the negotiation and parsing paths. Keeping to v2 alone honors the minimal-surface-area principle below — less code, fewer bugs, smaller attack surface.
+- **Broad, though not universal, reach.** Protocol v2 has shipped since Git 2.18 (2018) and been the default fetch protocol since Git 2.26 (2020). GitHub, GitLab, and Bitbucket support it. The known exception is **Azure DevOps / Azure Repos**, which only advertises protocol v1; nanogit treats it as incompatible and does not fall back. For nanogit's intended audience the trade-off is deliberate — v1 support would add complexity to reach a shrinking set of servers.
+
 ### Pluggable Storage
 Features a flexible two-layer storage architecture:
 - **Writing modes**: Control temporary storage during packfile creation

@@ -433,14 +433,24 @@ func (c *httpClient) getCommit(ctx context.Context, commitHash hash.Hash, noExtr
 	logger.Debug("Get commit",
 		"commit_hash", commitHash.String())
 
+	// noExtraObjects=true (the GetCommit public API) is a single-object
+	// fetch by shape. noExtraObjects=false (NewStagedWriter init) lets
+	// the server return associated tree objects for cache warmup, so the
+	// response shape is multi-object and the larger budget applies.
+	maxBytes := c.limits.SingleObjectFetchMaxBytes
+	if !noExtraObjects {
+		maxBytes = c.limits.MultiObjectFetchMaxBytes
+	}
+
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{commitHash},
-		Deepen:         1,
-		Shallow:        true,
-		Done:           true,
-		NoExtraObjects: noExtraObjects,
+		NoProgress:       true,
+		NoBlobFilter:     true,
+		Want:             []hash.Hash{commitHash},
+		Deepen:           1,
+		Shallow:          true,
+		Done:             true,
+		NoExtraObjects:   noExtraObjects,
+		MaxResponseBytes: maxBytes,
 	})
 	if err != nil {
 		// TODO: handle this at the client level
@@ -677,12 +687,13 @@ func (c *httpClient) fetchCommitObject(ctx context.Context, commitHash hash.Hash
 		"commit_hash", commitHash.String())
 
 	objects, err := c.Fetch(ctx, client.FetchOptions{
-		NoProgress:     true,
-		NoBlobFilter:   true,
-		Want:           []hash.Hash{commitHash},
-		Deepen:         perPage,
-		Done:           true,
-		NoExtraObjects: false, // we want to read other commits
+		NoProgress:       true,
+		NoBlobFilter:     true,
+		Want:             []hash.Hash{commitHash},
+		Deepen:           perPage,
+		Done:             true,
+		NoExtraObjects:   false, // we want to read other commits
+		MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch commit %s: %w", commitHash.String(), err)
@@ -838,12 +849,13 @@ func (c *httpClient) hashForPath(ctx context.Context, commitHash hash.Hash, path
 	if !ok {
 		logger.Debug("Commit not in storage, fetching", "commitHash", commitHash.String())
 		objects, err := c.Fetch(ctx, client.FetchOptions{
-			NoProgress:     true,
-			NoBlobFilter:   true,
-			Want:           []hash.Hash{commitHash},
-			Shallow:        true,
-			Done:           true,
-			NoExtraObjects: false, // let's read of other tree objects if possible
+			NoProgress:       true,
+			NoBlobFilter:     true,
+			Want:             []hash.Hash{commitHash},
+			Shallow:          true,
+			Done:             true,
+			NoExtraObjects:   false, // let's read of other tree objects if possible
+			MaxResponseBytes: c.limits.MultiObjectFetchMaxBytes,
 		})
 		if err != nil {
 			logger.Debug("Failed to fetch commit", "commitHash", commitHash.String(), "error", err)

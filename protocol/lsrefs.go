@@ -41,6 +41,15 @@ func ParseLsRefsResponse(ctx context.Context, reader io.Reader) ([]RefLine, erro
 			return nil, fmt.Errorf("parsing packet length: %w", err)
 		}
 
+		// Reject pkt-lines whose declared length exceeds the protocol
+		// cap before allocating a buffer of that size. This mirrors
+		// the same guard in protocol.Parser.Next; ParseLsRefsResponse
+		// has its own pkt-line loop, so the check must be repeated
+		// here to make the OOM defense apply on the ls-refs path.
+		if length > MaxPktLineSize {
+			return nil, &ErrPktLineTooLarge{Length: length, Max: MaxPktLineSize}
+		}
+
 		logger.Debug("Parsed packet length", "length", length, "packet_number", count)
 
 		// Handle different packet types

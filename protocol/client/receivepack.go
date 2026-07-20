@@ -118,17 +118,23 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 		return fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status)
 	}
 
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("error closing response body: %w", closeErr)
-		}
-	}()
-
 	logger.Debug("Receive-pack response",
 		"status", res.StatusCode,
 		"statusText", res.Status)
 
-	return parseReceivePackResponse(res.Body)
+	// Close the wrapped reader rather than res.Body directly so any
+	// future Close-time behavior on the wrapper (e.g. metric emission)
+	// runs alongside the underlying body close. Today the wrapper just
+	// forwards Close to res.Body, so the observable behavior is the
+	// same — the consistency is what matters.
+	body := newLimitedReadCloser(res.Body, c.limits.ReceivePackResponseMaxBytes, "receive-pack")
+	defer func() {
+		if closeErr := body.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing response body: %w", closeErr)
+		}
+	}()
+
+	return parseReceivePackResponse(body)
 }
 
 // parseReceivePackResponse consumes the pkt-line stream from a
