@@ -27,6 +27,14 @@ type FetchOptions struct {
 	// This can significantly improve performance when fetching specific objects from large repositories,
 	// as it avoids downloading and processing unnecessary objects.
 	NoExtraObjects bool
+
+	// MaxResponseBytes caps the upload-pack response body (the packfile
+	// stream the server returns) before the parser starts consuming it.
+	// 0 disables the cap. High-level callers select an appropriate value
+	// from options.Limits based on whether the fetch targets a single
+	// object (Limits.SingleObjectFetchMaxBytes) or many
+	// (Limits.MultiObjectFetchMaxBytes).
+	MaxResponseBytes int64
 }
 
 func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
@@ -48,7 +56,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
-	responseReader, response, err := c.sendFetchRequest(ctx, pkt)
+	responseReader, response, err := c.sendFetchRequest(ctx, pkt, pendingOpts.MaxResponseBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -171,20 +179,71 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 	logger.Debug("Fetch request raw data", "request", string(pkt))
 }
 
-// sendFetchRequest sends the fetch request and parses the response
-func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte) (io.ReadCloser, *protocol.FetchResponse, error) {
+// sendFetchRequest sends the fetch request and parses the response.
+// maxBytes caps the response body before parsing; 0 disables the cap.
+//
+// On a parse error the response body is closed before returning so it
+// is not leaked: the caller's "responseReader != nil" defer is skipped
+// because we return a nil reader on the error path. (Closing here does
+// NOT enable HTTP connection reuse — net/http requires the body to be
+// read to EOF for that — but it does release the body's resources and
+// any active streaming socket.) The oversize-cap path makes this more
+// reachable since truncated-by-cap responses surface as parse errors
+// while the underlying body still has unread bytes.
+func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (io.ReadCloser, *protocol.FetchResponse, error) {
+	logger := log.FromContext(ctx)
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, nil, fmt.Errorf("sending commands: %w", err)
 	}
 
+	responseReader = newLimitedReadCloser(responseReader, maxBytes, "fetch")
+
 	parser := protocol.NewParser(responseReader)
 	response, err := protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
+		if closeErr := responseReader.Close(); closeErr != nil {
+			logger.Error("error closing fetch response body after parse failure", "error", closeErr)
+		}
 		return nil, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
 
 	return responseReader, response, nil
+}
+
+// allWantedObjectsCollected reports whether the read loop has seen every
+// wanted hash. The caller maintains pendingWanted by deleting each hash on
+// first sight (see shouldTerminateEarly), so an empty map means "all
+// collected". A nil map means the fetch is not NoExtraObjects and the
+// early-termination / cap-swallow branches stay disabled.
+func allWantedObjectsCollected(pendingWanted map[string]bool) bool {
+	return pendingWanted != nil && len(pendingWanted) == 0
+}
+
+// classifyReadObjectErr decides what to do with a non-EOF error from
+// ReadObject. A non-nil return is the error to propagate (it aborts
+// processPackfileResponse); a nil return means the caller should swallow the
+// error and break out of the read loop, finalizing whatever was collected.
+//
+// The default is to propagate, wrapped with the 1-based object position so
+// the message points at the offending object — corrupt packfiles, short
+// reads, and oversize objects all surface as hard errors. The one exception
+// preserves the DoS-protection contract: when a NoExtraObjects fetch has
+// already collected every requested object, an *ErrResponseTooLarge fired on
+// the trailing bytes is on data the caller never asked for, so surfacing it
+// would turn a successful single-object lookup into a false negative against
+// a server that over-sends. pendingWanted is the deletion-tracked map
+// maintained by the read loop: nil means the fetch isn't NoExtraObjects (so
+// the swallow path is disabled), empty means every wanted hash has been seen.
+//
+// objectsRead is the count of objects successfully read before this error,
+// so the reported position is objectsRead+1.
+func classifyReadObjectErr(err error, pendingWanted map[string]bool, objectsRead int) error {
+	var tooLarge *ErrResponseTooLarge
+	if errors.As(err, &tooLarge) && allWantedObjectsCollected(pendingWanted) {
+		return nil
+	}
+	return fmt.Errorf("reading packfile object %d: %w", objectsRead+1, err)
 }
 
 // processPackfileResponse processes the packfile response and extracts objects
@@ -204,15 +263,29 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	// Collect delta objects for later resolution
 	var deltas []*protocol.PackfileObject
 
-	var count, objectCount, foundWantedCount, totalDelta int
+	var count, objectCount, totalDelta int
 	for {
 		obj, err := response.Packfile.ReadObject(ctx)
 		if err != nil {
+			// io.EOF is the natural end of the packfile stream.
 			if errors.Is(err, io.EOF) {
-				logger.Debug("Finished reading objects", "totalObjects", objectCount, "foundWanted", foundWantedCount, "totalDeltas", totalDelta)
+				logger.Debug("Finished reading objects", "totalObjects", objectCount, "totalDeltas", totalDelta)
 				break
 			}
-			return fmt.Errorf("reading packfile object %d: %w", count+1, err)
+			// Anything else propagates — corrupt packfile, short
+			// read, oversize object — UNLESS it's a cap breach on
+			// trailing bytes after every wanted object was already
+			// collected (see classifyReadObjectErr).
+			if terr := classifyReadObjectErr(err, pendingWantedHashes, count); terr != nil {
+				return terr
+			}
+			logger.Debug("Cap reached after all wanted objects collected; stopping early",
+				"totalObjects", objectCount, "totalDeltas", totalDelta)
+			// Drop deltas queued before the swallow for the same
+			// reason the early-break path does (bases may be in the
+			// unread tail).
+			deltas = nil
+			break
 		}
 
 		if obj.Object == nil {
@@ -235,18 +308,17 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		objects[obj.Object.Hash.String()] = obj.Object
 		objectCount++
 
-		// Check for early termination if enabled and we have pending wants
-		if pendingWantedHashes != nil {
-			objHashStr := obj.Object.Hash.String()
-			if pendingWantedHashes[objHashStr] {
-				foundWantedCount++
-				logger.Debug("Found wanted object", "hash", objHashStr, "foundCount", foundWantedCount, "totalWanted", len(pendingWantedHashes))
-
-				// Stop reading if we've found all wanted objects
-				if foundWantedCount >= len(pendingWantedHashes) {
-					logger.Debug("All wanted objects found, stopping early", "totalObjectsRead", objectCount, "skippingRemaining", len(objects)-count)
-				}
-			}
+		if shouldTerminateEarly(pendingWantedHashes, obj.Object.Hash.String()) {
+			logger.Debug("All wanted objects found, stopping early",
+				"totalObjectsRead", objectCount, "queuedDeltas", totalDelta)
+			// Drop any deltas queued before the early break.
+			// Their bases may live in the unread tail of the
+			// stream, so resolveDeltas would spuriously report
+			// missing-base errors against an over-sending or
+			// adversarial server. The wanted set is already
+			// satisfied by the non-delta objects collected above.
+			deltas = nil
+			break
 		}
 	}
 
@@ -260,6 +332,32 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 	}
 
 	return nil
+}
+
+// shouldTerminateEarly deletes the just-read hash from the pending wanted
+// set and reports whether the set is now empty. Returning true tells the
+// caller to break out of the read loop — both to avoid draining the rest of
+// the packfile (wasteful) and to keep the new tight per-operation caps from
+// tripping ErrResponseTooLarge on bytes the caller never asked for.
+//
+// Tracking by deletion rather than a counter is what makes this safe
+// against a malicious or buggy server that sends the same wanted object
+// more than once: each hash decrements the pending set exactly once, so
+// duplicates can't trigger early termination before every distinct hash
+// has been seen.
+//
+// Splitting this out is mostly housekeeping: it keeps
+// processPackfileResponse under the gocyclo-15 ceiling and makes the
+// early-termination contract testable in isolation.
+func shouldTerminateEarly(pendingWanted map[string]bool, objHash string) bool {
+	if pendingWanted == nil {
+		return false
+	}
+	if !pendingWanted[objHash] {
+		return false
+	}
+	delete(pendingWanted, objHash)
+	return len(pendingWanted) == 0
 }
 
 // resolveDeltas resolves delta objects by applying them to their base objects.

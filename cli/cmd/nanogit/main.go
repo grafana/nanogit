@@ -20,6 +20,14 @@ var (
 	globalToken    string
 	globalJSON     bool
 	globalVerbose  bool
+
+	// DoS-protection byte caps. 0 (the default) means "no limit", which
+	// matches the library's default. Each flag corresponds to one field
+	// of options.Limits.
+	globalMaxBytesSingleObject int64
+	globalMaxBytesMultiObject  int64
+	globalMaxBytesRefs         int64
+	globalMaxBytesReceivePack  int64
 )
 
 func init() {
@@ -28,6 +36,11 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalToken, "token", "", "Authentication token (can also use NANOGIT_TOKEN env var)")
 	rootCmd.PersistentFlags().BoolVar(&globalJSON, "json", false, "Output results in JSON format")
 	rootCmd.PersistentFlags().BoolVarP(&globalVerbose, "verbose", "v", false, "Be verbose (emit Info-level logs to stderr; set NANOGIT_TRACE=1 for Debug/wire detail)")
+
+	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesSingleObject, "max-bytes-single-object", 0, "Cap (bytes) on responses to single-object fetches: GetBlob, GetTree, GetCommit. 0 = no limit.")
+	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesMultiObject, "max-bytes-multi-object", 0, "Cap (bytes) on responses to multi-object fetches: GetFlatTree, ListCommits, CompareCommits, Clone. 0 = no limit.")
+	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesRefs, "max-bytes-refs", 0, "Cap (bytes) on ref-listing and protocol-detection responses. 0 = no limit (1 MB floor still applies to the protocol-detection path).")
+	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesReceivePack, "max-bytes-receive-pack", 0, "Cap (bytes) on the server's reply to a receive-pack push. 0 = no limit.")
 }
 
 func main() {

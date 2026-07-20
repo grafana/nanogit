@@ -19,6 +19,12 @@ on:
       - '.github/workflows/docs.yml'
       - '*.md'
       - 'scripts/prepare-docs.sh'
+  # The release workflow dispatches this (workflow_dispatch) after publishing a
+  # release, so the changelog page (generated from GitHub Releases) refreshes.
+  # We deliberately do NOT use a `release:` trigger here: it would classify this
+  # workflow as a publishing workflow and flag setup-node's cache as a
+  # cache-poisoning risk (zizmor). The dispatch lives in release.yml, which
+  # already disables caching.
   workflow_dispatch:
 
 permissions:
@@ -36,7 +42,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
 
@@ -50,20 +56,21 @@ jobs:
         run: npm ci
 
       - name: Prepare documentation files
+        # Reads the public Releases API anonymously — no token required.
         run: ./scripts/prepare-docs.sh
 
       - name: Build documentation
         run: npm run docs:build
 
       - name: Upload artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: docs/.vitepress/dist
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     permissions:

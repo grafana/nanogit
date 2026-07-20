@@ -18,6 +18,31 @@
 
 nanogit is a lightweight, cloud-native Git implementation designed for applications that need efficient Git operations over HTTPS without the complexity and resource overhead of traditional Git implementations.
 
+## Why we built nanogit in the first place
+
+nanogit was created by Grafana to power [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) — the [Observability as Code](https://grafana.com/docs/grafana/latest/as-code/) feature that lets you store Grafana dashboards and folders as files in your own Git repository and manage them as code: auditable, reviewable, and reproducible, editing in the UI and opening pull requests without leaving Grafana.
+
+Git Sync needed a real Git engine embedded in Grafana's backend, and none of the obvious options fit:
+
+- **A GitHub API wasn't enough.** The goal grew from "sync with GitHub" to "sync with any Git provider." That means speaking the standard Git Smart HTTP protocol directly, so GitLab, Bitbucket, and self-hosted servers work without provider-specific code.
+- **The `git` CLI and libgit2** assume a local `.git` working directory. Maintaining a checkout per tenant, and shelling out to a binary, is impractical and hard to reason about operationally in a shared, multitenant backend.
+- **[go-git](https://github.com/go-git/go-git)** is mature, but its abstraction and overhead were too heavy for this use case. It is built around local-disk operations and full clones — stateful and memory-heavy once multiplied across thousands of tenants and large repositories.
+
+So we built nanogit around the constraints Git Sync actually has:
+
+- **Provider-agnostic** — talks the Git wire protocol over HTTPS, so any compliant provider works without bespoke integrations.
+- **Stateless — no clones, no `.git`** — a defining goal was to avoid full clones and never persist a `.git` directory or per-tenant working tree. nanogit reads and writes objects directly over HTTPS, so there is no local repository state to store, clean up, or keep consistent across a horizontally scaled, multitenant backend.
+- **Lean and fast** — parses only what Git Sync needs. Streaming packfiles, path filtering, shallow reads, and delta handling keep it fast and memory-efficient on Grafana-scale repositories, where an operation usually touches a subpath rather than the whole repo.
+- **Operational control** — speaking the Git protocol directly lets Grafana control exactly how it talks to each provider: how many requests it makes and how large each response is (to stay within provider rate limits and byte budgets), what objects get cached and reused across operations, and how many round trips a sync costs. Hosted provider APIs and general-purpose clients don't expose that level of control.
+- **Safe and controllable** — a focused, embeddable library with a minimal surface area is easier to secure and operate than a general-purpose tool, and it needs only token auth (no SSH key management).
+
+nanogit is open source and usable on its own, but its design — and the performance numbers below — come directly from this workload: doing the Git plumbing behind Git Sync efficiently, safely, and for many tenants at scale.
+
+## Known usage
+
+- **[grafana/grafana](https://github.com/grafana/grafana)** — nanogit is the Git engine behind [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) provisioning (`apps/provisioning/pkg/repository/git`). It resolves refs, reads and writes dashboards and folders, stages commits, and pushes to each tenant's repository over HTTPS.
+- **[grafana/grafana-bench](https://github.com/grafana/grafana-bench)** — nanogit is the **default Git driver** for fetching the test-suite repository before a benchmark run. grafana-bench pulls its k6/Playwright suites from Git; nanogit's lightweight, HTTP-only client with parallel object fetching and sparse/subpath checkout pulls large monorepos faster and with less overhead than the alternative go-git driver, keeping benchmark setup fast and repeatable. (go-git stays available via `--git-driver gogit` when SSH or full Git features are needed.)
+
 ## Features
 
 - **HTTPS-only Git operations** - Works with any Git service supporting Smart HTTP Protocol v2 (GitHub, GitLab, Bitbucket, etc.), eliminating the need for SSH key management in cloud environments
@@ -46,6 +71,17 @@ The following features are explicitly not supported:
 - Direct .git directory access
 - "Dumb" servers
 - Complex permissions (all objects use mode 0644)
+
+## Why Git Protocol v2 Only?
+
+nanogit speaks **only** Git Smart HTTP Protocol v2. It does not implement the legacy v1 protocol (neither the original "smart" v1 negotiation nor the "dumb" HTTP protocol), and it will not silently fall back to it. This is a deliberate design decision, not a missing feature:
+
+- **Stateless by design** — Protocol v2 replaces v1's stateful, multi-round `want`/`have` negotiation with a command-oriented request model that completes in a single stateless HTTP round trip. That maps directly onto nanogit's stateless, serverless-friendly architecture. v1's negotiation assumes connection state that nanogit deliberately does not keep.
+- **Server-side ref filtering** — v2's `ls-refs` command lets the client request only the references it needs (via `ref-prefix`). v1 dumps the *entire* ref advertisement on every `info/refs` request, which is wasteful for repositories with thousands of branches and tags — exactly the multitenant, large-repo case nanogit targets.
+- **Smaller surface area** — Supporting both protocols would double the negotiation and parsing code paths. Minimal surface area is a core design principle: less code means fewer bugs and a smaller attack surface.
+- **Broad (not universal) provider support** — Protocol v2 has been available since Git 2.18 (2018) and the default fetch protocol since Git 2.26 (2020). GitHub, GitLab, and Bitbucket all support it. The notable exception is **Azure DevOps / Azure Repos**, which only speaks protocol v1 — nanogit cannot talk to it, and there is no fallback. For nanogit's target audience (cloud-native services talking to modern hosted Git), the trade-off is worth it: v1 support would add complexity to serve a shrinking set of servers.
+
+When a server only speaks v1, `nanogit check` reports it as incompatible and every operation fails fast rather than silently degrading. Always run it against a new provider before integrating. See the [Server Compatibility guide](https://grafana.github.io/nanogit/getting-started/server-compatibility/) for how to verify support.
 
 ## Why nanogit?
 
