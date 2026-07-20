@@ -120,9 +120,9 @@ For more details, see [Conventional Commits specification](https://www.conventio
 
 ### Development Process
 
-1. Clone the repository:
+1. Fork the repository on GitHub, then clone your fork:
    ```bash
-   git clone https://github.com/yourusername/nanogit.git
+   git clone https://github.com/<your-username>/nanogit.git
    cd nanogit
    ```
 
@@ -182,7 +182,7 @@ func TestSomething(t *testing.T) {
 
 #### Integration Tests
 
-Integration tests are located in the root directory and use [Ginkgo](https://onsi.github.io/ginkgo/) as the testing framework with [Gomega](https://onsi.github.io/gomega/) for assertions. We migrated from testify to Ginkgo for integration tests due to several key advantages:
+Integration tests are located in the `tests/` directory (a separate Go module) and use [Ginkgo](https://onsi.github.io/ginkgo/) as the testing framework with [Gomega](https://onsi.github.io/gomega/) for assertions. We migrated from testify to Ginkgo for integration tests due to several key advantages:
 
 **Why We Use Ginkgo for Integration Tests:**
 
@@ -198,22 +198,22 @@ Integration tests are located in the root directory and use [Ginkgo](https://ons
 - Automatic container lifecycle management with proper cleanup
 - Thread-safe test infrastructure that eliminates data races
 - Parallel test execution support without race conditions
-- Uses `internal/testhelpers/` for shared test utilities
-- Real Git server testing using [Gitea](https://gitea.io/) in a Docker container
+- Uses the public [`gittest`](gittest/README.md) package for shared test utilities
+- Real Git server testing using [Gitea](https://gitea.io/) in a Docker container (via [Testcontainers](https://golang.testcontainers.org/))
 
 **Test Structure:**
 ```bash
-internal/
-├── testhelpers/
-│   ├── gitserver.go          # Gitea container management
-│   ├── remoterepo.go         # Remote repository helpers
-│   ├── localrepo.go          # Local repository helpers
-│   └── logger.go             # Thread-safe logging
-| integration_suite_test.go # Main test suite with shared setup
-| auth_integration_test.go             # Authentication integration tests
-| refs_integration_test.go             # Reference operation tests
-| writer_integration_test.go           # Writer operation tests
-| ...                      # Other integration test files
+tests/                                 # Integration + provider tests (own go.mod, never published)
+├── integration_suite_test.go          # Main Ginkgo suite with shared setup
+├── auth_integration_test.go           # Authentication integration tests
+├── refs_integration_test.go           # Reference operation tests
+├── writer_integration_test.go         # Writer operation tests
+├── providers_integration_test.go      # Real-provider compatibility tests
+└── ...                                # Other integration test files
+gittest/                               # Public Testcontainers-based Gitea helpers used by the tests
+├── server.go                          # Gitea container management
+├── remote.go                          # Remote repository helpers
+└── logger.go                          # Thread-safe logging
 ```
 
 **Example Ginkgo Test:**
@@ -408,13 +408,13 @@ make test-providers
 ```
 Our CI pipeline includes provider tests against: 
 - GitHub using [grafana/nanogit-test](https://github.com/grafana/nanogit-test.git).
-- Gitlab using [grafana/nanogit-test](https://gitlab.com/grafana7281924/nanogit-test.git).
+- GitLab using [a dedicated GitLab test repo](https://gitlab.com/grafana7281924/nanogit-test.git).
 - Bitbucket using [grafana/nanogit-test](https://bitbucket.org/nanogit-test/nanogit-test)
 
 #### Writing Tests
 
 1. **Unit tests** should be fast and not require external dependencies
-2. **Integration tests** should be in the `test/` directory using Ginkgo
+2. **Integration tests** should be in the `tests/` directory using Ginkgo
 3. Use testify's `assert` and `require` packages for unit tests, and Gomega matchers for integration tests
 4. Follow Go's testing best practices
 5. Add appropriate test coverage
@@ -458,100 +458,7 @@ For documentation and examples, see [gittest README](gittest/README.md).
 
 ### Editor Settings
 
-#### Cursor
-
-We provide rules for cursor in `.cursor` directory that defines our coding standards and best practices. The rules cover:
-
-* Code style and formatting
-* Testing requirements
-* Error handling patterns
-* Documentation standards
-* Security considerations
-* Performance guidelines
-* Git protocol compliance
-* Code organization
-* Versioning practices
-* CI/CD requirements
-* Code review guidelines
-* Maintenance standards
-* Accessibility requirements
-* Extensibility guidelines
-
-To use these rules in Cursor:
-1. Open the project in Cursor
-2. The rules will be automatically loaded
-3. Cursor will provide inline suggestions based on these rules
-
-
-### Contributing to Cursor Rules
-
-We welcome contributions to improve our Cursor rules! The rules are designed to help maintain code quality and consistency, but they're not set in stone. If you have suggestions for improvements or find areas that could be enhanced, please feel free to contribute.
-
-#### How to Contribute to Rules
-
-1. **Identify Areas for Improvement**
-   - Look for patterns that could be better enforced
-   - Identify missing best practices
-   - Suggest clearer guidelines for existing rules
-
-2. **Propose Changes**
-   - Open an issue to discuss proposed changes
-   - Explain the rationale behind your suggestions
-   - Provide examples of how the changes would improve the codebase
-
-3. **Submit Pull Requests**
-   - Update the relevant rule files in the `.cursor` directory
-   - Include clear documentation for any new rules
-   - Add examples where appropriate
-
-4. **Review Process**
-   - All rule changes will be reviewed by maintainers
-   - Changes should align with the project's goals
-   - Consider the impact on existing code
-
-#### Rule Categories
-
-Feel free to contribute to any of these categories:
-
-* **Code Style**: Suggest improvements to formatting and style guidelines
-* **Testing**: Propose new testing requirements or best practices
-* **Error Handling**: Enhance error handling patterns
-* **Documentation**: Improve documentation standards
-* **Security**: Add new security considerations
-* **Performance**: Suggest performance optimizations
-* **Git Protocol**: Enhance Git protocol compliance rules
-* **Code Organization**: Propose better code structure guidelines
-* **Versioning**: Improve versioning practices
-* **CI/CD**: Add new CI/CD requirements
-* **Code Review**: Enhance code review guidelines
-* **Maintenance**: Suggest maintenance standards
-* **Accessibility**: Add accessibility requirements
-* **Extensibility**: Propose extensibility guidelines
-
-#### Best Practices for Rule Contributions
-
-1. **Keep Rules Clear and Concise**
-   - Rules should be easy to understand
-   - Avoid overly complex requirements
-   - Provide clear examples
-
-2. **Consider Impact**
-   - Evaluate the impact on existing code
-   - Consider the learning curve for new contributors
-   - Balance strictness with practicality
-
-3. **Documentation**
-   - Include clear explanations for new rules
-   - Provide examples of correct and incorrect usage
-   - Link to relevant documentation or resources
-
-4. **Testing**
-   - Test rules against existing code
-   - Ensure rules don't conflict with each other
-   - Verify rules work as expected in Cursor
-
-Remember, the goal is to make the development experience better for everyone. Your contributions can help shape the future of this project's development standards.
-
+The repository ships editor rules under `.cursor/` for contributors who use [Cursor](https://cursor.com); they are loaded automatically when you open the project. If you change project conventions (code style, testing, error handling, etc.), keep those rules up to date in the same PR.
 
 ### Documentation
 
@@ -609,6 +516,8 @@ npm run docs:dev     # Development server
 npm run docs:build   # Build for production
 npm run docs:preview # Preview production build
 ```
+
+**Note**: if you call the npm scripts directly, run `./scripts/prepare-docs.sh` first — it generates `docs/changelog.md` from the GitHub Releases API (no token required), and `npm run docs:build` fails without that file. The `make docs-*` targets run it for you.
 
 The documentation will be available at `http://localhost:5173/nanogit/`.
 

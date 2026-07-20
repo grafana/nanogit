@@ -332,4 +332,4 @@ Contributions are welcome! Please see the main [CONTRIBUTING.md](../CONTRIBUTING
 
 ## License
 
-This package is part of nanogit and shares the same license. See [LICENSE](../LICENSE) for details.
+This package is part of nanogit and shares the same license. See [LICENSE](../LICENSE.md) for details.
