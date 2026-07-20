@@ -41,13 +41,19 @@ if err != nil {
     panic(err)
 }
 
-// Read a file
-content, err := client.GetBlob(ctx, ref.Hash, "README.md")
+// Resolve the commit to get its root tree
+commit, err := client.GetCommit(ctx, ref.Hash)
 if err != nil {
     panic(err)
 }
 
-fmt.Println(string(content))
+// Read a file by path
+blob, err := client.GetBlobByPath(ctx, commit.Tree, "README.md")
+if err != nil {
+    panic(err)
+}
+
+fmt.Println(string(blob.Content))
 ```
 
 ### Writing Files

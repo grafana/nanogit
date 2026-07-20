@@ -11,82 +11,59 @@
   <a href="https://codecov.io/gh/grafana/nanogit"><img src="https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg" alt="codecov"></a>
 </p>
 
-## Overview
+## What is nanogit?
 
-nanogit is a lightweight, cloud-native Git implementation designed for applications that need efficient Git operations over HTTPS without the complexity and resource overhead of traditional Git implementations.
+nanogit is a lightweight Git client library for Go, built for services that read from and write to Git repositories over HTTPS — with no local clone, no `.git` directory, and no `git` binary. It speaks the [Git Smart HTTP Protocol v2](https://git-scm.com/docs/protocol-v2) directly, so it works with GitHub, GitLab, Bitbucket, Gitea, and any other server that supports protocol v2.
 
-## Why we built nanogit in the first place
+Grafana built nanogit to power [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/), which syncs dashboards with tenants' own Git repositories from inside Grafana's multitenant backend — a workload where cloning every repository to disk is not an option. Read the full story in [Why nanogit exists](why-nanogit.md).
 
-nanogit was created by Grafana to power [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) — the [Observability as Code](https://grafana.com/docs/grafana/latest/as-code/) feature that lets you store Grafana dashboards and folders as files in your own Git repository and manage them as code: auditable, reviewable, and reproducible, editing in the UI and opening pull requests without leaving Grafana.
+- **Stateless** — reads and writes Git objects directly over HTTPS; nothing is persisted locally, so there is no per-repository state to store, clean up, or keep consistent across replicas
+- **Works with any protocol v2 server** — one code path for GitHub, GitLab, Bitbucket, Gitea, and self-hosted servers; token-based auth, no SSH key management
+- **Essential operations** — refs, blobs, trees, commits, diffs, staged writes, and shallow clones with glob-based path filtering
+- **Memory-efficient** — streaming packfile processing and configurable memory/disk/auto writing modes for bulk operations
+- **Fast** — orders of magnitude faster and leaner than a full Git implementation for common server-side operations ([benchmarks below](#how-is-it-different-from-go-git))
+- **Commit signing** — sign commits with GPG, SSH, or S/MIME keys
+- **Pluggable** — object storage (caching) and [retry policies](architecture/retry.md) are injected via context, with sensible defaults
 
-Git Sync needed a real Git engine embedded in Grafana's backend, and none of the obvious options fit:
+## When should I use it?
 
-- **A GitHub API wasn't enough.** The goal grew from "sync with GitHub" to "sync with any Git provider." That means speaking the standard Git Smart HTTP protocol directly, so GitLab, Bitbucket, and self-hosted servers work without provider-specific code.
-- **The `git` CLI and libgit2** assume a local `.git` working directory. Maintaining a checkout per tenant, and shelling out to a binary, is impractical and hard to reason about operationally in a shared, multitenant backend.
-- **[go-git](https://github.com/go-git/go-git)** is mature, but its abstraction and overhead were too heavy for this use case. It is built around local-disk operations and full clones — stateful and memory-heavy once multiplied across thousands of tenants and large repositories.
+Use nanogit when your code runs **server-side and talks to Git over HTTPS**:
 
-So we built nanogit around the constraints Git Sync actually has:
+- **GitOps and as-code services** — sync configuration, dashboards, or manifests between your application and users' repositories
+- **Bots and automation** — commit generated files, open changes, or mirror content without shelling out to `git`
+- **Multitenant platforms** — operate on thousands of repositories without maintaining a checkout per tenant
+- **Serverless and containers** — environments with little or no persistent disk
+- **CI tooling** — fetch only the subpaths you need from large repositories using path-filtered, shallow clones
 
-- **Provider-agnostic** — talks the Git wire protocol over HTTPS, so any compliant provider works without bespoke integrations.
-- **Stateless — no clones, no `.git`** — a defining goal was to avoid full clones and never persist a `.git` directory or per-tenant working tree. nanogit reads and writes objects directly over HTTPS, so there is no local repository state to store, clean up, or keep consistent across a horizontally scaled, multitenant backend.
-- **Lean and fast** — parses only what Git Sync needs. Streaming packfiles, path filtering, shallow reads, and delta handling keep it fast and memory-efficient on Grafana-scale repositories, where an operation usually touches a subpath rather than the whole repo.
-- **Operational control** — speaking the Git protocol directly lets Grafana control exactly how it talks to each provider: how many requests it makes and how large each response is (to stay within provider rate limits and byte budgets), what objects get cached and reused across operations, and how many round trips a sync costs. Hosted provider APIs and general-purpose clients don't expose that level of control.
-- **Safe and controllable** — a focused, embeddable library with a minimal surface area is easier to secure and operate than a general-purpose tool, and it needs only token auth (no SSH key management).
+## When should I not use it?
 
-nanogit is open source and usable on its own, but its design — and the performance numbers below — come directly from this workload: doing the Git plumbing behind Git Sync efficiently, safely, and for many tenants at scale.
+nanogit is deliberately narrow. Reach for the `git` CLI or [go-git](https://github.com/go-git/go-git) instead when you need:
 
-## Known usage
+- **Local development workflows** — working trees, the index, `.git` directories, or repositories on disk
+- **Full Git functionality** — merges, rebases, blame, hooks, or Git configuration management
+- **Other transports** — SSH, `git://`, or local file access; nanogit is HTTPS-only
+- **Protocol v1 or "dumb" HTTP servers** — nanogit requires Smart HTTP protocol v2 and does not fall back. Notably, **Azure DevOps / Azure Repos only speaks v1 and is not supported.** Run [`nanogit check`](getting-started/server-compatibility.md) against a new provider before integrating
+- **Signature verification** — nanogit can sign commits but does not verify signatures
+- **Fine-grained file permissions** — all files are written with mode 0644
 
-- **[grafana/grafana](https://github.com/grafana/grafana)** — nanogit is the Git engine behind [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) provisioning (`apps/provisioning/pkg/repository/git`). It resolves refs, reads and writes dashboards and folders, stages commits, and pushes to each tenant's repository over HTTPS.
-- **[grafana/grafana-bench](https://github.com/grafana/grafana-bench)** — nanogit is the **default Git driver** for fetching the test-suite repository before a benchmark run. grafana-bench pulls its k6/Playwright suites from Git; nanogit's lightweight, HTTP-only client with parallel object fetching and sparse/subpath checkout pulls large monorepos faster and with less overhead than the alternative go-git driver, keeping benchmark setup fast and repeatable. (go-git stays available via `--git-driver gogit` when SSH or full Git features are needed.)
+See [Why Git Protocol v2 Only?](architecture/protocol-v2.md) for the rationale behind the strictest of these constraints.
 
-## Features
+## How is it different from go-git?
 
-- **HTTPS-only Git operations** - Works with any Git service supporting Smart HTTP Protocol v2 (GitHub, GitLab, Bitbucket, etc.), eliminating the need for SSH key management in cloud environments
+[go-git](https://github.com/go-git/go-git) is a mature, full-featured Git implementation. nanogit trades that breadth for a small, stateless core optimized for cloud services:
 
-- **Stateless architecture** - No local .git directory dependency, making it perfect for serverless functions, containers, and microservices where persistent local state isn't available or desired
+| Feature        | nanogit                                                 | go-git                 |
+| -------------- | ------------------------------------------------------- | ---------------------- |
+| Protocol       | HTTPS only (Smart HTTP v2)                              | All protocols          |
+| Storage        | Stateless; pluggable object storage and writing modes   | Local disk operations  |
+| Cloning        | Shallow, with glob-based path filtering                 | Full repository clones |
+| Scope          | Essential operations only                               | Full Git functionality |
+| Use case       | Cloud services, multitenant backends                    | General purpose        |
+| Resource usage | Minimal footprint                                       | Full Git features      |
 
-- **Memory-optimized design** - Streaming packfile operations and configurable writing modes minimize memory usage, crucial for bulk operations and memory-constrained environments
+Because it never materializes a full repository, nanogit is dramatically faster and lighter for typical server-side operations. From the [benchmark suite](https://github.com/grafana/nanogit/tree/main/perf) comparing both libraries across repository sizes:
 
-- **Flexible storage architecture** - Pluggable object storage and configurable writing modes allow optimization for different deployment patterns, from high-performance in-memory operations to memory-efficient disk-based processing
-
-- **Cloud-native authentication** - Built-in support for Basic Auth and API tokens, designed for automated workflows and CI/CD systems without interactive authentication
-
-- **Essential Git operations** - Focused on core functionality (read/write objects, commit operations, diffing) without the complexity of full Git implementations, reducing attack surface and resource requirements
-
-- **High performance** - Significantly faster than traditional Git implementations for common cloud operations, with up to 300x speed improvements for certain scenarios
-
-## Non-Goals
-
-The following features are explicitly not supported:
-
-- `git://` and Git-over-SSH protocols
-- File protocol (local Git operations)
-- Commit signing and signature verification
-- Git hooks
-- Git configuration management
-- Direct .git directory access
-- "Dumb" servers
-- Complex permissions (all objects use mode 0644)
-
-## Why nanogit?
-
-While [go-git](https://github.com/go-git/go-git) is a mature Git implementation, nanogit is designed for cloud-native, multitenant environments requiring minimal, stateless operations.
-
-| Feature        | nanogit                                                | go-git                 |
-| -------------- | ------------------------------------------------------ | ---------------------- |
-| Protocol       | HTTPS-only                                             | All protocols          |
-| Storage        | Stateless, configurable object storage + writing modes | Local disk operations  |
-| Cloning        | Path filtering with glob patterns, shallow clones      | Full repository clones |
-| Scope          | Essential operations only                              | Full Git functionality |
-| Use Case       | Cloud services, multitenant                            | General purpose        |
-| Resource Usage | Minimal footprint                                      | Full Git features      |
-
-Choose nanogit for lightweight cloud services requiring stateless operations and minimal resources. Use go-git when you need full Git functionality, local operations, or advanced features.
-
-These are some of the performance differences between nanogit and go-git in some of the measured scenarios:
-
-| Scenario                                  | Speed       | Memory Usage |
+| Scenario                                  | Speed       | Memory usage |
 | ----------------------------------------- | ----------- | ------------ |
 | CreateFile (XL repo)                      | 306x faster | 186x less    |
 | UpdateFile (XL repo)                      | 291x faster | 178x less    |
@@ -95,77 +72,62 @@ These are some of the performance differences between nanogit and go-git in some
 | CompareCommits (XL repo)                  | 60x faster  | 96x less     |
 | GetFlatTree (XL repo)                     | 258x faster | 160x less    |
 
-For detailed performance metrics, see the [performance analysis](architecture/performance.md).
+See the [performance analysis](architecture/performance.md) for methodology and full results.
 
-## Getting Started
+## Is it production-ready?
 
-Ready to use nanogit? Check out our guides:
+**Yes.** nanogit is the Git engine behind [Git Sync](https://grafana.com/docs/grafana/latest/as-code/observability-as-code/git-sync/) in [grafana/grafana](https://github.com/grafana/grafana), reading and writing dashboards across tenants' repositories in production, and the default Git driver in [grafana-bench](https://github.com/grafana/grafana-bench). See [who uses nanogit](why-nanogit.md#who-uses-nanogit).
 
-- **[Installation](getting-started/installation.md)** - Install nanogit in your project
-- **[Quick Start](getting-started/quick-start.md)** - Basic usage examples and common patterns
-- **[Server Compatibility](getting-started/server-compatibility.md)** - Verify your Git server supports nanogit in four CLI commands
-- **[API Reference](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API documentation on GoDoc
+Releases follow [semantic versioning](https://semver.org/): the v1 API is stable, and breaking changes only land in major versions. The project is actively developed by Grafana Labs.
+
+## Getting started
+
+Install the library (requires **Go 1.25+**):
+
+```bash
+go get github.com/grafana/nanogit@latest
+```
+
+Then follow the guides:
+
+- **[Installation](getting-started/installation.md)** — install nanogit in your project
+- **[Quick Start](getting-started/quick-start.md)** — read, write, clone, retry, and authenticate in a few minutes
+- **[CLI](getting-started/cli.md)** — terminal-based Git operations for testing and demos
+- **[Server Compatibility](getting-started/server-compatibility.md)** — verify your Git server supports nanogit in four CLI commands
+- **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** — complete API documentation
 
 ## Architecture
 
 Learn about nanogit's design and internals:
 
-- **[Architecture Overview](architecture/overview.md)** - Core design principles and components
-- **[Storage Backend](architecture/storage.md)** - Pluggable storage and writing modes
-- **[Retry Mechanism](architecture/retry.md)** - Pluggable retry mechanism for robust operations
-- **[Delta Resolution](architecture/delta-resolution.md)** - Git delta handling implementation
-- **[Performance](architecture/performance.md)** - Performance characteristics and benchmarks
+- **[Architecture Overview](architecture/overview.md)** — core design principles and components
+- **[Storage Backend](architecture/storage.md)** — pluggable storage and writing modes
+- **[Retry Mechanism](architecture/retry.md)** — pluggable retry mechanism for robust operations
+- **[Delta Resolution](architecture/delta-resolution.md)** — Git delta handling implementation
+- **[Performance](architecture/performance.md)** — performance characteristics and benchmarks
+- **[Learn how Git works](how-git-works.md)** — pointers to the upstream Git protocol documentation nanogit implements
 
 ## Testing
 
-nanogit provides comprehensive testing tools for applications using Git operations:
+nanogit ships the tooling to test code that depends on it:
 
-- **[Testing Guide](testing-guide.md)** - Complete guide with patterns and best practices
-- **[gittest Package](https://pkg.go.dev/github.com/grafana/nanogit/gittest)** - Integration testing with containerized Git servers
-- **Unit Testing** - Generated mocks for `Client` and `StagedWriter` interfaces
-
-The `gittest` package makes it easy to test Git operations with a real Git server running in Docker, local repository helpers, and automatic cleanup.
+- **[Testing Guide](testing-guide.md)** — complete guide with patterns and best practices
+- **[gittest Package](https://pkg.go.dev/github.com/grafana/nanogit/gittest)** — integration testing with a real containerized Git server, local repository helpers, and automatic cleanup
+- **Unit testing** — generated mocks for the `Client` and `StagedWriter` interfaces
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/grafana/nanogit/blob/main/CONTRIBUTING.md) for details on how to submit pull requests, report issues, and set up your development environment.
-
-## Code of Conduct
-
-This project follows the [Grafana Code of Conduct](https://github.com/grafana/nanogit/blob/main/CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+We welcome contributions! Please see the [Contributing Guide](https://github.com/grafana/nanogit/blob/main/CONTRIBUTING.md) for details on how to submit pull requests, report issues, and set up your development environment. This project follows the [Grafana Code of Conduct](https://github.com/grafana/nanogit/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
-This project is licensed under the [Apache License 2.0](https://github.com/grafana/nanogit/blob/main/LICENSE.md) - see the LICENSE file for details.
-
-## Project Status
-
-This project is currently in active development. While it's open source, it's important to note that it was initially created as part of a hackathon. We're working to make it production-ready, but please use it with appropriate caution.
-
-## Resources
-
-Want to learn how Git works? The following resources are useful:
-
-- [Git on the Server - The Protocols](https://git-scm.com/book/ms/v2/Git-on-the-Server-The-Protocols)
-- [Git Protocol v2](https://git-scm.com/docs/protocol-v2)
-- [Pack Protocol](https://git-scm.com/docs/pack-protocol)
-- [Git HTTP Backend](https://git-scm.com/docs/git-http-backend)
-- [HTTP Protocol](https://git-scm.com/docs/http-protocol)
-- [Git Protocol HTTP](https://git-scm.com/docs/gitprotocol-http)
-- [Git Protocol v2](https://git-scm.com/docs/gitprotocol-v2)
-- [Git Protocol Pack](https://git-scm.com/docs/gitprotocol-pack)
-- [Git Protocol Common](https://git-scm.com/docs/gitprotocol-common)
+This project is licensed under the [Apache License 2.0](https://github.com/grafana/nanogit/blob/main/LICENSE.md).
 
 ## Security
 
-If you find a security vulnerability, please report it to us according to [our security policy](https://github.com/grafana/.github/blob/main/SECURITY.md).
+If you find a security vulnerability, please report it according to [our security policy](https://github.com/grafana/.github/blob/main/SECURITY.md).
 
 ## Support
 
 - GitHub Issues: [Create an issue](https://github.com/grafana/nanogit/issues)
 - Community: [Grafana Community Forums](https://community.grafana.com)
-
-## Acknowledgments
-
-- The Grafana team for their support and guidance
-- The open source community for their valuable feedback and contributions
