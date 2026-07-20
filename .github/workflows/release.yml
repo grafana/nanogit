@@ -123,33 +123,29 @@ jobs:
 
           echo "Creating module tags for version ${VERSION} at commit ${COMMIT_SHA}"
 
-          # gittest: public test-utility module; cli: go-installable CLI module.
-          # Both are tagged at the release commit so `go get .../gittest@vX.Y.Z`
-          # and `go install .../cli/cmd/nanogit@vX.Y.Z` resolve. Their go.mod
-          # files pin the previous nanogit release by design; the CI
-          # cli-install-check job guarantees that still compiles (see
-          # RELEASING.md). Tags are created before GoReleaser runs so release
-          # notes never advertise an install command that cannot resolve.
-          # These pushes use GITHUB_TOKEN, which never retriggers workflows.
-          for MODULE in gittest cli; do
-            TAG_NAME="${MODULE}/v${VERSION}"
-            if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
-              # Tag already exists; check whether it points to the expected commit
-              EXISTING_SHA=$(git rev-list -n 1 "${TAG_NAME}")
-              if [ "${EXISTING_SHA}" = "${COMMIT_SHA}" ]; then
-                echo "✅ Tag ${TAG_NAME} already exists at ${COMMIT_SHA}; skipping creation."
-              else
-                echo "Error: Tag ${TAG_NAME} already exists at ${EXISTING_SHA}, expected ${COMMIT_SHA}." >&2
-                exit 1
-              fi
+          # gittest is the public test-utility module; it is tagged at the
+          # release commit so `go get .../gittest@gittest/vX.Y.Z` resolves.
+          # The cli module is deliberately NOT tagged: `go install` users get
+          # @latest (main tip), release binaries are built by GoReleaser, and
+          # the cli-install-check CI job keeps main's CLI installable. This
+          # push uses GITHUB_TOKEN, which never retriggers workflows.
+          TAG_NAME="gittest/v${VERSION}"
+          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
+            # Tag already exists; check whether it points to the expected commit
+            EXISTING_SHA=$(git rev-list -n 1 "${TAG_NAME}")
+            if [ "${EXISTING_SHA}" = "${COMMIT_SHA}" ]; then
+              echo "✅ Tag ${TAG_NAME} already exists at ${COMMIT_SHA}; skipping creation."
             else
-              git tag "${TAG_NAME}" "${COMMIT_SHA}"
-              git push origin "${TAG_NAME}"
-              echo "✅ Created ${TAG_NAME}"
+              echo "Error: Tag ${TAG_NAME} already exists at ${EXISTING_SHA}, expected ${COMMIT_SHA}." >&2
+              exit 1
             fi
-          done
+          else
+            git tag "${TAG_NAME}" "${COMMIT_SHA}"
+            git push origin "${TAG_NAME}"
+            echo "✅ Created ${TAG_NAME}"
+          fi
 
-          # Note: tests and perf modules are internal only (not tagged)
+          # Note: cli, tests, and perf modules are not tagged
 
           echo "Module tags created successfully"
 
@@ -205,7 +201,7 @@ jobs:
           echo "### 📦 Module Tags Created" >> $GITHUB_STEP_SUMMARY
           echo "- \`v${VERSION}\` - Main nanogit module" >> $GITHUB_STEP_SUMMARY
           echo "- \`gittest/v${VERSION}\` - Test utilities module (public)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`cli/v${VERSION}\` - CLI module (go install)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`cli/\` - Not tagged (go install uses @latest; binaries below)" >> $GITHUB_STEP_SUMMARY
           echo "- \`tests/\`, \`perf/\` - Internal modules only (no tag needed)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🎯 CLI Binaries" >> $GITHUB_STEP_SUMMARY
@@ -220,7 +216,7 @@ jobs:
           echo "- [pkg.go.dev](https://pkg.go.dev/github.com/grafana/nanogit/gittest@gittest/v${VERSION})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**cli:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`go install github.com/grafana/nanogit/cli/cmd/nanogit@v${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`go install github.com/grafana/nanogit/cli/cmd/nanogit@latest\` or the release binaries above" >> $GITHUB_STEP_SUMMARY
 
       - name: No release needed
         if: steps.new_release.outputs.new_tag == steps.last_release.outputs.last_tag

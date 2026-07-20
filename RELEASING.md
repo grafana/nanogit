@@ -28,12 +28,11 @@ When a PR is merged to `main`:
 2. **Semantic Release Activates**: The release workflow analyzes commits since the last release
 3. **Version Determined**: Based on commit message types
 4. **Release Published**: semantic-release creates the root tag (e.g. `v1.5.0`) and publishes the GitHub release with auto-generated notes — these notes are the single source of truth for the changelog
-5. **Module Tags Created**: The workflow then tags the nested public modules at the same commit, so all three tags are synchronized:
+5. **Module Tag Created**: The workflow then tags the gittest module at the same commit:
    - `v1.5.0` - Main nanogit module
    - `gittest/v1.5.0` - Test utilities module (public)
-   - `cli/v1.5.0` - CLI module (`go install`-able)
-   - Note: `tests/` and `perf/` modules are internal only (no tag needed)
-6. **CLI Binaries Uploaded**: GoReleaser attaches platform binaries to the release (module tags are created first, so the release notes' `go install ...@v1.5.0` command always resolves)
+   - Note: `cli/`, `tests/`, and `perf/` modules are not tagged
+6. **CLI Binaries Uploaded**: GoReleaser attaches platform binaries to the release; the release notes point `go install` users at `@latest`
 7. **Docs Rebuild**: The release workflow dispatches the Documentation workflow (`gh workflow run docs.yml`), which regenerates the changelog page from the GitHub Releases API and deploys it to GitHub Pages
 8. **pkg.go.dev Updated**: Go module proxy automatically indexes the public modules
 
@@ -193,19 +192,18 @@ nanogit uses a multi-module architecture with synchronized versioning:
 ```
 /                  - github.com/grafana/nanogit (main module)
 ├── /gittest       - github.com/grafana/nanogit/gittest (test utilities, tagged gittest/v*)
-├── /cli           - github.com/grafana/nanogit/cli (CLI, tagged cli/v*)
+├── /cli           - github.com/grafana/nanogit/cli (CLI, not tagged)
 ├── /tests         - github.com/grafana/nanogit/tests (integration tests, internal)
 └── /perf          - github.com/grafana/nanogit/perf (performance tests, internal)
 ```
 
 ### Synchronized Versioning
 
-Public modules share the same version number. When releasing v1.5.0:
+Tagged modules share the same version number. When releasing v1.5.0:
 - Main: `v1.5.0` (runtime library)
 - gittest: `gittest/v1.5.0` (public test utility)
-- cli: `cli/v1.5.0` (CLI)
 
-Internal modules (tests, perf) are not tagged as they're only used via the workspace.
+The cli, tests, and perf modules are not tagged.
 
 ### Usage
 
@@ -221,32 +219,34 @@ go get github.com/grafana/nanogit/gittest@gittest/v1.5.0
 
 **CLI:**
 ```bash
-go install github.com/grafana/nanogit/cli/cmd/nanogit@v1.5.0   # or @latest
+go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
 ```
+(Version-pinned CLI installs are intentionally not supported — download a
+release binary when you need a specific version.)
 
 **Note:** The main module does NOT depend on gittest, cli, or tests, ensuring users only download what they need.
 
 ### CLI module versioning
 
-The `cli/` module's `go.mod` pins the **latest released** nanogit version — never
+The `cli/` module's `go.mod` pins a **released** nanogit version — never
 `v0.0.0`, a pseudo-version, or a `replace` directive (any of those would break
-`go install`). Because the pin is a released version, a `cli/vX.Y.Z` tag
-created at release time necessarily pins the *previous* nanogit release. This
-is by design and safe: the `cli-install-check` CI job builds `cli/` with
-`GOWORK=off` on every PR, guaranteeing that main's CLI always compiles against
-its pinned released nanogit — so every `cli/v*` tag is installable.
+`go install`). The module is deliberately untagged, so `go install
+.../cli/cmd/nanogit@latest` resolves the tip of `main`, and release binaries
+(built by GoReleaser through the workspace) always contain the released
+library code.
 
-The practical rule this enforces: **a PR may not add a root-module API and
-consume it from `cli/` at the same time.** Land the library change, let the
-release ship, then bump `cli/go.mod` in a follow-up PR:
+**There is no per-release maintenance.** The pin is bumped only in the rare
+case that the CLI needs a root-module API newer than its pin — the
+`cli-install-check` CI job (which builds `cli/` with `GOWORK=off`, exactly
+like `go install`) fails the PR and tells you. The fix is part of that same
+PR's stack: land the library change, let the release ship, then bump:
 
 ```bash
-cd cli && go get github.com/grafana/nanogit@v1.5.0 && go mod tidy
+cd cli && go get github.com/grafana/nanogit@latest && go mod tidy
 ```
 
-(This is the same pattern used for `gittest/go.mod`, e.g. PR #367. Renovate
-deliberately ignores `github.com/grafana/nanogit*` self-requires, so this bump
-is always a manual step.)
+(Local development and CI are unaffected by the pin — `go.work` always builds
+the CLI against the working tree.)
 
 ## Versioning Strategy
 
