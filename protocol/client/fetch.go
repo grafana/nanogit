@@ -14,6 +14,9 @@ import (
 	"github.com/grafana/nanogit/storage"
 )
 
+// FetchOptions controls a raw protocol v2 fetch request: which objects to
+// request (Want), depth and filter arguments, cache bypass, and response
+// size limits.
 type FetchOptions struct {
 	NoCache      bool
 	NoProgress   bool

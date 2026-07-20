@@ -5,12 +5,13 @@ import "context"
 // packfileStorageKey is the key for the packfile storage in the context.
 type packfileStorageKey struct{}
 
-// ToContext sets the packfile storage for the client from the context.
+// ToContext returns a copy of ctx carrying the given packfile storage.
+// nanogit clients retrieve it with FromContext during Git operations.
 func ToContext(ctx context.Context, storage PackfileStorage) context.Context {
 	return context.WithValue(ctx, packfileStorageKey{}, storage)
 }
 
-// FromContext gets the packfile storage from the context.
+// FromContext returns the packfile storage stored in ctx, or nil if none is set.
 func FromContext(ctx context.Context) PackfileStorage {
 	storage, ok := ctx.Value(packfileStorageKey{}).(PackfileStorage)
 	if !ok {
@@ -20,7 +21,9 @@ func FromContext(ctx context.Context) PackfileStorage {
 	return storage
 }
 
-// FromContextOrInMemory creates a new in-memory storage if the storage is not set in the context.
+// FromContextOrInMemory returns the packfile storage stored in ctx, if any.
+// Otherwise it creates a new in-memory storage and returns it along with a
+// derived context that carries it.
 func FromContextOrInMemory(ctx context.Context) (context.Context, PackfileStorage) {
 	storage := FromContext(ctx)
 	if storage != nil {
