@@ -31,22 +31,6 @@ var negotiationModes = []struct {
 	{name: "with capability negotiation", extraOpts: []options.Option{options.WithCapabilityNegotiation()}},
 }
 
-// signerForProvider returns the writer options and the committer email to use
-// for provider write flows. When TEST_GPG_KEY and TEST_SIGN_EMAIL are set (the
-// provider CI jobs), every commit is GPG-signed and the committer/author email
-// is set to the signing key's email, so providers that require signed commits
-// accept and verify the push. When unset (local runs), it returns no option and
-// an empty email, leaving commits unsigned with their default identity.
-func signerForProvider(t *testing.T) (opts []nanogit.WriterOption, email string) {
-	t.Helper()
-	gpgKey := os.Getenv("TEST_GPG_KEY")
-	email = os.Getenv("TEST_SIGN_EMAIL")
-	if gpgKey == "" || email == "" {
-		return nil, ""
-	}
-	return []nanogit.WriterOption{nanogit.WithGPGSigner([]byte(gpgKey))}, email
-}
-
 func TestProviders(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping testproviders suite in short mode")
@@ -119,8 +103,7 @@ func runProvidersBaseFlow(t *testing.T, extraOpts ...options.Option) {
 	branchRef, err := client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)
 
-	signOpts, signEmail := signerForProvider(t)
-	writer, err := client.NewStagedWriter(ctx, branchRef, signOpts...)
+	writer, err := client.NewStagedWriter(ctx, branchRef)
 	require.NoError(t, err)
 
 	author := nanogit.Author{
@@ -132,10 +115,6 @@ func runProvidersBaseFlow(t *testing.T, extraOpts ...options.Option) {
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
 		Time:  time.Now(),
-	}
-	if signEmail != "" {
-		author.Email = signEmail
-		committer.Email = signEmail
 	}
 
 	exists, err = writer.BlobExists(ctx, "a/b/c/test.txt")
@@ -542,8 +521,7 @@ func runProvidersLargeBlobFlow(t *testing.T, extraOpts ...options.Option) {
 	branchRef, err := client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)
 
-	signOpts, signEmail := signerForProvider(t)
-	writer, err := client.NewStagedWriter(ctx, branchRef, signOpts...)
+	writer, err := client.NewStagedWriter(ctx, branchRef)
 	require.NoError(t, err)
 
 	author := nanogit.Author{
@@ -555,10 +533,6 @@ func runProvidersLargeBlobFlow(t *testing.T, extraOpts ...options.Option) {
 		Name:  "Test User",
 		Email: "test@example.com",
 		Time:  time.Now(),
-	}
-	if signEmail != "" {
-		author.Email = signEmail
-		committer.Email = signEmail
 	}
 
 	t.Log("Creating large blob (3.7MB dashboard)...")
@@ -653,8 +627,7 @@ func runProvidersCloneFlow(t *testing.T, extraOpts ...options.Option) {
 	branchRef, err := client.GetRef(ctx, "refs/heads/"+branchName)
 	require.NoError(t, err)
 
-	signOpts, signEmail := signerForProvider(t)
-	writer, err := client.NewStagedWriter(ctx, branchRef, signOpts...)
+	writer, err := client.NewStagedWriter(ctx, branchRef)
 	require.NoError(t, err)
 
 	author := nanogit.Author{
@@ -666,10 +639,6 @@ func runProvidersCloneFlow(t *testing.T, extraOpts ...options.Option) {
 		Name:  "Clone Test User",
 		Email: "clone-test@example.com",
 		Time:  time.Now(),
-	}
-	if signEmail != "" {
-		author.Email = signEmail
-		committer.Email = signEmail
 	}
 
 	// Create a diverse set of files for comprehensive clone testing
@@ -975,16 +944,11 @@ func TestProvidersWithoutSideBand(t *testing.T) {
 	branchRef, err := client.GetRef(ctx, fullBranch)
 	require.NoError(t, err)
 
-	signOpts, signEmail := signerForProvider(t)
-	writer, err := client.NewStagedWriter(ctx, branchRef, signOpts...)
+	writer, err := client.NewStagedWriter(ctx, branchRef)
 	require.NoError(t, err)
 
 	author := nanogit.Author{Name: "John Doe", Email: "john.doe@example.com", Time: time.Now()}
 	committer := nanogit.Committer{Name: "John Doe", Email: "john.doe@example.com", Time: time.Now()}
-	if signEmail != "" {
-		author.Email = signEmail
-		committer.Email = signEmail
-	}
 
 	blobPath := "no-sideband-test.txt"
 	blobContent := []byte("content pushed without side-band-64k")
