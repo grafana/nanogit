@@ -88,7 +88,9 @@ jobs:
       - name: Get last release
         id: last_release
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          # --match restricts to root release tags (vX.Y.Z), excluding the
+          # gittest/v* and cli/v* module tags that share release commits.
+          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo "none")
           echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
           echo "Last release tag: $LAST_TAG"
 
@@ -104,9 +106,52 @@ jobs:
       - name: Get new release
         id: new_release
         run: |
-          NEW_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          NEW_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo "none")
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "New release tag: $NEW_TAG"
+
+      - name: Create module tags
+        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
+        env:
+          NEW_VERSION: ${{ steps.new_release.outputs.new_tag }}
+        run: |
+          # Extract version without 'v' prefix
+          VERSION="${NEW_VERSION#v}"
+
+          # Get the commit SHA for the new release tag (resolve to commit, not tag object)
+          COMMIT_SHA=$(git rev-list -n 1 "${NEW_VERSION}")
+
+          echo "Creating module tags for version ${VERSION} at commit ${COMMIT_SHA}"
+
+          # gittest: public test-utility module; cli: go-installable CLI module.
+          # Both are tagged at the release commit so `go get .../gittest@vX.Y.Z`
+          # and `go install .../cli/cmd/nanogit@vX.Y.Z` resolve. Their go.mod
+          # files pin the previous nanogit release by design; the CI
+          # cli-install-check job guarantees that still compiles (see
+          # RELEASING.md). Tags are created before GoReleaser runs so release
+          # notes never advertise an install command that cannot resolve.
+          # These pushes use GITHUB_TOKEN, which never retriggers workflows.
+          for MODULE in gittest cli; do
+            TAG_NAME="${MODULE}/v${VERSION}"
+            if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
+              # Tag already exists; check whether it points to the expected commit
+              EXISTING_SHA=$(git rev-list -n 1 "${TAG_NAME}")
+              if [ "${EXISTING_SHA}" = "${COMMIT_SHA}" ]; then
+                echo "✅ Tag ${TAG_NAME} already exists at ${COMMIT_SHA}; skipping creation."
+              else
+                echo "Error: Tag ${TAG_NAME} already exists at ${EXISTING_SHA}, expected ${COMMIT_SHA}." >&2
+                exit 1
+              fi
+            else
+              git tag "${TAG_NAME}" "${COMMIT_SHA}"
+              git push origin "${TAG_NAME}"
+              echo "✅ Created ${TAG_NAME}"
+            fi
+          done
+
+          # Note: tests and perf modules are internal only (not tagged)
+
+          echo "Module tags created successfully"
 
       - name: Setup Go
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
@@ -126,41 +171,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create module tags
-        if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
-        env:
-          NEW_VERSION: ${{ steps.new_release.outputs.new_tag }}
-        run: |
-          # Extract version without 'v' prefix
-          VERSION="${NEW_VERSION#v}"
-
-          # Get the commit SHA for the new release tag (resolve to commit, not tag object)
-          COMMIT_SHA=$(git rev-list -n 1 "${NEW_VERSION}")
-
-          echo "Creating module tags for version ${VERSION} at commit ${COMMIT_SHA}"
-
-          # Create gittest module tag (public utility for users)
-          TAG_NAME="gittest/v${VERSION}"
-
-          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
-            # Tag already exists; check whether it points to the expected commit
-            EXISTING_SHA=$(git rev-parse "${TAG_NAME}")
-            if [ "${EXISTING_SHA}" = "${COMMIT_SHA}" ]; then
-              echo "✅ Tag ${TAG_NAME} already exists at ${COMMIT_SHA}; skipping creation."
-            else
-              echo "Error: Tag ${TAG_NAME} already exists at ${EXISTING_SHA}, expected ${COMMIT_SHA}." >&2
-              exit 1
-            fi
-          else
-            git tag "${TAG_NAME}" "${COMMIT_SHA}"
-            git push origin "${TAG_NAME}"
-            echo "✅ Created ${TAG_NAME}"
-          fi
-
-          # Note: tests module is internal only (not tagged)
-
-          echo "Module tags created successfully"
 
       - name: Refresh documentation changelog
         if: steps.new_release.outputs.new_tag != 'none' && steps.new_release.outputs.new_tag != steps.last_release.outputs.last_tag
@@ -195,7 +205,8 @@ jobs:
           echo "### 📦 Module Tags Created" >> $GITHUB_STEP_SUMMARY
           echo "- \`v${VERSION}\` - Main nanogit module" >> $GITHUB_STEP_SUMMARY
           echo "- \`gittest/v${VERSION}\` - Test utilities module (public)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`tests/\` - Internal tests only (no tag needed)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`cli/v${VERSION}\` - CLI module (go install)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/\`, \`perf/\` - Internal modules only (no tag needed)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🎯 CLI Binaries" >> $GITHUB_STEP_SUMMARY
           echo "Pre-built binaries for Linux, macOS, and Windows have been uploaded to the release." >> $GITHUB_STEP_SUMMARY
@@ -207,6 +218,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**gittest (public utility):**" >> $GITHUB_STEP_SUMMARY
           echo "- [pkg.go.dev](https://pkg.go.dev/github.com/grafana/nanogit/gittest@gittest/v${VERSION})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**cli:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`go install github.com/grafana/nanogit/cli/cmd/nanogit@v${VERSION}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: No release needed
         if: steps.new_release.outputs.new_tag == steps.last_release.outputs.last_tag

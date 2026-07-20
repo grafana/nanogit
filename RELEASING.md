@@ -14,10 +14,10 @@ The release system analyzes commit messages to determine the version bump:
 
 | Commit Type | Version Bump | Example |
 |-------------|--------------|---------|
-| `fix:` | Patch | v0.1.0 → v0.1.1 |
-| `feat:` | Minor | v0.1.0 → v0.2.0 |
-| `feat!:` or `BREAKING CHANGE:` | Major | v0.1.0 → v1.0.0 |
-| `perf:` | Patch | v0.1.0 → v0.1.1 |
+| `fix:` | Patch | v1.4.0 → v1.4.1 |
+| `feat:` | Minor | v1.4.0 → v1.5.0 |
+| `feat!:` or `BREAKING CHANGE:` | Major | v1.4.0 → v2.0.0 |
+| `perf:` | Patch | v1.4.0 → v1.4.1 |
 | `docs:`, `chore:`, `ci:`, etc. | No release | - |
 
 ### Release Workflow
@@ -27,14 +27,15 @@ When a PR is merged to `main`:
 1. **CI Checks Run**: All tests, linting, and security checks must pass
 2. **Semantic Release Activates**: The release workflow analyzes commits since the last release
 3. **Version Determined**: Based on commit message types
-4. **Tags Created**: Two synchronized Git tags are created:
-   - `v0.5.3` - Main nanogit module
-   - `gittest/v0.5.3` - Test utilities module (public)
-   - Note: `tests/` module is internal only (no tag needed)
-5. **GitHub Release**: Release is published with auto-generated release notes — these notes are the single source of truth for the changelog
-6. **CLI Binaries Uploaded**: GoReleaser attaches platform binaries to the release
+4. **Release Published**: semantic-release creates the root tag (e.g. `v1.5.0`) and publishes the GitHub release with auto-generated notes — these notes are the single source of truth for the changelog
+5. **Module Tags Created**: The workflow then tags the nested public modules at the same commit, so all three tags are synchronized:
+   - `v1.5.0` - Main nanogit module
+   - `gittest/v1.5.0` - Test utilities module (public)
+   - `cli/v1.5.0` - CLI module (`go install`-able)
+   - Note: `tests/` and `perf/` modules are internal only (no tag needed)
+6. **CLI Binaries Uploaded**: GoReleaser attaches platform binaries to the release (module tags are created first, so the release notes' `go install ...@v1.5.0` command always resolves)
 7. **Docs Rebuild**: The release workflow dispatches the Documentation workflow (`gh workflow run docs.yml`), which regenerates the changelog page from the GitHub Releases API and deploys it to GitHub Pages
-8. **pkg.go.dev Updated**: Go module proxy automatically indexes both public modules
+8. **pkg.go.dev Updated**: Go module proxy automatically indexes the public modules
 
 **Note**: There is no `CHANGELOG.md` file in the repository. Release notes live only on the [GitHub Releases](https://github.com/grafana/nanogit/releases) page, and the docs site's [Changelog](https://grafana.github.io/nanogit/changelog) page is generated from them at build time.
 
@@ -191,16 +192,18 @@ nanogit uses a multi-module architecture with synchronized versioning:
 
 ```
 /                  - github.com/grafana/nanogit (main module)
-├── /gittest       - github.com/grafana/nanogit/gittest (test utilities)
-├── /tests         - github.com/grafana/nanogit/tests (integration tests)
-└── /perf          - github.com/grafana/nanogit/perf (performance tests)
+├── /gittest       - github.com/grafana/nanogit/gittest (test utilities, tagged gittest/v*)
+├── /cli           - github.com/grafana/nanogit/cli (CLI, tagged cli/v*)
+├── /tests         - github.com/grafana/nanogit/tests (integration tests, internal)
+└── /perf          - github.com/grafana/nanogit/perf (performance tests, internal)
 ```
 
 ### Synchronized Versioning
 
-Public modules share the same version number. When releasing v0.5.3:
-- Main: `v0.5.3` (runtime library)
-- gittest: `gittest/v0.5.3` (public test utility)
+Public modules share the same version number. When releasing v1.5.0:
+- Main: `v1.5.0` (runtime library)
+- gittest: `gittest/v1.5.0` (public test utility)
+- cli: `cli/v1.5.0` (CLI)
 
 Internal modules (tests, perf) are not tagged as they're only used via the workspace.
 
@@ -208,32 +211,56 @@ Internal modules (tests, perf) are not tagged as they're only used via the works
 
 **Main module:**
 ```bash
-go get github.com/grafana/nanogit@v0.5.3
+go get github.com/grafana/nanogit@v1.5.0
 ```
 
 **Test utilities (optional):**
 ```bash
-go get github.com/grafana/nanogit/gittest@gittest/v0.5.3
+go get github.com/grafana/nanogit/gittest@gittest/v1.5.0
 ```
 
-**Note:** The main module does NOT depend on gittest or tests, ensuring users only download what they need.
+**CLI:**
+```bash
+go install github.com/grafana/nanogit/cli/cmd/nanogit@v1.5.0   # or @latest
+```
+
+**Note:** The main module does NOT depend on gittest, cli, or tests, ensuring users only download what they need.
+
+### CLI module versioning
+
+The `cli/` module's `go.mod` pins the **latest released** nanogit version — never
+`v0.0.0`, a pseudo-version, or a `replace` directive (any of those would break
+`go install`). Because the pin is a released version, a `cli/vX.Y.Z` tag
+created at release time necessarily pins the *previous* nanogit release. This
+is by design and safe: the `cli-install-check` CI job builds `cli/` with
+`GOWORK=off` on every PR, guaranteeing that main's CLI always compiles against
+its pinned released nanogit — so every `cli/v*` tag is installable.
+
+The practical rule this enforces: **a PR may not add a root-module API and
+consume it from `cli/` at the same time.** Land the library change, let the
+release ship, then bump `cli/go.mod` in a follow-up PR:
+
+```bash
+cd cli && go get github.com/grafana/nanogit@v1.5.0 && go mod tidy
+```
+
+(This is the same pattern used for `gittest/go.mod`, e.g. PR #367. Renovate
+deliberately ignores `github.com/grafana/nanogit*` self-requires, so this bump
+is always a manual step.)
 
 ## Versioning Strategy
 
-### Pre-1.0 (Current Phase)
-
-- **v0.x.x**: Pre-production releases
-- Breaking changes allowed in minor versions (v0.1.0 → v0.2.0)
-- API stability not guaranteed
-- User feedback period
-- **Initial version**: Started at v0.1.0 (baseline tag v0.0.0 established)
-
-### Post-1.0 (Production Ready)
+nanogit is **post-1.0 (production-stable)**:
 
 - **v1.x.x**: Production-stable releases
-- Breaking changes require major bump (v1.0.0 → v2.0.0)
-- API stability guaranteed within major version
+- Breaking changes require a major bump (`feat!:` / `BREAKING CHANGE:` → v2.0.0)
+- API stability guaranteed within a major version
 - Deprecation warnings before breaking changes
+
+**History note**: the project released as v0.x through v0.18.x before
+stabilizing at v1. The `v0.0.0` tag was a semantic-release baseline, not a
+usable release — it is [retracted](https://go.dev/ref/mod#go-mod-file-retract)
+in `go.mod` and must never be recreated or referenced from module files.
 
 ## Resources
 
@@ -252,5 +279,5 @@ If you have questions about the release process:
 
 ---
 
-**Last Updated**: 2025-11-11
+**Last Updated**: 2026-07-20
 **Maintained By**: Grafana Labs
