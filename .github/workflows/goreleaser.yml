@@ -1,13 +1,19 @@
-name: Build Release Binaries
+name: Rebuild Release Binaries
 
+# Manual recovery path only: rebuilds and re-uploads CLI binaries for an
+# EXISTING release tag (e.g. when the GoReleaser step of release.yml failed
+# after the tag was created). Normal releases are fully handled by
+# release.yml; re-running release.yml cannot rebuild binaries because
+# semantic-release finds no new commits and skips the GoReleaser step.
+#
+# This workflow deliberately has no `push: tags` trigger: automated releases
+# never fired it (GITHUB_TOKEN-pushed tags don't trigger workflows), and a
+# human tag push must not double-release alongside release.yml.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (e.g., v0.8.0)'
+        description: 'Existing release tag to rebuild binaries for (e.g., v1.4.1)'
         required: true
         type: string
 
@@ -29,7 +35,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag }}
 
       - name: Configure Git safe directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -41,18 +47,22 @@ jobs:
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
           distribution: goreleaser
-          version: '~> v2'
+          # Pin to specific version to prevent runtime artifact poisoning
+          # (kept in sync with release.yml)
+          version: 'v2.6.1'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          echo "## 📦 Binaries Built" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Binaries Rebuilt" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Binaries have been built and uploaded to the release:" >> $GITHUB_STEP_SUMMARY
+          echo "Binaries have been rebuilt and uploaded to the release:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Release:** [${GITHUB_REF_NAME}](https://github.com/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME})" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** [${TAG}](https://github.com/${{ github.repository }}/releases/tag/${TAG})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Platforms" >> $GITHUB_STEP_SUMMARY
           echo "- Linux (amd64, arm64, armv7)" >> $GITHUB_STEP_SUMMARY
