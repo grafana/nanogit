@@ -96,6 +96,17 @@ Then follow the guides:
 - **[Server Compatibility](getting-started/server-compatibility.md)** — verify your Git server supports nanogit in four CLI commands
 - **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** — complete API documentation
 
+## Guides
+
+Task-focused guides for production use:
+
+- **[Writing with the StagedWriter](guides/writing.md)** — the transactional write model: staging, multi-commit, push, retry semantics
+- **[Authentication](guides/authentication.md)** — basic auth, raw tokens, and per-provider conventions
+- **[Error Handling](guides/error-handling.md)** — sentinel and typed errors, `errors.Is`/`errors.As` patterns
+- **[Commit Signing](guides/commit-signing.md)** — GPG, SSH, and S/MIME signatures
+- **[Response Limits](guides/response-limits.md)** — cap response sizes for multitenant safety
+- **[History and Diffs](guides/history.md)** — `ListCommits` pagination/filtering and `CompareCommits`
+
 ## Architecture
 
 Learn about nanogit's design and internals:

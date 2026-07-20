@@ -371,8 +371,11 @@ Learn more in the [Testing Guide](../testing-guide.md) and [gittest documentatio
 
 ## Next Steps
 
+- **[Writing with the StagedWriter](../guides/writing.md)** - The full transactional write model: moves, deletes, multi-commit, retry semantics
+- **[Authentication](../guides/authentication.md)** - Raw token auth and per-provider conventions
+- **[Error Handling](../guides/error-handling.md)** - Sentinel and typed errors
+- **[Commit Signing](../guides/commit-signing.md)** - GPG, SSH, and S/MIME signatures
+- **[History and Diffs](../guides/history.md)** - `ListCommits` and `CompareCommits`
 - **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** - Complete API reference with all methods
 - **[Storage Architecture](../architecture/storage.md)** - Pluggable storage and writing modes
-- **[Retry Mechanism](../architecture/retry.md)** - Pluggable retry mechanism for robust operations
-- **[Performance](../architecture/performance.md)** - Performance characteristics and benchmarks
 - **[Architecture Overview](../architecture/overview.md)** - Core design principles
