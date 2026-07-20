@@ -141,7 +141,7 @@ Typed helpers (`CapReportStatusV2`, `CapSideBand64k`, `CapQuiet`, `CapObjectForm
 
 ### Programmatic negotiation
 
-Knowing the right subset to advertise requires knowing what the server supports. `options.WithCapabilityNegotiation()` flips that around: nanogit fetches `GET info/refs?service=git-receive-pack` once per client lifetime, parses the v1-style capability advertisement, and intersects it with the desired set on every subsequent ref update. The fetch result is cached behind `sync.Once`, so writer resets after `Push` and `Cleanup` reuse the same negotiated set without extra round-trips.
+Knowing the right subset to advertise requires knowing what the server supports. `options.WithCapabilityNegotiation()` flips that around: nanogit fetches `GET info/refs?service=git-receive-pack` once, parses the v1-style capability advertisement, and intersects it with the desired set on every subsequent ref update. A successful negotiation is cached for the client's lifetime, so writer resets after `Push` and `Cleanup` reuse the same negotiated set without extra round-trips. A failed negotiation is not cached — the next operation retries it, so a transient error on the first call doesn't poison the client.
 
 ```go
 client, err := nanogit.NewHTTPClient(repoURL,

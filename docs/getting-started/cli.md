@@ -99,6 +99,10 @@ The following flags are available for all commands:
 - `--token` - Authentication token for private repositories
 - `--json` - Output results in JSON format (where applicable)
 - `-v`, `--verbose` - Emit Info-level logs to stderr (see [Verbose mode](#verbose-mode))
+- `--max-bytes-single-object` - Cap (bytes) on responses to single-object fetches: `cat-file`-style reads (GetBlob, GetTree, GetCommit). 0 = no limit
+- `--max-bytes-multi-object` - Cap (bytes) on responses to multi-object fetches: GetFlatTree, ListCommits, CompareCommits, Clone. 0 = no limit
+- `--max-bytes-refs` - Cap (bytes) on ref-listing and protocol-detection responses. 0 = no limit (a 1 MB floor still applies to the protocol-detection path)
+- `--max-bytes-receive-pack` - Cap (bytes) on the server's reply to a receive-pack push. 0 = no limit
 
 These flags can also be set via environment variables:
 - `NANOGIT_USERNAME` - Authentication username
@@ -299,10 +303,13 @@ Clone a repository to a local directory with optional path filtering.
 
 **Usage**:
 ```bash
-nanogit clone <repository> <ref> <destination> [flags]
+nanogit clone [<repository>] [<destination>] [flags]
 ```
 
+Both arguments are optional: `<repository>` falls back to `NANOGIT_REPO`, and `<destination>` defaults to the current directory. The ref to clone is selected with the `--ref` flag (defaults to the remote HEAD).
+
 **Flags**:
+- `--ref` - Git reference to clone: branch, tag, or commit (default: remote HEAD)
 - `--include` - Include paths (glob patterns, can be specified multiple times)
 - `--exclude` - Exclude paths (glob patterns, can be specified multiple times)
 - `--batch-size` - Number of blobs to fetch per request (default: 50)
@@ -343,10 +350,10 @@ nanogit clone https://github.com/grafana/nanogit.git ./my-repo --exclude 'node_m
 Adjust performance settings (defaults are batch-size=50, concurrency=10):
 ```bash
 # Increase for better performance with large repositories
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 100 --concurrency 20
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --ref main --batch-size 100 --concurrency 20
 
 # Sequential mode for constrained environments
-nanogit clone https://github.com/grafana/nanogit.git main ./my-repo --batch-size 1 --concurrency 1
+nanogit clone https://github.com/grafana/nanogit.git ./my-repo --ref main --batch-size 1 --concurrency 1
 ```
 
 **Path Filtering**:
