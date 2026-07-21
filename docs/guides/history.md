@@ -1,6 +1,6 @@
 # History and diffs
 
-nanogit reads commit history and computes file-level diffs without cloning: `ListCommits` walks history backwards from a commit, and `CompareCommits` diffs two commits' trees.
+nanogit reads commit history and computes file-level diffs without cloning: [`ListCommits`](https://pkg.go.dev/github.com/grafana/nanogit#Client.ListCommits) walks history backwards from a commit, and [`CompareCommits`](https://pkg.go.dev/github.com/grafana/nanogit#Client.CompareCommits) diffs two commits' trees.
 
 ## Listing commits
 

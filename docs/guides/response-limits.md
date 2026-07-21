@@ -1,6 +1,6 @@
 # Response limits
 
-When a service talks to Git servers it doesn't control — the multitenant situation nanogit was built for — an oversized (or malicious) response can exhaust memory or disk. `options.WithLimits` caps how many bytes nanogit will read from the server per HTTP response, classified by operation, so a single misbehaving repository can't take out the process.
+When a service talks to Git servers it doesn't control — the multitenant situation nanogit was built for — an oversized (or malicious) response can exhaust memory or disk. [`options.WithLimits`](https://pkg.go.dev/github.com/grafana/nanogit/options#WithLimits) caps how many bytes nanogit will read from the server per HTTP response, classified by operation, so a single misbehaving repository can't take out the process.
 
 By default there are **no limits** (a zero `Limits` preserves historic behavior).
 

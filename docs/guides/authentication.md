@@ -1,6 +1,6 @@
 # Authentication
 
-nanogit is HTTPS-only and token-oriented: there is no SSH key management. Two options cover every provider, both passed to `NewHTTPClient`.
+nanogit is HTTPS-only and token-oriented: there is no SSH key management. Two options cover every provider, both passed to [`NewHTTPClient`](https://pkg.go.dev/github.com/grafana/nanogit#NewHTTPClient).
 
 ## Basic auth (most providers)
 
