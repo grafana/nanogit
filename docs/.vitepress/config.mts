@@ -45,6 +45,17 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Guides',
+        items: [
+          { text: 'Writing with the StagedWriter', link: '/guides/writing' },
+          { text: 'Authentication', link: '/guides/authentication' },
+          { text: 'Error Handling', link: '/guides/error-handling' },
+          { text: 'Commit Signing', link: '/guides/commit-signing' },
+          { text: 'Response Limits', link: '/guides/response-limits' },
+          { text: 'History and Diffs', link: '/guides/history' }
+        ]
+      },
+      {
         text: 'Architecture',
         items: [
           { text: 'Overview', link: '/architecture/overview' },
