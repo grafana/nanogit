@@ -1,3 +1,7 @@
+// Package options configures the nanogit HTTP client. It defines the
+// functional options passed to nanogit.NewHTTPClient: authentication
+// (WithBasicAuth, WithTokenAuth), user agent, custom HTTP transport,
+// response size limits, and receive-pack capability control.
 package options
 
 import (
@@ -14,16 +18,27 @@ func defaultHTTPClient() *http.Client {
 	return &http.Client{}
 }
 
+// BasicAuth holds credentials for HTTP basic authentication.
 type BasicAuth struct {
+	// Username is the basic auth username.
 	Username string
+	// Password is the basic auth password or personal access token.
 	Password string
 }
 
+// Options is the resolved client configuration produced by applying Option
+// functions (see Resolve). Most callers never build it directly; they pass
+// Option values to nanogit.NewHTTPClient instead.
 type Options struct {
-	HTTPClient    *http.Client
-	UserAgent     string
-	BasicAuth     *BasicAuth
-	AuthToken     *string
+	// HTTPClient performs the underlying HTTP requests.
+	HTTPClient *http.Client
+	// UserAgent overrides the User-Agent header sent with each request.
+	UserAgent string
+	// BasicAuth holds basic authentication credentials, if set.
+	BasicAuth *BasicAuth
+	// AuthToken is the raw Authorization header value, if set.
+	AuthToken *string
+	// SkipGitSuffix disables appending ".git" to the repository URL path.
 	SkipGitSuffix bool
 	// ReceivePackCapabilities, when non-empty, overrides the capabilities
 	// advertised on receive-pack ref update commands. When nil or empty,
@@ -67,6 +82,8 @@ type Limits struct {
 	ReceivePackResponseMaxBytes int64
 }
 
+// Option mutates Options during Resolve. An Option returns an error to
+// reject invalid configuration at client construction time.
 type Option func(*Options) error
 
 // Resolve applies the given Option functions in order to a fresh Options

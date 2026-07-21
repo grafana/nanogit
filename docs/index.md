@@ -6,8 +6,8 @@
   <a href="https://github.com/grafana/nanogit/releases"><img src="https://img.shields.io/github/v/release/grafana/nanogit" alt="GitHub Release"></a>
   <a href="https://github.com/grafana/nanogit/stargazers"><img src="https://img.shields.io/github/stars/grafana/nanogit?style=social" alt="GitHub Stars"></a>
   <a href="https://github.com/grafana/nanogit/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/grafana/nanogit" alt="License"></a>
-  <a href="https://goreportcard.com/report/github.com/grafana/nanogit"><img src="https://goreportcard.com/badge/github.com/grafana/nanogit" alt="Go Report Card"></a>
-  <a href="https://godoc.org/github.com/grafana/nanogit"><img src="https://godoc.org/github.com/grafana/nanogit?status.svg" alt="GoDoc"></a>
+  <a href="https://github.com/grafana/nanogit/actions/workflows/ci.yml"><img src="https://github.com/grafana/nanogit/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://pkg.go.dev/github.com/grafana/nanogit"><img src="https://pkg.go.dev/badge/github.com/grafana/nanogit.svg" alt="Go Reference"></a>
   <a href="https://codecov.io/gh/grafana/nanogit"><img src="https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg" alt="codecov"></a>
 </p>
 
@@ -82,7 +82,7 @@ Releases follow [semantic versioning](https://semver.org/): the v1 API is stable
 
 ## Getting started
 
-Install the library (requires **Go 1.25+**):
+Install the library (requires **Go 1.26+**):
 
 ```bash
 go get github.com/grafana/nanogit@latest

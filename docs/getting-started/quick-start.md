@@ -65,14 +65,14 @@ if err != nil {
     panic(err)
 }
 
-// Create a new file
-err = writer.CreateBlob(ctx, "docs/new-feature.md", []byte("# New Feature"))
+// Create a new file (returns the hash of the staged blob)
+_, err = writer.CreateBlob(ctx, "docs/new-feature.md", []byte("# New Feature"))
 if err != nil {
     panic(err)
 }
 
 // Update an existing file
-err = writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
+_, err = writer.UpdateBlob(ctx, "README.md", []byte("Updated content"))
 if err != nil {
     panic(err)
 }
@@ -107,7 +107,7 @@ fmt.Printf("Committed: %s\n", commit.Hash)
 
 ```go
 // Get the commit to clone
-ref, err := client.GetRef(ctx, "main")
+ref, err := client.GetRef(ctx, "refs/heads/main")
 if err != nil {
     panic(err)
 }
@@ -254,7 +254,7 @@ ctx = retry.ToContext(ctx, retrier)
 
 // All HTTP operations will now use retry logic
 client, err := nanogit.NewHTTPClient(repo)
-ref, err := client.GetRef(ctx, "main")
+ref, err := client.GetRef(ctx, "refs/heads/main")
 ```
 
 ### Custom Retry Configuration
@@ -272,11 +272,12 @@ ctx = retry.ToContext(ctx, retrier)
 
 **What gets retried:**
 - Network timeout errors
-- 5xx server errors (for GET requests)
+- 5xx server errors (for GET and DELETE requests only)
+- 429 Too Many Requests (rate limiting, for all request types)
 - Temporary errors
 
 **What does NOT get retried:**
-- 4xx client errors (bad requests, auth failures)
+- 4xx client errors (bad requests, auth failures) — except 429
 - Context cancellation
 - POST request 5xx errors (request body is consumed and cannot be re-read, so retries are not possible)
 
@@ -292,8 +293,9 @@ nanogit provides generated mocks for easy unit testing:
 import (
     "testing"
 
+    "github.com/grafana/nanogit"
     "github.com/grafana/nanogit/mocks"
-    "github.com/stretchr/testify/mock"
+    "github.com/grafana/nanogit/protocol/hash"
 )
 
 func TestMyService(t *testing.T) {
@@ -301,9 +303,13 @@ func TestMyService(t *testing.T) {
     mockClient := &mocks.FakeClient{}
 
     // Set up expectations
-    mockClient.GetRefReturns(&nanogit.Ref{
+    testHash, err := hash.FromHex("abcdef1234567890abcdef1234567890abcdef12")
+    if err != nil {
+        t.Fatal(err)
+    }
+    mockClient.GetRefReturns(nanogit.Ref{
         Name: "refs/heads/main",
-        Hash: hash.FromString("abc123"),
+        Hash: testHash,
     }, nil)
 
     // Use the mock in your tests
@@ -311,6 +317,8 @@ func TestMyService(t *testing.T) {
     // ... test your service
 }
 ```
+
+See [mocks/example_test.go](https://github.com/grafana/nanogit/blob/main/mocks/example_test.go) for complete working examples, including the `StagedWriter` mock.
 
 ### Integration Testing with gittest
 
@@ -321,7 +329,15 @@ go get github.com/grafana/nanogit/gittest@latest
 ```
 
 ```go
-import "github.com/grafana/nanogit/gittest"
+import (
+    "context"
+    "testing"
+
+    "github.com/grafana/nanogit"
+    "github.com/grafana/nanogit/gittest"
+    "github.com/grafana/nanogit/options"
+    "github.com/stretchr/testify/require"
+)
 
 func TestGitOperations(t *testing.T) {
     ctx := context.Background()
@@ -338,13 +354,17 @@ func TestGitOperations(t *testing.T) {
     repo, err := server.CreateRepo(ctx, "myrepo", user)
     require.NoError(t, err)
 
-    // Create local repository
+    // Create local repository and initialize it with the remote
     local, err := gittest.NewLocalRepo(ctx)
     require.NoError(t, err)
     defer local.Cleanup()
 
-    // Initialize with remote
-    client, err := local.QuickInit(user, repo.AuthURL)
+    connInfo, err := local.InitWithRemote(user, repo)
+    require.NoError(t, err)
+
+    // Create a nanogit client from the connection info
+    client, err := nanogit.NewHTTPClient(connInfo.URL,
+        options.WithBasicAuth(connInfo.Username, connInfo.Password))
     require.NoError(t, err)
 
     // Test your Git operations
@@ -363,7 +383,7 @@ func TestGitOperations(t *testing.T) {
     // Verify with nanogit client
     ref, err := client.GetRef(ctx, "refs/heads/main")
     require.NoError(t, err)
-    require.NotNil(t, ref)
+    require.NotEmpty(t, ref.Hash)
 }
 ```
 

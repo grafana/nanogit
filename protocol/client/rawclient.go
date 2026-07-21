@@ -1,3 +1,10 @@
+// Package client implements the low-level Git Smart HTTP protocol version 2
+// transport used by the root nanogit package: the info/refs handshake,
+// upload-pack and receive-pack exchanges, authentication headers, retries,
+// and typed errors for common HTTP failures.
+//
+// It is low-level plumbing. Most users should use the root nanogit package
+// instead of this one directly.
 package client
 
 import (
@@ -19,15 +26,36 @@ import (
 //
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../../internal/tools/fake_header.txt -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
+	// CanRead reports whether the credentials grant read (fetch) access to
+	// the repository.
 	CanRead(ctx context.Context) (bool, error)
+	// CanWrite reports whether the credentials grant repository-level write
+	// (push) access.
 	CanWrite(ctx context.Context) (bool, error)
-	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
+	// IsAuthorized reports whether the client can read from the repository.
+	//
+	// Deprecated: Use CanRead instead.
+	IsAuthorized(ctx context.Context) (bool, error)
+	// SmartInfo performs the GET info/refs handshake for the given service
+	// ("git-upload-pack" or "git-receive-pack").
 	SmartInfo(ctx context.Context, service string) error
+	// IsServerCompatible reports whether the server supports Git protocol
+	// v2, which nanogit requires.
 	IsServerCompatible(ctx context.Context) (bool, error)
+	// UploadPack posts a raw git-upload-pack request body and returns the
+	// response stream. The caller must close it.
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
+	// ReceivePack posts a raw git-receive-pack request body and checks the
+	// server's status response.
 	ReceivePack(ctx context.Context, data io.Reader) error
+	// FetchReceivePackCapabilities returns the capabilities the server
+	// advertises for git-receive-pack.
 	FetchReceivePackCapabilities(ctx context.Context) ([]protocol.Capability, error)
+	// Fetch requests the objects named in opts.Want and returns the parsed
+	// pack-file objects keyed by hash.
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
+	// LsRefs lists the server's refs via the ls-refs command, optionally
+	// filtered by opts.Prefix.
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }
 
