@@ -1,6 +1,6 @@
 # Commit signing
 
-A `StagedWriter` can cryptographically sign every commit it creates. Three signature formats are supported, selected with a writer option at `NewStagedWriter` time:
+A [`StagedWriter`](writing.md) can cryptographically sign every commit it creates. Three signature formats are supported, selected with a writer option at [`NewStagedWriter`](https://pkg.go.dev/github.com/grafana/nanogit#Client.NewStagedWriter) time:
 
 | Option | Format | Key material |
 | ------ | ------ | ------------ |
