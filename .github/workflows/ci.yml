@@ -493,3 +493,26 @@ jobs:
         run: apk add --no-cache git make
       - name: Run CLI linter
         run: make cli-lint
+
+  cli-install-check:
+    name: CLI Install Check
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Install build dependencies
+        run: apk add --no-cache git
+      - name: Build CLI against released nanogit (as `go install` would)
+        env:
+          # Disable the workspace so cli/go.mod's pinned nanogit release is
+          # resolved from the module proxy, exactly like
+          # `go install github.com/grafana/nanogit/cli/cmd/nanogit@<tag>`.
+          # This fails when cli/ consumes a root API that is not yet in a
+          # tagged release — land the library change first, then bump
+          # cli/go.mod after the release (see RELEASING.md).
+          GOWORK: 'off'
+        run: |
+          cd cli
+          go build ./...
+          go vet ./...
