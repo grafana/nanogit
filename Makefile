@@ -10,9 +10,15 @@ fmt:
 .PHONY: lint
 
 lint-staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+	go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run
+
+# Pinned for reproducible CI runs; the vulnerability database is fetched live
+# at run time, so pinning the binary does not stale the scan.
+.PHONY: vulncheck
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 .PHONY: test-unit
 test-unit:
