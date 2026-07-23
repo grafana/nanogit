@@ -906,6 +906,10 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		return nil, fmt.Errorf("build pending trees: %w", err)
 	}
 
+	if w.lastTree.Hash.Is(w.lastCommit.Tree) {
+		return nil, ErrNothingToCommit
+	}
+
 	if !w.writer.HasObjects() {
 		return nil, ErrNothingToCommit
 	}
