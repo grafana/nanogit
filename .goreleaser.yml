@@ -95,12 +95,13 @@ release:
   footer: |
     ## Installation
 
+    ### Download Binary
+    Download the binary for your platform from the assets above — these are built from this release.
+
     ### Using Go Install
     ```bash
-    go install github.com/grafana/nanogit/cli/cmd/nanogit@{{ .Tag }}
+    go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
     ```
-
-    ### Download Binary
-    Download the appropriate binary for your platform from the assets above.
+    (The CLI lives in an untagged nested module, so `go install` always builds the latest main.)
 
     **Full Changelog**: https://github.com/grafana/nanogit/compare/{{ .PreviousTag }}...{{ .Tag }}
