@@ -333,6 +333,19 @@ func TestStagedWriter_Commit_UnchangedTree(t *testing.T) {
 	require.ErrorIs(t, err, ErrNothingToCommit)
 	require.Nil(t, commit)
 	require.Equal(t, parentHash, writer.lastCommit.Hash)
+	require.False(t, writer.writer.HasObjects())
+	require.ErrorIs(t, writer.Push(ctx), ErrNothingToPush)
+
+	changedHash, err := writer.UpdateBlob(ctx, "dashboard.json", []byte("changed"))
+	require.NoError(t, err)
+	require.NotEqual(t, blobHash, changedHash)
+
+	commit, err = writer.Commit(ctx, "real update",
+		Author{Name: "A", Email: "a@b", Time: when},
+		Committer{Name: "A", Email: "a@b", Time: when})
+	require.NoError(t, err)
+	require.NotNil(t, commit)
+	require.Equal(t, parentHash, commit.Parent)
 }
 
 func TestStagedWriter_Commit_SignerError(t *testing.T) {
