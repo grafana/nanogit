@@ -1,0 +1,108 @@
+name: Provider Tests
+
+# Provider tests exercise nanogit against real hosted Git providers
+# (GitHub, GitLab, Bitbucket) and require credentials pulled from Vault.
+# Because the tests run repository code with those secrets in scope, they must
+# NEVER execute untrusted code from forks — a malicious change could otherwise
+# exfiltrate the tokens and signing keys.
+#
+# GitHub only exposes secrets and an OIDC token to workflows running in the
+# trusted base-repo context: pushes, same-repo pull requests, schedules and
+# manual dispatches. Fork pull requests get a read-only token and no OIDC, so
+# the guard below skips them entirely. (We deliberately avoid the workflow_run
+# trigger: it runs in a privileged context and is easy to misuse — flagged by
+# zizmor as a dangerous trigger — and buys us nothing here, since same-repo
+# PRs already run with the credentials these tests need.)
+#
+# Fork pull requests still get full coverage from the secret-free jobs in
+# ci.yml (unit tests, lint, and the Gitea-based integration tests).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+# No permissions by default; each job requests only what it needs.
+permissions: {}
+
+jobs:
+  provider-tests:
+    name: ${{ matrix.name }} Provider Tests
+    # Only run in a trusted context: this repository, and never a fork PR
+    # (a fork's head repository differs from the base repository).
+    if: >-
+      github.repository == 'grafana/nanogit' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2
+    # These permissions are needed to assume roles from GitHub's OIDC for Vault.
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GitHub
+            provider: github
+            vault: github
+            repo_var: GH_REPO_NAME
+          - name: GitLab
+            provider: gitlab
+            vault: gitlab
+            repo_var: GITLAB_REPO_NAME
+          - name: Bitbucket
+            provider: bitbucket
+            vault: bitbucket
+            repo_var: BITBUCKET_REPO_NAME
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache git make gcc musl-dev bash curl gpg
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@e46fe1e9a2bf9e618bcf8d8d32f3a7381b45c06d # get-vault-secrets/v2.0.0
+        with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
+          repo_secrets: |
+            REPO_USER=${{ matrix.vault }}:REPO_USER
+            REPO_TOKEN=${{ matrix.vault }}:REPO_TOKEN
+            SIGN_EMAIL=signing:EMAIL
+            SIGN_GPG_KEY=signing:GPG_KEY
+            SIGN_SSH_KEY=signing:SSH_KEY
+            SIGN_SMIME_KEY=signing:SMIME_KEY
+            SIGN_SMIME_CERT=signing:SMIME_CERT
+      - name: Cache Go modules
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Sync vendor directory
+        run: go work vendor
+      - name: Run provider tests
+        env:
+          CGO_ENABLED: 1
+          TEST_PROVIDER: ${{ matrix.provider }}
+          TEST_REPO: ${{ vars[matrix.repo_var] }}
+          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
+          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
+          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
+          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
+          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
+          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
+          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
+        run: |
+          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
+            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
+            exit 0
+          fi
+          make test-providers
