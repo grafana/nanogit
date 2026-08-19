@@ -1,6 +1,6 @@
 module github.com/grafana/nanogit/gittest
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/grafana/nanogit v1.4.0
