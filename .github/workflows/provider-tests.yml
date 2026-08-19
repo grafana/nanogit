@@ -4,22 +4,23 @@ name: Provider Tests
 # (GitHub, GitLab, Bitbucket) and require credentials pulled from Vault.
 # Because the tests run repository code with those secrets in scope, they must
 # NEVER execute untrusted code from forks — a malicious change could otherwise
-# exfiltrate the tokens and signing keys. This workflow therefore only runs in
-# the trusted base-repo context:
+# exfiltrate the tokens and signing keys.
 #
-#   - workflow_run: after the "CI" workflow completes, and ONLY when the
-#     triggering run came from a branch in grafana/nanogit itself (not a fork).
-#   - workflow_dispatch: manually, by a maintainer, against a reviewed ref.
-#   - schedule: nightly, on the default branch.
+# GitHub only exposes secrets and an OIDC token to workflows running in the
+# trusted base-repo context: pushes, same-repo pull requests, schedules and
+# manual dispatches. Fork pull requests get a read-only token and no OIDC, so
+# the guard below skips them entirely. (We deliberately avoid the workflow_run
+# trigger: it runs in a privileged context and is easy to misuse — flagged by
+# zizmor as a dangerous trigger — and buys us nothing here, since same-repo
+# PRs already run with the credentials these tests need.)
 #
-# Fork pull requests get full coverage from the secret-free jobs in ci.yml
-# (unit tests, lint, and the Gitea-based integration tests); provider
-# compatibility is validated here, in a trusted context, before/after merge.
+# Fork pull requests still get full coverage from the secret-free jobs in
+# ci.yml (unit tests, lint, and the Gitea-based integration tests).
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "0 3 * * *"
@@ -30,15 +31,12 @@ permissions: {}
 jobs:
   provider-tests:
     name: ${{ matrix.name }} Provider Tests
-    # Only run in a trusted context. For workflow_run, require that CI passed
-    # and that the triggering head repository is grafana/nanogit itself, i.e.
-    # not a fork. workflow_dispatch and schedule are maintainer-/repo-initiated
-    # and therefore always trusted.
+    # Only run in a trusted context: this repository, and never a fork PR
+    # (a fork's head repository differs from the base repository).
     if: >-
       github.repository == 'grafana/nanogit' &&
-      (github.event_name != 'workflow_run' ||
-        (github.event.workflow_run.conclusion == 'success' &&
-         github.event.workflow_run.head_repository.full_name == github.repository))
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     container:
       image: golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2
@@ -64,11 +62,6 @@ jobs:
             repo_var: BITBUCKET_REPO_NAME
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # Check out the exact commit that triggered CI (workflow_run) or the
-          # selected ref (dispatch/schedule). Safe because this workflow only
-          # runs for non-fork revisions.
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
@@ -113,29 +106,3 @@ jobs:
             exit 0
           fi
           make test-providers
-
-  # workflow_run runs do not attach their result to the originating commit
-  # automatically. Publish a commit status so same-repo PRs still surface a
-  # pass/fail check for the provider tests. Skipped for fork-triggered runs
-  # (where provider-tests is skipped) and for dispatch/schedule runs.
-  report:
-    name: Report status
-    needs: provider-tests
-    if: always() && github.event_name == 'workflow_run' && needs.provider-tests.result != 'skipped'
-    runs-on: ubuntu-latest
-    permissions:
-      statuses: write
-    steps:
-      - name: Publish commit status
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STATE: ${{ needs.provider-tests.result == 'success' && 'success' || 'failure' }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          curl -sSL --fail-with-body -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.repository }}/statuses/${SHA}" \
-            -d "{\"state\":\"${STATE}\",\"context\":\"Provider Tests\",\"description\":\"Provider tests ${STATE}\",\"target_url\":\"${RUN_URL}\"}"
