@@ -10,9 +10,9 @@ fmt:
 .PHONY: lint
 
 lint-staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+	go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
 
 .PHONY: test-unit
 test-unit:
@@ -125,7 +125,7 @@ cli-fmt:
 .PHONY: cli-lint
 cli-lint:
 	@echo "Linting CLI code..."
-	cd cli && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run
+	cd cli && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
 
 # Release
 .PHONY: release-snapshot
