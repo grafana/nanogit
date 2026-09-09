@@ -4,6 +4,7 @@
 package mocks
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -11,39 +12,43 @@ import (
 )
 
 type FakeRecorder struct {
-	CacheAccessStub        func(bool)
+	CacheAccessStub        func(context.Context, bool)
 	cacheAccessMutex       sync.RWMutex
 	cacheAccessArgsForCall []struct {
-		arg1 bool
+		arg1 context.Context
+		arg2 bool
 	}
-	HTTPRequestStub        func(string, int, time.Duration, int)
+	HTTPRequestStub        func(context.Context, metrics.Operation, int, time.Duration, int)
 	hTTPRequestMutex       sync.RWMutex
 	hTTPRequestArgsForCall []struct {
-		arg1 string
-		arg2 int
-		arg3 time.Duration
-		arg4 int
+		arg1 context.Context
+		arg2 metrics.Operation
+		arg3 int
+		arg4 time.Duration
+		arg5 int
 	}
-	ObjectsFetchedStub        func(int, int64)
+	ObjectsFetchedStub        func(context.Context, int, int64)
 	objectsFetchedMutex       sync.RWMutex
 	objectsFetchedArgsForCall []struct {
-		arg1 int
-		arg2 int64
+		arg1 context.Context
+		arg2 int
+		arg3 int64
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRecorder) CacheAccess(arg1 bool) {
+func (fake *FakeRecorder) CacheAccess(arg1 context.Context, arg2 bool) {
 	fake.cacheAccessMutex.Lock()
 	fake.cacheAccessArgsForCall = append(fake.cacheAccessArgsForCall, struct {
-		arg1 bool
-	}{arg1})
+		arg1 context.Context
+		arg2 bool
+	}{arg1, arg2})
 	stub := fake.CacheAccessStub
-	fake.recordInvocation("CacheAccess", []interface{}{arg1})
+	fake.recordInvocation("CacheAccess", []interface{}{arg1, arg2})
 	fake.cacheAccessMutex.Unlock()
 	if stub != nil {
-		fake.CacheAccessStub(arg1)
+		fake.CacheAccessStub(arg1, arg2)
 	}
 }
 
@@ -53,32 +58,33 @@ func (fake *FakeRecorder) CacheAccessCallCount() int {
 	return len(fake.cacheAccessArgsForCall)
 }
 
-func (fake *FakeRecorder) CacheAccessCalls(stub func(bool)) {
+func (fake *FakeRecorder) CacheAccessCalls(stub func(context.Context, bool)) {
 	fake.cacheAccessMutex.Lock()
 	defer fake.cacheAccessMutex.Unlock()
 	fake.CacheAccessStub = stub
 }
 
-func (fake *FakeRecorder) CacheAccessArgsForCall(i int) bool {
+func (fake *FakeRecorder) CacheAccessArgsForCall(i int) (context.Context, bool) {
 	fake.cacheAccessMutex.RLock()
 	defer fake.cacheAccessMutex.RUnlock()
 	argsForCall := fake.cacheAccessArgsForCall[i]
-	return argsForCall.arg1
+	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRecorder) HTTPRequest(arg1 string, arg2 int, arg3 time.Duration, arg4 int) {
+func (fake *FakeRecorder) HTTPRequest(arg1 context.Context, arg2 metrics.Operation, arg3 int, arg4 time.Duration, arg5 int) {
 	fake.hTTPRequestMutex.Lock()
 	fake.hTTPRequestArgsForCall = append(fake.hTTPRequestArgsForCall, struct {
-		arg1 string
-		arg2 int
-		arg3 time.Duration
-		arg4 int
-	}{arg1, arg2, arg3, arg4})
+		arg1 context.Context
+		arg2 metrics.Operation
+		arg3 int
+		arg4 time.Duration
+		arg5 int
+	}{arg1, arg2, arg3, arg4, arg5})
 	stub := fake.HTTPRequestStub
-	fake.recordInvocation("HTTPRequest", []interface{}{arg1, arg2, arg3, arg4})
+	fake.recordInvocation("HTTPRequest", []interface{}{arg1, arg2, arg3, arg4, arg5})
 	fake.hTTPRequestMutex.Unlock()
 	if stub != nil {
-		fake.HTTPRequestStub(arg1, arg2, arg3, arg4)
+		fake.HTTPRequestStub(arg1, arg2, arg3, arg4, arg5)
 	}
 }
 
@@ -88,30 +94,31 @@ func (fake *FakeRecorder) HTTPRequestCallCount() int {
 	return len(fake.hTTPRequestArgsForCall)
 }
 
-func (fake *FakeRecorder) HTTPRequestCalls(stub func(string, int, time.Duration, int)) {
+func (fake *FakeRecorder) HTTPRequestCalls(stub func(context.Context, metrics.Operation, int, time.Duration, int)) {
 	fake.hTTPRequestMutex.Lock()
 	defer fake.hTTPRequestMutex.Unlock()
 	fake.HTTPRequestStub = stub
 }
 
-func (fake *FakeRecorder) HTTPRequestArgsForCall(i int) (string, int, time.Duration, int) {
+func (fake *FakeRecorder) HTTPRequestArgsForCall(i int) (context.Context, metrics.Operation, int, time.Duration, int) {
 	fake.hTTPRequestMutex.RLock()
 	defer fake.hTTPRequestMutex.RUnlock()
 	argsForCall := fake.hTTPRequestArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4, argsForCall.arg5
 }
 
-func (fake *FakeRecorder) ObjectsFetched(arg1 int, arg2 int64) {
+func (fake *FakeRecorder) ObjectsFetched(arg1 context.Context, arg2 int, arg3 int64) {
 	fake.objectsFetchedMutex.Lock()
 	fake.objectsFetchedArgsForCall = append(fake.objectsFetchedArgsForCall, struct {
-		arg1 int
-		arg2 int64
-	}{arg1, arg2})
+		arg1 context.Context
+		arg2 int
+		arg3 int64
+	}{arg1, arg2, arg3})
 	stub := fake.ObjectsFetchedStub
-	fake.recordInvocation("ObjectsFetched", []interface{}{arg1, arg2})
+	fake.recordInvocation("ObjectsFetched", []interface{}{arg1, arg2, arg3})
 	fake.objectsFetchedMutex.Unlock()
 	if stub != nil {
-		fake.ObjectsFetchedStub(arg1, arg2)
+		fake.ObjectsFetchedStub(arg1, arg2, arg3)
 	}
 }
 
@@ -121,17 +128,17 @@ func (fake *FakeRecorder) ObjectsFetchedCallCount() int {
 	return len(fake.objectsFetchedArgsForCall)
 }
 
-func (fake *FakeRecorder) ObjectsFetchedCalls(stub func(int, int64)) {
+func (fake *FakeRecorder) ObjectsFetchedCalls(stub func(context.Context, int, int64)) {
 	fake.objectsFetchedMutex.Lock()
 	defer fake.objectsFetchedMutex.Unlock()
 	fake.ObjectsFetchedStub = stub
 }
 
-func (fake *FakeRecorder) ObjectsFetchedArgsForCall(i int) (int, int64) {
+func (fake *FakeRecorder) ObjectsFetchedArgsForCall(i int) (context.Context, int, int64) {
 	fake.objectsFetchedMutex.RLock()
 	defer fake.objectsFetchedMutex.RUnlock()
 	argsForCall := fake.objectsFetchedArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeRecorder) Invocations() map[string][][]interface{} {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/metrics"
 )
 
 // UploadPack sends a POST request to the git-upload-pack endpoint.
@@ -32,7 +33,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
-	res, err := c.do(ctx, "upload-pack", req)
+	res, err := c.do(ctx, metrics.OperationUploadPack, req)
 
 	if err != nil {
 		return nil, err

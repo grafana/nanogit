@@ -84,7 +84,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 	if responseReader != nil {
 		bytesRead = responseReader.n
 	}
-	recorder.ObjectsFetched(len(objects)-objectsBefore, bytesRead)
+	recorder.ObjectsFetched(ctx, len(objects)-objectsBefore, bytesRead)
 
 	logger.Debug("Fetch completed", "totalObjects", len(objects))
 	return objects, nil
@@ -102,7 +102,7 @@ func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions,
 	pending := make([]hash.Hash, 0, len(opts.Want))
 	for _, want := range opts.Want {
 		obj, ok := storage.Get(want)
-		recorder.CacheAccess(ok)
+		recorder.CacheAccess(ctx, ok)
 		if !ok {
 			pending = append(pending, want)
 		} else {

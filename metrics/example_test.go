@@ -18,15 +18,15 @@ type counterRecorder struct {
 	objects  atomic.Int64
 }
 
-func (c *counterRecorder) HTTPRequest(operation string, statusCode int, duration time.Duration, attempt int) {
+func (c *counterRecorder) HTTPRequest(ctx context.Context, operation string, statusCode int, duration time.Duration, attempt int) {
 	c.requests.Add(1)
 }
 
-func (c *counterRecorder) ObjectsFetched(count int, bytes int64) {
+func (c *counterRecorder) ObjectsFetched(ctx context.Context, count int, bytes int64) {
 	c.objects.Add(int64(count))
 }
 
-func (c *counterRecorder) CacheAccess(hit bool) {}
+func (c *counterRecorder) CacheAccess(ctx context.Context, hit bool) {}
 
 // ExampleToContext wires a recorder into the context so nanogit operations
 // performed with that context report HTTP request and object-fetch metrics.

@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/protocol"
 )
 
@@ -46,7 +47,7 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 	c.addDefaultHeaders(req)
 
 	// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) for GET requests
-	res, err := c.do(ctx, "compatibility", req)
+	res, err := c.do(ctx, metrics.OperationCompatibility, req)
 	if err != nil {
 		return false, err
 	}

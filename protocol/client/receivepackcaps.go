@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/protocol"
 )
 
@@ -45,7 +46,7 @@ func (c *rawClient) FetchReceivePackCapabilities(ctx context.Context) (caps []pr
 	// the server fall back to v1.
 	req.Header.Del("Git-Protocol")
 
-	res, err := c.do(ctx, "receive-pack-capabilities", req)
+	res, err := c.do(ctx, metrics.OperationReceivePackCapabilities, req)
 	if err != nil {
 		return nil, err
 	}

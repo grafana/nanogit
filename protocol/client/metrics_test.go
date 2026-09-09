@@ -39,19 +39,19 @@ type objectsFetchedCall struct {
 	bytes int64
 }
 
-func (r *testRecorder) HTTPRequest(operation string, statusCode int, duration time.Duration, attempt int) {
+func (r *testRecorder) HTTPRequest(ctx context.Context, operation string, statusCode int, duration time.Duration, attempt int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.httpRequests = append(r.httpRequests, httpRequestCall{operation, statusCode, duration, attempt})
 }
 
-func (r *testRecorder) ObjectsFetched(count int, bytes int64) {
+func (r *testRecorder) ObjectsFetched(ctx context.Context, count int, bytes int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.objectsFetched = append(r.objectsFetched, objectsFetchedCall{count, bytes})
 }
 
-func (r *testRecorder) CacheAccess(hit bool) {
+func (r *testRecorder) CacheAccess(ctx context.Context, hit bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.cacheAccessCalls = append(r.cacheAccessCalls, hit)
@@ -92,7 +92,7 @@ func TestDo_RecordsHTTPRequestMetric(t *testing.T) {
 
 	require.Len(t, recorder.httpRequests, 1)
 	call := recorder.httpRequests[0]
-	require.Equal(t, "smart-info", call.operation)
+	require.Equal(t, metrics.OperationSmartInfo, call.operation)
 	require.Equal(t, http.StatusOK, call.statusCode)
 	require.GreaterOrEqual(t, call.duration.Nanoseconds(), int64(0))
 	require.Equal(t, 1, call.attempt)
@@ -129,7 +129,7 @@ func TestDo_RecordsHTTPRequestMetricPerRetryAttempt(t *testing.T) {
 
 	require.Len(t, recorder.httpRequests, 3)
 	for i, call := range recorder.httpRequests {
-		require.Equal(t, "smart-info", call.operation)
+		require.Equal(t, metrics.OperationSmartInfo, call.operation)
 		require.Equal(t, i+1, call.attempt)
 		if i < 2 {
 			require.Equal(t, http.StatusInternalServerError, call.statusCode)

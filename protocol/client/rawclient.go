@@ -207,17 +207,17 @@ func (c *rawClient) do(ctx context.Context, operation string, req *http.Request)
 
 		res, err := c.client.Do(req)
 		if err != nil {
-			recorder.HTTPRequest(operation, 0, time.Since(start), attempt)
+			recorder.HTTPRequest(ctx, operation, 0, time.Since(start), attempt)
 			return nil, err
 		}
 
 		if err := CheckServerUnavailable(res); err != nil {
 			_ = res.Body.Close()
-			recorder.HTTPRequest(operation, res.StatusCode, time.Since(start), attempt)
+			recorder.HTTPRequest(ctx, operation, res.StatusCode, time.Since(start), attempt)
 			return nil, err
 		}
 
-		recorder.HTTPRequest(operation, res.StatusCode, time.Since(start), attempt)
+		recorder.HTTPRequest(ctx, operation, res.StatusCode, time.Since(start), attempt)
 		return res, nil
 	})
 }
