@@ -6,10 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -290,4 +293,129 @@ func TestDo_RecordsStatusCodeWhenClientReturnsResponseAndError(t *testing.T) {
 
 	require.Len(t, recorder.httpRequests, 1)
 	require.Equal(t, http.StatusFound, recorder.httpRequests[0].StatusCode)
+}
+
+// slowCloseBody is an io.ReadCloser whose Close blocks for a configured
+// delay, so tests can tell whether code under test captured a timestamp
+// before or after closing the body.
+type slowCloseBody struct {
+	io.Reader
+	delay time.Duration
+}
+
+func (s *slowCloseBody) Close() error {
+	time.Sleep(s.delay)
+	return nil
+}
+
+// slowCloseTransport returns a fixed status code with a slow-closing body,
+// bypassing the network entirely.
+type slowCloseTransport struct {
+	statusCode int
+	closeDelay time.Duration
+}
+
+func (t *slowCloseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: t.statusCode,
+		Status:     fmt.Sprintf("%d", t.statusCode),
+		Body:       &slowCloseBody{Reader: strings.NewReader(""), delay: t.closeDelay},
+		Header:     make(http.Header),
+		Request:    req,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+	}, nil
+}
+
+func TestDo_DurationExcludesBodyCloseOnRetryableStatus(t *testing.T) {
+	t.Parallel()
+
+	// A 5xx response takes the retryable "CheckServerUnavailable" branch
+	// in do(), which closes res.Body before returning. Duration must be
+	// snapshotted immediately after Do returns, not after that close, so
+	// a slow Close (e.g. draining a large unread body) must not inflate
+	// the reported Duration.
+	const closeDelay = 200 * time.Millisecond
+	httpClient := &http.Client{
+		Transport: &slowCloseTransport{statusCode: http.StatusInternalServerError, closeDelay: closeDelay},
+	}
+
+	recorder := &testRecorder{}
+	ctx := metrics.ToContext(context.Background(), recorder)
+
+	client, err := NewRawClient("https://example.com/repo", options.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	err = client.SmartInfo(ctx, "git-upload-pack")
+	require.Error(t, err)
+
+	require.Len(t, recorder.httpRequests, 1)
+	require.Less(t, recorder.httpRequests[0].Duration, closeDelay,
+		"Duration must be captured before the slow Body.Close(), not after")
+}
+
+func TestFetch_RecordsObjectsFetchedCountOnDeltaResolutionFailure(t *testing.T) {
+	t.Parallel()
+
+	// A ref-delta object whose base is never sent in this response.
+	// ReadObject succeeds (the delta itself is well-formed), but
+	// resolveDeltas fails afterwards because the base can't be found —
+	// this must not erase the fact that one object was successfully
+	// read off the wire, even though it's absent from the returned
+	// objects map.
+	//
+	// Delta payload format (uncompressed, before zlib): source-size
+	// varint (0x01), target-size varint (0x01), then one "insert
+	// literal" instruction: a cmd byte equal to the literal length
+	// (0x01) followed by that many literal bytes ('A').
+	deltaPayload := []byte{0x01, 0x01, 0x01, 'A'}
+	var zbuf bytes.Buffer
+	zw := zlib.NewWriter(&zbuf)
+	_, err := zw.Write(deltaPayload)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+
+	missingBase, err := hash.FromHex(strings.Repeat("0", 39) + "a")
+	require.NoError(t, err)
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+
+	pack := []byte("PACK" +
+		"\x00\x00\x00\x02" + // version 2
+		"\x00\x00\x00\x01") // 1 object
+	objHeader := byte(protocol.ObjectTypeRefDelta)<<4 | byte(len(deltaPayload)&0xF) // ref-delta, size fits in one nibble
+	pack = append(pack, objHeader)
+	pack = append(pack, missingBase[:]...) // 20-byte raw parent hash
+	pack = append(pack, zbuf.Bytes()...)
+	writePkt(append([]byte{1}, pack...))
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write(body.Bytes()); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	recorder := &testRecorder{}
+	ctx := metrics.ToContext(context.Background(), recorder)
+
+	client, err := NewRawClient(server.URL + "/repo")
+	require.NoError(t, err)
+
+	want, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+
+	_, err = client.Fetch(ctx, FetchOptions{Want: []hash.Hash{want}, Done: true})
+	require.ErrorContains(t, err, "missing base objects")
+
+	require.Len(t, recorder.objectsFetched, 1)
+	require.Equal(t, 1, recorder.objectsFetched[0].Count,
+		"the delta object was successfully read off the wire even though its base was never resolved")
 }

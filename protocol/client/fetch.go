@@ -61,8 +61,8 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
-	objectsBefore := len(objects)
 	responseReader, response, err := c.sendFetchRequest(ctx, pkt, pendingOpts.MaxResponseBytes)
+	var readCount int
 	if responseReader != nil {
 		defer func() {
 			if closeErr := responseReader.Close(); closeErr != nil {
@@ -72,11 +72,15 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		// Report whatever network activity occurred even if the fetch
 		// ultimately fails below: a malformed, truncated, oversized, or
 		// mid-stream-failing response still consumed network bytes and
-		// may have parsed some objects before failing. Deferred so it
+		// may have parsed some objects before failing. readCount is set
+		// by processPackfileResponse to the number of objects actually
+		// read off the wire — including a ref-delta that was read but
+		// whose later resolution failed — so it stays accurate even
+		// when the map of resolved objects doesn't grow. Deferred so it
 		// fires exactly once regardless of which return statement runs.
 		defer func() {
 			recorder.ObjectsFetched(ctx, metrics.ObjectsFetchedSample{
-				Count: len(objects) - objectsBefore,
+				Count: readCount,
 				Bytes: responseReader.n,
 			})
 		}()
@@ -85,7 +89,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		return nil, err
 	}
 
-	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
+	readCount, err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -277,8 +281,14 @@ func classifyReadObjectErr(err error, pendingWanted map[string]bool, objectsRead
 	return fmt.Errorf("reading packfile object %d: %w", objectsRead+1, err)
 }
 
-// processPackfileResponse processes the packfile response and extracts objects
-func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
+// processPackfileResponse processes the packfile response and extracts
+// objects. It returns the number of objects successfully read off the wire
+// (via ReadObject) before it stopped, whether that's because the stream
+// ended normally, an early-termination condition was hit, or an error
+// occurred — including ref-deltas that were read and queued but not yet
+// resolved into objects, since a resolution failure afterwards must not
+// erase the fact that they were successfully parsed from the response.
+func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) (int, error) {
 	logger := log.FromContext(ctx)
 	// Build a set of pending wanted object hashes for quick lookup if early termination is enabled
 	// Only build this if we have specific objects we want AND NoExtraObjects is enabled
@@ -308,7 +318,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 			// trailing bytes after every wanted object was already
 			// collected (see classifyReadObjectErr).
 			if terr := classifyReadObjectErr(err, pendingWantedHashes, count); terr != nil {
-				return terr
+				return count, terr
 			}
 			logger.Debug("Cap reached after all wanted objects collected; stopping early",
 				"totalObjects", objectCount, "totalDeltas", totalDelta)
@@ -358,11 +368,11 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		logger.Debug("Resolving deltas", "deltaCount", len(deltas), "baseObjectCount", len(objects))
 		err := c.resolveDeltas(ctx, deltas, objects, storage)
 		if err != nil {
-			return fmt.Errorf("failed to resolve deltas: %w", err)
+			return count, fmt.Errorf("failed to resolve deltas: %w", err)
 		}
 	}
 
-	return nil
+	return count, nil
 }
 
 // shouldTerminateEarly deletes the just-read hash from the pending wanted

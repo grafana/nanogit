@@ -206,6 +206,11 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 		start := time.Now()
 
 		res, err := c.client.Do(req)
+		// Snapshot immediately after Do returns, before any further
+		// processing (status checks, closing the body) that would
+		// otherwise inflate this attempt's reported Duration beyond
+		// the documented time-to-headers.
+		duration := time.Since(start)
 		if err != nil {
 			// A non-nil res alongside a non-nil err only happens when
 			// CheckRedirect rejects a redirect (net/http guarantees
@@ -219,7 +224,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation:  operation,
 				StatusCode: statusCode,
-				Duration:   time.Since(start),
+				Duration:   duration,
 				Attempt:    attempt,
 			})
 			return nil, err
@@ -230,7 +235,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation:  operation,
 				StatusCode: res.StatusCode,
-				Duration:   time.Since(start),
+				Duration:   duration,
 				Attempt:    attempt,
 			})
 			return nil, err
@@ -239,7 +244,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 		recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 			Operation:  operation,
 			StatusCode: res.StatusCode,
-			Duration:   time.Since(start),
+			Duration:   duration,
 			Attempt:    attempt,
 		})
 		return res, nil
