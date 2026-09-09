@@ -207,7 +207,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 
 		res, err := c.client.Do(req)
 		if err != nil {
-			recorder.HTTPRequest(ctx, metrics.HTTPRequestEvent{
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation: operation,
 				Duration:  time.Since(start),
 				Attempt:   attempt,
@@ -217,7 +217,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 
 		if err := CheckServerUnavailable(res); err != nil {
 			_ = res.Body.Close()
-			recorder.HTTPRequest(ctx, metrics.HTTPRequestEvent{
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation:  operation,
 				StatusCode: res.StatusCode,
 				Duration:   time.Since(start),
@@ -226,7 +226,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 			return nil, err
 		}
 
-		recorder.HTTPRequest(ctx, metrics.HTTPRequestEvent{
+		recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 			Operation:  operation,
 			StatusCode: res.StatusCode,
 			Duration:   time.Since(start),

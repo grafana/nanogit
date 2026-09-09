@@ -20,19 +20,19 @@ import (
 	"time"
 )
 
-// Recorder receives protocol/network-level instrumentation events emitted by
-// nanogit's HTTP and packfile-fetch layers. Implementations decide how to
-// aggregate and export these events (e.g. as Prometheus or OpenTelemetry
+// Recorder receives protocol/network-level instrumentation samples emitted
+// by nanogit's HTTP and packfile-fetch layers. Implementations decide how to
+// aggregate and export these samples (e.g. as Prometheus or OpenTelemetry
 // metrics); nanogit only reports raw values.
 //
-// Each method takes a single event struct rather than positional arguments,
-// so nanogit can add fields to an event in a future minor version without
+// Each method takes a single sample struct rather than positional arguments,
+// so nanogit can add fields to a sample in a future minor version without
 // breaking existing Recorder implementations — the same reason
 // log/slog.Handler takes a slog.Record instead of a parameter list.
 // Unrecognized fields should be ignored by implementations, not treated as
 // exhaustive.
 //
-// ctx is the context of the nanogit operation that triggered the event. It
+// ctx is the context of the nanogit operation that triggered the sample. It
 // is provided so implementations can attach trace-correlated exemplars (as
 // OpenTelemetry's metric API requires) or read request-scoped values; it is
 // not a signal to cancel or delay work. Recorder methods are called inline
@@ -42,20 +42,20 @@ import (
 type Recorder interface {
 	// HTTPRequest reports the outcome of a single HTTP request/response
 	// round trip made to the Git server.
-	HTTPRequest(ctx context.Context, event HTTPRequestEvent)
+	HTTPRequest(ctx context.Context, sample HTTPRequestSample)
 
 	// ObjectsFetched reports objects retrieved over the network by a
 	// single Fetch call.
-	ObjectsFetched(ctx context.Context, event ObjectsFetchedEvent)
+	ObjectsFetched(ctx context.Context, sample ObjectsFetchedSample)
 
 	// CacheAccess reports a single packfile object cache lookup performed
 	// before deciding whether to fetch that object over the network.
-	CacheAccess(ctx context.Context, event CacheAccessEvent)
+	CacheAccess(ctx context.Context, sample CacheAccessSample)
 }
 
-// HTTPRequestEvent describes the outcome of a single HTTP request/response
+// HTTPRequestSample describes the outcome of a single HTTP request/response
 // round trip made to the Git server.
-type HTTPRequestEvent struct {
+type HTTPRequestSample struct {
 	// Operation identifies the Git protocol operation; see the Operation*
 	// constants for the exhaustive set of values.
 	Operation Operation
@@ -70,18 +70,18 @@ type HTTPRequestEvent struct {
 	Attempt int
 }
 
-// ObjectsFetchedEvent describes objects retrieved over the network by a
+// ObjectsFetchedSample describes objects retrieved over the network by a
 // single Fetch call.
-type ObjectsFetchedEvent struct {
+type ObjectsFetchedSample struct {
 	// Count is the number of packfile objects parsed from the response.
 	Count int
 	// Bytes is the number of response bytes read.
 	Bytes int64
 }
 
-// CacheAccessEvent describes a single packfile object cache lookup
+// CacheAccessSample describes a single packfile object cache lookup
 // performed before deciding whether to fetch that object over the network.
-type CacheAccessEvent struct {
+type CacheAccessSample struct {
 	// Hit is true if the object was found in the configured
 	// storage.PackfileStorage.
 	Hit bool

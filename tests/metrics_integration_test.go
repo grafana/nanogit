@@ -13,7 +13,7 @@ import (
 )
 
 // These integration tests exercise metrics.Recorder end-to-end against the
-// shared Gitea testcontainer, verifying that the events documented in
+// shared Gitea testcontainer, verifying that the samples documented in
 // docs/architecture/metrics.md actually fire from real HTTP round trips and
 // real packfile fetches — not just against the httptest.Server fakes used
 // by the protocol/client unit tests.
@@ -29,10 +29,10 @@ var _ = Describe("Metrics", func() {
 		Expect(exists).To(BeTrue())
 
 		Expect(recorder.HTTPRequestCallCount()).To(BeNumerically(">=", 1))
-		_, event := recorder.HTTPRequestArgsForCall(0)
-		Expect(event.Operation).To(Equal(metrics.OperationSmartInfo))
-		Expect(event.StatusCode).To(Equal(200))
-		Expect(event.Attempt).To(Equal(1))
+		_, sample := recorder.HTTPRequestArgsForCall(0)
+		Expect(sample.Operation).To(Equal(metrics.OperationSmartInfo))
+		Expect(sample.StatusCode).To(Equal(200))
+		Expect(sample.Attempt).To(Equal(1))
 	})
 
 	It("records HTTPRequest with OperationUploadPack and ObjectsFetched for GetBlob", func() {
@@ -63,19 +63,19 @@ var _ = Describe("Metrics", func() {
 		Expect(recorder.HTTPRequestCallCount()).To(BeNumerically(">=", 1))
 		foundUploadPack := false
 		for i := range recorder.HTTPRequestCallCount() {
-			_, event := recorder.HTTPRequestArgsForCall(i)
-			if event.Operation == metrics.OperationUploadPack {
+			_, sample := recorder.HTTPRequestArgsForCall(i)
+			if sample.Operation == metrics.OperationUploadPack {
 				foundUploadPack = true
-				Expect(event.StatusCode).To(Equal(200))
+				Expect(sample.StatusCode).To(Equal(200))
 			}
 		}
 		Expect(foundUploadPack).To(BeTrue(), "expected at least one upload-pack HTTPRequest")
 
 		By("Verifying ObjectsFetched was recorded for the network fetch")
 		Expect(recorder.ObjectsFetchedCallCount()).To(Equal(1))
-		_, fetchEvent := recorder.ObjectsFetchedArgsForCall(0)
-		Expect(fetchEvent.Count).To(Equal(1))
-		Expect(fetchEvent.Bytes).To(BeNumerically(">", 0))
+		_, fetchSample := recorder.ObjectsFetchedArgsForCall(0)
+		Expect(fetchSample.Count).To(Equal(1))
+		Expect(fetchSample.Bytes).To(BeNumerically(">", 0))
 	})
 
 	It("records CacheAccess misses then hits across repeated fetches with shared storage", func() {
@@ -106,16 +106,16 @@ var _ = Describe("Metrics", func() {
 		_, err = client.GetBlob(metricsCtx, blobHash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(recorder.CacheAccessCallCount()).To(Equal(1))
-		_, cacheEvent := recorder.CacheAccessArgsForCall(0)
-		Expect(cacheEvent.Hit).To(BeFalse())
+		_, cacheSample := recorder.CacheAccessArgsForCall(0)
+		Expect(cacheSample.Hit).To(BeFalse())
 		Expect(recorder.ObjectsFetchedCallCount()).To(Equal(1))
 
 		By("Second GetBlob: cache hit, no network fetch")
 		_, err = client.GetBlob(metricsCtx, blobHash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(recorder.CacheAccessCallCount()).To(Equal(2))
-		_, cacheEvent = recorder.CacheAccessArgsForCall(1)
-		Expect(cacheEvent.Hit).To(BeTrue())
+		_, cacheSample = recorder.CacheAccessArgsForCall(1)
+		Expect(cacheSample.Hit).To(BeTrue())
 		Expect(recorder.ObjectsFetchedCallCount()).To(Equal(1),
 			"a cache hit must skip the network fetch entirely, so ObjectsFetched must not fire again")
 	})

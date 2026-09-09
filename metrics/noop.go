@@ -7,10 +7,10 @@ import "context"
 type NoopRecorder struct{}
 
 // HTTPRequest discards the reported request outcome.
-func (n *NoopRecorder) HTTPRequest(ctx context.Context, event HTTPRequestEvent) {}
+func (n *NoopRecorder) HTTPRequest(ctx context.Context, sample HTTPRequestSample) {}
 
 // ObjectsFetched discards the reported fetch outcome.
-func (n *NoopRecorder) ObjectsFetched(ctx context.Context, event ObjectsFetchedEvent) {}
+func (n *NoopRecorder) ObjectsFetched(ctx context.Context, sample ObjectsFetchedSample) {}
 
 // CacheAccess discards the reported cache lookup outcome.
-func (n *NoopRecorder) CacheAccess(ctx context.Context, event CacheAccessEvent) {}
+func (n *NoopRecorder) CacheAccess(ctx context.Context, sample CacheAccessSample) {}

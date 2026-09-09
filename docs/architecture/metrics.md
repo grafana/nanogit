@@ -6,21 +6,21 @@ These metrics are scoped to what only nanogit can see: HTTP timing/retries, fetc
 
 ```go
 type Recorder interface {
-    HTTPRequest(ctx context.Context, event HTTPRequestEvent)
-    ObjectsFetched(ctx context.Context, event ObjectsFetchedEvent)
-    CacheAccess(ctx context.Context, event CacheAccessEvent)
+    HTTPRequest(ctx context.Context, sample HTTPRequestSample)
+    ObjectsFetched(ctx context.Context, sample ObjectsFetchedSample)
+    CacheAccess(ctx context.Context, sample CacheAccessSample)
 }
 ```
 
-Each method takes a single event struct rather than positional arguments, so nanogit can add fields to an event in a future minor version without breaking existing `Recorder` implementations.
+Each method takes a single sample struct rather than positional arguments, so nanogit can add fields to a sample in a future minor version without breaking existing `Recorder` implementations.
 
 ## Reference
 
-| Event | Fields | Fires |
+| Sample type | Fields | Fires |
 | ----- | ------ | ----- |
-| `HTTPRequestEvent` | `Operation` (one of the `metrics.Operation*` constants: `OperationSmartInfo`, `OperationUploadPack`, `OperationReceivePack`, `OperationReceivePackCapabilities`, `OperationCompatibility`) · `StatusCode` (HTTP status, or `0` on a pre-response failure) · `Duration` (this attempt's wall-clock time) · `Attempt` (1-indexed; `> 1` means a retry) | Once per HTTP attempt — a retried request fires once per attempt |
-| `ObjectsFetchedEvent` | `Count` (objects parsed from the response, excludes cache hits) · `Bytes` (response bytes read) | Once per `Fetch` that reaches the network |
-| `CacheAccessEvent` | `Hit` (`true` if served from `storage.PackfileStorage`) | Once per object looked up in the packfile cache, before a network fetch. Not fired when no storage is configured or `FetchOptions.NoCache` is set |
+| `HTTPRequestSample` | `Operation` (one of the `metrics.Operation*` constants: `OperationSmartInfo`, `OperationUploadPack`, `OperationReceivePack`, `OperationReceivePackCapabilities`, `OperationCompatibility`) · `StatusCode` (HTTP status, or `0` on a pre-response failure) · `Duration` (this attempt's wall-clock time) · `Attempt` (1-indexed; `> 1` means a retry) | Once per HTTP attempt — a retried request fires once per attempt |
+| `ObjectsFetchedSample` | `Count` (objects parsed from the response, excludes cache hits) · `Bytes` (response bytes read) | Once per `Fetch` that reaches the network |
+| `CacheAccessSample` | `Hit` (`true` if served from `storage.PackfileStorage`) | Once per object looked up in the packfile cache, before a network fetch. Not fired when no storage is configured or `FetchOptions.NoCache` is set |
 
 All three methods take `ctx` first — not to cancel or delay work (implementations must return promptly), but so a bridge can attach trace-correlated data, e.g. OpenTelemetry's `Record`/`Add` require a context for exemplars.
 
@@ -42,16 +42,16 @@ type PrometheusRecorder struct {
     cacheMisses     prometheus.Counter
 }
 
-func (r *PrometheusRecorder) HTTPRequest(ctx context.Context, event metrics.HTTPRequestEvent) {
-    r.requestDuration.WithLabelValues(event.Operation, strconv.Itoa(event.StatusCode)).Observe(event.Duration.Seconds())
+func (r *PrometheusRecorder) HTTPRequest(ctx context.Context, sample metrics.HTTPRequestSample) {
+    r.requestDuration.WithLabelValues(sample.Operation, strconv.Itoa(sample.StatusCode)).Observe(sample.Duration.Seconds())
 }
 
-func (r *PrometheusRecorder) ObjectsFetched(ctx context.Context, event metrics.ObjectsFetchedEvent) {
-    r.objectsFetched.Add(float64(event.Count))
+func (r *PrometheusRecorder) ObjectsFetched(ctx context.Context, sample metrics.ObjectsFetchedSample) {
+    r.objectsFetched.Add(float64(sample.Count))
 }
 
-func (r *PrometheusRecorder) CacheAccess(ctx context.Context, event metrics.CacheAccessEvent) {
-    if event.Hit {
+func (r *PrometheusRecorder) CacheAccess(ctx context.Context, sample metrics.CacheAccessSample) {
+    if sample.Hit {
         r.cacheHits.Inc()
         return
     }
@@ -70,7 +70,7 @@ See `metrics.ExampleToContext` on [pkg.go.dev](https://pkg.go.dev/github.com/gra
 ## Best practices
 
 - Keep `Recorder` methods fast and non-blocking — they run inline on the request path.
-- Treat `attempt > 1` as the retry signal; there's no separate retry event.
+- Treat `attempt > 1` as the retry signal; there's no separate retry sample.
 - Don't try to derive job-level metrics (sync duration, files changed) from these — track those in your own code.
 
 ## Related documentation

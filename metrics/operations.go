@@ -1,7 +1,7 @@
 package metrics
 
 // Operation identifies which Git protocol operation triggered a Recorder
-// event. It is a plain string so Recorder implementations can match, log, or
+// sample. It is a plain string so Recorder implementations can match, log, or
 // label on it without importing this package's constants, but the values
 // below are the exhaustive set nanogit reports.
 type Operation = string

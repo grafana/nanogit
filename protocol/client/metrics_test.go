@@ -21,27 +21,27 @@ import (
 // testRecorder is a simple metrics.Recorder implementation for testing.
 type testRecorder struct {
 	mu               sync.Mutex
-	httpRequests     []metrics.HTTPRequestEvent
-	objectsFetched   []metrics.ObjectsFetchedEvent
-	cacheAccessCalls []metrics.CacheAccessEvent
+	httpRequests     []metrics.HTTPRequestSample
+	objectsFetched   []metrics.ObjectsFetchedSample
+	cacheAccessCalls []metrics.CacheAccessSample
 }
 
-func (r *testRecorder) HTTPRequest(ctx context.Context, event metrics.HTTPRequestEvent) {
+func (r *testRecorder) HTTPRequest(ctx context.Context, sample metrics.HTTPRequestSample) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.httpRequests = append(r.httpRequests, event)
+	r.httpRequests = append(r.httpRequests, sample)
 }
 
-func (r *testRecorder) ObjectsFetched(ctx context.Context, event metrics.ObjectsFetchedEvent) {
+func (r *testRecorder) ObjectsFetched(ctx context.Context, sample metrics.ObjectsFetchedSample) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.objectsFetched = append(r.objectsFetched, event)
+	r.objectsFetched = append(r.objectsFetched, sample)
 }
 
-func (r *testRecorder) CacheAccess(ctx context.Context, event metrics.CacheAccessEvent) {
+func (r *testRecorder) CacheAccess(ctx context.Context, sample metrics.CacheAccessSample) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.cacheAccessCalls = append(r.cacheAccessCalls, event)
+	r.cacheAccessCalls = append(r.cacheAccessCalls, sample)
 }
 
 // testPackfileStorage is a simple storage.PackfileStorage implementation for testing.
@@ -78,11 +78,11 @@ func TestDo_RecordsHTTPRequestMetric(t *testing.T) {
 	require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
 
 	require.Len(t, recorder.httpRequests, 1)
-	event := recorder.httpRequests[0]
-	require.Equal(t, metrics.OperationSmartInfo, event.Operation)
-	require.Equal(t, http.StatusOK, event.StatusCode)
-	require.GreaterOrEqual(t, event.Duration.Nanoseconds(), int64(0))
-	require.Equal(t, 1, event.Attempt)
+	sample := recorder.httpRequests[0]
+	require.Equal(t, metrics.OperationSmartInfo, sample.Operation)
+	require.Equal(t, http.StatusOK, sample.StatusCode)
+	require.GreaterOrEqual(t, sample.Duration.Nanoseconds(), int64(0))
+	require.Equal(t, 1, sample.Attempt)
 }
 
 func TestDo_RecordsHTTPRequestMetricPerRetryAttempt(t *testing.T) {
@@ -115,13 +115,13 @@ func TestDo_RecordsHTTPRequestMetricPerRetryAttempt(t *testing.T) {
 	require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
 
 	require.Len(t, recorder.httpRequests, 3)
-	for i, event := range recorder.httpRequests {
-		require.Equal(t, metrics.OperationSmartInfo, event.Operation)
-		require.Equal(t, i+1, event.Attempt)
+	for i, sample := range recorder.httpRequests {
+		require.Equal(t, metrics.OperationSmartInfo, sample.Operation)
+		require.Equal(t, i+1, sample.Attempt)
 		if i < 2 {
-			require.Equal(t, http.StatusInternalServerError, event.StatusCode)
+			require.Equal(t, http.StatusInternalServerError, sample.StatusCode)
 		} else {
-			require.Equal(t, http.StatusOK, event.StatusCode)
+			require.Equal(t, http.StatusOK, sample.StatusCode)
 		}
 	}
 }
@@ -154,7 +154,7 @@ func TestCheckCacheForObjects_RecordsCacheAccessMetric(t *testing.T) {
 	objects := make(map[string]*protocol.PackfileObject)
 	_, _ = client.checkCacheForObjects(ctx, FetchOptions{Want: []hash.Hash{hit, miss}}, objects, storage)
 
-	require.Equal(t, []metrics.CacheAccessEvent{{Hit: true}, {Hit: false}}, recorder.cacheAccessCalls)
+	require.Equal(t, []metrics.CacheAccessSample{{Hit: true}, {Hit: false}}, recorder.cacheAccessCalls)
 }
 
 func TestFetch_RecordsObjectsFetchedMetric(t *testing.T) {

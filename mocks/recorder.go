@@ -11,33 +11,33 @@ import (
 )
 
 type FakeRecorder struct {
-	CacheAccessStub        func(context.Context, metrics.CacheAccessEvent)
+	CacheAccessStub        func(context.Context, metrics.CacheAccessSample)
 	cacheAccessMutex       sync.RWMutex
 	cacheAccessArgsForCall []struct {
 		arg1 context.Context
-		arg2 metrics.CacheAccessEvent
+		arg2 metrics.CacheAccessSample
 	}
-	HTTPRequestStub        func(context.Context, metrics.HTTPRequestEvent)
+	HTTPRequestStub        func(context.Context, metrics.HTTPRequestSample)
 	hTTPRequestMutex       sync.RWMutex
 	hTTPRequestArgsForCall []struct {
 		arg1 context.Context
-		arg2 metrics.HTTPRequestEvent
+		arg2 metrics.HTTPRequestSample
 	}
-	ObjectsFetchedStub        func(context.Context, metrics.ObjectsFetchedEvent)
+	ObjectsFetchedStub        func(context.Context, metrics.ObjectsFetchedSample)
 	objectsFetchedMutex       sync.RWMutex
 	objectsFetchedArgsForCall []struct {
 		arg1 context.Context
-		arg2 metrics.ObjectsFetchedEvent
+		arg2 metrics.ObjectsFetchedSample
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRecorder) CacheAccess(arg1 context.Context, arg2 metrics.CacheAccessEvent) {
+func (fake *FakeRecorder) CacheAccess(arg1 context.Context, arg2 metrics.CacheAccessSample) {
 	fake.cacheAccessMutex.Lock()
 	fake.cacheAccessArgsForCall = append(fake.cacheAccessArgsForCall, struct {
 		arg1 context.Context
-		arg2 metrics.CacheAccessEvent
+		arg2 metrics.CacheAccessSample
 	}{arg1, arg2})
 	stub := fake.CacheAccessStub
 	fake.recordInvocation("CacheAccess", []interface{}{arg1, arg2})
@@ -53,24 +53,24 @@ func (fake *FakeRecorder) CacheAccessCallCount() int {
 	return len(fake.cacheAccessArgsForCall)
 }
 
-func (fake *FakeRecorder) CacheAccessCalls(stub func(context.Context, metrics.CacheAccessEvent)) {
+func (fake *FakeRecorder) CacheAccessCalls(stub func(context.Context, metrics.CacheAccessSample)) {
 	fake.cacheAccessMutex.Lock()
 	defer fake.cacheAccessMutex.Unlock()
 	fake.CacheAccessStub = stub
 }
 
-func (fake *FakeRecorder) CacheAccessArgsForCall(i int) (context.Context, metrics.CacheAccessEvent) {
+func (fake *FakeRecorder) CacheAccessArgsForCall(i int) (context.Context, metrics.CacheAccessSample) {
 	fake.cacheAccessMutex.RLock()
 	defer fake.cacheAccessMutex.RUnlock()
 	argsForCall := fake.cacheAccessArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRecorder) HTTPRequest(arg1 context.Context, arg2 metrics.HTTPRequestEvent) {
+func (fake *FakeRecorder) HTTPRequest(arg1 context.Context, arg2 metrics.HTTPRequestSample) {
 	fake.hTTPRequestMutex.Lock()
 	fake.hTTPRequestArgsForCall = append(fake.hTTPRequestArgsForCall, struct {
 		arg1 context.Context
-		arg2 metrics.HTTPRequestEvent
+		arg2 metrics.HTTPRequestSample
 	}{arg1, arg2})
 	stub := fake.HTTPRequestStub
 	fake.recordInvocation("HTTPRequest", []interface{}{arg1, arg2})
@@ -86,24 +86,24 @@ func (fake *FakeRecorder) HTTPRequestCallCount() int {
 	return len(fake.hTTPRequestArgsForCall)
 }
 
-func (fake *FakeRecorder) HTTPRequestCalls(stub func(context.Context, metrics.HTTPRequestEvent)) {
+func (fake *FakeRecorder) HTTPRequestCalls(stub func(context.Context, metrics.HTTPRequestSample)) {
 	fake.hTTPRequestMutex.Lock()
 	defer fake.hTTPRequestMutex.Unlock()
 	fake.HTTPRequestStub = stub
 }
 
-func (fake *FakeRecorder) HTTPRequestArgsForCall(i int) (context.Context, metrics.HTTPRequestEvent) {
+func (fake *FakeRecorder) HTTPRequestArgsForCall(i int) (context.Context, metrics.HTTPRequestSample) {
 	fake.hTTPRequestMutex.RLock()
 	defer fake.hTTPRequestMutex.RUnlock()
 	argsForCall := fake.hTTPRequestArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRecorder) ObjectsFetched(arg1 context.Context, arg2 metrics.ObjectsFetchedEvent) {
+func (fake *FakeRecorder) ObjectsFetched(arg1 context.Context, arg2 metrics.ObjectsFetchedSample) {
 	fake.objectsFetchedMutex.Lock()
 	fake.objectsFetchedArgsForCall = append(fake.objectsFetchedArgsForCall, struct {
 		arg1 context.Context
-		arg2 metrics.ObjectsFetchedEvent
+		arg2 metrics.ObjectsFetchedSample
 	}{arg1, arg2})
 	stub := fake.ObjectsFetchedStub
 	fake.recordInvocation("ObjectsFetched", []interface{}{arg1, arg2})
@@ -119,13 +119,13 @@ func (fake *FakeRecorder) ObjectsFetchedCallCount() int {
 	return len(fake.objectsFetchedArgsForCall)
 }
 
-func (fake *FakeRecorder) ObjectsFetchedCalls(stub func(context.Context, metrics.ObjectsFetchedEvent)) {
+func (fake *FakeRecorder) ObjectsFetchedCalls(stub func(context.Context, metrics.ObjectsFetchedSample)) {
 	fake.objectsFetchedMutex.Lock()
 	defer fake.objectsFetchedMutex.Unlock()
 	fake.ObjectsFetchedStub = stub
 }
 
-func (fake *FakeRecorder) ObjectsFetchedArgsForCall(i int) (context.Context, metrics.ObjectsFetchedEvent) {
+func (fake *FakeRecorder) ObjectsFetchedArgsForCall(i int) (context.Context, metrics.ObjectsFetchedSample) {
 	fake.objectsFetchedMutex.RLock()
 	defer fake.objectsFetchedMutex.RUnlock()
 	argsForCall := fake.objectsFetchedArgsForCall[i]
