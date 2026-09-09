@@ -46,7 +46,7 @@ func (c *rawClient) IsServerCompatible(ctx context.Context) (compatible bool, er
 	c.addDefaultHeaders(req)
 
 	// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) for GET requests
-	res, err := c.do(ctx, req)
+	res, err := c.do(ctx, "compatibility", req)
 	if err != nil {
 		return false, err
 	}

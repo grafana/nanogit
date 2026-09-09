@@ -49,7 +49,7 @@ func (c *rawClient) SmartInfo(ctx context.Context, service string) error {
 	c.addDefaultHeaders(req)
 
 	// Retries on network errors, 5xx server errors, and 429 (Too Many Requests) for GET requests
-	res, err := c.do(ctx, req)
+	res, err := c.do(ctx, "smart-info", req)
 
 	if err != nil {
 		return err

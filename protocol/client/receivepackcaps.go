@@ -45,7 +45,7 @@ func (c *rawClient) FetchReceivePackCapabilities(ctx context.Context) (caps []pr
 	// the server fall back to v1.
 	req.Header.Del("Git-Protocol")
 
-	res, err := c.do(ctx, req)
+	res, err := c.do(ctx, "receive-pack-capabilities", req)
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -42,6 +43,7 @@ type FetchOptions struct {
 
 func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
+	recorder := metrics.FromContext(ctx)
 	logger.Debug("Fetch", "wantCount", len(opts.Want), "noCache", opts.NoCache)
 
 	objects := make(map[string]*protocol.PackfileObject)
@@ -72,10 +74,17 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 		}()
 	}
 
+	objectsBefore := len(objects)
 	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
 	if err != nil {
 		return nil, err
 	}
+
+	var bytesRead int64
+	if responseReader != nil {
+		bytesRead = responseReader.n
+	}
+	recorder.ObjectsFetched(len(objects)-objectsBefore, bytesRead)
 
 	logger.Debug("Fetch completed", "totalObjects", len(objects))
 	return objects, nil
@@ -84,6 +93,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 // checkCacheForObjects checks if objects are available in cache and returns cached objects
 func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (bool, FetchOptions) {
 	logger := log.FromContext(ctx)
+	recorder := metrics.FromContext(ctx)
 
 	if storage == nil || opts.NoCache {
 		return false, opts
@@ -92,6 +102,7 @@ func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions,
 	pending := make([]hash.Hash, 0, len(opts.Want))
 	for _, want := range opts.Want {
 		obj, ok := storage.Get(want)
+		recorder.CacheAccess(ok)
 		if !ok {
 			pending = append(pending, want)
 		} else {
@@ -193,25 +204,43 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 // any active streaming socket.) The oversize-cap path makes this more
 // reachable since truncated-by-cap responses surface as parse errors
 // while the underlying body still has unread bytes.
-func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (io.ReadCloser, *protocol.FetchResponse, error) {
+func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (*countingReadCloser, *protocol.FetchResponse, error) {
 	logger := log.FromContext(ctx)
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	responseReader = newLimitedReadCloser(responseReader, maxBytes, "fetch")
+	countingReader := newCountingReadCloser(newLimitedReadCloser(responseReader, maxBytes, "fetch"))
 
-	parser := protocol.NewParser(responseReader)
+	parser := protocol.NewParser(countingReader)
 	response, err := protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
-		if closeErr := responseReader.Close(); closeErr != nil {
+		if closeErr := countingReader.Close(); closeErr != nil {
 			logger.Error("error closing fetch response body after parse failure", "error", closeErr)
 		}
 		return nil, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
 
-	return responseReader, response, nil
+	return countingReader, response, nil
+}
+
+// countingReadCloser wraps a response body to track the number of bytes
+// read from it, so Fetch can report ObjectsFetched byte counts without
+// threading a counter through the packfile parser.
+type countingReadCloser struct {
+	io.ReadCloser
+	n int64
+}
+
+func newCountingReadCloser(rc io.ReadCloser) *countingReadCloser {
+	return &countingReadCloser{ReadCloser: rc}
+}
+
+func (c *countingReadCloser) Read(p []byte) (int, error) {
+	n, err := c.ReadCloser.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // allWantedObjectsCollected reports whether the read loop has seen every

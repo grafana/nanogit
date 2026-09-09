@@ -32,7 +32,7 @@ func (c *rawClient) UploadPack(ctx context.Context, data io.Reader) (response io
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	c.addDefaultHeaders(req)
 
-	res, err := c.do(ctx, req)
+	res, err := c.do(ctx, "upload-pack", req)
 
 	if err != nil {
 		return nil, err
