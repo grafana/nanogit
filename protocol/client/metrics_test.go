@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/metrics"
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/retry"
@@ -206,4 +208,86 @@ func TestFetch_RecordsObjectsFetchedMetric(t *testing.T) {
 	require.Len(t, recorder.objectsFetched, 1)
 	require.Equal(t, 1, recorder.objectsFetched[0].Count)
 	require.Greater(t, recorder.objectsFetched[0].Bytes, int64(0))
+}
+
+func TestFetch_RecordsObjectsFetchedOnMidStreamFailure(t *testing.T) {
+	t.Parallel()
+
+	// Same corrupt-packfile shape as TestFetch_CorruptPackfile in
+	// fetch_test.go: a single object whose zlib stream is invalid,
+	// causing processPackfileResponse to fail before any object is
+	// successfully parsed. ObjectsFetched must still fire, reporting
+	// zero objects but the bytes read before the failure.
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	pack := []byte("PACK" +
+		"\x00\x00\x00\x02" + // version 2
+		"\x00\x00\x00\x01" + // 1 object
+		"\x33" + // blob, size 3
+		"\xff\xff") // invalid zlib stream
+	writePkt(append([]byte{1}, pack...))
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write(body.Bytes()); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	recorder := &testRecorder{}
+	ctx := metrics.ToContext(context.Background(), recorder)
+
+	client, err := NewRawClient(server.URL + "/repo")
+	require.NoError(t, err)
+
+	want, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+
+	_, err = client.Fetch(ctx, FetchOptions{Want: []hash.Hash{want}, Done: true})
+	require.Error(t, err)
+
+	require.Len(t, recorder.objectsFetched, 1,
+		"ObjectsFetched must fire even when the fetch fails mid-stream")
+	require.Equal(t, 0, recorder.objectsFetched[0].Count,
+		"the corrupt object never parsed, so no objects were collected")
+	require.Greater(t, recorder.objectsFetched[0].Bytes, int64(0),
+		"bytes read before the failure must still be reported")
+}
+
+func TestDo_RecordsStatusCodeWhenClientReturnsResponseAndError(t *testing.T) {
+	t.Parallel()
+
+	// http.Client.Do returns a non-nil Response alongside a non-nil
+	// error specifically when CheckRedirect rejects a redirect. do()
+	// must preserve that response's status code rather than reporting
+	// the zero value, which is reserved for "no response was received
+	// at all".
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/elsewhere", http.StatusFound)
+	}))
+	t.Cleanup(server.Close)
+
+	stopRedirect := errors.New("stop redirect")
+	httpClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return stopRedirect
+		},
+	}
+
+	recorder := &testRecorder{}
+	ctx := metrics.ToContext(context.Background(), recorder)
+
+	client, err := NewRawClient(server.URL+"/repo", options.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	err = client.SmartInfo(ctx, "git-upload-pack")
+	require.Error(t, err)
+
+	require.Len(t, recorder.httpRequests, 1)
+	require.Equal(t, http.StatusFound, recorder.httpRequests[0].StatusCode)
 }

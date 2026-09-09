@@ -61,33 +61,34 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
+	objectsBefore := len(objects)
 	responseReader, response, err := c.sendFetchRequest(ctx, pkt, pendingOpts.MaxResponseBytes)
-	if err != nil {
-		return nil, err
-	}
-
 	if responseReader != nil {
 		defer func() {
 			if closeErr := responseReader.Close(); closeErr != nil {
 				logger.Error("error closing response reader", "error", closeErr)
 			}
 		}()
+		// Report whatever network activity occurred even if the fetch
+		// ultimately fails below: a malformed, truncated, oversized, or
+		// mid-stream-failing response still consumed network bytes and
+		// may have parsed some objects before failing. Deferred so it
+		// fires exactly once regardless of which return statement runs.
+		defer func() {
+			recorder.ObjectsFetched(ctx, metrics.ObjectsFetchedSample{
+				Count: len(objects) - objectsBefore,
+				Bytes: responseReader.n,
+			})
+		}()
 	}
-
-	objectsBefore := len(objects)
-	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	var bytesRead int64
-	if responseReader != nil {
-		bytesRead = responseReader.n
+	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
+	if err != nil {
+		return nil, err
 	}
-	recorder.ObjectsFetched(ctx, metrics.ObjectsFetchedSample{
-		Count: len(objects) - objectsBefore,
-		Bytes: bytesRead,
-	})
 
 	logger.Debug("Fetch completed", "totalObjects", len(objects))
 	return objects, nil
@@ -199,16 +200,14 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 // sendFetchRequest sends the fetch request and parses the response.
 // maxBytes caps the response body before parsing; 0 disables the cap.
 //
-// On a parse error the response body is closed before returning so it
-// is not leaked: the caller's "responseReader != nil" defer is skipped
-// because we return a nil reader on the error path. (Closing here does
-// NOT enable HTTP connection reuse — net/http requires the body to be
-// read to EOF for that — but it does release the body's resources and
-// any active streaming socket.) The oversize-cap path makes this more
-// reachable since truncated-by-cap responses surface as parse errors
-// while the underlying body still has unread bytes.
+// On a parse error the countingReadCloser is still returned (non-nil)
+// alongside the error, so the caller's single "responseReader != nil"
+// defer closes it and reports however many bytes were read before the
+// failure — this function itself does not close it. The oversize-cap
+// path makes a parse-time failure more reachable, since a
+// truncated-by-cap response surfaces as a parse error while the
+// underlying body still has unread bytes.
 func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (*countingReadCloser, *protocol.FetchResponse, error) {
-	logger := log.FromContext(ctx)
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, nil, fmt.Errorf("sending commands: %w", err)
@@ -219,10 +218,7 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	parser := protocol.NewParser(countingReader)
 	response, err := protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
-		if closeErr := countingReader.Close(); closeErr != nil {
-			logger.Error("error closing fetch response body after parse failure", "error", closeErr)
-		}
-		return nil, nil, fmt.Errorf("parsing fetch response stream: %w", err)
+		return countingReader, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
 
 	return countingReader, response, nil

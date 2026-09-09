@@ -38,6 +38,11 @@ import (
 // not a signal to cancel or delay work. Recorder methods are called inline
 // on the request path and must return promptly.
 //
+// A Client is safe for concurrent use by multiple goroutines, and the same
+// Recorder can be shared across all of them via one context (or reused
+// across multiple contexts); implementations must therefore be safe for
+// concurrent calls.
+//
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../internal/tools/fake_header.txt -o ../mocks/recorder.go . Recorder
 type Recorder interface {
 	// HTTPRequest reports the outcome of a single HTTP request/response
@@ -62,8 +67,14 @@ type HTTPRequestSample struct {
 	// StatusCode is the HTTP status code, or 0 if the request failed
 	// before a response was received.
 	StatusCode int
-	// Duration is the wall-clock time of this single attempt (not the
-	// total across retries).
+	// Duration is the wall-clock time from sending the request to
+	// receiving the response status line and headers for this single
+	// attempt (not the total across retries). For upload-pack and
+	// receive-pack, the response/request body — which carries the
+	// packfile and can be the slowest part of the operation — is read
+	// separately afterwards, so Duration does not include it. Time the
+	// enclosing Fetch/Push call yourself if you need full-transfer
+	// latency.
 	Duration time.Duration
 	// Attempt is the 1-indexed attempt number, so callers can derive a
 	// retry count from repeated calls with Attempt > 1.
@@ -71,11 +82,17 @@ type HTTPRequestSample struct {
 }
 
 // ObjectsFetchedSample describes objects retrieved over the network by a
-// single Fetch call.
+// single Fetch call. It is reported once a response body is being read,
+// even if the fetch ultimately fails (a malformed, truncated, oversized,
+// or mid-stream-failing response still consumed network bytes and may
+// have parsed some objects before failing) — Count and Bytes reflect
+// however much was read before any such failure.
 type ObjectsFetchedSample struct {
-	// Count is the number of packfile objects parsed from the response.
+	// Count is the number of packfile objects parsed from the response
+	// before the fetch completed or failed.
 	Count int
-	// Bytes is the number of response bytes read.
+	// Bytes is the number of response bytes read before the fetch
+	// completed or failed.
 	Bytes int64
 }
 

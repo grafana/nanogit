@@ -207,10 +207,20 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 
 		res, err := c.client.Do(req)
 		if err != nil {
+			// A non-nil res alongside a non-nil err only happens when
+			// CheckRedirect rejects a redirect (net/http guarantees
+			// res.Body is already closed in that case); preserve its
+			// status rather than reporting the zero value, which is
+			// reserved for "no response was received at all".
+			var statusCode int
+			if res != nil {
+				statusCode = res.StatusCode
+			}
 			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
-				Operation: operation,
-				Duration:  time.Since(start),
-				Attempt:   attempt,
+				Operation:  operation,
+				StatusCode: statusCode,
+				Duration:   time.Since(start),
+				Attempt:    attempt,
 			})
 			return nil, err
 		}
