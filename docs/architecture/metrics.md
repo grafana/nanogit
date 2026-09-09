@@ -63,6 +63,10 @@ An OpenTelemetry bridge looks the same, except each method calls `r.counter.Add(
 
 See `metrics.ExampleToContext` on [pkg.go.dev](https://pkg.go.dev/github.com/grafana/nanogit/metrics#example-ToContext) for a runnable minimal recorder.
 
+## Why context, not a client option
+
+`options.Option` (`WithBasicAuth`, `WithLimits`, ...) configures connection identity once at construction and is fixed for that `Client`'s lifetime. `Recorder` reports *how an operation behaved*, not *which repo/credentials to use* — the same category as `Logger` and `Retrier`, which are also context-injected rather than options. A `Client` is designed to be driven concurrently by multiple goroutines (see the capability-negotiation lock in `client.go`), so context lets each caller supply its own Recorder — or none — per call, with no shared mutable state on the Client and no need for a second Client instance just to change what gets reported.
+
 ## Best practices
 
 - Keep `Recorder` methods fast and non-blocking — they run inline on the request path.
