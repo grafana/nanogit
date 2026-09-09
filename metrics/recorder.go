@@ -3,9 +3,16 @@
 // an implementation. Attach a recorder with ToContext; nanogit retrieves it
 // with FromContext and falls back to a NoopRecorder when none is set.
 //
+//	ctx := metrics.ToContext(context.Background(), myRecorder)
+//	client, err := nanogit.NewHTTPClient(repo, opts...)
+//	ref, err := client.GetRef(ctx, "refs/heads/main")
+//
 // nanogit does not depend on any particular metrics backend (Prometheus,
 // OpenTelemetry, etc.). Callers implement Recorder and bridge its calls to
-// whichever backend they already use, the same way they bridge log.Logger.
+// whichever backend they already use, the same way they bridge log.Logger —
+// see the ExampleToContext function in this package for a minimal adapter,
+// and https://grafana.github.io/nanogit/architecture/metrics for a full
+// guide with Prometheus and OpenTelemetry bridges.
 package metrics
 
 import "time"
