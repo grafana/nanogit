@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "vitepress": "1.6.4",
-    "vue": "3.5.41"
+    "vue": "3.5.42"
   },
   "overrides": {
     "esbuild": "0.28.2"
