@@ -15,7 +15,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
@@ -185,7 +187,11 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 //
 // The response body is automatically closed if the server is unavailable.
 // The context is automatically wrapped with an HTTP retrier that wraps any existing retrier.
-func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {
+//
+// operation identifies the Git protocol operation for the Recorder resolved
+// from ctx (e.g. "smart-info", "upload-pack"); it has no effect on request
+// behavior.
+func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *http.Request) (*http.Response, error) {
 	// Wrap the context with a temporary error retrier unless retries are disabled
 	baseRetrier := retry.FromContext(ctx)
 	if _, ok := baseRetrier.(*retry.NoopRetrier); !ok {
@@ -193,17 +199,54 @@ func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, 
 		ctx = retry.ToContext(ctx, tempRetrier)
 	}
 
+	recorder := metrics.FromContext(ctx)
+	attempt := 0
 	return retry.Do(ctx, func() (*http.Response, error) {
+		attempt++
+		start := time.Now()
+
 		res, err := c.client.Do(req)
+		// Snapshot immediately after Do returns, before any further
+		// processing (status checks, closing the body) that would
+		// otherwise inflate this attempt's reported Duration beyond
+		// the documented time-to-headers.
+		duration := time.Since(start)
 		if err != nil {
+			// A non-nil res alongside a non-nil err only happens when
+			// CheckRedirect rejects a redirect (net/http guarantees
+			// res.Body is already closed in that case); preserve its
+			// status rather than reporting the zero value, which is
+			// reserved for "no response was received at all".
+			var statusCode int
+			if res != nil {
+				statusCode = res.StatusCode
+			}
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
+				Operation:  operation,
+				StatusCode: statusCode,
+				Duration:   duration,
+				Attempt:    attempt,
+			})
 			return nil, err
 		}
 
 		if err := CheckServerUnavailable(res); err != nil {
 			_ = res.Body.Close()
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
+				Operation:  operation,
+				StatusCode: res.StatusCode,
+				Duration:   duration,
+				Attempt:    attempt,
+			})
 			return nil, err
 		}
 
+		recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
+			Operation:  operation,
+			StatusCode: res.StatusCode,
+			Duration:   duration,
+			Attempt:    attempt,
+		})
 		return res, nil
 	})
 }

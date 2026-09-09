@@ -26,7 +26,7 @@ Grafana built nanogit to power [Git Sync](https://grafana.com/docs/grafana/lates
 - **Memory-efficient** — streaming packfile processing and configurable memory/disk/auto writing modes for bulk operations
 - **Fast** — orders of magnitude faster and leaner than a full Git implementation for common server-side operations ([benchmarks below](#how-is-it-different-from-go-git))
 - **Commit signing** — sign commits with GPG, SSH, or S/MIME keys
-- **Pluggable** — object storage (caching) and [retry policies](https://grafana.github.io/nanogit/architecture/retry) are injected via context, with sensible defaults
+- **Pluggable** — object storage (caching), [retry policies](https://grafana.github.io/nanogit/architecture/retry), and [metrics](https://grafana.github.io/nanogit/architecture/metrics) are injected via context, with sensible defaults
 
 ## When should I use it?
 
@@ -181,7 +181,7 @@ Comprehensive documentation is available at **[grafana.github.io/nanogit](https:
 
 - **[Quick Start](https://grafana.github.io/nanogit/getting-started/quick-start/)** — reading, writing, cloning, retries, and authentication
 - **[Server Compatibility](https://grafana.github.io/nanogit/getting-started/server-compatibility/)** — verify a Git server works with nanogit in four CLI commands
-- **[Architecture](https://grafana.github.io/nanogit/architecture/overview/)** — design principles, [storage backends](docs/architecture/storage.md), [retry mechanism](docs/architecture/retry.md), and [performance](docs/architecture/performance.md)
+- **[Architecture](https://grafana.github.io/nanogit/architecture/overview/)** — design principles, [storage backends](docs/architecture/storage.md), [retry mechanism](docs/architecture/retry.md), [metrics](docs/architecture/metrics.md), and [performance](docs/architecture/performance.md)
 - **[Why nanogit exists](docs/why-nanogit.md)** — the Git Sync story and who uses nanogit
 - **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** — complete API documentation
 - **[Changelog](https://grafana.github.io/nanogit/changelog/)** — version history and release notes

@@ -23,7 +23,7 @@ Grafana built nanogit to power [Git Sync](https://grafana.com/docs/grafana/lates
 - **Memory-efficient** — streaming packfile processing and configurable memory/disk/auto writing modes for bulk operations
 - **Fast** — orders of magnitude faster and leaner than a full Git implementation for common server-side operations ([benchmarks below](#how-is-it-different-from-go-git))
 - **Commit signing** — sign commits with GPG, SSH, or S/MIME keys
-- **Pluggable** — object storage (caching) and [retry policies](architecture/retry.md) are injected via context, with sensible defaults
+- **Pluggable** — object storage (caching), [retry policies](architecture/retry.md), and [metrics](architecture/metrics.md) are injected via context, with sensible defaults
 
 ## When should I use it?
 
@@ -114,6 +114,7 @@ Learn about nanogit's design and internals:
 - **[Architecture Overview](architecture/overview.md)** — core design principles and components
 - **[Storage Backend](architecture/storage.md)** — pluggable storage and writing modes
 - **[Retry Mechanism](architecture/retry.md)** — pluggable retry mechanism for robust operations
+- **[Metrics](architecture/metrics.md)** — pluggable HTTP/fetch instrumentation and how to bridge it to Prometheus or OpenTelemetry
 - **[Delta Resolution](architecture/delta-resolution.md)** — Git delta handling implementation
 - **[Performance](architecture/performance.md)** — performance characteristics and benchmarks
 - **[Learn how Git works](how-git-works.md)** — pointers to the upstream Git protocol documentation nanogit implements

@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/protocol"
 )
 
@@ -99,7 +100,7 @@ func (c *rawClient) ReceivePack(ctx context.Context, data io.Reader) (err error)
 	req.Header.Add("Content-Type", "application/x-git-receive-pack-request")
 	req.Header.Add("Accept", "application/x-git-receive-pack-result")
 
-	res, err := c.do(ctx, req)
+	res, err := c.do(ctx, metrics.OperationReceivePack, req)
 	if err != nil {
 		return err
 	}

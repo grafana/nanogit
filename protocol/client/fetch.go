@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -42,6 +43,7 @@ type FetchOptions struct {
 
 func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
+	recorder := metrics.FromContext(ctx)
 	logger.Debug("Fetch", "wantCount", len(opts.Want), "noCache", opts.NoCache)
 
 	objects := make(map[string]*protocol.PackfileObject)
@@ -60,19 +62,34 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 	c.logFetchRequest(logger, pkt, pendingOpts)
 
 	responseReader, response, err := c.sendFetchRequest(ctx, pkt, pendingOpts.MaxResponseBytes)
-	if err != nil {
-		return nil, err
-	}
-
+	var readCount int
 	if responseReader != nil {
 		defer func() {
 			if closeErr := responseReader.Close(); closeErr != nil {
 				logger.Error("error closing response reader", "error", closeErr)
 			}
 		}()
+		// Report whatever network activity occurred even if the fetch
+		// ultimately fails below: a malformed, truncated, oversized, or
+		// mid-stream-failing response still consumed network bytes and
+		// may have parsed some objects before failing. readCount is set
+		// by processPackfileResponse to the number of objects actually
+		// read off the wire — including a ref-delta that was read but
+		// whose later resolution failed — so it stays accurate even
+		// when the map of resolved objects doesn't grow. Deferred so it
+		// fires exactly once regardless of which return statement runs.
+		defer func() {
+			recorder.ObjectsFetched(ctx, metrics.ObjectsFetchedSample{
+				Count: readCount,
+				Bytes: responseReader.n,
+			})
+		}()
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
+	readCount, err = c.processPackfileResponse(ctx, response, objects, storage, pendingOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +101,7 @@ func (c *rawClient) Fetch(ctx context.Context, opts FetchOptions) (map[string]*p
 // checkCacheForObjects checks if objects are available in cache and returns cached objects
 func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (bool, FetchOptions) {
 	logger := log.FromContext(ctx)
+	recorder := metrics.FromContext(ctx)
 
 	if storage == nil || opts.NoCache {
 		return false, opts
@@ -92,6 +110,7 @@ func (c *rawClient) checkCacheForObjects(ctx context.Context, opts FetchOptions,
 	pending := make([]hash.Hash, 0, len(opts.Want))
 	for _, want := range opts.Want {
 		obj, ok := storage.Get(want)
+		recorder.CacheAccess(ctx, metrics.CacheAccessSample{Hit: ok})
 		if !ok {
 			pending = append(pending, want)
 		} else {
@@ -185,33 +204,46 @@ func (c *rawClient) logFetchRequest(logger log.Logger, pkt []byte, opts FetchOpt
 // sendFetchRequest sends the fetch request and parses the response.
 // maxBytes caps the response body before parsing; 0 disables the cap.
 //
-// On a parse error the response body is closed before returning so it
-// is not leaked: the caller's "responseReader != nil" defer is skipped
-// because we return a nil reader on the error path. (Closing here does
-// NOT enable HTTP connection reuse — net/http requires the body to be
-// read to EOF for that — but it does release the body's resources and
-// any active streaming socket.) The oversize-cap path makes this more
-// reachable since truncated-by-cap responses surface as parse errors
-// while the underlying body still has unread bytes.
-func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (io.ReadCloser, *protocol.FetchResponse, error) {
-	logger := log.FromContext(ctx)
+// On a parse error the countingReadCloser is still returned (non-nil)
+// alongside the error, so the caller's single "responseReader != nil"
+// defer closes it and reports however many bytes were read before the
+// failure — this function itself does not close it. The oversize-cap
+// path makes a parse-time failure more reachable, since a
+// truncated-by-cap response surfaces as a parse error while the
+// underlying body still has unread bytes.
+func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes int64) (*countingReadCloser, *protocol.FetchResponse, error) {
 	responseReader, err := c.UploadPack(ctx, bytes.NewReader(pkt))
 	if err != nil {
 		return nil, nil, fmt.Errorf("sending commands: %w", err)
 	}
 
-	responseReader = newLimitedReadCloser(responseReader, maxBytes, "fetch")
+	countingReader := newCountingReadCloser(newLimitedReadCloser(responseReader, maxBytes, "fetch"))
 
-	parser := protocol.NewParser(responseReader)
+	parser := protocol.NewParser(countingReader)
 	response, err := protocol.ParseFetchResponse(ctx, parser)
 	if err != nil {
-		if closeErr := responseReader.Close(); closeErr != nil {
-			logger.Error("error closing fetch response body after parse failure", "error", closeErr)
-		}
-		return nil, nil, fmt.Errorf("parsing fetch response stream: %w", err)
+		return countingReader, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
 
-	return responseReader, response, nil
+	return countingReader, response, nil
+}
+
+// countingReadCloser wraps a response body to track the number of bytes
+// read from it, so Fetch can report ObjectsFetched byte counts without
+// threading a counter through the packfile parser.
+type countingReadCloser struct {
+	io.ReadCloser
+	n int64
+}
+
+func newCountingReadCloser(rc io.ReadCloser) *countingReadCloser {
+	return &countingReadCloser{ReadCloser: rc}
+}
+
+func (c *countingReadCloser) Read(p []byte) (int, error) {
+	n, err := c.ReadCloser.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // allWantedObjectsCollected reports whether the read loop has seen every
@@ -249,8 +281,14 @@ func classifyReadObjectErr(err error, pendingWanted map[string]bool, objectsRead
 	return fmt.Errorf("reading packfile object %d: %w", objectsRead+1, err)
 }
 
-// processPackfileResponse processes the packfile response and extracts objects
-func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) error {
+// processPackfileResponse processes the packfile response and extracts
+// objects. It returns the number of objects successfully read off the wire
+// (via ReadObject) before it stopped, whether that's because the stream
+// ended normally, an early-termination condition was hit, or an error
+// occurred — including ref-deltas that were read and queued but not yet
+// resolved into objects, since a resolution failure afterwards must not
+// erase the fact that they were successfully parsed from the response.
+func (c *rawClient) processPackfileResponse(ctx context.Context, response *protocol.FetchResponse, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage, opts FetchOptions) (int, error) {
 	logger := log.FromContext(ctx)
 	// Build a set of pending wanted object hashes for quick lookup if early termination is enabled
 	// Only build this if we have specific objects we want AND NoExtraObjects is enabled
@@ -280,7 +318,7 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 			// trailing bytes after every wanted object was already
 			// collected (see classifyReadObjectErr).
 			if terr := classifyReadObjectErr(err, pendingWantedHashes, count); terr != nil {
-				return terr
+				return count, terr
 			}
 			logger.Debug("Cap reached after all wanted objects collected; stopping early",
 				"totalObjects", objectCount, "totalDeltas", totalDelta)
@@ -330,11 +368,11 @@ func (c *rawClient) processPackfileResponse(ctx context.Context, response *proto
 		logger.Debug("Resolving deltas", "deltaCount", len(deltas), "baseObjectCount", len(objects))
 		err := c.resolveDeltas(ctx, deltas, objects, storage)
 		if err != nil {
-			return fmt.Errorf("failed to resolve deltas: %w", err)
+			return count, fmt.Errorf("failed to resolve deltas: %w", err)
 		}
 	}
 
-	return nil
+	return count, nil
 }
 
 // shouldTerminateEarly deletes the just-read hash from the pending wanted
