@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -22,39 +21,27 @@ import (
 // testRecorder is a simple metrics.Recorder implementation for testing.
 type testRecorder struct {
 	mu               sync.Mutex
-	httpRequests     []httpRequestCall
-	objectsFetched   []objectsFetchedCall
-	cacheAccessCalls []bool
+	httpRequests     []metrics.HTTPRequestEvent
+	objectsFetched   []metrics.ObjectsFetchedEvent
+	cacheAccessCalls []metrics.CacheAccessEvent
 }
 
-type httpRequestCall struct {
-	operation  string
-	statusCode int
-	duration   time.Duration
-	attempt    int
-}
-
-type objectsFetchedCall struct {
-	count int
-	bytes int64
-}
-
-func (r *testRecorder) HTTPRequest(ctx context.Context, operation string, statusCode int, duration time.Duration, attempt int) {
+func (r *testRecorder) HTTPRequest(ctx context.Context, event metrics.HTTPRequestEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.httpRequests = append(r.httpRequests, httpRequestCall{operation, statusCode, duration, attempt})
+	r.httpRequests = append(r.httpRequests, event)
 }
 
-func (r *testRecorder) ObjectsFetched(ctx context.Context, count int, bytes int64) {
+func (r *testRecorder) ObjectsFetched(ctx context.Context, event metrics.ObjectsFetchedEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.objectsFetched = append(r.objectsFetched, objectsFetchedCall{count, bytes})
+	r.objectsFetched = append(r.objectsFetched, event)
 }
 
-func (r *testRecorder) CacheAccess(ctx context.Context, hit bool) {
+func (r *testRecorder) CacheAccess(ctx context.Context, event metrics.CacheAccessEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.cacheAccessCalls = append(r.cacheAccessCalls, hit)
+	r.cacheAccessCalls = append(r.cacheAccessCalls, event)
 }
 
 // testPackfileStorage is a simple storage.PackfileStorage implementation for testing.
@@ -91,11 +78,11 @@ func TestDo_RecordsHTTPRequestMetric(t *testing.T) {
 	require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
 
 	require.Len(t, recorder.httpRequests, 1)
-	call := recorder.httpRequests[0]
-	require.Equal(t, metrics.OperationSmartInfo, call.operation)
-	require.Equal(t, http.StatusOK, call.statusCode)
-	require.GreaterOrEqual(t, call.duration.Nanoseconds(), int64(0))
-	require.Equal(t, 1, call.attempt)
+	event := recorder.httpRequests[0]
+	require.Equal(t, metrics.OperationSmartInfo, event.Operation)
+	require.Equal(t, http.StatusOK, event.StatusCode)
+	require.GreaterOrEqual(t, event.Duration.Nanoseconds(), int64(0))
+	require.Equal(t, 1, event.Attempt)
 }
 
 func TestDo_RecordsHTTPRequestMetricPerRetryAttempt(t *testing.T) {
@@ -128,13 +115,13 @@ func TestDo_RecordsHTTPRequestMetricPerRetryAttempt(t *testing.T) {
 	require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
 
 	require.Len(t, recorder.httpRequests, 3)
-	for i, call := range recorder.httpRequests {
-		require.Equal(t, metrics.OperationSmartInfo, call.operation)
-		require.Equal(t, i+1, call.attempt)
+	for i, event := range recorder.httpRequests {
+		require.Equal(t, metrics.OperationSmartInfo, event.Operation)
+		require.Equal(t, i+1, event.Attempt)
 		if i < 2 {
-			require.Equal(t, http.StatusInternalServerError, call.statusCode)
+			require.Equal(t, http.StatusInternalServerError, event.StatusCode)
 		} else {
-			require.Equal(t, http.StatusOK, call.statusCode)
+			require.Equal(t, http.StatusOK, event.StatusCode)
 		}
 	}
 }
@@ -167,7 +154,7 @@ func TestCheckCacheForObjects_RecordsCacheAccessMetric(t *testing.T) {
 	objects := make(map[string]*protocol.PackfileObject)
 	_, _ = client.checkCacheForObjects(ctx, FetchOptions{Want: []hash.Hash{hit, miss}}, objects, storage)
 
-	require.Equal(t, []bool{true, false}, recorder.cacheAccessCalls)
+	require.Equal(t, []metrics.CacheAccessEvent{{Hit: true}, {Hit: false}}, recorder.cacheAccessCalls)
 }
 
 func TestFetch_RecordsObjectsFetchedMetric(t *testing.T) {
@@ -217,6 +204,6 @@ func TestFetch_RecordsObjectsFetchedMetric(t *testing.T) {
 	require.Len(t, objects, 1)
 
 	require.Len(t, recorder.objectsFetched, 1)
-	require.Equal(t, 1, recorder.objectsFetched[0].count)
-	require.Greater(t, recorder.objectsFetched[0].bytes, int64(0))
+	require.Equal(t, 1, recorder.objectsFetched[0].Count)
+	require.Greater(t, recorder.objectsFetched[0].Bytes, int64(0))
 }

@@ -3,7 +3,6 @@ package metrics_test
 import (
 	"context"
 	"sync/atomic"
-	"time"
 
 	"github.com/grafana/nanogit/metrics"
 )
@@ -18,15 +17,15 @@ type counterRecorder struct {
 	objects  atomic.Int64
 }
 
-func (c *counterRecorder) HTTPRequest(ctx context.Context, operation string, statusCode int, duration time.Duration, attempt int) {
+func (c *counterRecorder) HTTPRequest(ctx context.Context, event metrics.HTTPRequestEvent) {
 	c.requests.Add(1)
 }
 
-func (c *counterRecorder) ObjectsFetched(ctx context.Context, count int, bytes int64) {
-	c.objects.Add(int64(count))
+func (c *counterRecorder) ObjectsFetched(ctx context.Context, event metrics.ObjectsFetchedEvent) {
+	c.objects.Add(int64(event.Count))
 }
 
-func (c *counterRecorder) CacheAccess(ctx context.Context, hit bool) {}
+func (c *counterRecorder) CacheAccess(ctx context.Context, event metrics.CacheAccessEvent) {}
 
 // ExampleToContext wires a recorder into the context so nanogit operations
 // performed with that context report HTTP request and object-fetch metrics.

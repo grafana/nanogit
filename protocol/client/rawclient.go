@@ -191,7 +191,7 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 // operation identifies the Git protocol operation for the Recorder resolved
 // from ctx (e.g. "smart-info", "upload-pack"); it has no effect on request
 // behavior.
-func (c *rawClient) do(ctx context.Context, operation string, req *http.Request) (*http.Response, error) {
+func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *http.Request) (*http.Response, error) {
 	// Wrap the context with a temporary error retrier unless retries are disabled
 	baseRetrier := retry.FromContext(ctx)
 	if _, ok := baseRetrier.(*retry.NoopRetrier); !ok {
@@ -207,17 +207,31 @@ func (c *rawClient) do(ctx context.Context, operation string, req *http.Request)
 
 		res, err := c.client.Do(req)
 		if err != nil {
-			recorder.HTTPRequest(ctx, operation, 0, time.Since(start), attempt)
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestEvent{
+				Operation: operation,
+				Duration:  time.Since(start),
+				Attempt:   attempt,
+			})
 			return nil, err
 		}
 
 		if err := CheckServerUnavailable(res); err != nil {
 			_ = res.Body.Close()
-			recorder.HTTPRequest(ctx, operation, res.StatusCode, time.Since(start), attempt)
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestEvent{
+				Operation:  operation,
+				StatusCode: res.StatusCode,
+				Duration:   time.Since(start),
+				Attempt:    attempt,
+			})
 			return nil, err
 		}
 
-		recorder.HTTPRequest(ctx, operation, res.StatusCode, time.Since(start), attempt)
+		recorder.HTTPRequest(ctx, metrics.HTTPRequestEvent{
+			Operation:  operation,
+			StatusCode: res.StatusCode,
+			Duration:   time.Since(start),
+			Attempt:    attempt,
+		})
 		return res, nil
 	})
 }

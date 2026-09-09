@@ -6,21 +6,23 @@ These metrics are scoped to what only nanogit can see: HTTP timing/retries, fetc
 
 ```go
 type Recorder interface {
-    HTTPRequest(ctx context.Context, operation Operation, statusCode int, duration time.Duration, attempt int)
-    ObjectsFetched(ctx context.Context, count int, bytes int64)
-    CacheAccess(ctx context.Context, hit bool)
+    HTTPRequest(ctx context.Context, event HTTPRequestEvent)
+    ObjectsFetched(ctx context.Context, event ObjectsFetchedEvent)
+    CacheAccess(ctx context.Context, event CacheAccessEvent)
 }
 ```
 
+Each method takes a single event struct rather than positional arguments, so nanogit can add fields to an event in a future minor version without breaking existing `Recorder` implementations.
+
 ## Reference
 
-| Event | Fires | Arguments |
-| ----- | ----- | --------- |
-| `HTTPRequest` | Once per HTTP attempt (a retried request fires once per attempt) | `operation`: one of the `metrics.Operation*` constants (`OperationSmartInfo`, `OperationUploadPack`, `OperationReceivePack`, `OperationReceivePackCapabilities`, `OperationCompatibility`) · `statusCode`: HTTP status, or `0` on a pre-response failure · `duration`: this attempt's wall-clock time · `attempt`: 1-indexed; `> 1` means a retry |
-| `ObjectsFetched` | Once per `Fetch` that reaches the network | `count`: objects parsed from the response (excludes cache hits) · `bytes`: response bytes read |
-| `CacheAccess` | Once per object looked up in the packfile cache, before a network fetch | `hit`: `true` if served from `storage.PackfileStorage`. Not fired when no storage is configured or `FetchOptions.NoCache` is set |
+| Event | Fields | Fires |
+| ----- | ------ | ----- |
+| `HTTPRequestEvent` | `Operation` (one of the `metrics.Operation*` constants: `OperationSmartInfo`, `OperationUploadPack`, `OperationReceivePack`, `OperationReceivePackCapabilities`, `OperationCompatibility`) · `StatusCode` (HTTP status, or `0` on a pre-response failure) · `Duration` (this attempt's wall-clock time) · `Attempt` (1-indexed; `> 1` means a retry) | Once per HTTP attempt — a retried request fires once per attempt |
+| `ObjectsFetchedEvent` | `Count` (objects parsed from the response, excludes cache hits) · `Bytes` (response bytes read) | Once per `Fetch` that reaches the network |
+| `CacheAccessEvent` | `Hit` (`true` if served from `storage.PackfileStorage`) | Once per object looked up in the packfile cache, before a network fetch. Not fired when no storage is configured or `FetchOptions.NoCache` is set |
 
-All three take `ctx` first — not to cancel or delay work (implementations must return promptly), but so a bridge can attach trace-correlated data, e.g. OpenTelemetry's `Record`/`Add` require a context for exemplars.
+All three methods take `ctx` first — not to cancel or delay work (implementations must return promptly), but so a bridge can attach trace-correlated data, e.g. OpenTelemetry's `Record`/`Add` require a context for exemplars.
 
 ## Plugging in a recorder
 
@@ -40,16 +42,16 @@ type PrometheusRecorder struct {
     cacheMisses     prometheus.Counter
 }
 
-func (r *PrometheusRecorder) HTTPRequest(ctx context.Context, operation metrics.Operation, statusCode int, duration time.Duration, attempt int) {
-    r.requestDuration.WithLabelValues(operation, strconv.Itoa(statusCode)).Observe(duration.Seconds())
+func (r *PrometheusRecorder) HTTPRequest(ctx context.Context, event metrics.HTTPRequestEvent) {
+    r.requestDuration.WithLabelValues(event.Operation, strconv.Itoa(event.StatusCode)).Observe(event.Duration.Seconds())
 }
 
-func (r *PrometheusRecorder) ObjectsFetched(ctx context.Context, count int, bytes int64) {
-    r.objectsFetched.Add(float64(count))
+func (r *PrometheusRecorder) ObjectsFetched(ctx context.Context, event metrics.ObjectsFetchedEvent) {
+    r.objectsFetched.Add(float64(event.Count))
 }
 
-func (r *PrometheusRecorder) CacheAccess(ctx context.Context, hit bool) {
-    if hit {
+func (r *PrometheusRecorder) CacheAccess(ctx context.Context, event metrics.CacheAccessEvent) {
+    if event.Hit {
         r.cacheHits.Inc()
         return
     }

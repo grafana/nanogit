@@ -25,6 +25,13 @@ import (
 // aggregate and export these events (e.g. as Prometheus or OpenTelemetry
 // metrics); nanogit only reports raw values.
 //
+// Each method takes a single event struct rather than positional arguments,
+// so nanogit can add fields to an event in a future minor version without
+// breaking existing Recorder implementations — the same reason
+// log/slog.Handler takes a slog.Record instead of a parameter list.
+// Unrecognized fields should be ignored by implementations, not treated as
+// exhaustive.
+//
 // ctx is the context of the nanogit operation that triggered the event. It
 // is provided so implementations can attach trace-correlated exemplars (as
 // OpenTelemetry's metric API requires) or read request-scoped values; it is
@@ -34,20 +41,48 @@ import (
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../internal/tools/fake_header.txt -o ../mocks/recorder.go . Recorder
 type Recorder interface {
 	// HTTPRequest reports the outcome of a single HTTP request/response
-	// round trip made to the Git server. operation identifies the Git
-	// protocol operation; see the Operation* constants for the exhaustive
-	// set of values. statusCode is the HTTP status code, or 0 if the
-	// request failed before a response was received. attempt is the
-	// 1-indexed attempt number, so callers can derive a retry count from
-	// repeated calls with attempt > 1.
-	HTTPRequest(ctx context.Context, operation Operation, statusCode int, duration time.Duration, attempt int)
+	// round trip made to the Git server.
+	HTTPRequest(ctx context.Context, event HTTPRequestEvent)
 
 	// ObjectsFetched reports objects retrieved over the network by a
-	// single Fetch call. count is the number of packfile objects parsed
-	// from the response; bytes is the number of response bytes read.
-	ObjectsFetched(ctx context.Context, count int, bytes int64)
+	// single Fetch call.
+	ObjectsFetched(ctx context.Context, event ObjectsFetchedEvent)
 
 	// CacheAccess reports a single packfile object cache lookup performed
 	// before deciding whether to fetch that object over the network.
-	CacheAccess(ctx context.Context, hit bool)
+	CacheAccess(ctx context.Context, event CacheAccessEvent)
+}
+
+// HTTPRequestEvent describes the outcome of a single HTTP request/response
+// round trip made to the Git server.
+type HTTPRequestEvent struct {
+	// Operation identifies the Git protocol operation; see the Operation*
+	// constants for the exhaustive set of values.
+	Operation Operation
+	// StatusCode is the HTTP status code, or 0 if the request failed
+	// before a response was received.
+	StatusCode int
+	// Duration is the wall-clock time of this single attempt (not the
+	// total across retries).
+	Duration time.Duration
+	// Attempt is the 1-indexed attempt number, so callers can derive a
+	// retry count from repeated calls with Attempt > 1.
+	Attempt int
+}
+
+// ObjectsFetchedEvent describes objects retrieved over the network by a
+// single Fetch call.
+type ObjectsFetchedEvent struct {
+	// Count is the number of packfile objects parsed from the response.
+	Count int
+	// Bytes is the number of response bytes read.
+	Bytes int64
+}
+
+// CacheAccessEvent describes a single packfile object cache lookup
+// performed before deciding whether to fetch that object over the network.
+type CacheAccessEvent struct {
+	// Hit is true if the object was found in the configured
+	// storage.PackfileStorage.
+	Hit bool
 }

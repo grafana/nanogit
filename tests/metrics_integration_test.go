@@ -29,10 +29,10 @@ var _ = Describe("Metrics", func() {
 		Expect(exists).To(BeTrue())
 
 		Expect(recorder.HTTPRequestCallCount()).To(BeNumerically(">=", 1))
-		_, operation, statusCode, _, attempt := recorder.HTTPRequestArgsForCall(0)
-		Expect(operation).To(Equal(metrics.OperationSmartInfo))
-		Expect(statusCode).To(Equal(200))
-		Expect(attempt).To(Equal(1))
+		_, event := recorder.HTTPRequestArgsForCall(0)
+		Expect(event.Operation).To(Equal(metrics.OperationSmartInfo))
+		Expect(event.StatusCode).To(Equal(200))
+		Expect(event.Attempt).To(Equal(1))
 	})
 
 	It("records HTTPRequest with OperationUploadPack and ObjectsFetched for GetBlob", func() {
@@ -63,19 +63,19 @@ var _ = Describe("Metrics", func() {
 		Expect(recorder.HTTPRequestCallCount()).To(BeNumerically(">=", 1))
 		foundUploadPack := false
 		for i := range recorder.HTTPRequestCallCount() {
-			_, operation, statusCode, _, _ := recorder.HTTPRequestArgsForCall(i)
-			if operation == metrics.OperationUploadPack {
+			_, event := recorder.HTTPRequestArgsForCall(i)
+			if event.Operation == metrics.OperationUploadPack {
 				foundUploadPack = true
-				Expect(statusCode).To(Equal(200))
+				Expect(event.StatusCode).To(Equal(200))
 			}
 		}
 		Expect(foundUploadPack).To(BeTrue(), "expected at least one upload-pack HTTPRequest")
 
 		By("Verifying ObjectsFetched was recorded for the network fetch")
 		Expect(recorder.ObjectsFetchedCallCount()).To(Equal(1))
-		_, count, bytes := recorder.ObjectsFetchedArgsForCall(0)
-		Expect(count).To(Equal(1))
-		Expect(bytes).To(BeNumerically(">", 0))
+		_, fetchEvent := recorder.ObjectsFetchedArgsForCall(0)
+		Expect(fetchEvent.Count).To(Equal(1))
+		Expect(fetchEvent.Bytes).To(BeNumerically(">", 0))
 	})
 
 	It("records CacheAccess misses then hits across repeated fetches with shared storage", func() {
@@ -106,16 +106,16 @@ var _ = Describe("Metrics", func() {
 		_, err = client.GetBlob(metricsCtx, blobHash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(recorder.CacheAccessCallCount()).To(Equal(1))
-		_, hit := recorder.CacheAccessArgsForCall(0)
-		Expect(hit).To(BeFalse())
+		_, cacheEvent := recorder.CacheAccessArgsForCall(0)
+		Expect(cacheEvent.Hit).To(BeFalse())
 		Expect(recorder.ObjectsFetchedCallCount()).To(Equal(1))
 
 		By("Second GetBlob: cache hit, no network fetch")
 		_, err = client.GetBlob(metricsCtx, blobHash)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(recorder.CacheAccessCallCount()).To(Equal(2))
-		_, hit = recorder.CacheAccessArgsForCall(1)
-		Expect(hit).To(BeTrue())
+		_, cacheEvent = recorder.CacheAccessArgsForCall(1)
+		Expect(cacheEvent.Hit).To(BeTrue())
 		Expect(recorder.ObjectsFetchedCallCount()).To(Equal(1),
 			"a cache hit must skip the network fetch entirely, so ObjectsFetched must not fire again")
 	})
