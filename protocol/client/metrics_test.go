@@ -328,6 +328,51 @@ func (t *slowCloseTransport) RoundTrip(req *http.Request) (*http.Response, error
 	}, nil
 }
 
+// slowReadBody blocks for a delay on its first Read (simulating a slow
+// body/packfile transfer) and closes immediately, so tests can assert that
+// time spent reading the body — not closing it — is counted.
+type slowReadBody struct {
+	data  []byte
+	delay time.Duration
+	slept bool
+}
+
+func (b *slowReadBody) Read(p []byte) (int, error) {
+	if !b.slept {
+		time.Sleep(b.delay)
+		b.slept = true
+	}
+	if len(b.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data)
+	b.data = b.data[n:]
+	return n, nil
+}
+
+func (b *slowReadBody) Close() error { return nil }
+
+// slowReadTransport returns a fixed status code with a slow-reading,
+// immediately-closing body, bypassing the network entirely.
+type slowReadTransport struct {
+	statusCode int
+	body       []byte
+	readDelay  time.Duration
+}
+
+func (t *slowReadTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: t.statusCode,
+		Status:     fmt.Sprintf("%d", t.statusCode),
+		Body:       &slowReadBody{data: t.body, delay: t.readDelay},
+		Header:     make(http.Header),
+		Request:    req,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+	}, nil
+}
+
 func TestDo_DurationExcludesBodyCloseOnRetryableStatus(t *testing.T) {
 	t.Parallel()
 
@@ -358,15 +403,15 @@ func TestDo_DurationExcludesBodyCloseOnRetryableStatus(t *testing.T) {
 func TestDo_DurationIncludesBodyReadOnSuccess(t *testing.T) {
 	t.Parallel()
 
-	// A 2xx response is handed to the caller to consume, so its Duration
-	// must be measured when the caller closes the body — after the body
-	// (the packfile, for upload-pack) has been read — not snapshotted at
-	// the response headers. A slow-closing body stands in for a slow body
-	// read: if Duration were captured at headers it would be near zero,
-	// but it must be at least the close delay.
-	const closeDelay = 150 * time.Millisecond
+	// The point of the change is that Duration includes time spent reading
+	// the response body (the packfile, for upload-pack), not just the time
+	// to headers. Put the whole delay in Read and keep Close immediate, then
+	// consume the body via UploadPack: if Duration were snapshotted at
+	// headers, or measured only around Close, it would be near zero — it
+	// must be at least the read delay.
+	const readDelay = 150 * time.Millisecond
 	httpClient := &http.Client{
-		Transport: &slowCloseTransport{statusCode: http.StatusOK, closeDelay: closeDelay},
+		Transport: &slowReadTransport{statusCode: http.StatusOK, body: []byte("packfile-bytes"), readDelay: readDelay},
 	}
 
 	recorder := &testRecorder{}
@@ -375,12 +420,17 @@ func TestDo_DurationIncludesBodyReadOnSuccess(t *testing.T) {
 	client, err := NewRawClient("https://example.com/repo", options.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	// SmartInfo returns 2xx here and closes the body on the way out.
-	require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+	body, err := client.UploadPack(ctx, strings.NewReader(""))
+	require.NoError(t, err)
+
+	// Reading the body is where the slow transfer happens; only then close.
+	_, err = io.ReadAll(body)
+	require.NoError(t, err)
+	require.NoError(t, body.Close())
 
 	require.Len(t, recorder.httpRequests, 1)
-	require.GreaterOrEqual(t, recorder.httpRequests[0].Duration, closeDelay,
-		"Duration must include reading/closing the response body, not stop at headers")
+	require.GreaterOrEqual(t, recorder.httpRequests[0].Duration, readDelay,
+		"Duration must include time spent reading the response body, not stop at headers")
 }
 
 func TestFetch_RecordsObjectsFetchedCountOnDeltaResolutionFailure(t *testing.T) {
