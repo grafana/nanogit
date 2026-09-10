@@ -70,13 +70,19 @@ type HTTPRequestSample struct {
 	// Duration is the wall-clock time this single attempt took (not the
 	// total across retries). For a request that received a response,
 	// Duration spans from sending the request to closing the response
-	// body, so it includes reading the whole body — the packfile for
-	// upload-pack, which is often the slowest part of the operation — not
-	// just the time to the response status line and headers. For an
-	// attempt that failed before any response (a network error) or whose
-	// response was rejected as server-unavailable and retried, the body is
-	// never delivered to nanogit's caller, so Duration covers only the
-	// time up to that failure.
+	// body, so it captures the whole exchange rather than only the time to
+	// the response status line and headers:
+	//   - For upload-pack (fetch), the response body carries the packfile,
+	//     which nanogit's caller reads after the headers arrive and which
+	//     is often the slowest part of the operation; that read time is
+	//     included.
+	//   - For receive-pack (push), the packfile is the request body, which
+	//     the HTTP client streams to the server before returning the
+	//     response headers, so its upload time is included as well.
+	// For an attempt that failed before any response (a network error) or
+	// whose response was rejected as server-unavailable and retried, the
+	// body is never delivered to nanogit's caller, so Duration covers only
+	// the time up to that failure.
 	Duration time.Duration
 	// Attempt is the 1-indexed attempt number, so callers can derive a
 	// retry count from repeated calls with Attempt > 1.
