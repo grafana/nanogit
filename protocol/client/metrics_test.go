@@ -355,6 +355,34 @@ func TestDo_DurationExcludesBodyCloseOnRetryableStatus(t *testing.T) {
 		"Duration must be captured before the slow Body.Close(), not after")
 }
 
+func TestDo_DurationIncludesBodyReadOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	// A 2xx response is handed to the caller to consume, so its Duration
+	// must be measured when the caller closes the body — after the body
+	// (the packfile, for upload-pack) has been read — not snapshotted at
+	// the response headers. A slow-closing body stands in for a slow body
+	// read: if Duration were captured at headers it would be near zero,
+	// but it must be at least the close delay.
+	const closeDelay = 150 * time.Millisecond
+	httpClient := &http.Client{
+		Transport: &slowCloseTransport{statusCode: http.StatusOK, closeDelay: closeDelay},
+	}
+
+	recorder := &testRecorder{}
+	ctx := metrics.ToContext(context.Background(), recorder)
+
+	client, err := NewRawClient("https://example.com/repo", options.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	// SmartInfo returns 2xx here and closes the body on the way out.
+	require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+
+	require.Len(t, recorder.httpRequests, 1)
+	require.GreaterOrEqual(t, recorder.httpRequests[0].Duration, closeDelay,
+		"Duration must include reading/closing the response body, not stop at headers")
+}
+
 func TestFetch_RecordsObjectsFetchedCountOnDeltaResolutionFailure(t *testing.T) {
 	t.Parallel()
 
