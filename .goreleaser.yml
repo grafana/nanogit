@@ -89,6 +89,10 @@ release:
   # Don't create a new release, just upload assets to existing release
   mode: append
 
+  # Allow the manual "Rebuild Release Binaries" workflow to re-upload assets
+  # after a partial failure without erroring on duplicate asset names.
+  replace_existing_artifacts: true
+
   # Don't modify the release notes (semantic-release handles that)
   skip_upload: false
 

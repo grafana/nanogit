@@ -8,7 +8,11 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on PR branches, but never on main: the release
+  # workflow's wait-for-ci gate requires every check on the merge commit to
+  # conclude success/skipped, so cancelling an in-flight main run (e.g. when
+  # two PRs merge in quick succession) fails the release for that commit.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   generate:
@@ -337,9 +341,8 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for vulnerabilities
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+        # Pinned in the Makefile (single source of truth for tool versions)
+        run: make vulncheck
 
   trufflehog:
     name: Secrets Scan
@@ -370,10 +373,6 @@ jobs:
             git diff
             exit 1
           fi
-      - name: Check for unused dependencies
-        run: |
-          go install github.com/remyoudompheng/go-misc/deadcode@latest
-          deadcode ./... || true
 
   staticcheck:
     name: Static Analysis
@@ -385,9 +384,9 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for staticcheck issues
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck ./...
+        # Pinned in the Makefile (single source of truth for tool versions),
+        # so CI and `make lint-staticcheck` always run the same version
+        run: make lint-staticcheck
 
   test-clone-perf:
     name: Clone Performance Tests
