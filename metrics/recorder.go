@@ -67,14 +67,22 @@ type HTTPRequestSample struct {
 	// StatusCode is the HTTP status code, or 0 if the request failed
 	// before a response was received.
 	StatusCode int
-	// Duration is the wall-clock time from sending the request to
-	// receiving the response status line and headers for this single
-	// attempt (not the total across retries). For upload-pack and
-	// receive-pack, the response/request body — which carries the
-	// packfile and can be the slowest part of the operation — is read
-	// separately afterwards, so Duration does not include it. Time the
-	// enclosing Fetch/Push call yourself if you need full-transfer
-	// latency.
+	// Duration is the wall-clock time this single attempt took (not the
+	// total across retries). For a request that received a response,
+	// Duration spans from sending the request to closing the response
+	// body, so it captures the whole exchange rather than only the time to
+	// the response status line and headers:
+	//   - For upload-pack (fetch), the response body carries the packfile,
+	//     which nanogit's caller reads after the headers arrive and which
+	//     is often the slowest part of the operation; that read time is
+	//     included.
+	//   - For receive-pack (push), the packfile is the request body, which
+	//     the HTTP client streams to the server before returning the
+	//     response headers, so its upload time is included as well.
+	// For an attempt that failed before any response (a network error) or
+	// whose response was rejected as server-unavailable and retried, the
+	// body is never delivered to nanogit's caller, so Duration covers only
+	// the time up to that failure.
 	Duration time.Duration
 	// Attempt is the 1-indexed attempt number, so callers can derive a
 	// retry count from repeated calls with Attempt > 1.

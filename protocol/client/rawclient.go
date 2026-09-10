@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/grafana/nanogit/metrics"
@@ -206,11 +207,13 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 		start := time.Now()
 
 		res, err := c.client.Do(req)
-		// Snapshot immediately after Do returns, before any further
-		// processing (status checks, closing the body) that would
-		// otherwise inflate this attempt's reported Duration beyond
-		// the documented time-to-headers.
-		duration := time.Since(start)
+		// Snapshot immediately after Do returns for the paths that report
+		// inline below (network failure and server-unavailable). Those
+		// discard the body without handing it to the caller, so the only
+		// meaningful duration is up to this point — and snapshotting here
+		// keeps a slow Body.Close() (e.g. draining a large unread body)
+		// from inflating it.
+		headersDuration := time.Since(start)
 		if err != nil {
 			// A non-nil res alongside a non-nil err only happens when
 			// CheckRedirect rejects a redirect (net/http guarantees
@@ -224,7 +227,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation:  operation,
 				StatusCode: statusCode,
-				Duration:   duration,
+				Duration:   headersDuration,
 				Attempt:    attempt,
 			})
 			return nil, err
@@ -235,18 +238,48 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation:  operation,
 				StatusCode: res.StatusCode,
-				Duration:   duration,
+				Duration:   headersDuration,
 				Attempt:    attempt,
 			})
 			return nil, err
 		}
 
-		recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
+		// The request got a response the caller will consume. Defer the
+		// sample until that caller closes the body so Duration covers the
+		// whole request — including reading the response body, which for
+		// upload-pack is the packfile and often the slowest part — rather
+		// than only the time to headers. Every do() caller closes the
+		// returned body exactly once (on both the success and non-2xx
+		// paths), so this fires exactly once.
+		sample := metrics.HTTPRequestSample{
 			Operation:  operation,
 			StatusCode: res.StatusCode,
-			Duration:   duration,
 			Attempt:    attempt,
-		})
+		}
+		res.Body = &recordOnCloseBody{
+			ReadCloser: res.Body,
+			record: func() {
+				sample.Duration = time.Since(start)
+				recorder.HTTPRequest(ctx, sample)
+			},
+		}
 		return res, nil
 	})
+}
+
+// recordOnCloseBody wraps a response body so a metrics callback fires when
+// the body is closed rather than when the response headers arrived. do()
+// uses it to make HTTPRequestSample.Duration span the full request
+// (send → body read → close) for requests whose body the caller consumes.
+// record runs at most once even if Close is called more than once.
+type recordOnCloseBody struct {
+	io.ReadCloser
+	once   sync.Once
+	record func()
+}
+
+func (b *recordOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.once.Do(b.record)
+	return err
 }
