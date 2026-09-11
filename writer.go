@@ -906,6 +906,22 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		return nil, fmt.Errorf("build pending trees: %w", err)
 	}
 
+	if w.lastTree.Hash.Is(w.lastCommit.Tree) {
+		// Tree construction may have staged blobs and trees even though the
+		// resulting tree is identical to the parent. Discard those objects so a
+		// follow-up Push reports ErrNothingToPush and later commits start clean.
+		cleanupErr := w.writer.Cleanup()
+		caps, capsErr := w.client.effectiveReceivePackCapabilities(ctx)
+		if capsErr != nil {
+			return nil, fmt.Errorf("resolve receive-pack capabilities after unchanged tree: %w", capsErr)
+		}
+		w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
+		if cleanupErr != nil {
+			return nil, fmt.Errorf("cleanup packfile after unchanged tree: %w", cleanupErr)
+		}
+		return nil, ErrNothingToCommit
+	}
+
 	if !w.writer.HasObjects() {
 		return nil, ErrNothingToCommit
 	}
