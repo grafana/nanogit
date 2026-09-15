@@ -226,7 +226,7 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	// maxBytes above, which caps the compressed wire response, this defends
 	// against decompression bombs that fit under the wire cap but inflate to
 	// gigabytes.
-	response, err := protocol.ParseFetchResponseWithOptions(ctx, parser, protocol.WithMaxObjectSize(c.limits.MaxObjectDecodedBytes))
+	response, err := protocol.ParseFetchResponseWithOptions(ctx, parser, protocol.WithMaxDecodedObjectBytes(c.limits.MaxObjectDecodedBytes))
 	if err != nil {
 		return countingReader, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
@@ -511,16 +511,16 @@ func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.Pack
 	// The direct-inflation path caps a single object at readObject time, but a
 	// small delta made mostly of copy commands can amplify an in-bounds base
 	// into a much larger object. The delta header declares the reconstructed
-	// size (TargetLength) and ApplyDelta's output is bounded by it, so checking
-	// it here rejects a delta bomb before ApplyDelta allocates — mirroring the
+	// size (TargetLength), which ApplyDelta enforces exactly, so checking it
+	// here rejects a delta bomb before ApplyDelta allocates — mirroring the
 	// pre-allocation check on directly inflated objects. Returned as a fatal
 	// error so the resolution loop stops instead of re-applying the delta.
-	if maxObjectSize := effectiveMaxObjectSize(c.limits.MaxObjectDecodedBytes); delta.Delta.TargetLength > uint64(maxObjectSize) {
+	if maxDecodedObjectBytes := effectiveMaxDecodedObjectBytes(c.limits.MaxObjectDecodedBytes); delta.Delta.TargetLength > uint64(maxDecodedObjectBytes) {
 		reported := int64(delta.Delta.TargetLength)
 		if delta.Delta.TargetLength > math.MaxInt64 {
 			reported = math.MaxInt64
 		}
-		return &protocol.ObjectTooLargeError{Size: reported, Limit: maxObjectSize}
+		return &protocol.ObjectTooLargeError{Size: reported, Limit: maxDecodedObjectBytes}
 	}
 
 	// Apply the delta to the base object
@@ -556,10 +556,10 @@ func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.Pack
 	return nil
 }
 
-// effectiveMaxObjectSize resolves the decoded-object cap the same way
+// effectiveMaxDecodedObjectBytes resolves the decoded-object cap the same way
 // ParsePackfile does: a positive configured limit wins, otherwise nanogit's
 // built-in default applies so decoded-size protection is never fully off.
-func effectiveMaxObjectSize(limit int64) int64 {
+func effectiveMaxDecodedObjectBytes(limit int64) int64 {
 	if limit > 0 {
 		return limit
 	}

@@ -48,10 +48,10 @@ type Delta struct {
 	Parent               string
 	ExpectedSourceLength uint64
 	// TargetLength is the declared decoded size, in bytes, of the object the
-	// delta reconstructs (the second size in the delta header). ApplyDelta's
-	// output is bounded by it, so callers can reject an over-large
-	// reconstruction before applying the delta (see ApplyDelta / the
-	// decoded-object cap).
+	// delta reconstructs (the second size in the delta header). ApplyDelta
+	// enforces it exactly (rejecting an over- or under-length result), so a
+	// caller can reject an over-large reconstruction up front by checking
+	// TargetLength against the decoded-object cap before applying the delta.
 	TargetLength uint64
 	// Changes contains all the modifications to do in order.
 	//

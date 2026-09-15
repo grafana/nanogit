@@ -196,7 +196,7 @@ func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchRes
 
 // ParseFetchResponseWithOptions is ParseFetchResponse with configurable
 // PackfileOptions applied to the embedded packfile parser, e.g.
-// WithMaxObjectSize to change the decoded-object cap.
+// WithMaxDecodedObjectBytes to change the decoded-object cap.
 func ParseFetchResponseWithOptions(ctx context.Context, parser *Parser, packOpts ...PackfileOption) (response *FetchResponse, err error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Starting fetch response parsing")
