@@ -264,6 +264,32 @@ func TestReadObject_WithMaxDecodedObjectBytes(t *testing.T) {
 	})
 }
 
+func TestReadObject_SizeVarintTooLong(t *testing.T) {
+	t.Parallel()
+
+	var pack bytes.Buffer
+	pack.WriteString("PACK")
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+	require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
+
+	// Craft an object header whose size varint is an unbounded run of
+	// continuation bytes with a zero payload (0x80). This never grows the
+	// decoded size, so the size limit alone would never trip; only an
+	// explicit bound on the varint length stops it. Without that bound the
+	// shift would eventually overflow the size accumulator.
+	pack.WriteByte(byte(protocol.ObjectTypeBlob)<<4 | 0x80) // type + first size nibble, continuation set
+	for i := 0; i < 64; i++ {
+		pack.WriteByte(0x80)
+	}
+	pack.WriteByte(0x00) // final byte would terminate the varint
+
+	pr, err := protocol.ParsePackfile(t.Context(), &pack)
+	require.NoError(t, err)
+
+	_, err = pr.ReadObject(t.Context())
+	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
+}
+
 func TestReadObject_MaxSizeObject(t *testing.T) {
 	t.Parallel()
 

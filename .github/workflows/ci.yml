@@ -7,8 +7,16 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs share one group per branch, so a superseded push cancels the older
+  # run. main gets a group per commit SHA instead of one shared group: GitHub
+  # Actions cancels a *queued* run when a new run enters its group even with
+  # cancel-in-progress off, so three quick merges sharing one main group could
+  # still cancel the middle commit's still-pending run — leaving it without a
+  # conclusion the release workflow's wait-for-ci gate can pass. Per-SHA
+  # groups mean main commits never share a group and so can never cancel
+  # each other.
+  group: ${{ github.ref == 'refs/heads/main' && format('{0}-main-{1}', github.workflow, github.sha) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   generate:
@@ -104,6 +112,9 @@ jobs:
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg gpg-agent gpgsm openssh-keygen
       - id: get-secrets
+        # Vault OIDC is unavailable on fork PRs, so only fetch the Codecov
+        # token for pushes and same-repo PRs. Forks still run the tests below.
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: grafana/shared-workflows/actions/get-vault-secrets@2e3743a1f8abfd3e921e53a7726ec0744c11bb01 # get-vault-secrets/v2.0.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
@@ -125,6 +136,8 @@ jobs:
           CGO_ENABLED: 1
         run: make test-coverage
       - name: Upload coverage
+        # Skip on fork PRs where the Codecov token is unavailable.
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           fail_ci_if_error: true
@@ -157,175 +170,10 @@ jobs:
           CGO_ENABLED: 1
         run: make test-integration
 
-  test-github-provider:
-    name: GitHub Provider Tests
-    if: github.repository == 'grafana/nanogit'
-    runs-on: ubuntu-latest
-    container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
-    # These permissions are needed to assume roles from Github's OIDC.
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
-      - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@2e3743a1f8abfd3e921e53a7726ec0744c11bb01 # get-vault-secrets/v2.0.1
-        with:
-          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
-          repo_secrets: |
-            REPO_USER=github:REPO_USER
-            REPO_TOKEN=github:REPO_TOKEN
-            SIGN_EMAIL=signing:EMAIL
-            SIGN_GPG_KEY=signing:GPG_KEY
-            SIGN_SSH_KEY=signing:SSH_KEY
-            SIGN_SMIME_KEY=signing:SMIME_KEY
-            SIGN_SMIME_CERT=signing:SMIME_CERT
-      - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Sync vendor directory
-        run: go work vendor
-      - name: Run provider tests
-        env:
-          CGO_ENABLED: 1
-          TEST_PROVIDER: github
-          TEST_REPO: ${{ vars.GH_REPO_NAME }}
-          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
-          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
-          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
-          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
-          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
-          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
-          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
-        run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
-            exit 0
-          fi
-          make test-providers
-
-  test-gitlab-provider:
-    name: GitLab Provider Tests
-    if: github.repository == 'grafana/nanogit'
-    runs-on: ubuntu-latest
-    container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
-    # These permissions are needed to assume roles from Github's OIDC.
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
-      - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@2e3743a1f8abfd3e921e53a7726ec0744c11bb01 # get-vault-secrets/v2.0.1
-        with:
-          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
-          repo_secrets: |
-            REPO_USER=gitlab:REPO_USER
-            REPO_TOKEN=gitlab:REPO_TOKEN
-            SIGN_EMAIL=signing:EMAIL
-            SIGN_GPG_KEY=signing:GPG_KEY
-            SIGN_SSH_KEY=signing:SSH_KEY
-            SIGN_SMIME_KEY=signing:SMIME_KEY
-            SIGN_SMIME_CERT=signing:SMIME_CERT
-      - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Sync vendor directory
-        run: go work vendor
-      - name: Run provider tests
-        env:
-          CGO_ENABLED: 1
-          TEST_PROVIDER: gitlab
-          TEST_REPO: ${{ vars.GITLAB_REPO_NAME }}
-          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
-          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
-          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
-          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
-          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
-          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
-          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
-        run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
-            exit 0
-          fi
-          make test-providers
-  test-bitbucket-provider:
-    name: Bitbucket Provider Tests
-    if: github.repository == 'grafana/nanogit'
-    runs-on: ubuntu-latest
-    container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
-    # These permissions are needed to assume roles from Github's OIDC.
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Install build dependencies
-        run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
-      - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@2e3743a1f8abfd3e921e53a7726ec0744c11bb01 # get-vault-secrets/v2.0.1
-        with:
-          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
-          repo_secrets: |
-            REPO_USER=bitbucket:REPO_USER
-            REPO_TOKEN=bitbucket:REPO_TOKEN
-            SIGN_EMAIL=signing:EMAIL
-            SIGN_GPG_KEY=signing:GPG_KEY
-            SIGN_SSH_KEY=signing:SSH_KEY
-            SIGN_SMIME_KEY=signing:SMIME_KEY
-            SIGN_SMIME_CERT=signing:SMIME_CERT
-      - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Sync vendor directory
-        run: go work vendor
-      - name: Run provider tests
-        env:
-          CGO_ENABLED: 1
-          TEST_PROVIDER: bitbucket
-          TEST_REPO: ${{ vars.BITBUCKET_REPO_NAME }}
-          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
-          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
-          TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
-          TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
-          TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
-          TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
-          TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
-        run: |
-          if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
-            echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
-            exit 0
-          fi
-          make test-providers
+  # NOTE: Provider tests (GitHub/GitLab/Bitbucket) require Vault secrets and
+  # therefore live in a separate workflow (provider-tests.yml) that only runs
+  # in the trusted base-repo context. They are intentionally NOT part of CI,
+  # so they never execute untrusted fork code with secrets present.
 
   security:
     name: Security
@@ -337,9 +185,8 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for vulnerabilities
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+        # Pinned in the Makefile (single source of truth for tool versions)
+        run: make vulncheck
 
   trufflehog:
     name: Secrets Scan
@@ -370,10 +217,6 @@ jobs:
             git diff
             exit 1
           fi
-      - name: Check for unused dependencies
-        run: |
-          go install github.com/remyoudompheng/go-misc/deadcode@latest
-          deadcode ./... || true
 
   staticcheck:
     name: Static Analysis
@@ -385,9 +228,9 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for staticcheck issues
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck ./...
+        # Pinned in the Makefile (single source of truth for tool versions),
+        # so CI and `make lint-staticcheck` always run the same version
+        run: make lint-staticcheck
 
   test-clone-perf:
     name: Clone Performance Tests

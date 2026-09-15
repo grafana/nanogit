@@ -11,6 +11,7 @@ import (
 	"fmt"
 	stdhash "hash"
 	"io"
+	"math/bits"
 	"os"
 	"slices"
 	"sort"
@@ -610,6 +611,17 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	for buf[0]&0x80 == 0x80 {
 		if _, err := p.reader.Read(buf[:]); err != nil {
 			return entry, err
+		}
+
+		// A well-formed size varint for an object we accept is only a few
+		// bytes long. Cap the shift before applying it so a corrupt or
+		// malicious stream cannot send an unbounded run of continuation bytes
+		// (for example repeated 0x80) and overflow the size accumulator below.
+		// The shift used here must leave the sign bit clear: the 7-bit group
+		// occupies bits [shift, shift+6], so shift+6 must stay below the sign
+		// bit (bits.UintSize-1), i.e. shift <= bits.UintSize-8.
+		if shift > bits.UintSize-8 {
+			return entry, fmt.Errorf("%w (size varint too long)", ErrObjectTooLarge)
 		}
 
 		size += int(buf[0]&0x7f) << shift
