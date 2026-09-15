@@ -135,7 +135,7 @@ func TestFetchHonorsMaxObjectDecodedBytes(t *testing.T) {
 
 	var tooLarge *protocol.ObjectTooLargeError
 	require.True(t, errors.As(err, &tooLarge), "expected *protocol.ObjectTooLargeError, got %T: %v", err, err)
-	require.Equal(t, declaredSize, tooLarge.Size)
+	require.Equal(t, int64(declaredSize), tooLarge.Size)
 	require.Equal(t, int64(4096), tooLarge.Limit)
 	// The sentinel is preserved through the wrap for errors.Is callers.
 	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)

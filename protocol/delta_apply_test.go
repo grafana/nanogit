@@ -262,4 +262,76 @@ func TestApplyDelta(t *testing.T) {
 		expected := []byte{0xFF, 0xFE, 0xFD, 0xAA, 0xBB, 0x00, 0x01, 0x02, 0x03}
 		require.Equal(t, expected, result)
 	})
+
+	// When the delta records a target size (parseDelta always does), ApplyDelta
+	// enforces it: reconstruction can neither overrun nor fall short of the
+	// declared size, and the buffer is preallocated to it rather than to an
+	// inflatable estimate. These guard the delta path against decompression
+	// bombs (a small delta amplifying its base past the decoded-object cap).
+	t.Run("error: output exceeds declared target", func(t *testing.T) {
+		delta := &Delta{
+			ExpectedSourceLength: 5,
+			TargetLength:         3, // declares 3 bytes...
+			Changes: []DeltaChange{
+				{DeltaData: []byte("world")}, // ...but a change produces 5
+			},
+		}
+		_, err := ApplyDelta([]byte("hello"), delta)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "exceed declared target")
+	})
+
+	t.Run("error: output shorter than declared target", func(t *testing.T) {
+		delta := &Delta{
+			ExpectedSourceLength: 5,
+			TargetLength:         10, // declares 10 bytes...
+			Changes: []DeltaChange{
+				{DeltaData: []byte("ab")}, // ...but only 2 are produced
+			},
+		}
+		_, err := ApplyDelta([]byte("hello"), delta)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "does not match declared target")
+	})
+
+	t.Run("preallocation is bounded to the declared target", func(t *testing.T) {
+		// A delta made of many tiny changes must not drive a preallocation
+		// larger than the declared output. With TargetLength set, capacity is
+		// exactly the target no matter how many changes there are.
+		const target = 1000
+		changes := make([]DeltaChange, target)
+		for i := range changes {
+			changes[i] = DeltaChange{DeltaData: []byte("y")}
+		}
+		delta := &Delta{
+			ExpectedSourceLength: 1,
+			TargetLength:         target,
+			Changes:              changes,
+		}
+		result, err := ApplyDelta([]byte("x"), delta)
+		require.NoError(t, err)
+		require.Len(t, result, target)
+		require.Equal(t, target, cap(result),
+			"buffer must be preallocated to the target, not an inflatable estimate")
+	})
+}
+
+func TestParseDelta_DropsCommandThatWouldOverrunTarget(t *testing.T) {
+	t.Parallel()
+
+	// Header: source size 10, target size 10. Then a 7-byte add (fits) and a
+	// 5-byte add that would consume more than the 3 bytes still remaining in
+	// the target. The overrunning command must be dropped rather than
+	// underflowing the unsigned remaining-size counter.
+	payload := []byte{
+		0x0A,                                    // source size 10
+		0x0A,                                    // target size 10
+		0x07, 'a', 'b', 'c', 'd', 'e', 'f', 'g', // add 7 bytes
+		0x05, 'h', 'i', 'j', 'k', 'l', // add 5 bytes -> would overrun, dropped
+	}
+
+	delta, err := parseDelta("parent", payload)
+	require.NoError(t, err)
+	require.EqualValues(t, 10, delta.TargetLength)
+	require.Len(t, delta.Changes, 1, "the overrunning command must be dropped, not underflow the counter")
 }

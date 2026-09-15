@@ -200,7 +200,7 @@ func TestReadObject_TooLarge_ErrorDetails(t *testing.T) {
 	// can map it distinctly (e.g. to an HTTP 413).
 	var tooLarge *protocol.ObjectTooLargeError
 	require.ErrorAs(t, err, &tooLarge)
-	require.Equal(t, declaredSize, tooLarge.Size)
+	require.Equal(t, int64(declaredSize), tooLarge.Size)
 	require.Equal(t, int64(protocol.MaxUnpackedObjectSize), tooLarge.Limit)
 }
 
@@ -226,7 +226,7 @@ func TestReadObject_WithMaxObjectSize(t *testing.T) {
 
 	t.Run("allowed when under the configured cap", func(t *testing.T) {
 		t.Parallel()
-		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxObjectSize(2*decodedSize))
 		require.NoError(t, err)
 
@@ -237,7 +237,7 @@ func TestReadObject_WithMaxObjectSize(t *testing.T) {
 
 	t.Run("rejected when over the configured cap", func(t *testing.T) {
 		t.Parallel()
-		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxObjectSize(decodedSize-1))
 		require.NoError(t, err)
 
@@ -246,7 +246,7 @@ func TestReadObject_WithMaxObjectSize(t *testing.T) {
 
 		var tooLarge *protocol.ObjectTooLargeError
 		require.ErrorAs(t, err, &tooLarge)
-		require.Equal(t, decodedSize, tooLarge.Size)
+		require.Equal(t, int64(decodedSize), tooLarge.Size)
 		require.Equal(t, int64(decodedSize-1), tooLarge.Limit)
 	})
 
@@ -254,7 +254,7 @@ func TestReadObject_WithMaxObjectSize(t *testing.T) {
 		t.Parallel()
 		// A zero/negative override must not disable the check: the built-in
 		// MaxUnpackedObjectSize default stays in force.
-		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxObjectSize(0))
 		require.NoError(t, err)
 

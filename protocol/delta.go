@@ -118,6 +118,14 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 			break
 		}
 
+		// A command that would consume more than the target size still has
+		// left is malformed: accepting it would both overrun the declared
+		// output and underflow the unsigned counter below. Stop here and let
+		// ApplyDelta's length validation reject the (now short) result.
+		if consumedSize > deltaSize {
+			break
+		}
+
 		delta.Changes = append(delta.Changes, change)
 		deltaSize -= consumedSize
 		payload = newPayload

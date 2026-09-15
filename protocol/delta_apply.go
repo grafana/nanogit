@@ -28,21 +28,31 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 			len(baseData), delta.ExpectedSourceLength)
 	}
 
-	// Pre-allocate result buffer with estimated size
-	// This is an optimization to reduce allocations during delta application
-	var result []byte
-	estimatedSize := delta.ExpectedSourceLength
-	if len(delta.Changes) > 0 {
-		// Rough estimate: add space for new data in delta
-		estimatedSize += uint64(len(delta.Changes) * 64) // Conservative estimate
+	// Pre-allocate the result buffer to the delta's declared target size when
+	// it is known (parseDelta always records it). This both avoids repeated
+	// growth and, crucially, prevents a malformed delta from driving a huge
+	// preallocation: the previous "ExpectedSourceLength + 64*len(Changes)"
+	// estimate could be inflated far past the real output by a delta made of
+	// many tiny changes. When TargetLength is 0 (e.g. a hand-built Delta) we
+	// fall back to the source length as a conservative hint and skip the
+	// output-length guards below.
+	//
+	// Callers that decode untrusted packs (see resolveSingleDelta) reject a
+	// TargetLength over the decoded-object cap before calling ApplyDelta, so
+	// the preallocation here is bounded by that cap.
+	bounded := delta.TargetLength > 0
+	initialCap := delta.ExpectedSourceLength
+	if bounded {
+		initialCap = delta.TargetLength
 	}
-	result = make([]byte, 0, estimatedSize)
+	result := make([]byte, 0, initialCap)
 
 	// Apply each delta change sequentially
 	for i, change := range delta.Changes {
+		var chunk []byte
 		if change.DeltaData != nil {
 			// Instruction type 1: Insert new data from the delta
-			result = append(result, change.DeltaData...)
+			chunk = change.DeltaData
 		} else {
 			// Instruction type 2: Copy data from the base object
 			// Validate that the copy operation is within bounds
@@ -56,9 +66,23 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 			}
 
 			// Copy the specified range from base data
-			copyData := baseData[change.SourceOffset : change.SourceOffset+change.Length]
-			result = append(result, copyData...)
+			chunk = baseData[change.SourceOffset : change.SourceOffset+change.Length]
 		}
+
+		// Reject any change that would push the output past the declared
+		// target. This keeps a delta from amplifying its base beyond the
+		// bound that was validated against the decoded-object cap.
+		if bounded && uint64(len(result))+uint64(len(chunk)) > delta.TargetLength {
+			return nil, fmt.Errorf("delta change %d: output would exceed declared target size %d bytes", i, delta.TargetLength)
+		}
+
+		result = append(result, chunk...)
+	}
+
+	// A well-formed delta reconstructs exactly TargetLength bytes; anything
+	// else is a malformed (or truncated) delta.
+	if bounded && uint64(len(result)) != delta.TargetLength {
+		return nil, fmt.Errorf("delta output size %d does not match declared target size %d", len(result), delta.TargetLength)
 	}
 
 	return result, nil

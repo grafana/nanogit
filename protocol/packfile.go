@@ -171,8 +171,10 @@ const MaxUnpackedObjectSize = 10 * 1024 * 1024
 // declared size and the limit for callers that map it distinctly (e.g. to an
 // HTTP 413).
 type ObjectTooLargeError struct {
-	// Size is the object's declared decoded size, in bytes.
-	Size int
+	// Size is the object's declared decoded size, in bytes. A declared size
+	// larger than math.MaxInt64 is reported as math.MaxInt64 (it is
+	// necessarily over any valid limit either way).
+	Size int64
 	// Limit is the maximum allowed decoded size, in bytes.
 	Limit int64
 }
@@ -608,7 +610,7 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
 	if size < 0 || int64(size) > p.maxObjectSize {
-		return entry, &ObjectTooLargeError{Size: size, Limit: p.maxObjectSize}
+		return entry, &ObjectTooLargeError{Size: int64(size), Limit: p.maxObjectSize}
 	}
 
 	err := p.processObjectByType(entry.Object, size, buf[0])
@@ -814,7 +816,16 @@ func (p *PackfileReader) calculateObjectHash(objType ObjectType, data []byte) (h
 	return result, nil
 }
 
-func ParsePackfile(ctx context.Context, reader io.Reader, opts ...PackfileOption) (*PackfileReader, error) {
+// ParsePackfile parses a packfile from reader using default settings,
+// including the built-in MaxUnpackedObjectSize decoded-object cap. Use
+// ParsePackfileWithOptions to override the cap.
+func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
+	return ParsePackfileWithOptions(ctx, reader)
+}
+
+// ParsePackfileWithOptions is ParsePackfile with configurable PackfileOptions,
+// e.g. WithMaxObjectSize to change the decoded-object cap.
+func ParsePackfileWithOptions(ctx context.Context, reader io.Reader, opts ...PackfileOption) (*PackfileReader, error) {
 	logger := log.FromContext(ctx)
 	// Read and verify the "PACK" signature
 	signature := make([]byte, 4)

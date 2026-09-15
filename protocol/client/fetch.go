@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/metrics"
@@ -225,7 +226,7 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	// maxBytes above, which caps the compressed wire response, this defends
 	// against decompression bombs that fit under the wire cap but inflate to
 	// gigabytes.
-	response, err := protocol.ParseFetchResponse(ctx, parser, protocol.WithMaxObjectSize(c.limits.MaxObjectDecodedBytes))
+	response, err := protocol.ParseFetchResponseWithOptions(ctx, parser, protocol.WithMaxObjectSize(c.limits.MaxObjectDecodedBytes))
 	if err != nil {
 		return countingReader, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
@@ -515,7 +516,11 @@ func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.Pack
 	// pre-allocation check on directly inflated objects. Returned as a fatal
 	// error so the resolution loop stops instead of re-applying the delta.
 	if maxObjectSize := effectiveMaxObjectSize(c.limits.MaxObjectDecodedBytes); delta.Delta.TargetLength > uint64(maxObjectSize) {
-		return &protocol.ObjectTooLargeError{Size: int(delta.Delta.TargetLength), Limit: maxObjectSize}
+		reported := int64(delta.Delta.TargetLength)
+		if delta.Delta.TargetLength > math.MaxInt64 {
+			reported = math.MaxInt64
+		}
+		return &protocol.ObjectTooLargeError{Size: reported, Limit: maxObjectSize}
 	}
 
 	// Apply the delta to the base object
