@@ -22,6 +22,13 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      pr:
+        description: >-
+          PR number to test (use for fork PRs, after reviewing the diff).
+          Leave blank to test the branch selected above.
+        required: false
+        default: ""
   schedule:
     - cron: "0 3 * * *"
 
@@ -70,6 +77,13 @@ jobs:
             repo_var: BITBUCKET_REPO_NAME
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # For a manual run targeting a PR (typically a fork PR that the
+          # automatic guard skips), check out that PR's merge ref. A maintainer
+          # with write access must trigger this and is responsible for having
+          # reviewed the diff — the tests run the contributor's code with real
+          # provider credentials. For all other events, use the default ref.
+          ref: ${{ (github.event_name == 'workflow_dispatch' && inputs.pr != '') && format('refs/pull/{0}/merge', inputs.pr) || '' }}
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
