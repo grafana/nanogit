@@ -2,6 +2,17 @@ name: slash command /run-provider-tests
 
 # Ergonomic front-end to provider-tests.yml for FORK pull requests.
 #
+# Prior art — this mirrors the `/run-cloud-tests` slash command in
+# terraform-provider-grafana, adapted to nanogit's fork-safe dispatch model:
+#   - Inspiration PR:
+#     https://github.com/grafana/terraform-provider-grafana/pull/2966
+#   - Reference workflow:
+#     https://github.com/grafana/terraform-provider-grafana/blob/main/.github/workflows/slash-run-cloud-tests.yml
+# Key difference: that workflow dispatches on the PR's head *branch*, which does
+# not exist in the base repo for forks. We instead dispatch provider-tests.yml
+# with the PR number so it checks out refs/pull/<n>/merge (and we pin the
+# reviewed head SHA), never executing fork code in this comment-triggered job.
+#
 # Provider tests run repository code with real provider credentials (see
 # provider-tests.yml), so they never run automatically on fork PRs. A
 # maintainer who has reviewed the diff can trigger them from the PR itself by
