@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/grafana/nanogit/log"
 	"github.com/grafana/nanogit/metrics"
@@ -418,10 +417,7 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 
 	maxIterations := len(deltas) + 1
 	for iteration := 1; len(remaining) > 0 && iteration <= maxIterations; iteration++ {
-		resolvedCount, stillPending, err := c.resolveDeltaIteration(ctx, remaining, objects, storage)
-		if err != nil {
-			return err
-		}
+		resolvedCount, stillPending := c.resolveDeltaIteration(ctx, remaining, objects, storage)
 		remaining = stillPending
 
 		if resolvedCount == 0 && len(remaining) > 0 {
@@ -439,12 +435,8 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 	return nil
 }
 
-// resolveDeltaIteration processes one iteration of delta resolution. A non-nil
-// error is fatal and aborts resolution immediately; per-delta errors that just
-// mean "try again once more bases are known" are folded into stillPending
-// instead. An oversized reconstruction (*protocol.ObjectTooLargeError) is
-// fatal so the delta is never re-applied on a later iteration.
-func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject, error) {
+// resolveDeltaIteration processes one iteration of delta resolution
+func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject) {
 	logger := log.FromContext(ctx)
 	var stillPending []*protocol.PackfileObject
 	resolvedCount := 0
@@ -462,10 +454,6 @@ func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protoco
 		}
 
 		if err := c.resolveSingleDelta(ctx, delta, baseObj, objects, storage); err != nil {
-			var tooLarge *protocol.ObjectTooLargeError
-			if errors.As(err, &tooLarge) {
-				return resolvedCount, stillPending, err
-			}
 			logger.Debug("Failed to resolve delta", "parent", delta.Delta.Parent, "error", err)
 			stillPending = append(stillPending, delta)
 			continue
@@ -474,7 +462,7 @@ func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protoco
 		resolvedCount++
 	}
 
-	return resolvedCount, stillPending, nil
+	return resolvedCount, stillPending
 }
 
 // findBaseObject finds the base object for a delta, checking both objects map and storage
@@ -507,21 +495,11 @@ func (c *rawClient) findBaseObject(ctx context.Context, parentHash string, objec
 func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.PackfileObject, baseObj *protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) error {
 	logger := log.FromContext(ctx)
 
-	// Bound the reconstructed object's decoded size before applying the delta.
-	// The direct-inflation path caps a single object at readObject time, but a
-	// small delta made mostly of copy commands can amplify an in-bounds base
-	// into a much larger object. The delta header declares the reconstructed
-	// size (TargetLength), which ApplyDelta enforces exactly, so checking it
-	// here rejects a delta bomb before ApplyDelta allocates — mirroring the
-	// pre-allocation check on directly inflated objects. Returned as a fatal
-	// error so the resolution loop stops instead of re-applying the delta.
-	if maxDecodedObjectBytes := effectiveMaxDecodedObjectBytes(c.limits.MaxObjectDecodedBytes); delta.Delta.TargetLength > uint64(maxDecodedObjectBytes) {
-		reported := int64(delta.Delta.TargetLength)
-		if delta.Delta.TargetLength > math.MaxInt64 {
-			reported = math.MaxInt64
-		}
-		return &protocol.ObjectTooLargeError{Size: reported, Limit: maxDecodedObjectBytes}
-	}
+	// The reconstructed object's decoded size is bounded when the delta is
+	// parsed: parseDelta rejects a declared target over the decoded-object cap
+	// before this point (see PackfileReader.maxDecodedObjectBytes), and
+	// ApplyDelta enforces that declared target exactly. No size check is
+	// needed here.
 
 	// Apply the delta to the base object
 	resolvedData, err := protocol.ApplyDelta(baseObj.Data, delta.Delta)
@@ -554,16 +532,6 @@ func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.Pack
 
 	logger.Debug("Resolved delta", "hash", resolvedHash.String(), "parent", delta.Delta.Parent, "type", resolvedType)
 	return nil
-}
-
-// effectiveMaxDecodedObjectBytes resolves the decoded-object cap the same way
-// ParsePackfile does: a positive configured limit wins, otherwise nanogit's
-// built-in default applies so decoded-size protection is never fully off.
-func effectiveMaxDecodedObjectBytes(limit int64) int64 {
-	if limit > 0 {
-		return limit
-	}
-	return protocol.MaxUnpackedObjectSize
 }
 
 // createMissingBasesError creates an error for unresolvable deltas

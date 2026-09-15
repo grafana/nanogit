@@ -1,5 +1,7 @@
 package protocol
 
+import "math"
+
 // FileStatus represents the status of a file in a commit
 // Git file status codes are documented in the Git documentation:
 // https://git-scm.com/docs/git-status#_short_format
@@ -89,7 +91,14 @@ type DeltaChange struct {
 // https://git-scm.com/docs/pack-format#_deltified_representation
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
 // Review it once we have some more integration testing so that we don't break things unintentionally.
-func parseDelta(parent string, payload []byte) (*Delta, error) {
+// maxDecodedObjectBytes caps the reconstructed object's declared decoded size
+// (the delta's target size). A value <= 0 disables the check. It is enforced
+// immediately after the header is decoded — before the command loop
+// materializes any DeltaChange — so an oversized target cannot amplify memory
+// through the []DeltaChange representation, and so the cap applies to every
+// consumer (not just those that resolve deltas). Oversized targets surface as
+// *ObjectTooLargeError (which wraps ErrObjectTooLarge).
+func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*Delta, error) {
 	delta := &Delta{Parent: parent}
 
 	const minDeltaSize = 4
@@ -100,6 +109,15 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 	deltaSize, payload := deltaHeaderSize(payload)
 	originalDeltaSize := deltaSize
 	delta.TargetLength = originalDeltaSize
+
+	// Reject an oversized target up front, before allocating any DeltaChange.
+	if maxDecodedObjectBytes > 0 && delta.TargetLength > uint64(maxDecodedObjectBytes) {
+		reported := int64(delta.TargetLength)
+		if delta.TargetLength > math.MaxInt64 {
+			reported = math.MaxInt64
+		}
+		return nil, &ObjectTooLargeError{Size: reported, Limit: maxDecodedObjectBytes}
+	}
 
 	for deltaSize > 0 && deltaSize <= originalDeltaSize {
 		if len(payload) == 0 {

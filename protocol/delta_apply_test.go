@@ -330,8 +330,40 @@ func TestParseDelta_DropsCommandThatWouldOverrunTarget(t *testing.T) {
 		0x05, 'h', 'i', 'j', 'k', 'l', // add 5 bytes -> would overrun, dropped
 	}
 
-	delta, err := parseDelta("parent", payload)
+	delta, err := parseDelta("parent", payload, 0)
 	require.NoError(t, err)
 	require.EqualValues(t, 10, delta.TargetLength)
 	require.Len(t, delta.Changes, 1, "the overrunning command must be dropped, not underflow the counter")
+}
+
+func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {
+	t.Parallel()
+
+	// Header: source size 5, target size 1 MiB, then a long run of 1-byte add
+	// commands. With a small cap, parseDelta must reject on the declared target
+	// immediately — before materializing any DeltaChange for those commands.
+	payload := []byte{
+		0x05,             // source size 5
+		0x80, 0x80, 0x40, // target size 1<<20 (1 MiB)
+	}
+	for i := 0; i < 100; i++ {
+		payload = append(payload, 0x01, 'a') // add 1 byte
+	}
+
+	const cap = 4096
+	delta, err := parseDelta("parent", payload, cap)
+	require.Nil(t, delta)
+	require.ErrorIs(t, err, ErrObjectTooLarge)
+
+	var tooLarge *ObjectTooLargeError
+	require.ErrorAs(t, err, &tooLarge)
+	require.Equal(t, int64(1<<20), tooLarge.Size)
+	require.Equal(t, int64(cap), tooLarge.Limit)
+
+	// A cap of 0 disables the oversized-target check (used by direct parseDelta
+	// callers/tests). The payload here is truncated relative to its huge
+	// declared target, so parsing still fails — but not with ErrObjectTooLarge.
+	_, err = parseDelta("parent", payload, 0)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrObjectTooLarge)
 }

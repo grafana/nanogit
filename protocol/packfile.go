@@ -412,10 +412,19 @@ func (e *PackfileObject) parseCustomField(command string, data []byte) {
 	e.Commit.Fields[command] = data
 }
 
-func (e *PackfileObject) parseDelta(parent string) error {
-	var err error
-	e.Delta, err = parseDelta(parent, e.Data)
-	return eofIsUnexpected(err)
+func (e *PackfileObject) parseDelta(parent string, maxDecodedObjectBytes int64) error {
+	delta, err := parseDelta(parent, e.Data, maxDecodedObjectBytes)
+	if err != nil {
+		// An oversized-target rejection must surface as-is (not be reclassified
+		// as an unexpected EOF) so callers can map it to ObjectTooLargeError.
+		var tooLarge *ObjectTooLargeError
+		if errors.As(err, &tooLarge) {
+			return err
+		}
+		return eofIsUnexpected(err)
+	}
+	e.Delta = delta
+	return nil
 }
 
 // PackfileTreeEntry represents a part of a packfile tree.
@@ -684,7 +693,7 @@ func (p *PackfileReader) processRefDelta(obj *PackfileObject, size int) error {
 		return err
 	}
 
-	return obj.parseDelta(hex.EncodeToString(ref[:]))
+	return obj.parseDelta(hex.EncodeToString(ref[:]), p.maxDecodedObjectBytes)
 }
 
 func (p *PackfileReader) readAndInflate(sz int) ([]byte, error) {
