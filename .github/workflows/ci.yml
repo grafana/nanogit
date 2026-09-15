@@ -7,11 +7,15 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Cancel superseded runs on PR branches, but never on main: the release
-  # workflow's wait-for-ci gate requires every check on the merge commit to
-  # conclude success/skipped, so cancelling an in-flight main run (e.g. when
-  # two PRs merge in quick succession) fails the release for that commit.
+  # PRs share one group per branch, so a superseded push cancels the older
+  # run. main gets a group per commit SHA instead of one shared group: GitHub
+  # Actions cancels a *queued* run when a new run enters its group even with
+  # cancel-in-progress off, so three quick merges sharing one main group could
+  # still cancel the middle commit's still-pending run — leaving it without a
+  # conclusion the release workflow's wait-for-ci gate can pass. Per-SHA
+  # groups mean main commits never share a group and so can never cancel
+  # each other.
+  group: ${{ github.ref == 'refs/heads/main' && format('{0}-main-{1}', github.workflow, github.sha) || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
