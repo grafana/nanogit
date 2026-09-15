@@ -80,6 +80,19 @@ type Limits struct {
 	// ReceivePackResponseMaxBytes caps the git-receive-pack reply to a
 	// push (CreateRef, UpdateRef, DeleteRef, staged Push).
 	ReceivePackResponseMaxBytes int64
+	// MaxObjectDecodedBytes caps the *decoded* (inflated) size of any single
+	// object read from a packfile. Unlike the wire caps above (which bound
+	// the compressed git-upload-pack response), this bounds post-decompression
+	// memory: an object's declared decoded size is checked before it is
+	// allocated, so a small, highly compressible payload that would inflate to
+	// gigabytes is rejected up front. This is what defeats decompression bombs.
+	//
+	// Unlike the wire caps, a zero value does NOT disable the check: it leaves
+	// nanogit's built-in default (protocol.MaxUnpackedObjectSize) in place, so
+	// decoded-size protection is always on. Set a positive value to raise or
+	// lower that ceiling; oversized objects surface as *protocol.ObjectTooLargeError
+	// (which wraps protocol.ErrObjectTooLarge).
+	MaxObjectDecodedBytes int64
 }
 
 // Option mutates Options during Resolve. An Option returns an error to

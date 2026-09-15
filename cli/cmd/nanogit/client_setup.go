@@ -114,10 +114,12 @@ func limitsFromGlobalFlags() (options.Limits, bool) {
 		MultiObjectFetchMaxBytes:    globalMaxBytesMultiObject,
 		RefsMetadataMaxBytes:        globalMaxBytesRefs,
 		ReceivePackResponseMaxBytes: globalMaxBytesReceivePack,
+		MaxObjectDecodedBytes:       globalMaxObjectDecodedBytes,
 	}
 	any := globalMaxBytesSingleObject != 0 ||
 		globalMaxBytesMultiObject != 0 ||
 		globalMaxBytesRefs != 0 ||
-		globalMaxBytesReceivePack != 0
+		globalMaxBytesReceivePack != 0 ||
+		globalMaxObjectDecodedBytes != 0
 	return l, any
 }

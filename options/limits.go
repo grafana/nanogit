@@ -21,6 +21,9 @@ func WithLimits(l Limits) Option {
 		if l.ReceivePackResponseMaxBytes < 0 {
 			return fmt.Errorf("Limits.ReceivePackResponseMaxBytes is negative: %d", l.ReceivePackResponseMaxBytes)
 		}
+		if l.MaxObjectDecodedBytes < 0 {
+			return fmt.Errorf("Limits.MaxObjectDecodedBytes is negative: %d", l.MaxObjectDecodedBytes)
+		}
 		o.Limits = l
 		return nil
 	}

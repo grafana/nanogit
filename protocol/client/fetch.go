@@ -220,7 +220,12 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	countingReader := newCountingReadCloser(newLimitedReadCloser(responseReader, maxBytes, "fetch"))
 
 	parser := protocol.NewParser(countingReader)
-	response, err := protocol.ParseFetchResponse(ctx, parser)
+	// MaxObjectDecodedBytes bounds the inflated size of each object read from
+	// the packfile (0 leaves nanogit's built-in default in place). Unlike
+	// maxBytes above, which caps the compressed wire response, this defends
+	// against decompression bombs that fit under the wire cap but inflate to
+	// gigabytes.
+	response, err := protocol.ParseFetchResponse(ctx, parser, protocol.WithMaxObjectSize(c.limits.MaxObjectDecodedBytes))
 	if err != nil {
 		return countingReader, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}
@@ -412,7 +417,10 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 
 	maxIterations := len(deltas) + 1
 	for iteration := 1; len(remaining) > 0 && iteration <= maxIterations; iteration++ {
-		resolvedCount, stillPending := c.resolveDeltaIteration(ctx, remaining, objects, storage)
+		resolvedCount, stillPending, err := c.resolveDeltaIteration(ctx, remaining, objects, storage)
+		if err != nil {
+			return err
+		}
 		remaining = stillPending
 
 		if resolvedCount == 0 && len(remaining) > 0 {
@@ -430,8 +438,12 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 	return nil
 }
 
-// resolveDeltaIteration processes one iteration of delta resolution
-func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject) {
+// resolveDeltaIteration processes one iteration of delta resolution. A non-nil
+// error is fatal and aborts resolution immediately; per-delta errors that just
+// mean "try again once more bases are known" are folded into stillPending
+// instead. An oversized reconstruction (*protocol.ObjectTooLargeError) is
+// fatal so the delta is never re-applied on a later iteration.
+func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
 	var stillPending []*protocol.PackfileObject
 	resolvedCount := 0
@@ -449,6 +461,10 @@ func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protoco
 		}
 
 		if err := c.resolveSingleDelta(ctx, delta, baseObj, objects, storage); err != nil {
+			var tooLarge *protocol.ObjectTooLargeError
+			if errors.As(err, &tooLarge) {
+				return resolvedCount, stillPending, err
+			}
 			logger.Debug("Failed to resolve delta", "parent", delta.Delta.Parent, "error", err)
 			stillPending = append(stillPending, delta)
 			continue
@@ -457,7 +473,7 @@ func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protoco
 		resolvedCount++
 	}
 
-	return resolvedCount, stillPending
+	return resolvedCount, stillPending, nil
 }
 
 // findBaseObject finds the base object for a delta, checking both objects map and storage
@@ -490,6 +506,18 @@ func (c *rawClient) findBaseObject(ctx context.Context, parentHash string, objec
 func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.PackfileObject, baseObj *protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) error {
 	logger := log.FromContext(ctx)
 
+	// Bound the reconstructed object's decoded size before applying the delta.
+	// The direct-inflation path caps a single object at readObject time, but a
+	// small delta made mostly of copy commands can amplify an in-bounds base
+	// into a much larger object. The delta header declares the reconstructed
+	// size (TargetLength) and ApplyDelta's output is bounded by it, so checking
+	// it here rejects a delta bomb before ApplyDelta allocates — mirroring the
+	// pre-allocation check on directly inflated objects. Returned as a fatal
+	// error so the resolution loop stops instead of re-applying the delta.
+	if maxObjectSize := effectiveMaxObjectSize(c.limits.MaxObjectDecodedBytes); delta.Delta.TargetLength > uint64(maxObjectSize) {
+		return &protocol.ObjectTooLargeError{Size: int(delta.Delta.TargetLength), Limit: maxObjectSize}
+	}
+
 	// Apply the delta to the base object
 	resolvedData, err := protocol.ApplyDelta(baseObj.Data, delta.Delta)
 	if err != nil {
@@ -521,6 +549,16 @@ func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.Pack
 
 	logger.Debug("Resolved delta", "hash", resolvedHash.String(), "parent", delta.Delta.Parent, "type", resolvedType)
 	return nil
+}
+
+// effectiveMaxObjectSize resolves the decoded-object cap the same way
+// ParsePackfile does: a positive configured limit wins, otherwise nanogit's
+// built-in default applies so decoded-size protection is never fully off.
+func effectiveMaxObjectSize(limit int64) int64 {
+	if limit > 0 {
+		return limit
+	}
+	return protocol.MaxUnpackedObjectSize
 }
 
 // createMissingBasesError creates an error for unresolvable deltas

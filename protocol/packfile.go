@@ -158,8 +158,46 @@ const (
 	ErrObjectTooLarge             = strError("the object size exceeds the maximum unpacked object size")
 )
 
-// MaxUnpackedObjectSize is the maximum size of an unpacked object.
+// MaxUnpackedObjectSize is the default maximum size of an unpacked (decoded)
+// object. It is the ceiling applied when no explicit limit is configured via
+// PackfileReader options, so decoded-size protection is always on.
 const MaxUnpackedObjectSize = 10 * 1024 * 1024
+
+// ObjectTooLargeError reports that a packfile object's declared decoded
+// (inflated) size exceeds the configured maximum. The declared size is
+// rejected before the object is allocated, which is what defeats
+// decompression bombs. It wraps ErrObjectTooLarge so
+// errors.Is(err, ErrObjectTooLarge) keeps matching, while exposing the
+// declared size and the limit for callers that map it distinctly (e.g. to an
+// HTTP 413).
+type ObjectTooLargeError struct {
+	// Size is the object's declared decoded size, in bytes.
+	Size int
+	// Limit is the maximum allowed decoded size, in bytes.
+	Limit int64
+}
+
+func (e *ObjectTooLargeError) Error() string {
+	return fmt.Sprintf("%s (%d bytes exceeds limit of %d bytes)", ErrObjectTooLarge, e.Size, e.Limit)
+}
+
+func (e *ObjectTooLargeError) Unwrap() error { return ErrObjectTooLarge }
+
+// PackfileOption configures a PackfileReader created by ParsePackfile.
+type PackfileOption func(*PackfileReader)
+
+// WithMaxObjectSize overrides the maximum allowed decoded (inflated) size, in
+// bytes, of any single object read from the packfile. A value <= 0 leaves the
+// default (MaxUnpackedObjectSize) in place. Objects whose declared decoded
+// size exceeds the limit are rejected before allocation with an
+// *ObjectTooLargeError (which wraps ErrObjectTooLarge).
+func WithMaxObjectSize(maxBytes int64) PackfileOption {
+	return func(p *PackfileReader) {
+		if maxBytes > 0 {
+			p.maxObjectSize = maxBytes
+		}
+	}
+}
 
 type PackfileEntry struct {
 	Object  *PackfileObject
@@ -478,6 +516,12 @@ type PackfileReader struct {
 	algo             crypto.Hash
 	zlibReader       io.ReadCloser // Reusable zlib reader for performance
 	hasher           stdhash.Hash  // Reusable hasher for performance
+	// maxObjectSize is the maximum allowed decoded size, in bytes, of any
+	// single object. It defaults to MaxUnpackedObjectSize and can be
+	// overridden with WithMaxObjectSize. Objects declaring a larger size are
+	// rejected before allocation (see readObject), defeating decompression
+	// bombs.
+	maxObjectSize int64
 
 	// State that shouldn't be set when constructed.
 	trailerRead bool
@@ -563,8 +607,8 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
-	if size < 0 || size > MaxUnpackedObjectSize {
-		return entry, fmt.Errorf("%w (%d bytes)", ErrObjectTooLarge, size)
+	if size < 0 || int64(size) > p.maxObjectSize {
+		return entry, &ObjectTooLargeError{Size: size, Limit: p.maxObjectSize}
 	}
 
 	err := p.processObjectByType(entry.Object, size, buf[0])
@@ -770,7 +814,7 @@ func (p *PackfileReader) calculateObjectHash(objType ObjectType, data []byte) (h
 	return result, nil
 }
 
-func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
+func ParsePackfile(ctx context.Context, reader io.Reader, opts ...PackfileOption) (*PackfileReader, error) {
 	logger := log.FromContext(ctx)
 	// Read and verify the "PACK" signature
 	signature := make([]byte, 4)
@@ -805,11 +849,16 @@ func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, erro
 	// Now the reader points to the object data stream
 	// For fast I/O with 64KB buffer
 	bufferedReader := bufio.NewReaderSize(reader, 64*1024)
-	return &PackfileReader{
+	pr := &PackfileReader{
 		reader:           bufferedReader,
 		remainingObjects: countObjects,
 		algo:             crypto.SHA1, // TODO: Support SHA256
-	}, nil
+		maxObjectSize:    MaxUnpackedObjectSize,
+	}
+	for _, opt := range opts {
+		opt(pr)
+	}
+	return pr, nil
 }
 
 // PackfileStorageMode defines how packfile objects are stored during staging.

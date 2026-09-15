@@ -47,6 +47,12 @@ var (
 type Delta struct {
 	Parent               string
 	ExpectedSourceLength uint64
+	// TargetLength is the declared decoded size, in bytes, of the object the
+	// delta reconstructs (the second size in the delta header). ApplyDelta's
+	// output is bounded by it, so callers can reject an over-large
+	// reconstruction before applying the delta (see ApplyDelta / the
+	// decoded-object cap).
+	TargetLength uint64
 	// Changes contains all the modifications to do in order.
 	//
 	// When iterating, this must be done sequentially, in order.
@@ -93,6 +99,7 @@ func parseDelta(parent string, payload []byte) (*Delta, error) {
 	delta.ExpectedSourceLength, payload = deltaHeaderSize(payload)
 	deltaSize, payload := deltaHeaderSize(payload)
 	originalDeltaSize := deltaSize
+	delta.TargetLength = originalDeltaSize
 
 	for deltaSize > 0 && deltaSize <= originalDeltaSize {
 		if len(payload) == 0 {

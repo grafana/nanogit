@@ -103,6 +103,7 @@ The following flags are available for all commands:
 - `--max-bytes-multi-object` - Cap (bytes) on responses to multi-object fetches: GetFlatTree, ListCommits, CompareCommits, Clone. 0 = no limit
 - `--max-bytes-refs` - Cap (bytes) on ref-listing and protocol-detection responses. 0 = no limit (a 1 MB floor still applies to the protocol-detection path)
 - `--max-bytes-receive-pack` - Cap (bytes) on the server's reply to a receive-pack push. 0 = no limit
+- `--max-object-decoded-bytes` - Cap (bytes) on the decoded (inflated) size of any single packfile object, defeating decompression bombs. 0 = keep the built-in default ceiling (never fully disabled)
 
 These flags can also be set via environment variables:
 - `NANOGIT_USERNAME` - Authentication username
