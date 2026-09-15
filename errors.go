@@ -75,9 +75,11 @@ var (
 
 // ObjectNotFoundError provides structured information about a Git object that was not found.
 type ObjectNotFoundError struct {
+	// ObjectID is the hash of the object that was not found.
 	ObjectID hash.Hash
 }
 
+// Error implements the error interface.
 func (e *ObjectNotFoundError) Error() string {
 	return "object " + e.ObjectID.String() + " not found"
 }
@@ -96,9 +98,11 @@ func NewObjectNotFoundError(objectID hash.Hash) *ObjectNotFoundError {
 
 // ObjectAlreadyExistsError provides structured information about a Git object that already exists.
 type ObjectAlreadyExistsError struct {
+	// ObjectID is the hash of the object that already exists.
 	ObjectID hash.Hash
 }
 
+// Error implements the error interface.
 func (e *ObjectAlreadyExistsError) Error() string {
 	return "object " + e.ObjectID.String() + " already exists"
 }
@@ -117,11 +121,15 @@ func NewObjectAlreadyExistsError(objectID hash.Hash) *ObjectAlreadyExistsError {
 
 // UnexpectedObjectCountError provides structured information about a Git object with an unexpected count.
 type UnexpectedObjectCountError struct {
+	// ExpectedCount is the number of objects the caller requested.
 	ExpectedCount int
-	ActualCount   int
-	Objects       []*protocol.PackfileObject
+	// ActualCount is the number of objects the server returned.
+	ActualCount int
+	// Objects are the objects the server returned.
+	Objects []*protocol.PackfileObject
 }
 
+// Error implements the error interface.
 func (e *UnexpectedObjectCountError) Error() string {
 	objectNames := make([]string, 0, len(e.Objects))
 	for _, obj := range e.Objects {
@@ -146,11 +154,15 @@ func NewUnexpectedObjectCountError(expectedCount int, objects []*protocol.Packfi
 
 // UnexpectedObjectTypeError provides structured information about a Git object with an unexpected type.
 type UnexpectedObjectTypeError struct {
-	ObjectID     hash.Hash
+	// ObjectID is the hash of the mismatched object.
+	ObjectID hash.Hash
+	// ExpectedType is the object type the caller requested.
 	ExpectedType protocol.ObjectType
-	ActualType   protocol.ObjectType
+	// ActualType is the object type the server returned.
+	ActualType protocol.ObjectType
 }
 
+// Error implements the error interface.
 func (e *UnexpectedObjectTypeError) Error() string {
 	return "object " + e.ObjectID.String() + " has unexpected type " + e.ActualType.String() + " (expected " + e.ExpectedType.String() + ")"
 }
@@ -171,14 +183,16 @@ func NewUnexpectedObjectTypeError(objectID hash.Hash, expectedType, actualType p
 
 // PathNotFoundError provides structured information about a Git path that was not found.
 type PathNotFoundError struct {
+	// Path is the repository-relative path that was not found.
 	Path string
 }
 
+// Error implements the error interface.
 func (e *PathNotFoundError) Error() string {
 	return "path not found: " + e.Path
 }
 
-// Unwrap enables errors.Is() compatibility with ErrPathNotFound
+// Unwrap enables errors.Is() compatibility with ErrObjectNotFound
 func (e *PathNotFoundError) Unwrap() error {
 	return ErrObjectNotFound
 }
@@ -192,14 +206,16 @@ func NewPathNotFoundError(path string) *PathNotFoundError {
 
 // RefNotFoundError provides structured information about a Git reference that was not found.
 type RefNotFoundError struct {
+	// RefName is the full name of the reference that was not found (e.g. "refs/heads/main").
 	RefName string
 }
 
+// Error implements the error interface.
 func (e *RefNotFoundError) Error() string {
 	return "reference not found: " + e.RefName
 }
 
-// Unwrap enables errors.Is() compatibility with ErrRefNotFound
+// Unwrap enables errors.Is() compatibility with ErrObjectNotFound
 func (e *RefNotFoundError) Unwrap() error {
 	return ErrObjectNotFound
 }
@@ -213,9 +229,11 @@ func NewRefNotFoundError(refName string) *RefNotFoundError {
 
 // RefAlreadyExistsError provides structured information about a Git reference that already exists.
 type RefAlreadyExistsError struct {
+	// RefName is the full name of the reference that already exists (e.g. "refs/heads/main").
 	RefName string
 }
 
+// Error implements the error interface.
 func (e *RefAlreadyExistsError) Error() string {
 	return "reference already exists: " + e.RefName
 }
@@ -234,14 +252,18 @@ func NewRefAlreadyExistsError(refName string) *RefAlreadyExistsError {
 
 // AuthorError provides structured information about invalid author information.
 type AuthorError struct {
-	Field  string
+	// Field is the author field that failed validation (e.g. "name", "email").
+	Field string
+	// Reason describes why the field is invalid.
 	Reason string
 }
 
+// Error implements the error interface.
 func (e *AuthorError) Error() string {
 	return fmt.Sprintf("invalid author %s: %s", e.Field, e.Reason)
 }
 
+// Unwrap enables errors.Is() compatibility with ErrInvalidAuthor
 func (e *AuthorError) Unwrap() error {
 	return ErrInvalidAuthor
 }
@@ -271,7 +293,19 @@ type PermissionDeniedError = client.PermissionDeniedError
 // RepositoryNotFoundError provides structured information about a repository not found error.
 type RepositoryNotFoundError = client.RepositoryNotFoundError
 
-// Re-export constructors
+// NewUnauthorizedError constructs the typed error returned when the server
+// rejects the request with HTTP 401 (authentication failed) for the given
+// HTTP method and Git endpoint.
+// It is re-exported from the protocol/client package to avoid import cycles.
 var NewUnauthorizedError = client.NewUnauthorizedError
+
+// NewPermissionDeniedError constructs the typed error returned when the
+// server rejects the request with HTTP 403 (authenticated but not allowed)
+// for the given HTTP method and Git endpoint.
+// It is re-exported from the protocol/client package to avoid import cycles.
 var NewPermissionDeniedError = client.NewPermissionDeniedError
+
+// NewRepositoryNotFoundError constructs the typed error returned when the
+// server responds with HTTP 404 because the repository does not exist.
+// It is re-exported from the protocol/client package to avoid import cycles.
 var NewRepositoryNotFoundError = client.NewRepositoryNotFoundError

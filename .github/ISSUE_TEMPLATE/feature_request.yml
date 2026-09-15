@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a new feature or enhancement for nanogit
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What problem are you trying to solve? Describe the use case behind the request.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like nanogit to solve it? API sketches welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches or workarounds you have considered.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: "This fits nanogit's scope: server-side Git over HTTPS (no local worktrees, SSH, or full-Git features)"
+          required: true

@@ -7,7 +7,6 @@
   <a href="https://github.com/grafana/nanogit/stargazers"><img src="https://img.shields.io/github/stars/grafana/nanogit?style=social" alt="GitHub Stars"></a>
   <a href="https://github.com/grafana/nanogit/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/grafana/nanogit" alt="License"></a>
   <a href="https://github.com/grafana/nanogit/actions/workflows/ci.yml"><img src="https://github.com/grafana/nanogit/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <a href="https://goreportcard.com/report/github.com/grafana/nanogit"><img src="https://goreportcard.com/badge/github.com/grafana/nanogit" alt="Go Report Card"></a>
   <a href="https://pkg.go.dev/github.com/grafana/nanogit"><img src="https://pkg.go.dev/badge/github.com/grafana/nanogit.svg" alt="Go Reference"></a>
   <a href="https://codecov.io/gh/grafana/nanogit"><img src="https://codecov.io/gh/grafana/nanogit/branch/main/graph/badge.svg" alt="codecov"></a>
 </p>
@@ -24,7 +23,7 @@ Grafana built nanogit to power [Git Sync](https://grafana.com/docs/grafana/lates
 - **Memory-efficient** — streaming packfile processing and configurable memory/disk/auto writing modes for bulk operations
 - **Fast** — orders of magnitude faster and leaner than a full Git implementation for common server-side operations ([benchmarks below](#how-is-it-different-from-go-git))
 - **Commit signing** — sign commits with GPG, SSH, or S/MIME keys
-- **Pluggable** — object storage (caching) and [retry policies](architecture/retry.md) are injected via context, with sensible defaults
+- **Pluggable** — object storage (caching), [retry policies](architecture/retry.md), and [metrics](architecture/metrics.md) are injected via context, with sensible defaults
 
 ## When should I use it?
 
@@ -97,6 +96,17 @@ Then follow the guides:
 - **[Server Compatibility](getting-started/server-compatibility.md)** — verify your Git server supports nanogit in four CLI commands
 - **[API Reference (GoDoc)](https://pkg.go.dev/github.com/grafana/nanogit)** — complete API documentation
 
+## Guides
+
+Task-focused guides for production use:
+
+- **[Writing with the StagedWriter](guides/writing.md)** — the transactional write model: staging, multi-commit, push, retry semantics
+- **[Authentication](guides/authentication.md)** — basic auth, raw tokens, and per-provider conventions
+- **[Error Handling](guides/error-handling.md)** — sentinel and typed errors, `errors.Is`/`errors.As` patterns
+- **[Commit Signing](guides/commit-signing.md)** — GPG, SSH, and S/MIME signatures
+- **[Response Limits](guides/response-limits.md)** — cap response sizes for multitenant safety
+- **[History and Diffs](guides/history.md)** — `ListCommits` pagination/filtering and `CompareCommits`
+
 ## Architecture
 
 Learn about nanogit's design and internals:
@@ -104,6 +114,7 @@ Learn about nanogit's design and internals:
 - **[Architecture Overview](architecture/overview.md)** — core design principles and components
 - **[Storage Backend](architecture/storage.md)** — pluggable storage and writing modes
 - **[Retry Mechanism](architecture/retry.md)** — pluggable retry mechanism for robust operations
+- **[Metrics](architecture/metrics.md)** — pluggable HTTP/fetch instrumentation and how to bridge it to Prometheus or OpenTelemetry
 - **[Delta Resolution](architecture/delta-resolution.md)** — Git delta handling implementation
 - **[Performance](architecture/performance.md)** — performance characteristics and benchmarks
 - **[Learn how Git works](how-git-works.md)** — pointers to the upstream Git protocol documentation nanogit implements

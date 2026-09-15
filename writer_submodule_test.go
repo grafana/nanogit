@@ -74,8 +74,8 @@ func TestCollectDirectChildren_MergesSubmodules(t *testing.T) {
 
 	w := newWriterWithState(t,
 		map[string]*FlatTreeEntry{
-			"dashboards":    {Path: "dashboards", Hash: dashboards, Type: protocol.ObjectTypeTree, Mode: 0o40000},
-			"rootfile.txt":  {Path: "rootfile.txt", Hash: rootFile, Type: protocol.ObjectTypeBlob, Mode: 0o100644},
+			"dashboards":   {Path: "dashboards", Hash: dashboards, Type: protocol.ObjectTypeTree, Mode: 0o40000},
+			"rootfile.txt": {Path: "rootfile.txt", Hash: rootFile, Type: protocol.ObjectTypeBlob, Mode: 0o100644},
 		},
 		map[string]*FlatTreeEntry{
 			"thirdparty": {Path: "thirdparty", Hash: gitlink, Type: protocol.ObjectTypeCommit, Mode: 0o160000},
@@ -140,8 +140,8 @@ func TestCollectDirectChildren_OnlyDirectChildren(t *testing.T) {
 
 	w := newWriterWithState(t,
 		map[string]*FlatTreeEntry{
-			"dashboards":         {Path: "dashboards", Hash: siblingTree, Type: protocol.ObjectTypeTree, Mode: 0o40000},
-			"dashboards/nested":  {Path: "dashboards/nested", Hash: siblingTree, Type: protocol.ObjectTypeTree, Mode: 0o40000},
+			"dashboards":        {Path: "dashboards", Hash: siblingTree, Type: protocol.ObjectTypeTree, Mode: 0o40000},
+			"dashboards/nested": {Path: "dashboards/nested", Hash: siblingTree, Type: protocol.ObjectTypeTree, Mode: 0o40000},
 		},
 		map[string]*FlatTreeEntry{
 			// Direct child of "dashboards" — must appear in the rebuild.
@@ -239,8 +239,8 @@ func TestPruneSubmoduleEntriesAfterPush_KeepsValidSubmodule(t *testing.T) {
 			"dashboards": {Path: "dashboards", Hash: dashTree, Type: protocol.ObjectTypeTree, Mode: 0o40000},
 		},
 		map[string]*FlatTreeEntry{
-			"dashboards/lib":  {Path: "dashboards/lib", Hash: gitlink, Type: protocol.ObjectTypeCommit, Mode: 0o160000},
-			"thirdparty":      {Path: "thirdparty", Hash: gitlink, Type: protocol.ObjectTypeCommit, Mode: 0o160000},
+			"dashboards/lib": {Path: "dashboards/lib", Hash: gitlink, Type: protocol.ObjectTypeCommit, Mode: 0o160000},
+			"thirdparty":     {Path: "thirdparty", Hash: gitlink, Type: protocol.ObjectTypeCommit, Mode: 0o160000},
 		},
 	)
 

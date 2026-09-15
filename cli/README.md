@@ -325,4 +325,4 @@ Contributions are welcome! Please ensure:
 
 ## License
 
-Same as the main nanogit project. See the root [LICENSE](../LICENSE) file for details.
+Same as the main nanogit project. See the root [LICENSE](../LICENSE.md) file for details.

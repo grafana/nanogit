@@ -1,22 +1,14 @@
-// Package object defines the types of objects that can be stored in a Git repository.
+// Package protocol implements the Git wire protocol: pack-file encoding and
+// decoding, pkt-line framing, delta resolution, and the object model
+// (commits, trees, blobs, tags) those formats carry.
 //
-// Git stores all content as objects in its object database. Each object has a type
-// that determines how Git interprets its contents. The object types are:
+// It is low-level plumbing. Most users should use the root nanogit package,
+// which wraps this one in a high-level client.
 //
-//   - Commit: A snapshot of the repository at a point in time, containing metadata
-//     about the commit (author, committer, message) and references to tree and parent
-//     objects.
-//   - Tree: A directory listing, containing references to blobs and other trees.
-//   - Blob: A file's contents.
-//   - Tag: A reference to a specific object, usually a commit, with additional metadata.
-//
-// Additionally, Git uses two special object types for pack files:
-//   - OfsDelta: A delta object that references its base by offset within the pack.
-//   - RefDelta: A delta object that references its base by its object ID.
-//
-// For more details about Git's object types and their formats, see:
+// For more details about Git's object and transfer formats, see:
 // https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
-// https://git-scm.com/docs/pack-format#_object_types
+// https://git-scm.com/docs/pack-format
+// https://git-scm.com/docs/protocol-v2
 package protocol
 
 import (
