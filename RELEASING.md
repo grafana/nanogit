@@ -150,8 +150,8 @@ In rare cases where automatic release fails, you can trigger a manual release:
 ### Option 2: Manual Tag (Not Recommended)
 
 Only use this as a last resort. Note that pushing a tag does **not** build
-binaries — there is no tag-triggered workflow — so the last step dispatches
-the rebuild workflow explicitly:
+binaries or refresh the docs site — neither is tag-triggered — so the last
+two steps dispatch them explicitly:
 
 ```bash
 # Determine next version
@@ -169,6 +169,9 @@ gh release create v1.4.1 --generate-notes
 
 # Build and upload the CLI binaries for the new tag
 gh workflow run goreleaser.yml --ref main -f tag=v1.4.1
+
+# Rebuild the docs site so the changelog page reflects the new release
+gh workflow run docs.yml --ref main
 ```
 
 **Note**: `--generate-notes` produces basic notes from PR titles rather than the conventional-commit sections semantic-release creates. Prefer fixing the automated process.
@@ -187,7 +190,9 @@ Instead:
    Re-uploads are safe (`replace_existing_artifacts` is enabled).
 2. **Missing gittest tag**: create it manually at the release commit —
    `git tag gittest/v1.4.1 v1.4.1^{} && git push origin gittest/v1.4.1`.
-   The automated step is idempotent, so it also self-heals on the next release.
+   The automated step only creates the tag for the version it is currently
+   releasing — it does not scan for or backfill tags missed by earlier
+   releases, so a later release will **not** self-heal this for you.
 3. **Stale changelog page**: dispatch the docs workflow —
    `gh workflow run docs.yml --ref main`.
 
