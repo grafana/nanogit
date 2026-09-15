@@ -1,0 +1,128 @@
+name: slash command /run-provider-tests
+
+# Ergonomic front-end to provider-tests.yml for FORK pull requests.
+#
+# Provider tests run repository code with real provider credentials (see
+# provider-tests.yml), so they never run automatically on fork PRs. A
+# maintainer who has reviewed the diff can trigger them from the PR itself by
+# commenting `/run-provider-tests` (or `/run-cloud-tests`). This workflow then
+# dispatches provider-tests.yml with the PR number, which checks out the PR's
+# `refs/pull/<n>/merge` ref — the same safe, maintainer-gated path documented
+# in CONTRIBUTING.md, just without leaving the PR to run `gh workflow run`.
+#
+# Security model:
+#   - issue_comment always runs in the trusted base-repo context using the
+#     workflow definition from the default branch, never fork-supplied YAML.
+#   - The author_association guard restricts triggering to people with write
+#     access (MEMBER/COLLABORATOR/OWNER); the reviewing maintainer is the trust
+#     gate, exactly as when running `gh workflow run` by hand.
+#   - This job never checks out or executes PR code; it only calls the GitHub
+#     API. The untrusted code runs in provider-tests.yml against the merge ref.
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  # One dispatch per PR at a time; a rapid second comment supersedes the first.
+  group: slash-run-provider-tests-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+# Least privilege: read the API by default, escalate per-job below.
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch provider tests
+    # Only on PR comments that contain the slash command, from someone with
+    # write access to the base repo.
+    if: >-
+      github.repository == 'grafana/nanogit'
+      && github.event.issue.pull_request
+      && (
+        contains(github.event.comment.body, '/run-provider-tests')
+        || contains(github.event.comment.body, '/run-cloud-tests')
+      )
+      && (
+        github.event.comment.author_association == 'MEMBER'
+        || github.event.comment.author_association == 'COLLABORATOR'
+        || github.event.comment.author_association == 'OWNER'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # dispatch provider-tests.yml
+      pull-requests: write # react to the comment and post the run link
+    steps:
+      - name: Resolve PR head
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.issue.pull_request.url }}
+        run: |
+          set -euo pipefail
+          # .head.label is "owner:branch" (e.g. "MissingRoberto:fix-oss-ci"),
+          # which identifies the fork and branch in the confirmation comment.
+          head_label=$(gh api "$PR_URL" --jq '.head.label')
+          echo "head_label=$head_label" >> "$GITHUB_OUTPUT"
+
+      - name: Acknowledge with a reaction
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_URL: ${{ github.event.comment.url }}
+        run: |
+          set -euo pipefail
+          gh api "$COMMENT_URL/reactions" --method POST --field content='rocket'
+
+      - name: Dispatch provider tests for the PR merge ref
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Record the time just before dispatch so we can find the new run.
+          before=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          # Dispatch on the default branch (main) so the trusted workflow
+          # definition runs; the `pr` input makes it check out
+          # refs/pull/<n>/merge — the contributor's changes merged into main.
+          gh workflow run provider-tests.yml \
+            --repo "$REPO" \
+            --ref main \
+            --field pr="$PR_NUMBER"
+
+          # workflow_dispatch runs take a few seconds to appear in the API.
+          run_url=""
+          for _ in $(seq 1 10); do
+            sleep 3
+            run_url=$(gh api \
+              "repos/${REPO}/actions/workflows/provider-tests.yml/runs?event=workflow_dispatch&created=>=${before}&per_page=1" \
+              --jq '.workflow_runs[0].html_url // empty')
+            if [ -n "$run_url" ]; then
+              echo "Found run: $run_url"
+              break
+            fi
+          done
+
+          if [ -z "$run_url" ]; then
+            echo "::warning::Dispatched, but could not resolve the run URL yet."
+          fi
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Post the run link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          HEAD_LABEL: ${{ steps.pr.outputs.head_label }}
+          RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RUN_URL" ]; then
+            body="Provider tests dispatched for \`${HEAD_LABEL}\`: [view run](${RUN_URL})"
+          else
+            actions_url="${GITHUB_SERVER_URL}/${REPO}/actions/workflows/provider-tests.yml"
+            body="Provider tests dispatched for \`${HEAD_LABEL}\`, but the run URL could not be determined yet. Check the [workflow runs](${actions_url}) page."
+          fi
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body"

@@ -443,7 +443,19 @@ tests are validated by a maintainer as part of review.
 
 A maintainer with write access runs them manually **after reviewing the PR
 diff** — because doing so executes the contributor's code against real provider
-credentials, the review is the trust gate. To trigger a run for PR `<number>`:
+credentials, the review is the trust gate.
+
+The easiest way is to **comment `/run-provider-tests` (or `/run-cloud-tests`)
+on the PR**. The
+[`slash-run-provider-tests.yml`](.github/workflows/slash-run-provider-tests.yml)
+workflow reacts with a 🚀, dispatches Provider Tests against the PR's merge ref,
+and replies with a link to the run. Only comments from maintainers
+(`MEMBER`/`COLLABORATOR`/`OWNER`) trigger it, so the review remains the trust
+gate. The slash-command workflow itself only calls the GitHub API — it never
+checks out or runs the PR's code; that happens in the dispatched Provider Tests
+run.
+
+You can also trigger it by hand for PR `<number>`:
 
 ```bash
 # Reviewed the diff first? Then dispatch Provider Tests against the PR's merge ref:
@@ -453,9 +465,9 @@ gh workflow run "Provider Tests" -f pr=<number>
 gh run watch "$(gh run list --workflow 'Provider Tests' --limit 1 --json databaseId --jq '.[0].databaseId')"
 ```
 
-You can also trigger it from the GitHub UI: **Actions → Provider Tests → Run
-workflow**, and enter the PR number in the `pr` field (leave it blank to test
-the branch you select in the dropdown instead).
+Or from the GitHub UI: **Actions → Provider Tests → Run workflow**, and enter
+the PR number in the `pr` field (leave it blank to test the branch you select
+in the dropdown instead).
 
 The `pr` input makes the workflow check out `refs/pull/<number>/merge`, so the
 tests run the contributor's changes merged into `main`. Results are visible in
