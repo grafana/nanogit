@@ -7,8 +7,16 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs share one group per branch, so a superseded push cancels the older
+  # run. main gets a group per commit SHA instead of one shared group: GitHub
+  # Actions cancels a *queued* run when a new run enters its group even with
+  # cancel-in-progress off, so three quick merges sharing one main group could
+  # still cancel the middle commit's still-pending run — leaving it without a
+  # conclusion the release workflow's wait-for-ci gate can pass. Per-SHA
+  # groups mean main commits never share a group and so can never cancel
+  # each other.
+  group: ${{ github.ref == 'refs/heads/main' && format('{0}-main-{1}', github.workflow, github.sha) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   generate:
@@ -337,9 +345,8 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for vulnerabilities
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+        # Pinned in the Makefile (single source of truth for tool versions)
+        run: make vulncheck
 
   trufflehog:
     name: Secrets Scan
@@ -370,10 +377,6 @@ jobs:
             git diff
             exit 1
           fi
-      - name: Check for unused dependencies
-        run: |
-          go install github.com/remyoudompheng/go-misc/deadcode@latest
-          deadcode ./... || true
 
   staticcheck:
     name: Static Analysis
@@ -385,9 +388,9 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git make
       - name: Check for staticcheck issues
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck ./...
+        # Pinned in the Makefile (single source of truth for tool versions),
+        # so CI and `make lint-staticcheck` always run the same version
+        run: make lint-staticcheck
 
   test-clone-perf:
     name: Clone Performance Tests
