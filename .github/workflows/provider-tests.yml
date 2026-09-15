@@ -25,6 +25,14 @@ on:
   schedule:
     - cron: "0 3 * * *"
 
+concurrency:
+  # Provider tests mutate shared remote test repositories (create/delete
+  # branches, push commits), so overlapping runs on the same ref would race.
+  # PRs share one group per branch so a superseded push cancels the older run;
+  # main uses a per-SHA group (never cancels between commits), mirroring ci.yml.
+  group: ${{ github.ref == 'refs/heads/main' && format('{0}-main-{1}', github.workflow, github.sha) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 # No permissions by default; each job requests only what it needs.
 permissions: {}
 
