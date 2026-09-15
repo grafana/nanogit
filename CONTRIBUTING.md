@@ -445,15 +445,14 @@ A maintainer with write access runs them manually **after reviewing the PR
 diff** — because doing so executes the contributor's code against real provider
 credentials, the review is the trust gate.
 
-The easiest way is to **comment `/run-provider-tests` (or `/run-cloud-tests`)
-on the PR**. The
+The easiest way is to **comment `/run-provider-tests` on the PR**. The
 [`slash-run-provider-tests.yml`](.github/workflows/slash-run-provider-tests.yml)
 workflow reacts with a 🚀, dispatches Provider Tests against the PR's merge ref,
-and replies with a link to the run. Only comments from maintainers
-(`MEMBER`/`COLLABORATOR`/`OWNER`) trigger it, so the review remains the trust
-gate. The slash-command workflow itself only calls the GitHub API — it never
-checks out or runs the PR's code; that happens in the dispatched Provider Tests
-run.
+and replies with a link to the run. It only proceeds if the commenter has
+**write access to the repo** (verified against the GitHub API, not just org
+membership), so the maintainer's review remains the trust gate. The
+slash-command workflow itself only calls the GitHub API — it never checks out
+or runs the PR's code; that happens in the dispatched Provider Tests run.
 
 You can also trigger it by hand for PR `<number>`:
 

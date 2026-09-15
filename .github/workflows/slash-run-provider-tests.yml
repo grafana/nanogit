@@ -5,7 +5,7 @@ name: slash command /run-provider-tests
 # Provider tests run repository code with real provider credentials (see
 # provider-tests.yml), so they never run automatically on fork PRs. A
 # maintainer who has reviewed the diff can trigger them from the PR itself by
-# commenting `/run-provider-tests` (or `/run-cloud-tests`). This workflow then
+# commenting `/run-provider-tests`. This workflow then
 # dispatches provider-tests.yml with the PR number, which checks out the PR's
 # `refs/pull/<n>/merge` ref — the same safe, maintainer-gated path documented
 # in CONTRIBUTING.md, just without leaving the PR to run `gh workflow run`.
@@ -13,9 +13,14 @@ name: slash command /run-provider-tests
 # Security model:
 #   - issue_comment always runs in the trusted base-repo context using the
 #     workflow definition from the default branch, never fork-supplied YAML.
-#   - The author_association guard restricts triggering to people with write
-#     access (MEMBER/COLLABORATOR/OWNER); the reviewing maintainer is the trust
-#     gate, exactly as when running `gh workflow run` by hand.
+#   - The trust gate is *write access to this repo*. The cheap `if:` guard only
+#     pre-filters obvious non-starters; the authoritative check is the
+#     "Require write access" step below, which asks the API for the commenter's
+#     actual permission. We deliberately do NOT trust `author_association`:
+#     `MEMBER` merely means "belongs to the grafana org", not "can write to
+#     nanogit", so it would let any org member run fork code against the
+#     provider credentials. The reviewing maintainer remains the trust gate,
+#     exactly as when running `gh workflow run` by hand.
 #   - This job never checks out or executes PR code; it only calls the GitHub
 #     API. The untrusted code runs in provider-tests.yml against the merge ref.
 on:
@@ -34,25 +39,38 @@ permissions:
 jobs:
   dispatch:
     name: Dispatch provider tests
-    # Only on PR comments that contain the slash command, from someone with
-    # write access to the base repo.
+    # Cheap pre-filter only: a PR comment in this repo that contains the slash
+    # command. This is NOT the authorization check — that is the "Require write
+    # access" step below, which verifies the commenter's real repo permission.
     if: >-
       github.repository == 'grafana/nanogit'
       && github.event.issue.pull_request
-      && (
-        contains(github.event.comment.body, '/run-provider-tests')
-        || contains(github.event.comment.body, '/run-cloud-tests')
-      )
-      && (
-        github.event.comment.author_association == 'MEMBER'
-        || github.event.comment.author_association == 'COLLABORATOR'
-        || github.event.comment.author_association == 'OWNER'
-      )
+      && contains(github.event.comment.body, '/run-provider-tests')
     runs-on: ubuntu-latest
     permissions:
       actions: write # dispatch provider-tests.yml
       pull-requests: write # react to the comment and post the run link
     steps:
+      - name: Require write access
+        # Authoritative trust gate: only someone who can actually write to this
+        # repo may run fork code against the provider credentials. Ask the API
+        # for the commenter's permission rather than trusting author_association
+        # (MEMBER = org member, not necessarily a nanogit maintainer).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          perm=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
+          case "$perm" in
+            admin | write | maintain)
+              echo "${ACTOR} has '${perm}' access; proceeding." ;;
+            *)
+              echo "::error::${ACTOR} lacks write access to ${REPO} (permission=${perm}). Only maintainers can trigger provider tests on a PR."
+              exit 1 ;;
+          esac
+
       - name: Resolve PR head
         id: pr
         env:
