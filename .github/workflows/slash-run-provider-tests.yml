@@ -62,9 +62,14 @@ jobs:
           ACTOR: ${{ github.event.comment.user.login }}
         run: |
           set -euo pipefail
+          # The legacy `.permission` field only ever returns admin/write/read/
+          # none: the "maintain" role collapses to write and "triage" to read,
+          # so `admin|write` is the complete set that means "can push". A
+          # non-collaborator (incl. an org member without repo access) returns
+          # "none", and an unknown login 404s -> the command fails under set -e.
           perm=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
           case "$perm" in
-            admin | write | maintain)
+            admin | write)
               echo "${ACTOR} has '${perm}' access; proceeding." ;;
             *)
               echo "::error::${ACTOR} lacks write access to ${REPO} (permission=${perm}). Only maintainers can trigger provider tests on a PR."
@@ -78,10 +83,17 @@ jobs:
           PR_URL: ${{ github.event.issue.pull_request.url }}
         run: |
           set -euo pipefail
-          # .head.label is "owner:branch" (e.g. "MissingRoberto:fix-oss-ci"),
-          # which identifies the fork and branch in the confirmation comment.
-          head_label=$(gh api "$PR_URL" --jq '.head.label')
+          # Read the head label (for the confirmation comment) and, critically,
+          # the head SHA *now* — the moment a maintainer vouched for this PR.
+          # We pass that SHA to provider-tests.yml so it can refuse to run if
+          # the PR head has moved since (see the TOCTOU note in that workflow).
+          # Both are drawn from a single API read so they describe one state.
+          pr_json=$(gh api "$PR_URL" --jq '{label: .head.label, sha: .head.sha}')
+          # .head.label is "owner:branch" (e.g. "MissingRoberto:fix-oss-ci").
+          head_label=$(echo "$pr_json" | jq -r '.label')
+          head_sha=$(echo "$pr_json" | jq -r '.sha')
           echo "head_label=$head_label" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
 
       - name: Acknowledge with a reaction
         env:
@@ -97,6 +109,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           set -euo pipefail
           # Record the time just before dispatch so we can find the new run.
@@ -105,10 +118,13 @@ jobs:
           # Dispatch on the default branch (main) so the trusted workflow
           # definition runs; the `pr` input makes it check out
           # refs/pull/<n>/merge — the contributor's changes merged into main.
+          # `head_sha` pins the exact commit the maintainer vouched for so the
+          # run aborts if the PR head moved between the comment and the checkout.
           gh workflow run provider-tests.yml \
             --repo "$REPO" \
             --ref main \
-            --field pr="$PR_NUMBER"
+            --field pr="$PR_NUMBER" \
+            --field head_sha="$HEAD_SHA"
 
           # workflow_dispatch runs take a few seconds to appear in the API.
           run_url=""

@@ -452,7 +452,9 @@ and replies with a link to the run. It only proceeds if the commenter has
 **write access to the repo** (verified against the GitHub API, not just org
 membership), so the maintainer's review remains the trust gate. The
 slash-command workflow itself only calls the GitHub API — it never checks out
-or runs the PR's code; that happens in the dispatched Provider Tests run.
+or runs the PR's code; that happens in the dispatched Provider Tests run. It
+also pins the PR head commit you vouched for, so the run aborts if the
+contributor pushes new code between your comment and the checkout.
 
 You can also trigger it by hand for PR `<number>`:
 
@@ -469,9 +471,12 @@ the PR number in the `pr` field (leave it blank to test the branch you select
 in the dropdown instead).
 
 The `pr` input makes the workflow check out `refs/pull/<number>/merge`, so the
-tests run the contributor's changes merged into `main`. Results are visible in
-the workflow run itself; note that because manual runs are decoupled from the
-PR's own checks, they will not appear as a status check on the PR.
+tests run the contributor's changes merged into `main`. For a manual run you
+can optionally add `-f head_sha=<sha>` to pin the exact commit you reviewed;
+the run then aborts if the PR head has moved since. The slash command sets this
+automatically. Results are visible in the workflow run itself; note that
+because manual runs are decoupled from the PR's own checks, they will not
+appear as a status check on the PR.
 
 #### Writing Tests
 
