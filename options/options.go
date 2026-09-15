@@ -44,9 +44,11 @@ type Options struct {
 	// advertised on receive-pack ref update commands. When nil or empty,
 	// protocol.DefaultReceivePackCapabilities() is used.
 	ReceivePackCapabilities []protocol.Capability
-	// Limits caps the bytes nanogit will read from the server per HTTP
-	// response, classified by operation. The zero value disables every cap
-	// so embedders that don't opt in keep today's unbounded behavior.
+	// Limits caps the bytes nanogit will read from the server, classified by
+	// operation. The zero value disables the four wire caps (embedders that
+	// don't opt in keep today's unbounded per-response behavior), but decoded-
+	// object protection stays on: MaxObjectDecodedBytes falls back to nanogit's
+	// built-in default rather than becoming unlimited. See Limits for details.
 	Limits Limits
 	// NegotiateCapabilities, when true, makes the client fetch the server's
 	// receive-pack capability advertisement once per client lifetime and
