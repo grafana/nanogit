@@ -144,4 +144,3 @@ func resolveAnyDefaultBranch(ctx context.Context, c nanogit.Client) (nanogit.Ref
 	}
 	return nanogit.Ref{}, errors.New("no refs/heads/* branch found on remote")
 }
-

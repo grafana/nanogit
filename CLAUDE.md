@@ -87,7 +87,7 @@ cd perf && make profile-compare    # Compare current vs baseline performance
 - Multiple repository sizes and operation types
 - Network latency simulation capabilities
 - Comprehensive metrics collection and reporting
-- See `tests/performance/README.md` for detailed documentation
+- See `perf/README.md` for detailed documentation
 
 ## Development Notes
 

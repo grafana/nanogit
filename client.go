@@ -66,37 +66,110 @@ type StagedWriter interface {
 	Cleanup(ctx context.Context) error
 }
 
-// Client defines the interface for interacting with a Git repository.
-// It provides methods for repository operations, reference management,
-//
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header internal/tools/fake_header.txt -o mocks/client.go . Client
+
+// Client is the interface for interacting with a single remote Git repository
+// over the Smart HTTP protocol v2. It covers repository probes, reference
+// management, object reads (blobs, trees, commits), history comparison,
+// path-filtered cloning, and creating a StagedWriter for transactional writes.
+//
+// Instances are created with NewHTTPClient. All operations are stateless HTTP
+// exchanges: nothing is written to the local filesystem unless explicitly
+// requested (Clone), and no per-repository state outlives the client.
 type Client interface {
-	// Repo operations
+	// CanRead reports whether the client can read from the repository, by
+	// probing the git-upload-pack service with the configured credentials.
 	CanRead(ctx context.Context) (bool, error)
+
+	// CanWrite reports whether the client has repository-level write access,
+	// by probing the git-receive-pack service. It cannot see branch-level
+	// restrictions (e.g. protected branches); a push may still be rejected.
 	CanWrite(ctx context.Context) (bool, error)
-	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
+
+	// IsAuthorized reports whether the client can communicate with the
+	// repository using the configured credentials.
+	//
+	// Deprecated: Use CanRead instead.
+	IsAuthorized(ctx context.Context) (bool, error)
+
+	// RepoExists reports whether the repository exists on the server, by
+	// attempting to fetch its refs. It returns false (without error) when the
+	// server answers with 404.
 	RepoExists(ctx context.Context) (bool, error)
+
+	// IsServerCompatible reports whether the server supports Git protocol v2,
+	// which nanogit requires. It returns false for servers that only speak
+	// protocol v1 (for example Azure DevOps).
 	IsServerCompatible(ctx context.Context) (bool, error)
-	// Ref operations
+
+	// ListRefs retrieves all references (branches, tags, and others)
+	// advertised by the remote repository, without downloading object data.
 	ListRefs(ctx context.Context) ([]Ref, error)
+
+	// GetRef retrieves a single reference by its fully qualified name, such
+	// as "refs/heads/main" or "refs/tags/v1.0.0". It returns a
+	// RefNotFoundError if the reference does not exist; short names like
+	// "main" are not resolved.
 	GetRef(ctx context.Context, refName string) (Ref, error)
+
+	// CreateRef creates a new reference pointing at ref.Hash. The reference
+	// must not already exist.
 	CreateRef(ctx context.Context, ref Ref) error
+
+	// UpdateRef moves an existing reference to point at ref.Hash. The
+	// reference must already exist.
 	UpdateRef(ctx context.Context, ref Ref) error
+
+	// DeleteRef removes a reference from the remote repository. Only the
+	// reference is removed, not the objects it pointed to.
 	DeleteRef(ctx context.Context, refName string) error
-	// Blob operations
+
+	// GetBlob retrieves a blob (file content) by its object hash.
 	GetBlob(ctx context.Context, hash hash.Hash) (*Blob, error)
+
+	// GetBlobByPath retrieves a file by walking the tree hierarchy from
+	// rootHash to the given slash-separated path, e.g. "docs/README.md".
+	// Tip: pass Commit.Tree as the root.
 	GetBlobByPath(ctx context.Context, rootHash hash.Hash, path string) (*Blob, error)
-	// Tree operations
+
+	// GetFlatTree retrieves a recursive listing of every file and directory
+	// reachable from the given commit or tree hash, with each entry carrying
+	// its full path from the repository root.
 	GetFlatTree(ctx context.Context, hash hash.Hash) (*FlatTree, error)
+
+	// GetTree retrieves a single tree object (one directory level) by its
+	// hash.
 	GetTree(ctx context.Context, hash hash.Hash) (*Tree, error)
+
+	// GetTreeByPath retrieves the tree object for a directory at the given
+	// slash-separated path, walking down from rootHash. The path "" or "."
+	// returns the root tree itself.
 	GetTreeByPath(ctx context.Context, rootHash hash.Hash, path string) (*Tree, error)
-	// Commit operations
+
+	// GetCommit retrieves a single commit object, including its author,
+	// committer, message, parent hashes, and root tree hash.
 	GetCommit(ctx context.Context, hash hash.Hash) (*Commit, error)
+
+	// CompareCommits returns the file-level differences between two commits:
+	// files added, modified, or deleted between baseCommit and headCommit,
+	// sorted by path. Rename detection is enabled with WithRenameDetection.
 	CompareCommits(ctx context.Context, baseCommit, headCommit hash.Hash, opts ...CompareCommitsOption) ([]CommitFile, error)
+
+	// ListCommits walks the history backwards from startCommit and returns
+	// the matching commits. ListCommitsOptions provides pagination (Page,
+	// PerPage) and filtering (Path, Since, Until).
 	ListCommits(ctx context.Context, startCommit hash.Hash, options ListCommitsOptions) ([]Commit, error)
-	// Clone operations
+
+	// Clone writes a snapshot of the repository at CloneOptions.Hash to a
+	// local directory, optionally filtered to specific paths with glob
+	// patterns. It fetches only the objects the filtered snapshot needs; it
+	// does not create a .git directory or a working clone.
 	Clone(ctx context.Context, opts CloneOptions) (*CloneResult, error)
-	// Write operations
+
+	// NewStagedWriter creates a StagedWriter that stages changes on top of
+	// the commit currently referenced by ref, to be committed and pushed as
+	// one atomic update. WriterOption values choose where staged objects are
+	// buffered (memory, disk, or automatic).
 	NewStagedWriter(ctx context.Context, ref Ref, options ...WriterOption) (StagedWriter, error)
 }
 
@@ -132,29 +205,28 @@ type httpClient struct {
 }
 
 // NewHTTPClient creates a new Git client for the specified repository URL.
-// The client implements the Git Smart Protocol version 2 over HTTP/HTTPS transport.
-// It supports both HTTP and HTTPS URLs and can be configured with various options
-// for authentication, logging, and HTTP client customization.
+// The client implements the Git Smart Protocol version 2 over HTTP/HTTPS
+// transport and is configured with functional options from the
+// [github.com/grafana/nanogit/options] package (authentication, response
+// limits, receive-pack capabilities, HTTP client customization).
 //
-// Parameters:
-//   - repo: Repository URL (must be HTTP or HTTPS)
-//   - options: Configuration options for authentication, logging, etc.
-//
-// Returns:
-//   - Client: Configured Git client interface
-//   - error: Error if URL is invalid or configuration fails
+// It returns an error if the URL is not a valid HTTP or HTTPS repository URL
+// or if an option fails to apply.
 //
 // Example:
 //
-//	// Create client with basic authentication
+//	// Create a client with basic authentication.
 //	client, err := nanogit.NewHTTPClient(
 //	    "https://github.com/user/repo",
 //	    options.WithBasicAuth("username", "password"),
-//	    options.WithLogger(logger),
 //	)
 //	if err != nil {
 //	    return err
 //	}
+//
+// Logging and retries are configured per call through the context; see
+// [github.com/grafana/nanogit/log.ToContext] and
+// [github.com/grafana/nanogit/retry.ToContext].
 func NewHTTPClient(repo string, opts ...options.Option) (Client, error) {
 	// Resolve options once so both the raw transport and the higher-level
 	// httpClient fields come from the same application of each Option.

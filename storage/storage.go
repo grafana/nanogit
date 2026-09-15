@@ -1,3 +1,8 @@
+// Package storage provides context-injected packfile object storage for
+// nanogit clients. Objects fetched or written during Git operations are
+// cached in a PackfileStorage carried in the context.Context, so callers can
+// plug in a custom backend with ToContext or rely on the built-in in-memory
+// implementation (see FromContextOrInMemory).
 package storage
 
 import (
