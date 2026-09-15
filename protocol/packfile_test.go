@@ -250,17 +250,30 @@ func TestReadObject_WithMaxDecodedObjectBytes(t *testing.T) {
 		require.Equal(t, int64(decodedSize-1), tooLarge.Limit)
 	})
 
-	t.Run("non-positive cap falls back to the default", func(t *testing.T) {
+	t.Run("non-positive cap keeps the built-in default in force", func(t *testing.T) {
 		t.Parallel()
-		// A zero/negative override must not disable the check: the built-in
-		// MaxUnpackedObjectSize default stays in force.
-		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+		// A zero/negative override must NOT disable the cap: an object
+		// declaring a size above MaxUnpackedObjectSize is still rejected, with
+		// the default limit reported. Reading a small object would succeed
+		// whether zero restored the default or disabled the cap entirely, so it
+		// wouldn't prove the security invariant.
+		var pack bytes.Buffer
+		pack.WriteString("PACK")
+		require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+		require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
+		pack.Write(objectHeader(protocol.ObjectTypeBlob, protocol.MaxUnpackedObjectSize+1))
+
+		pr, err := protocol.ParsePackfileWithOptions(t.Context(), &pack,
 			protocol.WithMaxDecodedObjectBytes(0))
 		require.NoError(t, err)
 
-		entry, err := pr.ReadObject(t.Context())
-		require.NoError(t, err)
-		require.Len(t, entry.Object.Data, decodedSize)
+		_, err = pr.ReadObject(t.Context())
+		require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
+
+		var tooLarge *protocol.ObjectTooLargeError
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, int64(protocol.MaxUnpackedObjectSize+1), tooLarge.Size)
+		require.Equal(t, int64(protocol.MaxUnpackedObjectSize), tooLarge.Limit)
 	})
 }
 

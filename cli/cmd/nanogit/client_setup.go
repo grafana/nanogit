@@ -104,10 +104,12 @@ func setupClient(ctx context.Context, repoURL string, extra ...options.Option) (
 	return ctx, client, nil
 }
 
-// limitsFromGlobalFlags returns the options.Limits derived from the CLI
-// --max-bytes-* flags, plus a flag indicating whether any limit was set.
-// When all four flags are zero (the default), the bool is false so callers
-// can skip applying WithLimits and preserve the library's default behavior.
+// limitsFromGlobalFlags returns the options.Limits derived from the CLI limit
+// flags (the four --max-bytes-* wire caps plus --max-object-decoded-bytes),
+// along with a flag indicating whether any of them was set. When all five are
+// zero (the default), the bool is false so callers can skip applying WithLimits
+// and preserve the library's default behavior — which still enforces the
+// built-in decoded-object cap.
 func limitsFromGlobalFlags() (options.Limits, bool) {
 	l := options.Limits{
 		SingleObjectFetchMaxBytes:   globalMaxBytesSingleObject,

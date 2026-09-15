@@ -58,12 +58,13 @@ type Options struct {
 // Limits caps how much data nanogit will read from the server, broken down by
 // operation class. The four *MaxBytes fields cap the bytes read from a single
 // HTTP response (wire bytes); a zero value for any of them means "no limit",
-// so the zero value of those four preserves nanogit's historic behavior. The
-// four read-side caps govern the git-upload-pack endpoint (which carries both
-// the fetch and ls-refs commands in protocol v2); they are split by operation
-// rather than by endpoint because their expected response sizes differ by
-// orders of magnitude. ReceivePackResponseMaxBytes is the lone write-side cap
-// and governs git-receive-pack.
+// so the zero value of those four preserves nanogit's historic behavior. Three
+// of them — SingleObjectFetchMaxBytes, MultiObjectFetchMaxBytes, and
+// RefsMetadataMaxBytes — are read-side and govern the git-upload-pack endpoint
+// (which carries both the fetch and ls-refs commands in protocol v2); they are
+// split by operation rather than by endpoint because their expected response
+// sizes differ by orders of magnitude. ReceivePackResponseMaxBytes is the lone
+// write-side cap and governs git-receive-pack.
 //
 // MaxObjectDecodedBytes is the exception: it bounds decoded (post-inflation)
 // object size rather than wire bytes, and a zero value does NOT disable it —
