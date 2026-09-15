@@ -1,5 +1,11 @@
 name: Provider Tests
 
+# For PR-targeted manual runs, put the PR number in the run title so the
+# slash-command dispatcher can correlate the run it just triggered (and link to
+# the right one) instead of guessing by timestamp.
+run-name: >-
+  ${{ (github.event_name == 'workflow_dispatch' && inputs.pr != '') && format('Provider Tests (PR #{0})', inputs.pr) || 'Provider Tests' }}
+
 # Provider tests exercise nanogit against real hosted Git providers
 # (GitHub, GitLab, Bitbucket) and require credentials pulled from Vault.
 # Because the tests run repository code with those secrets in scope, they must

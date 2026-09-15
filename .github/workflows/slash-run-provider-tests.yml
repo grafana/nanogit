@@ -39,9 +39,12 @@ on:
     types: [created]
 
 concurrency:
-  # One dispatch per PR at a time; a rapid second comment supersedes the first.
+  # Serialize dispatcher jobs per PR. We do NOT cancel in progress: once a job
+  # has dispatched provider-tests.yml that run cannot be recalled, so canceling
+  # a job mid-flight would strand a privileged run and skip its status comment.
+  # A second comment therefore waits and then dispatches its own run.
   group: slash-run-provider-tests-${{ github.event.issue.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Least privilege: read the API by default, escalate per-job below.
 permissions:
@@ -50,13 +53,16 @@ permissions:
 jobs:
   dispatch:
     name: Dispatch provider tests
-    # Cheap pre-filter only: a PR comment in this repo that contains the slash
-    # command. This is NOT the authorization check — that is the "Require write
-    # access" step below, which verifies the commenter's real repo permission.
+    # Cheap pre-filter only: a PR comment in this repo whose body *starts with*
+    # the slash command. startsWith (not contains) avoids firing when someone
+    # merely quotes or discusses the command (e.g. "do not run
+    # /run-provider-tests yet"). This is NOT the authorization check — that is
+    # the "Require write access" step below, which verifies the commenter's
+    # real repo permission.
     if: >-
       github.repository == 'grafana/nanogit'
       && github.event.issue.pull_request
-      && contains(github.event.comment.body, '/run-provider-tests')
+      && startsWith(github.event.comment.body, '/run-provider-tests')
     runs-on: ubuntu-latest
     permissions:
       actions: write # dispatch provider-tests.yml
@@ -137,13 +143,20 @@ jobs:
             --field pr="$PR_NUMBER" \
             --field head_sha="$HEAD_SHA"
 
-          # workflow_dispatch runs take a few seconds to appear in the API.
+          # Find the run we just dispatched. Correlate on the run title
+          # (provider-tests.yml sets run-name to include the PR number) rather
+          # than taking the newest dispatch, so a concurrent dispatch for a
+          # different PR can't make us link to the wrong privileged run.
+          want_title="Provider Tests (PR #${PR_NUMBER})"
           run_url=""
           for _ in $(seq 1 10); do
             sleep 3
-            run_url=$(gh api \
-              "repos/${REPO}/actions/workflows/provider-tests.yml/runs?event=workflow_dispatch&created=>=${before}&per_page=1" \
-              --jq '.workflow_runs[0].html_url // empty')
+            runs_json=$(gh api \
+              "repos/${REPO}/actions/workflows/provider-tests.yml/runs?event=workflow_dispatch&created=>=${before}&per_page=20")
+            # $t is a jq variable bound with --arg, not a shell variable.
+            # shellcheck disable=SC2016
+            run_url=$(printf '%s' "$runs_json" | jq -r --arg t "$want_title" \
+              'first(.workflow_runs[] | select(.display_title == $t or .name == $t) | .html_url) // empty')
             if [ -n "$run_url" ]; then
               echo "Found run: $run_url"
               break
