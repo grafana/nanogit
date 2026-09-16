@@ -70,16 +70,21 @@ func TestFetchResolvesDeltaChain(t *testing.T) {
 	delta1 := addOnlyDelta(len(base), mid)  // base -> mid
 	delta2 := addOnlyDelta(len(mid), final) // mid  -> final
 
-	// v2 packfile with three objects: base blob, ref-delta(base), ref-delta(mid).
+	// v2 packfile with three objects: base blob, ref-delta(mid), ref-delta(base).
+	// delta2 (whose base is mid) is placed BEFORE delta1 (which produces mid) on
+	// purpose: the first resolution pass must leave delta2 pending because mid
+	// does not exist yet, and only after delta1 is applied in that pass can a
+	// second pass resolve delta2 — exercising resolveDeltas' iterate-until-no-
+	// progress loop rather than a single in-order sweep.
 	pack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x03")
 	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeBlob, len(base))...)
 	pack = append(pack, zlibBytes(t, base)...)
-	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(delta1))...)
-	pack = append(pack, baseHash[:]...)
-	pack = append(pack, zlibBytes(t, delta1)...)
 	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(delta2))...)
 	pack = append(pack, midHash[:]...)
 	pack = append(pack, zlibBytes(t, delta2)...)
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(delta1))...)
+	pack = append(pack, baseHash[:]...)
+	pack = append(pack, zlibBytes(t, delta1)...)
 
 	var body bytes.Buffer
 	writePkt := func(b []byte) {

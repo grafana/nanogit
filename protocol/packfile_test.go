@@ -303,6 +303,54 @@ func TestReadObject_SizeVarintTooLong(t *testing.T) {
 	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
 }
 
+func TestReadObject_HonorsConfiguredLimitAboveVarintCeiling(t *testing.T) {
+	t.Parallel()
+
+	// A ~40 MiB declared size needs a 4-byte size varint. On 32-bit builds
+	// (armv7) the old int accumulator's varint-length guard rejected the 4th
+	// byte as ErrObjectTooLarge before the configured limit was ever consulted,
+	// so a limit above ~32 MiB was not honored. With a uint64 accumulator the
+	// header-stage decision must be driven purely by the configured cap.
+	//
+	// The pack carries only the header (no body): we assert the size/limit
+	// decision, not full inflation, so nothing allocates the 40 MiB.
+	const declared = 40 * 1024 * 1024
+
+	buildPack := func() []byte {
+		var pack bytes.Buffer
+		pack.WriteString("PACK")
+		require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(2)))
+		require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
+		pack.Write(objectHeader(protocol.ObjectTypeBlob, declared))
+		return pack.Bytes()
+	}
+
+	t.Run("within a larger configured cap is not rejected as too large", func(t *testing.T) {
+		t.Parallel()
+		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+			protocol.WithMaxDecodedObjectBytes(64*1024*1024))
+		require.NoError(t, err)
+
+		_, err = pr.ReadObject(t.Context())
+		require.Error(t, err) // no body -> inflation fails
+		require.NotErrorIs(t, err, protocol.ErrObjectTooLarge,
+			"a size within the configured cap must not be rejected as too large")
+	})
+
+	t.Run("above the cap is rejected with the declared size", func(t *testing.T) {
+		t.Parallel()
+		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+			protocol.WithMaxDecodedObjectBytes(10*1024*1024))
+		require.NoError(t, err)
+
+		_, err = pr.ReadObject(t.Context())
+		var tooLarge *protocol.ObjectTooLargeError
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, int64(declared), tooLarge.Size)
+		require.Equal(t, int64(10*1024*1024), tooLarge.Limit)
+	})
+}
+
 func TestReadObject_MaxSizeObject(t *testing.T) {
 	t.Parallel()
 

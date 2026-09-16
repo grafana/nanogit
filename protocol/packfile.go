@@ -11,7 +11,7 @@ import (
 	"fmt"
 	stdhash "hash"
 	"io"
-	"math/bits"
+	"math"
 	"os"
 	"slices"
 	"sort"
@@ -606,35 +606,54 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	// The remaining 4 bits are the start of a varint containing the size.
 	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
 
-	size := int(buf[0] & 0b1111)
+	// Accumulate the declared size in a uint64 so the value is independent of
+	// the platform word size. On 32-bit builds (e.g. the released armv7) an int
+	// accumulator would overflow — or trip the varint-length guard — before an
+	// object near a configured multi-tens-of-MiB limit could be compared against
+	// it, silently not honoring the limit.
+	size := uint64(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
 		if _, err := p.reader.Read(buf[:]); err != nil {
 			return entry, err
 		}
 
-		// A well-formed size varint for an object we accept is only a few
-		// bytes long. Cap the shift before applying it so a corrupt or
-		// malicious stream cannot send an unbounded run of continuation bytes
-		// (for example repeated 0x80) and overflow the size accumulator below.
-		// The shift used here must leave the sign bit clear: the 7-bit group
-		// occupies bits [shift, shift+6], so shift+6 must stay below the sign
-		// bit (bits.UintSize-1), i.e. shift <= bits.UintSize-8.
-		if shift > bits.UintSize-8 {
+		// A well-formed size varint for an object we accept is only a few bytes
+		// long. Cap the shift before applying it so a corrupt or malicious
+		// stream cannot send an unbounded run of continuation bytes (for example
+		// repeated 0x80) and overflow the accumulator below. The 7-bit group
+		// occupies bits [shift, shift+6], so shift must stay <= 63-6 = 57 to fit
+		// in the uint64.
+		if shift > 57 {
 			return entry, fmt.Errorf("%w (size varint too long)", ErrObjectTooLarge)
 		}
 
-		size += int(buf[0]&0x7f) << shift
+		size += uint64(buf[0]&0x7f) << shift
 		shift += 7
 	}
 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
-	if size < 0 || int64(size) > p.maxDecodedObjectBytes {
+	// Reject anything over the configured decoded-object cap. Comparing as
+	// uint64 honors the full configured limit on every platform, instead of
+	// tripping the varint-length guard first on 32-bit builds.
+	if size > uint64(p.maxDecodedObjectBytes) {
+		reported := int64(size)
+		if size > math.MaxInt64 {
+			reported = math.MaxInt64
+		}
+		return entry, &ObjectTooLargeError{Size: reported, Limit: p.maxDecodedObjectBytes}
+	}
+
+	// An in-limit size must still be addressable as an int before it is used as
+	// a buffer length/capacity downstream (int is 32-bit on armv7). With the
+	// default cap this never triggers; it only guards a limit configured above
+	// the platform word.
+	if size > math.MaxInt {
 		return entry, &ObjectTooLargeError{Size: int64(size), Limit: p.maxDecodedObjectBytes}
 	}
 
-	err := p.processObjectByType(entry.Object, size, buf[0])
+	err := p.processObjectByType(entry.Object, int(size), buf[0])
 	if err != nil {
 		return entry, err
 	}
