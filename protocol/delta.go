@@ -137,11 +137,14 @@ func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*De
 		}
 
 		// A command that would consume more than the target size still has
-		// left is malformed: accepting it would both overrun the declared
-		// output and underflow the unsigned counter below. Stop here and let
-		// ApplyDelta's length validation reject the (now short) result.
+		// left is malformed: a well-formed delta's instructions sum to exactly
+		// the declared target. Accepting it would overrun the declared output
+		// and underflow the unsigned counter below. Reject it here rather than
+		// dropping it and relying on ApplyDelta's downstream length check, so
+		// the failure is local and every consumer of the parsed Delta is
+		// protected, not just those that reconstruct via ApplyDelta.
 		if consumedSize > deltaSize {
-			break
+			return nil, strError("delta command overruns declared target size")
 		}
 
 		delta.Changes = append(delta.Changes, change)

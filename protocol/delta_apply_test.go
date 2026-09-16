@@ -316,24 +316,27 @@ func TestApplyDelta(t *testing.T) {
 	})
 }
 
-func TestParseDelta_DropsCommandThatWouldOverrunTarget(t *testing.T) {
+func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {
 	t.Parallel()
 
 	// Header: source size 10, target size 10. Then a 7-byte add (fits) and a
 	// 5-byte add that would consume more than the 3 bytes still remaining in
-	// the target. The overrunning command must be dropped rather than
-	// underflowing the unsigned remaining-size counter.
+	// the target. The overrunning command is unambiguously malformed (a
+	// well-formed delta's instructions sum to exactly the target), so parseDelta
+	// must reject it up front rather than silently dropping it and leaning on
+	// ApplyDelta's downstream length check — and rather than underflowing the
+	// unsigned remaining-size counter.
 	payload := []byte{
 		0x0A,                                    // source size 10
 		0x0A,                                    // target size 10
 		0x07, 'a', 'b', 'c', 'd', 'e', 'f', 'g', // add 7 bytes
-		0x05, 'h', 'i', 'j', 'k', 'l', // add 5 bytes -> would overrun, dropped
+		0x05, 'h', 'i', 'j', 'k', 'l', // add 5 bytes -> would overrun, rejected
 	}
 
 	delta, err := parseDelta("parent", payload, 0)
-	require.NoError(t, err)
-	require.EqualValues(t, 10, delta.TargetLength)
-	require.Len(t, delta.Changes, 1, "the overrunning command must be dropped, not underflow the counter")
+	require.Nil(t, delta)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "overrun")
 }
 
 func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {
