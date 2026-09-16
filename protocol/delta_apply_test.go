@@ -278,7 +278,11 @@ func TestApplyDelta(t *testing.T) {
 		}
 		_, err := ApplyDelta([]byte("hello"), delta)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "exceed declared target")
+		var sizeErr *DeltaSizeError
+		require.ErrorAs(t, err, &sizeErr)
+		require.EqualValues(t, 3, sizeErr.Declared)
+		require.EqualValues(t, 5, sizeErr.Actual)
+		require.ErrorIs(t, err, ErrDeltaSize)
 	})
 
 	t.Run("error: output shorter than declared target", func(t *testing.T) {
@@ -291,7 +295,11 @@ func TestApplyDelta(t *testing.T) {
 		}
 		_, err := ApplyDelta([]byte("hello"), delta)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "does not match declared target")
+		var sizeErr *DeltaSizeError
+		require.ErrorAs(t, err, &sizeErr)
+		require.EqualValues(t, 10, sizeErr.Declared)
+		require.EqualValues(t, 2, sizeErr.Actual)
+		require.ErrorIs(t, err, ErrDeltaSize)
 	})
 
 	t.Run("preallocation is bounded to the declared target", func(t *testing.T) {
@@ -336,7 +344,12 @@ func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {
 	delta, err := parseDelta("parent", payload, 0)
 	require.Nil(t, delta)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "overrun")
+	var sizeErr *DeltaSizeError
+	require.ErrorAs(t, err, &sizeErr)
+	require.EqualValues(t, 10, sizeErr.Declared)
+	// 7 bytes already consumed + the 5-byte command = 12, past the 10 target.
+	require.EqualValues(t, 12, sizeErr.Actual)
+	require.ErrorIs(t, err, ErrDeltaSize)
 }
 
 func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {

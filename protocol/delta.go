@@ -1,6 +1,9 @@
 package protocol
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 // FileStatus represents the status of a file in a commit
 // Git file status codes are documented in the Git documentation:
@@ -33,6 +36,41 @@ var (
 	errMissingOffsetByte = strError("missing offset byte")
 	errMissingSizeByte   = strError("missing size byte")
 )
+
+// ErrDeltaSize is the sentinel wrapped by *DeltaSizeError. Match it with
+// errors.Is(err, ErrDeltaSize) to detect any delta whose instructions do not
+// reconstruct exactly its declared target size.
+//
+// It is distinct from ErrObjectTooLarge: ErrObjectTooLarge means a delta's
+// declared target exceeds the configured decoded-object cap (a size-limit
+// rejection), whereas ErrDeltaSize means the delta is internally inconsistent
+// — malformed or truncated — regardless of any limit.
+var ErrDeltaSize = strError("delta does not reconstruct its declared target size")
+
+// DeltaSizeError reports that a delta's instructions do not reconstruct an
+// object of its declared target size, so the delta is malformed or truncated.
+// nanogit returns it from more than one place: while parsing a delta (an
+// instruction that would consume past the declared target) and while applying
+// one (a change that would overrun the target, or a final reconstructed length
+// that does not match). It wraps ErrDeltaSize so errors.Is(err, ErrDeltaSize)
+// matches, while exposing the declared target and the offending size.
+type DeltaSizeError struct {
+	// Declared is the target size, in bytes, declared in the delta header.
+	Declared uint64
+	// Actual is the reconstructed output size, in bytes, observed at the point
+	// the mismatch was detected. For an overrun it is the size the offending
+	// instruction would have produced; for a final-length check it is the
+	// completed output length.
+	Actual uint64
+	// Reason is a short, stable description of which size check failed.
+	Reason string
+}
+
+func (e *DeltaSizeError) Error() string {
+	return fmt.Sprintf("%s: %s (declared target %d bytes, got %d bytes)", ErrDeltaSize, e.Reason, e.Declared, e.Actual)
+}
+
+func (e *DeltaSizeError) Unwrap() error { return ErrDeltaSize }
 
 // Delta represents a delta, which is a way to describe the changes to a file between two commits.
 //
@@ -144,7 +182,13 @@ func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*De
 		// the failure is local and every consumer of the parsed Delta is
 		// protected, not just those that reconstruct via ApplyDelta.
 		if consumedSize > deltaSize {
-			return nil, strError("delta command overruns declared target size")
+			// Bytes already accounted for plus this instruction is the output
+			// this command would have produced; it exceeds the declared target.
+			return nil, &DeltaSizeError{
+				Declared: originalDeltaSize,
+				Actual:   (originalDeltaSize - deltaSize) + consumedSize,
+				Reason:   "instruction consumes past declared target",
+			}
 		}
 
 		delta.Changes = append(delta.Changes, change)

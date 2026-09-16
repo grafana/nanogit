@@ -73,7 +73,11 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 		// target. This keeps a delta from amplifying its base beyond the
 		// bound that was validated against the decoded-object cap.
 		if bounded && uint64(len(result))+uint64(len(chunk)) > delta.TargetLength {
-			return nil, fmt.Errorf("delta change %d: output would exceed declared target size %d bytes", i, delta.TargetLength)
+			return nil, &DeltaSizeError{
+				Declared: delta.TargetLength,
+				Actual:   uint64(len(result)) + uint64(len(chunk)),
+				Reason:   fmt.Sprintf("change %d would push output past declared target", i),
+			}
 		}
 
 		result = append(result, chunk...)
@@ -82,7 +86,11 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 	// A well-formed delta reconstructs exactly TargetLength bytes; anything
 	// else is a malformed (or truncated) delta.
 	if bounded && uint64(len(result)) != delta.TargetLength {
-		return nil, fmt.Errorf("delta output size %d does not match declared target size %d", len(result), delta.TargetLength)
+		return nil, &DeltaSizeError{
+			Declared: delta.TargetLength,
+			Actual:   uint64(len(result)),
+			Reason:   "reconstructed output size does not match declared target",
+		}
 	}
 
 	return result, nil
