@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"math"
 	"strings"
 	"testing"
 
@@ -385,6 +386,26 @@ func TestApplyDelta_ParsedZeroTargetDoesNotAllocateBase(t *testing.T) {
 	require.Empty(t, got)
 	require.Equal(t, 0, cap(got),
 		"a parsed zero-target delta must not preallocate the base size")
+}
+
+func TestApplyDelta_TargetExceedingPlatformMaxErrorsNotPanics(t *testing.T) {
+	t.Parallel()
+
+	// A declared target above the platform's int range must surface an error
+	// rather than panic inside make (slice capacities are int, 32-bit on armv7).
+	// math.MaxUint64 exceeds MaxInt on every supported platform.
+	delta := &Delta{
+		ExpectedSourceLength: 0,
+		TargetLength:         math.MaxUint64,
+	}
+
+	require.NotPanics(t, func() {
+		_, err := ApplyDelta([]byte{}, delta)
+		require.Error(t, err)
+		var sizeErr *DeltaSizeError
+		require.ErrorAs(t, err, &sizeErr)
+		require.Contains(t, sizeErr.Reason, "platform")
+	})
 }
 
 func TestDelta_DecodeChanges(t *testing.T) {

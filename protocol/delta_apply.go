@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"math"
 )
 
 // ApplyDelta applies delta changes to a base object's data to reconstruct the full object.
@@ -50,6 +51,21 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 	if !bounded {
 		initialCap = delta.ExpectedSourceLength
 	}
+
+	// Slice capacities are limited to int, which is 32-bit on the supported
+	// armv7 builds. A target above that (from a hand-built Delta, or a parsed
+	// one whose configured decoded cap exceeds the platform word) would panic in
+	// make rather than surface an error, so reject it explicitly first. On the
+	// unbounded path initialCap == len(baseData), already an int, so this only
+	// bites the target-driven bound.
+	if initialCap > math.MaxInt {
+		return nil, &DeltaSizeError{
+			Declared: delta.TargetLength,
+			Actual:   initialCap,
+			Reason:   fmt.Sprintf("declared target exceeds this platform's maximum allocatable size (%d bytes)", math.MaxInt),
+		}
+	}
+
 	result := make([]byte, 0, initialCap)
 
 	// appendChange resolves one decoded change to its output bytes and appends
