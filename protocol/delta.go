@@ -96,12 +96,14 @@ type Delta struct {
 	// Changes contains pre-decoded modifications to apply, in order. It is an
 	// input to ApplyDelta for callers that build a Delta by hand (e.g. tests).
 	//
-	// parseDelta deliberately leaves this nil: decoding a delta's whole
-	// instruction stream into a []DeltaChange up front lets a small, highly
-	// compressible payload amplify into hundreds of MiB of metadata (~40 bytes
-	// per instruction, and an instruction can be as small as one payload byte).
-	// A parsed Delta instead retains the raw instruction bytes and ApplyDelta
-	// streams them one at a time; see instructions.
+	// NOTE: a Delta produced by the packfile reader now leaves this nil, whereas
+	// earlier versions populated it. Decoding a delta's whole instruction stream
+	// into a []DeltaChange up front lets a small, highly compressible payload
+	// amplify into hundreds of MiB of metadata (~40 bytes per instruction, and
+	// an instruction can be as small as one payload byte), so a parsed Delta
+	// instead retains the raw instruction bytes (see instructions) and ApplyDelta
+	// streams them one at a time. Callers that inspected Changes on a parsed
+	// Delta should call DecodeChanges instead, which decodes on demand.
 	//
 	// When iterating, this must be done sequentially, in order. No modification
 	// of the source data is necessary. The presence of some fields determines
@@ -127,6 +129,32 @@ type DeltaChange struct {
 	// If we should copy from source (DeltaData == nil), SourceOffset is the starting position in the source, and Length is how much data is to be added.
 	Length       uint64
 	SourceOffset uint64
+}
+
+// DecodeChanges returns the delta's instructions decoded into a slice, in
+// order. It restores the pre-streaming ability to inspect a parsed delta's
+// changes: parseDelta no longer populates the Changes field (doing so risked a
+// metadata bomb), so a caller that needs the decoded instructions materializes
+// them explicitly here and pays the O(number-of-instructions) cost only when it
+// asks for it.
+//
+// For a hand-built Delta (no retained instruction bytes) it returns the Changes
+// field as-is. Prefer ApplyDelta when you only need the reconstructed object;
+// it streams the instructions without building this slice.
+func (d *Delta) DecodeChanges() ([]DeltaChange, error) {
+	if d.instructions == nil {
+		return d.Changes, nil
+	}
+
+	var changes []DeltaChange
+	err := walkDeltaCommands(d.ExpectedSourceLength, d.TargetLength, d.instructions, func(c DeltaChange) error {
+		changes = append(changes, c)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return changes, nil
 }
 
 // parseDelta parses a delta payload into a Delta struct.

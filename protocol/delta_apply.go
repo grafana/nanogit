@@ -34,16 +34,21 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 			len(baseData), delta.ExpectedSourceLength)
 	}
 
-	// Pre-allocate the result buffer to the delta's declared target size when
-	// it is known (parseDelta always records it). This both avoids repeated
-	// growth and, crucially, bounds the allocation: it is exactly the output
-	// size, which parseDelta already validated against the decoded-object cap.
-	// When TargetLength is 0 (e.g. a hand-built Delta) we fall back to the
-	// source length as a conservative hint and skip the output-length guards.
-	bounded := delta.TargetLength > 0
-	initialCap := delta.ExpectedSourceLength
-	if bounded {
-		initialCap = delta.TargetLength
+	// Pre-allocate the result buffer to the delta's declared target size and
+	// enforce that exact size below. This bounds the allocation to the output —
+	// which parseDelta already validated against the decoded-object cap — rather
+	// than to the (possibly much larger) base.
+	//
+	// A parsed delta always knows its target, even when it is legitimately zero,
+	// so it is always bounded: TargetLength == 0 must NOT be read as "unknown",
+	// or a tiny zero-target delta against a large base would preallocate the
+	// base size. Only a hand-built Delta with no retained instructions may leave
+	// the target unknown (zero), in which case we fall back to the source length
+	// as a hint and skip the output-length guards.
+	bounded := delta.instructions != nil || delta.TargetLength > 0
+	initialCap := delta.TargetLength
+	if !bounded {
+		initialCap = delta.ExpectedSourceLength
 	}
 	result := make([]byte, 0, initialCap)
 

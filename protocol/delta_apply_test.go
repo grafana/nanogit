@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -356,6 +357,79 @@ func TestParseDelta_StreamsInsteadOfMaterializingChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result, target)
 	require.Equal(t, []byte(strings.Repeat("a", target)), result)
+}
+
+func TestApplyDelta_ParsedZeroTargetDoesNotAllocateBase(t *testing.T) {
+	t.Parallel()
+
+	// A parsed delta that legitimately declares a zero-byte target against a
+	// non-trivial base must reconstruct an empty object WITHOUT preallocating
+	// the base size. Regression guard: reading TargetLength==0 as "unknown"
+	// used to fall back to ExpectedSourceLength, turning repeated tiny deltas
+	// against a large base into an allocation/GC DoS.
+	const baseLen = 4096
+	base := bytes.Repeat([]byte("x"), baseLen)
+
+	// Header: source size 4096 (0x80,0x20), target size 0 (0x00), plus a
+	// trailing byte so the payload meets the 4-byte minimum. With a zero target
+	// the instruction stream is never walked.
+	payload := []byte{0x80, 0x20, 0x00, 0x00}
+
+	delta, err := parseDelta("parent", payload, 0)
+	require.NoError(t, err)
+	require.EqualValues(t, baseLen, delta.ExpectedSourceLength)
+	require.EqualValues(t, 0, delta.TargetLength)
+
+	got, err := ApplyDelta(base, delta)
+	require.NoError(t, err)
+	require.Empty(t, got)
+	require.Equal(t, 0, cap(got),
+		"a parsed zero-target delta must not preallocate the base size")
+}
+
+func TestDelta_DecodeChanges(t *testing.T) {
+	t.Parallel()
+
+	t.Run("decodes a parsed delta's instructions on demand", func(t *testing.T) {
+		t.Parallel()
+
+		// base "Hello, world!" -> copy "Hello, ", add "DELTA ", copy "world!".
+		base := []byte("Hello, world!")
+		payload := []byte{
+			0x0D,       // source size 13
+			0x13,       // target size 19
+			0x90, 0x07, // copy base[0:7]
+			0x06, 'D', 'E', 'L', 'T', 'A', ' ', // add 6 bytes
+			0x91, 0x07, 0x06, // copy base[7:13]
+		}
+
+		delta, err := parseDelta("parent", payload, 0)
+		require.NoError(t, err)
+		require.Nil(t, delta.Changes, "parsed delta leaves Changes nil")
+
+		changes, err := delta.DecodeChanges()
+		require.NoError(t, err)
+		require.Len(t, changes, 3)
+		require.Equal(t, DeltaChange{SourceOffset: 0, Length: 7}, changes[0])
+		require.Equal(t, []byte("DELTA "), changes[2-1].DeltaData)
+		require.Equal(t, DeltaChange{SourceOffset: 7, Length: 6}, changes[2])
+
+		// Decoded changes reconstruct the same object ApplyDelta produces.
+		resolved, err := ApplyDelta(base, delta)
+		require.NoError(t, err)
+		require.Equal(t, []byte("Hello, DELTA world!"), resolved)
+	})
+
+	t.Run("returns the Changes field for a hand-built delta", func(t *testing.T) {
+		t.Parallel()
+
+		want := []DeltaChange{{DeltaData: []byte("ab")}, {SourceOffset: 1, Length: 2}}
+		delta := &Delta{Changes: want}
+
+		got, err := delta.DecodeChanges()
+		require.NoError(t, err)
+		require.Equal(t, want, got)
+	})
 }
 
 func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {
