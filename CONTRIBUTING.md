@@ -411,6 +411,57 @@ Our CI pipeline includes provider tests against:
 - GitLab using [a dedicated GitLab test repo](https://gitlab.com/grafana7281924/nanogit-test.git).
 - Bitbucket using [grafana/nanogit-test](https://bitbucket.org/nanogit-test/nanogit-test)
 
+##### How provider tests run in CI
+
+Provider tests need real provider credentials (repository tokens and signing
+keys), which CI reads from Vault using GitHub's OIDC. Because the tests execute
+the checked-out code **with those secrets in scope**, they run only in a
+trusted context and live in their own workflow,
+[`.github/workflows/provider-tests.yml`](.github/workflows/provider-tests.yml),
+separate from the main `ci.yml`. They run automatically on:
+
+- **pushes to `main`** (post-merge),
+- **pull requests opened from a branch in `grafana/nanogit`** (i.e. from
+  maintainers, not forks),
+- a **nightly schedule**, and
+- **manual dispatch** (see below).
+
+GitHub withholds secrets and the OIDC token from workflows triggered by **pull
+requests from forks**. This is deliberate: it prevents a malicious PR from
+exfiltrating the tokens and signing keys. The workflow enforces the same rule
+explicitly — it skips any PR whose head repository is not `grafana/nanogit` —
+so a fork PR never runs provider tests automatically.
+
+##### External contributors (fork PRs)
+
+If you contribute from a fork, you do **not** need provider credentials. Your PR
+still gets full pre-merge coverage from the secret-free jobs in `ci.yml`:
+unit tests, linting, and the Docker/Gitea-based integration tests. The provider
+tests are validated by a maintainer as part of review.
+
+##### Maintainers: running provider tests for a fork PR
+
+A maintainer with write access runs them manually **after reviewing the PR
+diff** — because doing so executes the contributor's code against real provider
+credentials, the review is the trust gate. To trigger a run for PR `<number>`:
+
+```bash
+# Reviewed the diff first? Then dispatch Provider Tests against the PR's merge ref:
+gh workflow run "Provider Tests" -f pr=<number>
+
+# Watch the run and view the result:
+gh run watch "$(gh run list --workflow 'Provider Tests' --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+You can also trigger it from the GitHub UI: **Actions → Provider Tests → Run
+workflow**, and enter the PR number in the `pr` field (leave it blank to test
+the branch you select in the dropdown instead).
+
+The `pr` input makes the workflow check out `refs/pull/<number>/merge`, so the
+tests run the contributor's changes merged into `main`. Results are visible in
+the workflow run itself; note that because manual runs are decoupled from the
+PR's own checks, they will not appear as a status check on the PR.
+
 #### Writing Tests
 
 1. **Unit tests** should be fast and not require external dependencies

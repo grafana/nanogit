@@ -36,4 +36,4 @@ This runs `go test -race -run 'TestProviders|TestSignProvidersVerify' ./tests`. 
 - `TEST_GPG_KEY`, `TEST_SSH_KEY`, `TEST_SMIME_KEY`, `TEST_SMIME_CERT` — signing key material to test with
 - `TEST_CLEANUP` — set to `false` to keep the test branches around for debugging
 
-CI runs the provider tests against GitHub, GitLab, and Bitbucket test repositories; see `.github/workflows/ci.yml` and [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
+CI runs the provider tests against GitHub, GitLab, and Bitbucket test repositories; see `.github/workflows/provider-tests.yml` and [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
