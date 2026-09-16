@@ -368,13 +368,13 @@ func TestApplyDelta_ParsedZeroTargetDoesNotAllocateBase(t *testing.T) {
 	// the base size. Regression guard: reading TargetLength==0 as "unknown"
 	// used to fall back to ExpectedSourceLength, turning repeated tiny deltas
 	// against a large base into an allocation/GC DoS.
-	const baseLen = 4096
+	const baseLen = 16384
 	base := bytes.Repeat([]byte("x"), baseLen)
 
-	// Header: source size 4096 (0x80,0x20), target size 0 (0x00), plus a
-	// trailing byte so the payload meets the 4-byte minimum. With a zero target
-	// the instruction stream is never walked.
-	payload := []byte{0x80, 0x20, 0x00, 0x00}
+	// Header only: source size 16384 (0x80,0x80,0x01), target size 0 (0x00).
+	// The source varint is three bytes, so the header alone meets the 4-byte
+	// minimum without any (now-rejected) trailing instruction padding.
+	payload := []byte{0x80, 0x80, 0x01, 0x00}
 
 	delta, err := parseDelta("parent", payload, 0)
 	require.NoError(t, err)
@@ -499,6 +499,26 @@ func TestParseDelta_RejectsOutOfBoundsInstruction(t *testing.T) {
 	require.Nil(t, delta)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "malformed delta instruction")
+}
+
+func TestParseDelta_RejectsTrailingCommands(t *testing.T) {
+	t.Parallel()
+
+	// A target of 1 followed by two one-byte adds: the first add fills the
+	// target, and Git requires the stream to end there. The trailing second add
+	// must be rejected, not silently ignored (which would reconstruct only the
+	// first byte).
+	payload := []byte{
+		0x00,      // source size 0
+		0x01,      // target size 1
+		0x01, 'a', // add 1 byte -> fills the target
+		0x01, 'b', // trailing add -> malformed
+	}
+
+	delta, err := parseDelta("parent", payload, 0)
+	require.Nil(t, delta)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "trailing bytes")
 }
 
 func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {

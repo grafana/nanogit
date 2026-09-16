@@ -226,11 +226,12 @@ func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*De
 // of []DeltaChange metadata (~40 bytes per instruction). A nil fn validates the
 // stream without acting on it.
 //
-// It rejects any instruction that would consume past the declared target size
-// with a *DeltaSizeError. The final-length check — the instructions must
-// reconstruct exactly targetLength bytes — is left to ApplyDelta, matching the
-// historic split where a short instruction stream is tolerated at parse time
-// and rejected at reconstruction.
+// It validates the whole stream: an instruction that consumes past the target
+// yields a *DeltaSizeError, a malformed (zero-consumption) instruction and a
+// stream that ends early ("missing cmd byte") or late (trailing bytes) are all
+// rejected, so a well-formed stream fills exactly targetLength bytes and is
+// consumed exactly. ApplyDelta keeps its own final-length check as a guard for
+// hand-built Deltas, which supply Changes directly and never pass through here.
 func walkDeltaCommands(expectedSourceLength, targetLength uint64, instructions []byte, fn func(DeltaChange) error) error {
 	remaining := targetLength
 	payload := instructions
@@ -278,6 +279,14 @@ func walkDeltaCommands(expectedSourceLength, targetLength uint64, instructions [
 
 		remaining -= consumedSize
 		payload = newPayload
+	}
+
+	// A well-formed delta's instructions end exactly when the target is filled.
+	// Any bytes left over (trailing commands after remaining hit zero, or a
+	// non-empty stream on a zero-target delta) are malformed — reject them
+	// rather than silently ignoring them and reconstructing a truncated object.
+	if len(payload) > 0 {
+		return strError("delta has trailing bytes after the declared target was reached")
 	}
 
 	return nil
