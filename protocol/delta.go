@@ -248,9 +248,15 @@ func walkDeltaCommands(expectedSourceLength, targetLength uint64, instructions [
 		}
 
 		if consumedSize == 0 {
-			// A tolerated-but-malformed command (e.g. an out-of-bounds copy).
-			// Stop; a resulting short reconstruction is rejected by ApplyDelta.
-			break
+			// parseDeltaCommand reports zero consumption only for a malformed
+			// instruction — an out-of-bounds copy, or an add whose length
+			// exceeds the target (the size==0 copy is normalized to 64 KiB
+			// earlier, so it never lands here). Reject it at parse time rather
+			// than stopping and leaving a short delta: otherwise ApplyDelta would
+			// preallocate the full declared target before failing the final
+			// length check, and resolveDeltas would repeat that cap-sized
+			// allocation on every pass while other deltas make progress.
+			return strError("malformed delta instruction (out-of-bounds copy or oversized add)")
 		}
 
 		// A command consuming more than the target has left is malformed: a

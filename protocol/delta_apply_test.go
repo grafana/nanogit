@@ -481,6 +481,26 @@ func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {
 	require.ErrorIs(t, err, ErrDeltaSize)
 }
 
+func TestParseDelta_RejectsOutOfBoundsInstruction(t *testing.T) {
+	t.Parallel()
+
+	// A copy whose size (20) exceeds the declared target (10) is malformed;
+	// parseDeltaCommand reports zero consumption for it. parseDelta must reject
+	// it up front rather than tolerating it and leaving a short delta — which
+	// would push the full cap-sized allocation and rejection down into
+	// ApplyDelta, where resolveDeltas retries it on every pass (a DoS vector).
+	payload := []byte{
+		0x04,       // source size 4
+		0x0A,       // target size 10
+		0x90, 0x14, // copy offset 0, size 20 (> target) -> zero consumption
+	}
+
+	delta, err := parseDelta("parent", payload, 0)
+	require.Nil(t, delta)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "malformed delta instruction")
+}
+
 func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {
 	t.Parallel()
 

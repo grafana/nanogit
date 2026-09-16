@@ -618,17 +618,18 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 			return entry, err
 		}
 
-		// A well-formed size varint for an object we accept is only a few bytes
-		// long. Cap the shift before applying it so a corrupt or malicious
-		// stream cannot send an unbounded run of continuation bytes (for example
-		// repeated 0x80) and overflow the accumulator below. The 7-bit group
-		// occupies bits [shift, shift+6], so shift must stay <= 63-6 = 57 to fit
-		// in the uint64.
-		if shift > 57 {
+		// Reject a varint that would overflow the uint64 accumulator: either the
+		// shift is past the word, or this 7-bit group carries bits that would
+		// land above bit 63. This bounds an unbounded run of continuation bytes
+		// (each pushes shift higher) while still accepting the low bits of the
+		// final partial group — e.g. a size of 1<<60, which is valid and may sit
+		// below a configured limit.
+		group := uint64(buf[0] & 0x7f)
+		if shift >= 64 || group > math.MaxUint64>>shift {
 			return entry, fmt.Errorf("%w (size varint too long)", ErrObjectTooLarge)
 		}
 
-		size += uint64(buf[0]&0x7f) << shift
+		size += group << shift
 		shift += 7
 	}
 
@@ -648,9 +649,10 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	// An in-limit size must still be addressable as an int before it is used as
 	// a buffer length/capacity downstream (int is 32-bit on armv7). With the
 	// default cap this never triggers; it only guards a limit configured above
-	// the platform word.
+	// the platform word. The limit reported here is the platform's effective
+	// allocation ceiling, not the (larger) configured cap the size is under.
 	if size > math.MaxInt {
-		return entry, &ObjectTooLargeError{Size: int64(size), Limit: p.maxDecodedObjectBytes}
+		return entry, &ObjectTooLargeError{Size: int64(size), Limit: math.MaxInt}
 	}
 
 	err := p.processObjectByType(entry.Object, int(size), buf[0])
