@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -322,6 +323,39 @@ func TestApplyDelta(t *testing.T) {
 		require.Equal(t, target, cap(result),
 			"buffer must be preallocated to the target, not an inflatable estimate")
 	})
+}
+
+func TestParseDelta_StreamsInsteadOfMaterializingChanges(t *testing.T) {
+	t.Parallel()
+
+	// A delta made of many tiny add instructions, all within a small target and
+	// a small payload. The metadata-bomb concern is that decoding these into a
+	// []DeltaChange up front costs ~40 bytes each; parseDelta must instead retain
+	// only the raw instruction bytes and leave Changes nil, so its footprint is
+	// independent of the instruction count.
+	const target = 4096
+	source := []byte("x")
+	payload := []byte{
+		byte(len(source)), // source size 1
+		0x80, 0x20,        // target size 4096 (7-bit little-endian varint)
+	}
+	for i := 0; i < target; i++ {
+		payload = append(payload, 0x01, 'a') // add one byte
+	}
+
+	delta, err := parseDelta("parent", payload, 0)
+	require.NoError(t, err)
+	require.EqualValues(t, target, delta.TargetLength)
+	require.Nil(t, delta.Changes,
+		"parseDelta must not materialize a []DeltaChange (metadata-bomb guard)")
+	require.NotNil(t, delta.instructions,
+		"a parsed delta must retain its raw instruction bytes for streaming apply")
+
+	// And the retained instructions must still reconstruct the object exactly.
+	result, err := ApplyDelta(source, delta)
+	require.NoError(t, err)
+	require.Len(t, result, target)
+	require.Equal(t, []byte(strings.Repeat("a", target)), result)
 }
 
 func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {

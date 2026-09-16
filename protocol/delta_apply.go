@@ -11,6 +11,12 @@ import (
 //  1. Copy from source: Copy a range of bytes from the base data
 //  2. Insert new data: Insert bytes directly from the delta
 //
+// A parsed Delta (from parseDelta) carries its raw instruction bytes and is
+// streamed one instruction at a time, so reconstruction never holds more than
+// the output buffer plus a single decoded instruction — a delta cannot amplify
+// a small payload into a large []DeltaChange. A hand-built Delta supplies its
+// work through Changes instead, which are applied the same way.
+//
 // Parameters:
 //   - baseData: The source/base object data to apply the delta to
 //   - delta: The Delta object containing the changes to apply
@@ -30,16 +36,10 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 
 	// Pre-allocate the result buffer to the delta's declared target size when
 	// it is known (parseDelta always records it). This both avoids repeated
-	// growth and, crucially, prevents a malformed delta from driving a huge
-	// preallocation: the previous "ExpectedSourceLength + 64*len(Changes)"
-	// estimate could be inflated far past the real output by a delta made of
-	// many tiny changes. When TargetLength is 0 (e.g. a hand-built Delta) we
-	// fall back to the source length as a conservative hint and skip the
-	// output-length guards below.
-	//
-	// Callers that decode untrusted packs (see resolveSingleDelta) reject a
-	// TargetLength over the decoded-object cap before calling ApplyDelta, so
-	// the preallocation here is bounded by that cap.
+	// growth and, crucially, bounds the allocation: it is exactly the output
+	// size, which parseDelta already validated against the decoded-object cap.
+	// When TargetLength is 0 (e.g. a hand-built Delta) we fall back to the
+	// source length as a conservative hint and skip the output-length guards.
 	bounded := delta.TargetLength > 0
 	initialCap := delta.ExpectedSourceLength
 	if bounded {
@@ -47,40 +47,42 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 	}
 	result := make([]byte, 0, initialCap)
 
-	// Apply each delta change sequentially
-	for i, change := range delta.Changes {
-		var chunk []byte
-		if change.DeltaData != nil {
-			// Instruction type 1: Insert new data from the delta
-			chunk = change.DeltaData
-		} else {
-			// Instruction type 2: Copy data from the base object
-			// Validate that the copy operation is within bounds
-			if change.SourceOffset+change.Length > uint64(len(baseData)) {
-				return nil, fmt.Errorf("delta change %d: copy operation out of bounds (offset=%d, length=%d, base_size=%d)",
-					i, change.SourceOffset, change.Length, len(baseData))
-			}
-
-			if change.Length == 0 {
-				return nil, fmt.Errorf("delta change %d: invalid zero-length copy operation", i)
-			}
-
-			// Copy the specified range from base data
-			chunk = baseData[change.SourceOffset : change.SourceOffset+change.Length]
+	// appendChange resolves one decoded change to its output bytes and appends
+	// them, rejecting any change that would push the reconstruction past the
+	// declared target. That bound is what keeps a delta from amplifying its base
+	// beyond the cap TargetLength was validated against. The index is only used
+	// for diagnostics.
+	idx := 0
+	appendChange := func(change DeltaChange) error {
+		chunk, err := deltaChunk(idx, change, baseData)
+		if err != nil {
+			return err
 		}
-
-		// Reject any change that would push the output past the declared
-		// target. This keeps a delta from amplifying its base beyond the
-		// bound that was validated against the decoded-object cap.
 		if bounded && uint64(len(result))+uint64(len(chunk)) > delta.TargetLength {
-			return nil, &DeltaSizeError{
+			return &DeltaSizeError{
 				Declared: delta.TargetLength,
 				Actual:   uint64(len(result)) + uint64(len(chunk)),
-				Reason:   fmt.Sprintf("change %d would push output past declared target", i),
+				Reason:   fmt.Sprintf("change %d would push output past declared target", idx),
 			}
 		}
-
 		result = append(result, chunk...)
+		idx++
+		return nil
+	}
+
+	if delta.instructions != nil {
+		// Preferred path: stream straight from the raw delta payload so we never
+		// hold more than one decoded instruction at a time.
+		if err := walkDeltaCommands(delta.ExpectedSourceLength, delta.TargetLength, delta.instructions, appendChange); err != nil {
+			return nil, err
+		}
+	} else {
+		// Legacy path: a hand-built Delta carrying pre-decoded Changes.
+		for _, change := range delta.Changes {
+			if err := appendChange(change); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// A well-formed delta reconstructs exactly TargetLength bytes; anything
@@ -94,4 +96,24 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 	}
 
 	return result, nil
+}
+
+// deltaChunk resolves a single decoded change to the bytes it contributes to
+// the reconstruction: literal data carried in the delta, or a bounds-checked
+// range copied from the base object. idx is used only for diagnostics.
+func deltaChunk(idx int, change DeltaChange, baseData []byte) ([]byte, error) {
+	// Instruction type 1: insert new data carried in the delta.
+	if change.DeltaData != nil {
+		return change.DeltaData, nil
+	}
+
+	// Instruction type 2: copy a range from the base object.
+	if change.SourceOffset+change.Length > uint64(len(baseData)) {
+		return nil, fmt.Errorf("delta change %d: copy operation out of bounds (offset=%d, length=%d, base_size=%d)",
+			idx, change.SourceOffset, change.Length, len(baseData))
+	}
+	if change.Length == 0 {
+		return nil, fmt.Errorf("delta change %d: invalid zero-length copy operation", idx)
+	}
+	return baseData[change.SourceOffset : change.SourceOffset+change.Length], nil
 }
