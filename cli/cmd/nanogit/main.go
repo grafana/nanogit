@@ -28,6 +28,10 @@ var (
 	globalMaxBytesMultiObject  int64
 	globalMaxBytesRefs         int64
 	globalMaxBytesReceivePack  int64
+	// globalMaxObjectDecodedBytes caps the decoded (inflated) size of a single
+	// packfile object. Unlike the wire caps above, 0 does not disable it: the
+	// library keeps its built-in default in force.
+	globalMaxObjectDecodedBytes int64
 )
 
 func init() {
@@ -41,6 +45,7 @@ func init() {
 	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesMultiObject, "max-bytes-multi-object", 0, "Cap (bytes) on responses to multi-object fetches: GetFlatTree, ListCommits, CompareCommits, Clone. 0 = no limit.")
 	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesRefs, "max-bytes-refs", 0, "Cap (bytes) on ref-listing and protocol-detection responses. 0 = no limit (1 MB floor still applies to the protocol-detection path).")
 	rootCmd.PersistentFlags().Int64Var(&globalMaxBytesReceivePack, "max-bytes-receive-pack", 0, "Cap (bytes) on the server's reply to a receive-pack push. 0 = no limit.")
+	rootCmd.PersistentFlags().Int64Var(&globalMaxObjectDecodedBytes, "max-object-decoded-bytes", 0, "Cap (bytes) on the decoded (inflated) size of any single packfile object, defeating decompression bombs. 0 = keep the built-in default ceiling (never fully disabled).")
 }
 
 func main() {
