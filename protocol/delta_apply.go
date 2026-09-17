@@ -42,13 +42,17 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 	// Slice capacities are limited to int, which is 32-bit on the supported
 	// armv7 builds. A target above that (a parsed delta whose configured decoded
 	// cap exceeds the platform word) would panic in make rather than surface an
-	// error, so reject it explicitly first.
+	// error, so reject it explicitly first. This is the same "too large to
+	// allocate" condition the standard-object path reports, so use the same
+	// typed error (ObjectTooLargeError with the platform ceiling as the limit)
+	// to keep errors.As(..., *ObjectTooLargeError) / HTTP 413 handling working;
+	// saturate Size if the declared target overflows int64.
 	if delta.TargetLength > math.MaxInt {
-		return nil, &DeltaSizeError{
-			Declared: delta.TargetLength,
-			Actual:   delta.TargetLength,
-			Reason:   fmt.Sprintf("declared target exceeds this platform's maximum allocatable size (%d bytes)", math.MaxInt),
+		size := int64(delta.TargetLength)
+		if delta.TargetLength > math.MaxInt64 {
+			size = math.MaxInt64
 		}
+		return nil, &ObjectTooLargeError{Size: size, Limit: math.MaxInt}
 	}
 
 	result := make([]byte, 0, delta.TargetLength)

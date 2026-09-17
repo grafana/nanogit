@@ -315,7 +315,9 @@ func TestApplyDelta_TargetExceedingPlatformMaxErrorsNotPanics(t *testing.T) {
 
 	// A declared target above the platform's int range must surface an error
 	// rather than panic inside make (slice capacities are int, 32-bit on armv7).
-	// math.MaxUint64 exceeds MaxInt on every supported platform.
+	// math.MaxUint64 exceeds MaxInt on every supported platform. It must be the
+	// same typed error the standard-object path uses, so 413 handling still
+	// matches, with Size saturated to MaxInt64.
 	delta := &Delta{
 		ExpectedSourceLength: 0,
 		TargetLength:         math.MaxUint64,
@@ -324,9 +326,11 @@ func TestApplyDelta_TargetExceedingPlatformMaxErrorsNotPanics(t *testing.T) {
 	require.NotPanics(t, func() {
 		_, err := ApplyDelta([]byte{}, delta)
 		require.Error(t, err)
-		var sizeErr *DeltaSizeError
-		require.ErrorAs(t, err, &sizeErr)
-		require.Contains(t, sizeErr.Reason, "platform")
+		var tooLarge *ObjectTooLargeError
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, int64(math.MaxInt64), tooLarge.Size)
+		require.Equal(t, int64(math.MaxInt), tooLarge.Limit)
+		require.ErrorIs(t, err, ErrObjectTooLarge)
 	})
 }
 
