@@ -417,7 +417,15 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 
 	maxIterations := len(deltas) + 1
 	for iteration := 1; len(remaining) > 0 && iteration <= maxIterations; iteration++ {
-		resolvedCount, stillPending := c.resolveDeltaIteration(ctx, remaining, objects, storage)
+		resolvedCount, stillPending, err := c.resolveDeltaIteration(ctx, remaining, objects, storage)
+		if err != nil {
+			// A delta whose base was found but could not be applied is a real
+			// reconstruction failure (e.g. an oversized target rejected on a
+			// 32-bit platform). Surface it directly so its typed error survives
+			// for the caller (errors.As, HTTP 413) rather than being masked as a
+			// "missing base objects" error once the delta is requeued.
+			return err
+		}
 		remaining = stillPending
 
 		if resolvedCount == 0 && len(remaining) > 0 {
@@ -435,8 +443,11 @@ func (c *rawClient) resolveDeltas(ctx context.Context, deltas []*protocol.Packfi
 	return nil
 }
 
-// resolveDeltaIteration processes one iteration of delta resolution
-func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject) {
+// resolveDeltaIteration processes one iteration of delta resolution. A delta
+// whose base is not yet available is returned as still-pending; a delta whose
+// base was found but failed to apply yields an error, which the caller
+// propagates immediately (it will not resolve on a later pass).
+func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) (int, []*protocol.PackfileObject, error) {
 	logger := log.FromContext(ctx)
 	var stillPending []*protocol.PackfileObject
 	resolvedCount := 0
@@ -454,15 +465,18 @@ func (c *rawClient) resolveDeltaIteration(ctx context.Context, deltas []*protoco
 		}
 
 		if err := c.resolveSingleDelta(ctx, delta, baseObj, objects, storage); err != nil {
+			// The base was present, so this is a genuine reconstruction failure,
+			// not a not-yet-available base. Requeueing it would only get it
+			// reported later as a misleading "missing base objects" error and
+			// would drop its typed error, so fail fast.
 			logger.Debug("Failed to resolve delta", "parent", delta.Delta.Parent, "error", err)
-			stillPending = append(stillPending, delta)
-			continue
+			return resolvedCount, stillPending, err
 		}
 
 		resolvedCount++
 	}
 
-	return resolvedCount, stillPending
+	return resolvedCount, stillPending, nil
 }
 
 // findBaseObject finds the base object for a delta, checking both objects map and storage

@@ -122,3 +122,56 @@ func TestFetchResolvesDeltaChain(t *testing.T) {
 	require.Equal(t, final, finalObj.Data)
 	require.Equal(t, finalHash, finalObj.Hash)
 }
+
+// TestFetchSurfacesDeltaApplyError proves that when a delta's base IS present
+// but reconstruction fails, Fetch returns that real error rather than masking
+// it as a "missing base objects" error by requeueing the delta. The delta here
+// declares a source size that does not match its (present) base, so ApplyDelta
+// fails with a base-size mismatch — a reconstruction failure reachable on any
+// platform, standing in for the 32-bit oversized-target case that also flows
+// through this path.
+func TestFetchSurfacesDeltaApplyError(t *testing.T) {
+	t.Parallel()
+
+	base := []byte("hello") // 5 bytes
+	baseHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeBlob, base)
+	require.NoError(t, err)
+
+	// Declared source size 6 != the 5-byte base -> ApplyDelta base-size mismatch.
+	delta := addOnlyDelta(len(base)+1, []byte("world"))
+
+	pack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x02")
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeBlob, len(base))...)
+	pack = append(pack, zlibBytes(t, base)...)
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(delta))...)
+	pack = append(pack, baseHash[:]...)
+	pack = append(pack, zlibBytes(t, delta)...)
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	writePkt(append([]byte{1}, pack...))
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body.Bytes())
+	}))
+	t.Cleanup(server.Close)
+
+	rc, err := NewRawClient(server.URL + "/repo")
+	require.NoError(t, err)
+
+	wantHash, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+
+	_, err = rc.Fetch(context.Background(), FetchOptions{Want: []hash.Hash{wantHash}, Done: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "base data size mismatch",
+		"the real reconstruction error must surface")
+	require.NotContains(t, err.Error(), "missing base",
+		"a present-but-unappliable base must not be reported as missing")
+}

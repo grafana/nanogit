@@ -212,8 +212,8 @@ func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*De
 // yields a *DeltaSizeError, a malformed (zero-consumption) instruction and a
 // stream that ends early ("missing cmd byte") or late (trailing bytes) are all
 // rejected, so a well-formed stream fills exactly targetLength bytes and is
-// consumed exactly. ApplyDelta keeps its own final-length check as a guard for
-// hand-built Deltas, which supply Changes directly and never pass through here.
+// consumed exactly. ApplyDelta keeps its own final-length check purely as
+// defense-in-depth against a regression in this validation.
 func walkDeltaCommands(expectedSourceLength, targetLength uint64, instructions []byte, fn func(DeltaChange) error) error {
 	remaining := targetLength
 	payload := instructions
