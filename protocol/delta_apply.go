@@ -12,11 +12,10 @@ import (
 //  1. Copy from source: Copy a range of bytes from the base data
 //  2. Insert new data: Insert bytes directly from the delta
 //
-// A parsed Delta (from parseDelta) carries its raw instruction bytes and is
-// streamed one instruction at a time, so reconstruction never holds more than
-// the output buffer plus a single decoded instruction — a delta cannot amplify
-// a small payload into a large []DeltaChange. A hand-built Delta supplies its
-// work through Changes instead, which are applied the same way.
+// The Delta carries its raw instruction bytes (see parseDelta) and ApplyDelta
+// streams them one at a time, so reconstruction never holds more than the
+// output buffer plus a single decoded instruction — a delta cannot amplify a
+// small payload into a large []DeltaChange.
 //
 // Parameters:
 //   - baseData: The source/base object data to apply the delta to
@@ -35,80 +34,48 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 			len(baseData), delta.ExpectedSourceLength)
 	}
 
-	// Pre-allocate the result buffer to the delta's declared target size and
-	// enforce that exact size below. This bounds the allocation to the output —
-	// which parseDelta already validated against the decoded-object cap — rather
-	// than to the (possibly much larger) base.
+	// Pre-allocate the result buffer to the delta's declared target size. This
+	// bounds the allocation to the output — which parseDelta already validated
+	// against the decoded-object cap — rather than to the (possibly much larger)
+	// base. TargetLength is authoritative even when zero.
 	//
-	// A parsed delta always knows its target, even when it is legitimately zero,
-	// so it is always bounded: TargetLength == 0 must NOT be read as "unknown",
-	// or a tiny zero-target delta against a large base would preallocate the
-	// base size. Only a hand-built Delta with no retained instructions may leave
-	// the target unknown (zero), in which case we fall back to the source length
-	// as a hint and skip the output-length guards.
-	bounded := delta.instructions != nil || delta.TargetLength > 0
-	initialCap := delta.TargetLength
-	if !bounded {
-		initialCap = delta.ExpectedSourceLength
-	}
-
 	// Slice capacities are limited to int, which is 32-bit on the supported
-	// armv7 builds. A target above that (from a hand-built Delta, or a parsed
-	// one whose configured decoded cap exceeds the platform word) would panic in
-	// make rather than surface an error, so reject it explicitly first. On the
-	// unbounded path initialCap == len(baseData), already an int, so this only
-	// bites the target-driven bound.
-	if initialCap > math.MaxInt {
+	// armv7 builds. A target above that (a parsed delta whose configured decoded
+	// cap exceeds the platform word) would panic in make rather than surface an
+	// error, so reject it explicitly first.
+	if delta.TargetLength > math.MaxInt {
 		return nil, &DeltaSizeError{
 			Declared: delta.TargetLength,
-			Actual:   initialCap,
+			Actual:   delta.TargetLength,
 			Reason:   fmt.Sprintf("declared target exceeds this platform's maximum allocatable size (%d bytes)", math.MaxInt),
 		}
 	}
 
-	result := make([]byte, 0, initialCap)
+	result := make([]byte, 0, delta.TargetLength)
 
-	// appendChange resolves one decoded change to its output bytes and appends
-	// them, rejecting any change that would push the reconstruction past the
-	// declared target. That bound is what keeps a delta from amplifying its base
-	// beyond the cap TargetLength was validated against. The index is only used
-	// for diagnostics.
+	// walkDeltaCommands streams one decoded instruction at a time and guarantees
+	// the instructions fill exactly TargetLength (it rejects short, long, and
+	// overrunning streams), so appendChange simply appends each chunk. The index
+	// is only used for diagnostics.
 	idx := 0
 	appendChange := func(change DeltaChange) error {
 		chunk, err := deltaChunk(idx, change, baseData)
 		if err != nil {
 			return err
 		}
-		if bounded && uint64(len(result))+uint64(len(chunk)) > delta.TargetLength {
-			return &DeltaSizeError{
-				Declared: delta.TargetLength,
-				Actual:   uint64(len(result)) + uint64(len(chunk)),
-				Reason:   fmt.Sprintf("change %d would push output past declared target", idx),
-			}
-		}
 		result = append(result, chunk...)
 		idx++
 		return nil
 	}
 
-	if delta.instructions != nil {
-		// Preferred path: stream straight from the raw delta payload so we never
-		// hold more than one decoded instruction at a time.
-		if err := walkDeltaCommands(delta.ExpectedSourceLength, delta.TargetLength, delta.instructions, appendChange); err != nil {
-			return nil, err
-		}
-	} else {
-		// Legacy path: a hand-built Delta carrying pre-decoded Changes.
-		for _, change := range delta.Changes {
-			if err := appendChange(change); err != nil {
-				return nil, err
-			}
-		}
+	if err := walkDeltaCommands(delta.ExpectedSourceLength, delta.TargetLength, delta.instructions, appendChange); err != nil {
+		return nil, err
 	}
 
-	// A well-formed delta reconstructs exactly TargetLength bytes; anything
-	// else is a malformed (or truncated) delta.
-	if bounded && uint64(len(result)) != delta.TargetLength {
+	// Defense in depth: a well-formed stream reconstructs exactly TargetLength
+	// bytes. walkDeltaCommands already enforces this, so a mismatch here would be
+	// an internal invariant violation rather than bad input.
+	if uint64(len(result)) != delta.TargetLength {
 		return nil, &DeltaSizeError{
 			Declared: delta.TargetLength,
 			Actual:   uint64(len(result)),

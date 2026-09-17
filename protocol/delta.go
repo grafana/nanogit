@@ -93,27 +93,13 @@ type Delta struct {
 	// caller can reject an over-large reconstruction up front by checking
 	// TargetLength against the decoded-object cap before applying the delta.
 	TargetLength uint64
-	// Changes contains pre-decoded modifications to apply, in order. It is an
-	// input to ApplyDelta for callers that build a Delta by hand (e.g. tests).
-	//
-	// NOTE: a Delta produced by the packfile reader now leaves this nil, whereas
-	// earlier versions populated it. Decoding a delta's whole instruction stream
-	// into a []DeltaChange up front lets a small, highly compressible payload
-	// amplify into hundreds of MiB of metadata (~40 bytes per instruction, and
-	// an instruction can be as small as one payload byte), so a parsed Delta
-	// instead retains the raw instruction bytes (see instructions) and ApplyDelta
-	// streams them one at a time. Callers that inspected Changes on a parsed
-	// Delta should call DecodeChanges instead, which decodes on demand.
-	//
-	// When iterating, this must be done sequentially, in order. No modification
-	// of the source data is necessary. The presence of some fields determines
-	// how to act; see the documentation of the struct.
-	Changes []DeltaChange
 	// instructions holds the raw delta command stream (the payload after the
-	// header) for a parsed Delta. ApplyDelta decodes it one instruction at a
-	// time so reconstruction memory stays bounded by TargetLength regardless of
-	// how many instructions a (possibly hostile) delta declares. It is nil for a
-	// hand-built Delta, which supplies its work through Changes instead.
+	// header). ApplyDelta decodes it one instruction at a time so reconstruction
+	// memory stays bounded by TargetLength regardless of how many instructions a
+	// (possibly hostile) delta declares — an earlier exported []DeltaChange field
+	// let a small, highly compressible payload amplify into hundreds of MiB of
+	// metadata (~40 bytes per instruction). Callers that need the decoded
+	// instructions call DecodeChanges, which materializes them on demand.
 	instructions []byte
 }
 
@@ -131,19 +117,15 @@ type DeltaChange struct {
 	SourceOffset uint64
 }
 
-// DecodeChanges returns the delta's instructions decoded into a slice, in
-// order. It restores the pre-streaming ability to inspect a parsed delta's
-// changes: parseDelta no longer populates the Changes field (doing so risked a
-// metadata bomb), so a caller that needs the decoded instructions materializes
-// them explicitly here and pays the O(number-of-instructions) cost only when it
-// asks for it.
-//
-// For a hand-built Delta (no retained instruction bytes) it returns the Changes
-// field as-is. Prefer ApplyDelta when you only need the reconstructed object;
-// it streams the instructions without building this slice.
+// DecodeChanges materializes the delta's instruction stream into a slice of
+// DeltaChange, in order. ApplyDelta itself streams the instructions and never
+// builds this slice (a delta can hold millions of tiny instructions); use
+// DecodeChanges only when you actually need to inspect the individual changes,
+// accepting the O(number-of-instructions) allocation. Returns nil for a Delta
+// with no instruction stream.
 func (d *Delta) DecodeChanges() ([]DeltaChange, error) {
 	if d.instructions == nil {
-		return d.Changes, nil
+		return nil, nil
 	}
 
 	var changes []DeltaChange
@@ -178,12 +160,12 @@ func (d *Delta) DecodeChanges() ([]DeltaChange, error) {
 // every consumer (not just those that resolve deltas). Oversized targets
 // surface as *ObjectTooLargeError (which wraps ErrObjectTooLarge).
 //
-// parseDelta does NOT materialize the instructions into delta.Changes: doing so
-// would let a small, highly compressible payload amplify into hundreds of MiB
-// of []DeltaChange metadata even when both its payload and target sit under the
-// cap. It retains the raw instruction bytes on the Delta and validates them
-// with a single streaming walk (holding one instruction at a time); ApplyDelta
-// later re-walks them to reconstruct the object, bounded by TargetLength.
+// parseDelta does NOT materialize the instructions into a []DeltaChange: doing
+// so would let a small, highly compressible payload amplify into hundreds of
+// MiB of metadata even when both its payload and target sit under the cap. It
+// retains the raw instruction bytes on the Delta and validates them with a
+// single streaming walk (holding one instruction at a time); ApplyDelta later
+// re-walks them to reconstruct the object, bounded by TargetLength.
 func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*Delta, error) {
 	const minDeltaSize = 4
 	if len(payload) < minDeltaSize {
