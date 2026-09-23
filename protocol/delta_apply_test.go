@@ -46,33 +46,31 @@ func encAdd(data []byte) []byte {
 	return out
 }
 
-// deltaFromChanges builds a *Delta whose instruction stream encodes the given
-// changes, exactly as parseDelta would produce it (TargetLength is the sum of
-// the change lengths). It sets the unexported instructions field directly so
-// ApplyDelta exercises its real streaming path without the 4-byte minimum
-// parseDelta imposes on a full payload.
-func deltaFromChanges(source uint64, changes []DeltaChange) *Delta {
-	instr := []byte{}
-	var target uint64
+// encodeChanges encodes changes into a raw delta instruction stream, exactly as
+// parseDelta would leave on a Delta. Tests set it on the unexported instructions
+// field so ApplyDelta exercises its real streaming path.
+func encodeChanges(changes []DeltaChange) []byte {
+	var instr []byte
 	for _, c := range changes {
 		if c.DeltaData != nil {
 			instr = append(instr, encAdd(c.DeltaData)...)
-			target += uint64(len(c.DeltaData))
 		} else {
 			instr = append(instr, encCopy(c.SourceOffset, c.Length)...)
-			target += c.Length
 		}
 	}
-	return &Delta{ExpectedSourceLength: source, TargetLength: target, instructions: instr}
+	return instr
 }
 
 func TestApplyDelta(t *testing.T) {
 	t.Run("simple insert operation", func(t *testing.T) {
 		baseData := []byte("Hello")
-		delta := deltaFromChanges(5,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 5,
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{DeltaData: []byte("World")},
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -81,13 +79,16 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("simple copy operation", func(t *testing.T) {
 		baseData := []byte("Hello World")
-		delta := deltaFromChanges(11,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 11,
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{
 					SourceOffset: 0,
 					Length:       5,
 				},
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -96,8 +97,10 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("mixed copy and insert operations", func(t *testing.T) {
 		baseData := []byte("Hello World")
-		delta := deltaFromChanges(11,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 11,
+			TargetLength:         13,
+			instructions: encodeChanges([]DeltaChange{
 				// Copy "Hello"
 				{SourceOffset: 0, Length: 5},
 				// Insert ", "
@@ -106,7 +109,8 @@ func TestApplyDelta(t *testing.T) {
 				{SourceOffset: 6, Length: 5},
 				// Insert "!"
 				{DeltaData: []byte("!")},
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -115,14 +119,17 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("copy from multiple locations", func(t *testing.T) {
 		baseData := []byte("ABCDEFGH")
-		delta := deltaFromChanges(8,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 8,
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 7, Length: 1}, // H
 				{SourceOffset: 4, Length: 1}, // E
 				{SourceOffset: 2, Length: 1}, // C
 				{SourceOffset: 1, Length: 1}, // B
 				{SourceOffset: 0, Length: 1}, // A
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -131,10 +138,13 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("empty base data", func(t *testing.T) {
 		baseData := []byte("")
-		delta := deltaFromChanges(0,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 0,
+			TargetLength:         11,
+			instructions: encodeChanges([]DeltaChange{
 				{DeltaData: []byte("New content")},
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -159,15 +169,18 @@ func TestApplyDelta(t *testing.T) {
 			baseData[i] = byte(i % 256)
 		}
 
-		delta := deltaFromChanges(10000,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 10000,
+			TargetLength:         10008,
+			instructions: encodeChanges([]DeltaChange{
 				// Copy first 5000 bytes
 				{SourceOffset: 0, Length: 5000},
 				// Insert some new data
 				{DeltaData: []byte("INSERTED")},
 				// Copy last 5000 bytes
 				{SourceOffset: 5000, Length: 5000},
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -181,10 +194,13 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("error: base size mismatch", func(t *testing.T) {
 		baseData := []byte("Hello")
-		delta := deltaFromChanges(10, // expects 10 but base is 5
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 10, // expects 10 but base is 5
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{DeltaData: []byte("World")},
-			})
+			}),
+		}
 
 		_, err := ApplyDelta(baseData, delta)
 		require.Error(t, err)
@@ -196,15 +212,18 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("Line 1\nLine 2\nLine 3\nLine 4\n")
 
 		// Delta that replaces "Line 2" with "Modified Line 2"
-		delta := deltaFromChanges(uint64(len(baseData)),
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: uint64(len(baseData)),
+			TargetLength:         37,
+			instructions: encodeChanges([]DeltaChange{
 				// Copy "Line 1\n"
 				{SourceOffset: 0, Length: 7},
 				// Insert modified line
 				{DeltaData: []byte("Modified Line 2\n")},
 				// Copy remaining lines starting from "Line 3"
 				{SourceOffset: 14, Length: uint64(len(baseData) - 14)},
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -215,14 +234,17 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("multiple small inserts and copies", func(t *testing.T) {
 		baseData := []byte("The quick brown fox jumps over the lazy dog")
-		delta := deltaFromChanges(uint64(len(baseData)),
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: uint64(len(baseData)),
+			TargetLength:         52,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 0, Length: 4},   // "The "
 				{DeltaData: []byte("very ")},   // Insert "very "
 				{SourceOffset: 4, Length: 6},   // "quick "
 				{DeltaData: []byte("and ")},    // Insert "and "
 				{SourceOffset: 10, Length: 33}, // rest of string (43 - 10 = 33)
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -231,12 +253,15 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("delta duplicates content", func(t *testing.T) {
 		baseData := []byte("AB")
-		delta := deltaFromChanges(2,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 2,
+			TargetLength:         6,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 0, Length: 2}, // AB
 				{SourceOffset: 0, Length: 2}, // AB again
 				{SourceOffset: 0, Length: 2}, // AB again
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -245,12 +270,15 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("binary data", func(t *testing.T) {
 		baseData := []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD}
-		delta := deltaFromChanges(7,
-			[]DeltaChange{
+		delta := &Delta{
+			ExpectedSourceLength: 7,
+			TargetLength:         9,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 4, Length: 3}, // 0xFF, 0xFE, 0xFD
 				{DeltaData: []byte{0xAA, 0xBB}},
 				{SourceOffset: 0, Length: 4}, // 0x00, 0x01, 0x02, 0x03
-			})
+			}),
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
@@ -267,7 +295,11 @@ func TestApplyDelta(t *testing.T) {
 		for i := range changes {
 			changes[i] = DeltaChange{DeltaData: []byte("y")}
 		}
-		delta := deltaFromChanges(1, changes)
+		delta := &Delta{
+			ExpectedSourceLength: 1,
+			TargetLength:         target,
+			instructions:         encodeChanges(changes),
+		}
 
 		result, err := ApplyDelta([]byte("x"), delta)
 		require.NoError(t, err)
