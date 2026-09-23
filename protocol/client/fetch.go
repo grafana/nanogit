@@ -509,13 +509,8 @@ func (c *rawClient) findBaseObject(ctx context.Context, parentHash string, objec
 func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.PackfileObject, baseObj *protocol.PackfileObject, objects map[string]*protocol.PackfileObject, storage storage.PackfileStorage) error {
 	logger := log.FromContext(ctx)
 
-	// The reconstructed object's decoded size is bounded when the delta is
-	// parsed: parseDelta rejects a declared target over the decoded-object cap
-	// before this point (see PackfileReader.maxDecodedObjectBytes), and
-	// ApplyDelta enforces that declared target exactly. No size check is
-	// needed here.
-
-	// Apply the delta to the base object
+	// Size is already bounded at parse time (decoded-object cap) and enforced by
+	// ApplyDelta, so no size check is needed here.
 	resolvedData, err := protocol.ApplyDelta(baseObj.Data, delta.Delta)
 	if err != nil {
 		return fmt.Errorf("failed to apply delta: %w", err)

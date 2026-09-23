@@ -528,11 +528,8 @@ type PackfileReader struct {
 	algo             crypto.Hash
 	zlibReader       io.ReadCloser // Reusable zlib reader for performance
 	hasher           stdhash.Hash  // Reusable hasher for performance
-	// maxDecodedObjectBytes is the maximum allowed decoded size, in bytes, of any
-	// single object. It defaults to MaxUnpackedObjectSize and can be
-	// overridden with WithMaxDecodedObjectBytes. Objects declaring a larger size are
-	// rejected before allocation (see readObject), defeating decompression
-	// bombs.
+	// maxDecodedObjectBytes caps the decoded size of any single object. Defaults
+	// to MaxUnpackedObjectSize; set via WithMaxDecodedObjectBytes.
 	maxDecodedObjectBytes int64
 
 	// State that shouldn't be set when constructed.
@@ -606,11 +603,9 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 	// The remaining 4 bits are the start of a varint containing the size.
 	entry.Object.Type = ObjectType((buf[0] >> 4) & 0b111)
 
-	// Accumulate the declared size in a uint64 so the value is independent of
-	// the platform word size. On 32-bit builds (e.g. the released armv7) an int
-	// accumulator would overflow — or trip the varint-length guard — before an
-	// object near a configured multi-tens-of-MiB limit could be compared against
-	// it, silently not honoring the limit.
+	// Accumulate the size in a uint64 so it is independent of the platform word
+	// size: on 32-bit builds an int accumulator would trip the length guard
+	// before an object near a large configured cap could be compared against it.
 	size := uint64(buf[0] & 0b1111)
 	shift := 4
 	for buf[0]&0x80 == 0x80 {
@@ -618,12 +613,9 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 			return entry, err
 		}
 
-		// Reject a varint that would overflow the uint64 accumulator: either the
-		// shift is past the word, or this 7-bit group carries bits that would
-		// land above bit 63. This bounds an unbounded run of continuation bytes
-		// (each pushes shift higher) while still accepting the low bits of the
-		// final partial group — e.g. a size of 1<<60, which is valid and may sit
-		// below a configured limit.
+		// Reject a varint that would overflow the accumulator (shift past the
+		// word, or a group with bits above bit 63), bounding an unbounded run of
+		// continuation bytes while still accepting the last partial group.
 		group := uint64(buf[0] & 0x7f)
 		if shift >= 64 || group > math.MaxUint64>>shift {
 			return entry, fmt.Errorf("%w (size varint too long)", ErrObjectTooLarge)
@@ -635,9 +627,7 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 
 	logger.Debug("Read object type", "type_byte", buf[0], "type", entry.Object.Type, "size", size, "shift", shift)
 
-	// Reject anything over the configured decoded-object cap. Comparing as
-	// uint64 honors the full configured limit on every platform, instead of
-	// tripping the varint-length guard first on 32-bit builds.
+	// Reject anything over the configured decoded-object cap.
 	if size > uint64(p.maxDecodedObjectBytes) {
 		reported := int64(size)
 		if size > math.MaxInt64 {
@@ -646,11 +636,9 @@ func (p *PackfileReader) readObject(ctx context.Context) (PackfileEntry, error) 
 		return entry, &ObjectTooLargeError{Size: reported, Limit: p.maxDecodedObjectBytes}
 	}
 
-	// An in-limit size must still be addressable as an int before it is used as
-	// a buffer length/capacity downstream (int is 32-bit on armv7). With the
-	// default cap this never triggers; it only guards a limit configured above
-	// the platform word. The limit reported here is the platform's effective
-	// allocation ceiling, not the (larger) configured cap the size is under.
+	// An in-limit size must still fit an int before it is used as a length
+	// downstream (int is 32-bit on armv7); report the platform ceiling as the
+	// limit. With the default cap this never triggers.
 	if size > math.MaxInt {
 		return entry, &ObjectTooLargeError{Size: int64(size), Limit: math.MaxInt}
 	}

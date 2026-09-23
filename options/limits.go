@@ -2,17 +2,8 @@ package options
 
 import "fmt"
 
-// WithLimits installs DoS-protection caps, classified by operation. For the
-// four wire-response caps, embedders that don't call WithLimits (or pass a
-// zero Limits) keep nanogit's historic unbounded behavior: a zero value in
-// any of those four fields means "no limit".
-//
-// MaxObjectDecodedBytes is the exception: a zero value leaves nanogit's
-// built-in decoded-object default (protocol.MaxUnpackedObjectSize) in force
-// rather than disabling the cap, so decompression-bomb protection is always
-// on. Set a positive value to raise or lower that ceiling.
-//
-// Negative values are rejected.
+// WithLimits installs the DoS-protection caps described on Limits. Negative
+// values are rejected.
 func WithLimits(l Limits) Option {
 	return func(o *Options) error {
 		if l.SingleObjectFetchMaxBytes < 0 {

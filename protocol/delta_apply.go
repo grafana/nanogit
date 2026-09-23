@@ -34,19 +34,11 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 			len(baseData), delta.ExpectedSourceLength)
 	}
 
-	// Pre-allocate the result buffer to the delta's declared target size. This
-	// bounds the allocation to the output — which parseDelta already validated
-	// against the decoded-object cap — rather than to the (possibly much larger)
-	// base. TargetLength is authoritative even when zero.
-	//
-	// Slice capacities are limited to int, which is 32-bit on the supported
-	// armv7 builds. A target above that (a parsed delta whose configured decoded
-	// cap exceeds the platform word) would panic in make rather than surface an
-	// error, so reject it explicitly first. This is the same "too large to
-	// allocate" condition the standard-object path reports, so use the same
-	// typed error (ObjectTooLargeError with the platform ceiling as the limit)
-	// to keep errors.As(..., *ObjectTooLargeError) / HTTP 413 handling working;
-	// saturate Size if the declared target overflows int64.
+	// Preallocate to the declared target (parseDelta validated it against the
+	// decoded-object cap), not to the possibly-larger base. A target above
+	// math.MaxInt cannot be a slice capacity (int is 32-bit on armv7) and would
+	// panic in make, so reject it with the same ObjectTooLargeError the
+	// standard-object path uses, saturating Size to int64.
 	if delta.TargetLength > math.MaxInt {
 		size := int64(delta.TargetLength)
 		if delta.TargetLength > math.MaxInt64 {
@@ -57,10 +49,8 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 
 	result := make([]byte, 0, delta.TargetLength)
 
-	// walkDeltaCommands streams one decoded instruction at a time and guarantees
-	// the instructions fill exactly TargetLength (it rejects short, long, and
-	// overrunning streams), so appendChange simply appends each chunk. The index
-	// is only used for diagnostics.
+	// walkDeltaCommands guarantees the instructions fill exactly TargetLength, so
+	// appendChange just appends each chunk. idx is only for diagnostics.
 	idx := 0
 	appendChange := func(change DeltaChange) error {
 		chunk, err := deltaChunk(idx, change, baseData)
@@ -76,9 +66,7 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 		return nil, err
 	}
 
-	// Defense in depth: a well-formed stream reconstructs exactly TargetLength
-	// bytes. walkDeltaCommands already enforces this, so a mismatch here would be
-	// an internal invariant violation rather than bad input.
+	// Defense in depth: walkDeltaCommands already guarantees this.
 	if uint64(len(result)) != delta.TargetLength {
 		return nil, &DeltaSizeError{
 			Declared: delta.TargetLength,
