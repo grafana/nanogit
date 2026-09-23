@@ -143,7 +143,9 @@ func TestApplyDelta(t *testing.T) {
 
 	t.Run("empty delta (no changes)", func(t *testing.T) {
 		baseData := []byte("Hello")
-		delta := deltaFromChanges(5, nil)
+		delta := &Delta{
+			ExpectedSourceLength: 5,
+		}
 
 		result, err := ApplyDelta(baseData, delta)
 		require.NoError(t, err)
