@@ -846,16 +846,10 @@ func (p *PackfileReader) calculateObjectHash(objType ObjectType, data []byte) (h
 	return result, nil
 }
 
-// ParsePackfile parses a packfile from reader using default settings,
-// including the built-in MaxUnpackedObjectSize decoded-object cap. Use
-// ParsePackfileWithOptions to override the cap.
-func ParsePackfile(ctx context.Context, reader io.Reader) (*PackfileReader, error) {
-	return ParsePackfileWithOptions(ctx, reader)
-}
-
-// ParsePackfileWithOptions is ParsePackfile with configurable PackfileOptions,
-// e.g. WithMaxDecodedObjectBytes to change the decoded-object cap.
-func ParsePackfileWithOptions(ctx context.Context, reader io.Reader, opts ...PackfileOption) (*PackfileReader, error) {
+// ParsePackfile parses a packfile from reader. opts configure the reader (e.g.
+// WithMaxDecodedObjectBytes to override the decoded-object cap); with none, the
+// built-in MaxUnpackedObjectSize cap applies.
+func ParsePackfile(ctx context.Context, reader io.Reader, opts ...PackfileOption) (*PackfileReader, error) {
 	logger := log.FromContext(ctx)
 	// Read and verify the "PACK" signature
 	signature := make([]byte, 4)

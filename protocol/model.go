@@ -187,17 +187,10 @@ func (mr *MultiplexedReader) Read(p []byte) (n int, err error) {
 	}
 }
 
-// ParseFetchResponse parses a git-upload-pack fetch response using default
-// packfile settings, including the built-in decoded-object cap. Use
-// ParseFetchResponseWithOptions to override packfile parsing behavior.
-func ParseFetchResponse(ctx context.Context, parser *Parser) (response *FetchResponse, err error) {
-	return ParseFetchResponseWithOptions(ctx, parser)
-}
-
-// ParseFetchResponseWithOptions is ParseFetchResponse with configurable
-// PackfileOptions applied to the embedded packfile parser, e.g.
-// WithMaxDecodedObjectBytes to change the decoded-object cap.
-func ParseFetchResponseWithOptions(ctx context.Context, parser *Parser, packOpts ...PackfileOption) (response *FetchResponse, err error) {
+// ParseFetchResponse parses a git-upload-pack fetch response. packOpts are
+// applied to the embedded packfile parser (e.g. WithMaxDecodedObjectBytes to
+// override the decoded-object cap); with none, the built-in cap applies.
+func ParseFetchResponse(ctx context.Context, parser *Parser, packOpts ...PackfileOption) (response *FetchResponse, err error) {
 	logger := log.FromContext(ctx)
 	logger.Debug("Starting fetch response parsing")
 
@@ -242,7 +235,7 @@ outer:
 			// Create a multiplexed reader to handle the Git protocol multiplexing
 			multiplexedReader := NewMultiplexedReader(ctx, parser)
 			var err error
-			fr.Packfile, err = ParsePackfileWithOptions(ctx, multiplexedReader, packOpts...)
+			fr.Packfile, err = ParsePackfile(ctx, multiplexedReader, packOpts...)
 			if err != nil {
 				logger.Debug("Error parsing packfile", "error", err)
 				return nil, err

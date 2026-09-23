@@ -225,7 +225,7 @@ func (c *rawClient) sendFetchRequest(ctx context.Context, pkt []byte, maxBytes i
 	// maxBytes above, which caps the compressed wire response, this defends
 	// against decompression bombs that fit under the wire cap but inflate to
 	// gigabytes.
-	response, err := protocol.ParseFetchResponseWithOptions(ctx, parser, protocol.WithMaxDecodedObjectBytes(c.limits.MaxObjectDecodedBytes))
+	response, err := protocol.ParseFetchResponse(ctx, parser, protocol.WithMaxDecodedObjectBytes(c.limits.MaxObjectDecodedBytes))
 	if err != nil {
 		return countingReader, nil, fmt.Errorf("parsing fetch response stream: %w", err)
 	}

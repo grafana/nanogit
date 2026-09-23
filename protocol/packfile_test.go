@@ -226,7 +226,7 @@ func TestReadObject_WithMaxDecodedObjectBytes(t *testing.T) {
 
 	t.Run("allowed when under the configured cap", func(t *testing.T) {
 		t.Parallel()
-		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxDecodedObjectBytes(2*decodedSize))
 		require.NoError(t, err)
 
@@ -237,7 +237,7 @@ func TestReadObject_WithMaxDecodedObjectBytes(t *testing.T) {
 
 	t.Run("rejected when over the configured cap", func(t *testing.T) {
 		t.Parallel()
-		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxDecodedObjectBytes(decodedSize-1))
 		require.NoError(t, err)
 
@@ -263,7 +263,7 @@ func TestReadObject_WithMaxDecodedObjectBytes(t *testing.T) {
 		require.NoError(t, binary.Write(&pack, binary.BigEndian, uint32(1)))
 		pack.Write(objectHeader(protocol.ObjectTypeBlob, protocol.MaxUnpackedObjectSize+1))
 
-		pr, err := protocol.ParsePackfileWithOptions(t.Context(), &pack,
+		pr, err := protocol.ParsePackfile(t.Context(), &pack,
 			protocol.WithMaxDecodedObjectBytes(0))
 		require.NoError(t, err)
 
@@ -327,7 +327,7 @@ func TestReadObject_HonorsConfiguredLimitAboveVarintCeiling(t *testing.T) {
 
 	t.Run("within a larger configured cap is not rejected as too large", func(t *testing.T) {
 		t.Parallel()
-		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxDecodedObjectBytes(64*1024*1024))
 		require.NoError(t, err)
 
@@ -339,7 +339,7 @@ func TestReadObject_HonorsConfiguredLimitAboveVarintCeiling(t *testing.T) {
 
 	t.Run("above the cap is rejected with the declared size", func(t *testing.T) {
 		t.Parallel()
-		pr, err := protocol.ParsePackfileWithOptions(t.Context(), bytes.NewReader(buildPack()),
+		pr, err := protocol.ParsePackfile(t.Context(), bytes.NewReader(buildPack()),
 			protocol.WithMaxDecodedObjectBytes(10*1024*1024))
 		require.NoError(t, err)
 
