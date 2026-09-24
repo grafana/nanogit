@@ -78,12 +78,9 @@ type Limits struct {
 	// object read from a packfile, checked against its declared size before
 	// allocation — this is what defeats decompression bombs. Unlike the wire
 	// caps, a zero value does not disable it: it keeps the built-in default
-	// (protocol.MaxUnpackedObjectSize). Oversized objects surface as
+	// (protocol.MaxUnpackedObjectSize, nanogit's historical hardcoded limit, so
+	// leaving this unset preserves prior behavior). Oversized objects surface as
 	// *protocol.ObjectTooLargeError.
-	//
-	// That default reproduces nanogit's historical, previously-hardcoded
-	// unpacked-object limit, so embedders that leave this unset see no change in
-	// behavior; setting a positive value only raises or lowers that ceiling.
 	MaxObjectDecodedBytes int64
 }
 

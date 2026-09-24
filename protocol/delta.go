@@ -154,7 +154,7 @@ func (d *Delta) DecodeChanges() ([]DeltaChange, error) {
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
 // Review it once we have some more integration testing so that we don't break things unintentionally.
 //
-// A declared target above maxDecodedObjectBytes (when > 0) is rejected with
+// A declared target above maxDecodedObjectBytes is rejected with
 // *ObjectTooLargeError before the instruction stream is walked. The instructions
 // are validated but not materialized: the raw bytes are retained for ApplyDelta
 // to stream, so a compressible delta cannot amplify into a large metadata slice.
@@ -168,7 +168,9 @@ func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*De
 	targetLength, payload := deltaHeaderSize(payload)
 
 	// Reject an oversized target up front, before walking the command stream.
-	if maxDecodedObjectBytes > 0 && targetLength > uint64(maxDecodedObjectBytes) {
+	// The cap is always set by the reader (it defaults to MaxUnpackedObjectSize),
+	// so it is never disabled on the production path.
+	if targetLength > uint64(maxDecodedObjectBytes) {
 		reported := int64(targetLength)
 		if targetLength > math.MaxInt64 {
 			reported = math.MaxInt64

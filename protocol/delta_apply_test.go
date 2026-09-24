@@ -327,7 +327,7 @@ func TestParseDelta_StreamsInsteadOfMaterializingChanges(t *testing.T) {
 		payload = append(payload, 0x01, 'a') // add one byte
 	}
 
-	delta, err := parseDelta("parent", payload, 0)
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
 	require.NoError(t, err)
 	require.EqualValues(t, target, delta.TargetLength)
 	require.NotNil(t, delta.instructions,
@@ -356,7 +356,7 @@ func TestApplyDelta_ParsedZeroTargetDoesNotAllocateBase(t *testing.T) {
 	// minimum without any (now-rejected) trailing instruction padding.
 	payload := []byte{0x80, 0x80, 0x01, 0x00}
 
-	delta, err := parseDelta("parent", payload, 0)
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
 	require.NoError(t, err)
 	require.EqualValues(t, baseLen, delta.ExpectedSourceLength)
 	require.EqualValues(t, 0, delta.TargetLength)
@@ -408,7 +408,7 @@ func TestDelta_DecodeChanges(t *testing.T) {
 			0x91, 0x07, 0x06, // copy base[7:13]
 		}
 
-		delta, err := parseDelta("parent", payload, 0)
+		delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
 		require.NoError(t, err)
 
 		changes, err := delta.DecodeChanges()
@@ -450,7 +450,7 @@ func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {
 		0x05, 'h', 'i', 'j', 'k', 'l', // add 5 bytes -> would overrun, rejected
 	}
 
-	delta, err := parseDelta("parent", payload, 0)
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
 	require.Nil(t, delta)
 	require.Error(t, err)
 	var sizeErr *DeltaSizeError
@@ -475,7 +475,7 @@ func TestParseDelta_RejectsOutOfBoundsInstruction(t *testing.T) {
 		0x90, 0x14, // copy offset 0, size 20 (> target) -> zero consumption
 	}
 
-	delta, err := parseDelta("parent", payload, 0)
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
 	require.Nil(t, delta)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "malformed delta instruction")
@@ -495,7 +495,7 @@ func TestParseDelta_RejectsTrailingCommands(t *testing.T) {
 		0x01, 'b', // trailing add -> malformed
 	}
 
-	delta, err := parseDelta("parent", payload, 0)
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
 	require.Nil(t, delta)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "trailing bytes")
@@ -525,10 +525,10 @@ func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {
 	require.Equal(t, int64(1<<20), tooLarge.Size)
 	require.Equal(t, int64(cap), tooLarge.Limit)
 
-	// A cap of 0 disables the oversized-target check (used by direct parseDelta
-	// callers/tests). The payload here is truncated relative to its huge
-	// declared target, so parsing still fails — but not with ErrObjectTooLarge.
-	_, err = parseDelta("parent", payload, 0)
+	// With a cap above the declared target the oversized-target check passes, so
+	// parsing proceeds to the command stream — which is truncated relative to
+	// that target, so parsing still fails, but not with ErrObjectTooLarge.
+	_, err = parseDelta("parent", payload, 2<<20)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, ErrObjectTooLarge)
 }

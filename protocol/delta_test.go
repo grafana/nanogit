@@ -86,7 +86,7 @@ func TestParseDelta(t *testing.T) {
 			t.Parallel()
 			t.Log(tt.description)
 
-			got, err := parseDelta(tt.parent, tt.payload, 0)
+			got, err := parseDelta(tt.parent, tt.payload, MaxUnpackedObjectSize)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr.Error(), err.Error())
