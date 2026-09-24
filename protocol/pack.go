@@ -578,10 +578,13 @@ func readPacketData(reader io.Reader, lengthBytes []byte, length uint64) ([]byte
 	packetData := pooledBuf[:dataLength]
 	n, err := io.ReadFull(reader, packetData)
 	if err != nil {
-		// Return buffer to pool before error
+		// Copy the partial data out of the pooled buffer BEFORE returning the
+		// buffer to the pool. Returning it first would let another goroutine
+		// Get the same backing array and write into it (via io.ReadFull) while
+		// this goroutine is still reading packetData here — a data race.
+		fullPacket := append(lengthBytes, packetData[:n]...)
 		//lint:ignore SA6002 byte slices are correct for sync.Pool
 		packetDataPool.Put(pooledBuf[:0]) //nolint:staticcheck
-		fullPacket := append(lengthBytes, packetData[:n]...)
 		if err == io.ErrUnexpectedEOF || err == io.EOF {
 			return nil, NewPackParseError(fullPacket, fmt.Errorf("line declared %d bytes, but only %d are available", length, len(fullPacket)))
 		}

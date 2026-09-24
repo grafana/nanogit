@@ -1,8 +1,12 @@
 package client
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
+	"crypto"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 )
 
@@ -77,6 +82,134 @@ func TestFetchHonorsSingleObjectLimit(t *testing.T) {
 	require.True(t, errors.As(err, &tooLarge), "expected *ErrResponseTooLarge, got %T: %v", err, err)
 	require.Equal(t, "fetch", tooLarge.Op)
 	require.Equal(t, int64(256), tooLarge.Limit)
+}
+
+// encodeObjectHeader encodes a packfile object's type + size varint the same
+// way a real pack does, so a test object can declare an arbitrary decoded size.
+func encodeObjectHeader(objType protocol.ObjectType, size int) []byte {
+	b := byte(objType)<<4 | byte(size&0xF)
+	size >>= 4
+	var out []byte
+	for size > 0 {
+		out = append(out, b|0x80)
+		b = byte(size & 0x7F)
+		size >>= 7
+	}
+	return append(out, b)
+}
+
+// TestFetchHonorsMaxObjectDecodedBytes proves the decoded-object cap threads
+// from options.Limits through Fetch to the packfile parser and rejects an
+// object whose declared decoded size exceeds the cap — before it is inflated
+// or allocated, so the compressed payload need not even be valid.
+func TestFetchHonorsMaxObjectDecodedBytes(t *testing.T) {
+	t.Parallel()
+
+	const declaredSize = 1 << 20 // 1 MiB declared decoded size, over the cap below
+
+	pack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x01") // v2, 1 object
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeBlob, declaredSize)...)
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	writePkt(append([]byte{1}, pack...)) // sideband channel 1 = pack data
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body.Bytes())
+	}))
+	t.Cleanup(server.Close)
+
+	rc, err := NewRawClient(server.URL+"/repo",
+		options.WithLimits(options.Limits{MaxObjectDecodedBytes: 4096}))
+	require.NoError(t, err)
+
+	wantHash, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+
+	_, err = rc.Fetch(context.Background(), FetchOptions{Want: []hash.Hash{wantHash}, Done: true})
+	require.Error(t, err)
+
+	var tooLarge *protocol.ObjectTooLargeError
+	require.True(t, errors.As(err, &tooLarge), "expected *protocol.ObjectTooLargeError, got %T: %v", err, err)
+	require.Equal(t, int64(declaredSize), tooLarge.Size)
+	require.Equal(t, int64(4096), tooLarge.Limit)
+	// The sentinel is preserved through the wrap for errors.Is callers.
+	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
+}
+
+func zlibBytes(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zlib.NewWriter(&buf)
+	_, err := zw.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
+}
+
+// TestFetchHonorsMaxObjectDecodedBytesForDeltas proves the decoded-object cap
+// also bounds the delta path: a pack with an in-cap base blob followed by a
+// ref-delta whose declared target size exceeds the cap must be rejected with
+// ObjectTooLargeError (carrying the declared target and the limit) rather than
+// reconstructed.
+func TestFetchHonorsMaxObjectDecodedBytesForDeltas(t *testing.T) {
+	t.Parallel()
+
+	const cap = 4096
+	baseData := []byte("the base object contents") // 24 bytes, well under the cap
+	require.Less(t, len(baseData), 128, "source size must fit a single-byte delta varint")
+	baseHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeBlob, baseData)
+	require.NoError(t, err)
+
+	// Delta header: source size = len(baseData) (single byte), target size =
+	// 1<<20 (encoded as the 7-bit little-endian varint 0x80 0x80 0x40), which
+	// is far above the cap. No commands are needed: parseDelta rejects on the
+	// declared target before the command loop.
+	deltaPayload := []byte{byte(len(baseData)), 0x80, 0x80, 0x40}
+
+	pack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x02") // v2, 2 objects
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeBlob, len(baseData))...)
+	pack = append(pack, zlibBytes(t, baseData)...)
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(deltaPayload))...)
+	pack = append(pack, baseHash[:]...)
+	pack = append(pack, zlibBytes(t, deltaPayload)...)
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	writePkt(append([]byte{1}, pack...)) // sideband channel 1 = pack data
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body.Bytes())
+	}))
+	t.Cleanup(server.Close)
+
+	rc, err := NewRawClient(server.URL+"/repo",
+		options.WithLimits(options.Limits{MaxObjectDecodedBytes: cap}))
+	require.NoError(t, err)
+
+	wantHash, err := hash.FromHex("0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+
+	_, err = rc.Fetch(context.Background(), FetchOptions{Want: []hash.Hash{wantHash}, Done: true})
+	require.Error(t, err)
+
+	var tooLarge *protocol.ObjectTooLargeError
+	require.True(t, errors.As(err, &tooLarge), "expected *protocol.ObjectTooLargeError, got %T: %v", err, err)
+	require.Equal(t, int64(1<<20), tooLarge.Size)
+	require.Equal(t, int64(cap), tooLarge.Limit)
+	require.ErrorIs(t, err, protocol.ErrObjectTooLarge)
 }
 
 func TestFetchUnboundedByDefault(t *testing.T) {

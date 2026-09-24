@@ -22,6 +22,7 @@ func TestWithLimits(t *testing.T) {
 			MultiObjectFetchMaxBytes:    1 << 30,
 			RefsMetadataMaxBytes:        1 << 16,
 			ReceivePackResponseMaxBytes: 1 << 16,
+			MaxObjectDecodedBytes:       1 << 24,
 		}
 		resolved, err := Resolve(WithLimits(want))
 		require.NoError(t, err)
@@ -50,6 +51,12 @@ func TestWithLimits(t *testing.T) {
 		_, err := Resolve(WithLimits(Limits{ReceivePackResponseMaxBytes: -1}))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ReceivePackResponseMaxBytes")
+	})
+
+	t.Run("negative MaxObjectDecodedBytes rejected", func(t *testing.T) {
+		_, err := Resolve(WithLimits(Limits{MaxObjectDecodedBytes: -1}))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MaxObjectDecodedBytes")
 	})
 
 	t.Run("WithLimits is composable with other options", func(t *testing.T) {

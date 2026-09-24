@@ -1,5 +1,10 @@
 package protocol
 
+import (
+	"fmt"
+	"math"
+)
+
 // FileStatus represents the status of a file in a commit
 // Git file status codes are documented in the Git documentation:
 // https://git-scm.com/docs/git-status#_short_format
@@ -32,6 +37,50 @@ var (
 	errMissingSizeByte   = strError("missing size byte")
 )
 
+// ErrDeltaSize is the sentinel wrapped by *DeltaSizeError; match it with
+// errors.Is. It means the delta is internally inconsistent (malformed or
+// truncated), as opposed to ErrObjectTooLarge, which means the declared target
+// exceeds the configured cap.
+var ErrDeltaSize = strError("delta does not reconstruct its declared target size")
+
+// DeltaSizeError reports that a delta's instructions do not reconstruct an
+// object of its declared target size. It wraps ErrDeltaSize.
+type DeltaSizeError struct {
+	// Declared is the target size, in bytes, from the delta header.
+	Declared uint64
+	// Actual is the reconstructed output size, in bytes, at the point the
+	// mismatch was detected.
+	Actual uint64
+	// Reason is a short description of which size check failed.
+	Reason string
+}
+
+func (e *DeltaSizeError) Error() string {
+	return fmt.Sprintf("%s: %s (declared target %d bytes, got %d bytes)", ErrDeltaSize, e.Reason, e.Declared, e.Actual)
+}
+
+func (e *DeltaSizeError) Unwrap() error { return ErrDeltaSize }
+
+// ErrMalformedDeltaInstruction is the sentinel wrapped by
+// *MalformedDeltaInstructionError; match it with errors.Is. It means a delta
+// command cannot consume any target bytes — an out-of-bounds copy or an add
+// whose length exceeds the declared target.
+var ErrMalformedDeltaInstruction = strError("malformed delta instruction")
+
+// MalformedDeltaInstructionError reports a delta command that cannot consume any
+// target bytes. It wraps ErrMalformedDeltaInstruction.
+type MalformedDeltaInstructionError struct {
+	// Reason describes the concrete situation (e.g. the offending offset, size,
+	// source length, and target size).
+	Reason string
+}
+
+func (e *MalformedDeltaInstructionError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrMalformedDeltaInstruction, e.Reason)
+}
+
+func (e *MalformedDeltaInstructionError) Unwrap() error { return ErrMalformedDeltaInstruction }
+
 // Delta represents a delta, which is a way to describe the changes to a file between two commits.
 //
 // A delta is a sequence of instructions that describe how to modify a source file to produce a target file.
@@ -47,12 +96,13 @@ var (
 type Delta struct {
 	Parent               string
 	ExpectedSourceLength uint64
-	// Changes contains all the modifications to do in order.
-	//
-	// When iterating, this must be done sequentially, in order.
-	// No modifications of the source data is necessary.
-	// The presence of some fields determines how to act; see the documentation of the struct.
-	Changes []DeltaChange
+	// TargetLength is the declared decoded size, in bytes, of the reconstructed
+	// object (the second size in the delta header). ApplyDelta enforces it exactly.
+	TargetLength uint64
+	// instructions is the raw delta command stream (the payload after the
+	// header). ApplyDelta decodes it one instruction at a time; DecodeChanges
+	// materializes it into a []DeltaChange on demand.
+	instructions []byte
 }
 
 // DeltaChange represents a single change to a file.
@@ -69,6 +119,26 @@ type DeltaChange struct {
 	SourceOffset uint64
 }
 
+// DecodeChanges materializes the delta's instruction stream into a slice of
+// DeltaChange, in order. Prefer ApplyDelta, which streams the instructions
+// without allocating the slice; use DecodeChanges only to inspect individual
+// changes. Returns nil when there is no instruction stream.
+func (d *Delta) DecodeChanges() ([]DeltaChange, error) {
+	if d.instructions == nil {
+		return nil, nil
+	}
+
+	var changes []DeltaChange
+	err := walkDeltaCommands(d.ExpectedSourceLength, d.TargetLength, d.instructions, func(c DeltaChange) error {
+		changes = append(changes, c)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return changes, nil
+}
+
 // parseDelta parses a delta payload into a Delta struct.
 //
 // The delta format consists of:
@@ -83,40 +153,96 @@ type DeltaChange struct {
 // https://git-scm.com/docs/pack-format#_deltified_representation
 // FIXME: This logic is pretty hard to follow and test. So it's missing coverage for now
 // Review it once we have some more integration testing so that we don't break things unintentionally.
-func parseDelta(parent string, payload []byte) (*Delta, error) {
-	delta := &Delta{Parent: parent}
-
+//
+// A declared target above maxDecodedObjectBytes is rejected with
+// *ObjectTooLargeError before the instruction stream is walked. The instructions
+// are validated but not materialized: the raw bytes are retained for ApplyDelta
+// to stream, so a compressible delta cannot amplify into a large metadata slice.
+func parseDelta(parent string, payload []byte, maxDecodedObjectBytes int64) (*Delta, error) {
 	const minDeltaSize = 4
 	if len(payload) < minDeltaSize {
 		return nil, strError("payload too short")
 	}
-	delta.ExpectedSourceLength, payload = deltaHeaderSize(payload)
-	deltaSize, payload := deltaHeaderSize(payload)
-	originalDeltaSize := deltaSize
 
-	for deltaSize > 0 && deltaSize <= originalDeltaSize {
+	expectedSourceLength, payload := deltaHeaderSize(payload)
+	targetLength, payload := deltaHeaderSize(payload)
+
+	// Reject an oversized target up front, before walking the command stream.
+	// The cap is always set by the reader (it defaults to MaxUnpackedObjectSize),
+	// so it is never disabled on the production path.
+	if targetLength > uint64(maxDecodedObjectBytes) {
+		reported := int64(targetLength)
+		if targetLength > math.MaxInt64 {
+			reported = math.MaxInt64
+		}
+		return nil, &ObjectTooLargeError{Size: reported, Limit: maxDecodedObjectBytes}
+	}
+
+	// Validate the instruction stream without retaining it (nil callback).
+	if err := walkDeltaCommands(expectedSourceLength, targetLength, payload, nil); err != nil {
+		return nil, err
+	}
+
+	return &Delta{
+		Parent:               parent,
+		ExpectedSourceLength: expectedSourceLength,
+		TargetLength:         targetLength,
+		instructions:         payload,
+	}, nil
+}
+
+// walkDeltaCommands decodes the instruction stream in order, invoking fn (when
+// non-nil) with each decoded change. It keeps only one DeltaChange live at a
+// time, so a hostile delta cannot amplify a small payload into a large
+// []DeltaChange; a nil fn validates without acting.
+//
+// It validates the whole stream — an instruction consuming past the target, a
+// malformed instruction (reported by parseDeltaCommand), and a stream that ends
+// early or late are all rejected — so a well-formed stream fills exactly
+// targetLength bytes and is consumed exactly.
+func walkDeltaCommands(expectedSourceLength, targetLength uint64, instructions []byte, fn func(DeltaChange) error) error {
+	remaining := targetLength
+	payload := instructions
+	for remaining > 0 && remaining <= targetLength {
 		if len(payload) == 0 {
-			return nil, strError("missing cmd byte")
+			return strError("missing cmd byte")
 		}
 
 		cmd := payload[0]
 		payload = payload[1:]
 
-		change, newPayload, consumedSize, err := parseDeltaCommand(cmd, payload, delta.ExpectedSourceLength, originalDeltaSize)
+		change, newPayload, consumedSize, err := parseDeltaCommand(cmd, payload, expectedSourceLength, targetLength)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		if consumedSize == 0 {
-			break
+		// Reject an instruction that consumes past the target (also avoids
+		// underflowing remaining below).
+		if consumedSize > remaining {
+			return &DeltaSizeError{
+				Declared: targetLength,
+				Actual:   (targetLength - remaining) + consumedSize,
+				Reason:   "instruction consumes past declared target",
+			}
 		}
 
-		delta.Changes = append(delta.Changes, change)
-		deltaSize -= consumedSize
+		if fn != nil {
+			if err := fn(change); err != nil {
+				return err
+			}
+		}
+
+		remaining -= consumedSize
 		payload = newPayload
 	}
 
-	return delta, nil
+	// Trailing bytes after the target is filled are malformed; reject rather
+	// than silently ignore them.
+	if len(payload) > 0 {
+		return strError("delta has trailing bytes after the declared target was reached")
+	}
+
+	return nil
 }
 
 // parseDeltaCommand parses a single delta command and returns the resulting change,
@@ -148,7 +274,10 @@ func parseCopyCommand(cmd byte, payload []byte, expectedSourceLength, originalDe
 	}
 
 	if size > originalDeltaSize || offset+size > expectedSourceLength || offset+size < offset {
-		return DeltaChange{}, payload, 0, nil
+		return DeltaChange{}, payload, 0, &MalformedDeltaInstructionError{
+			Reason: fmt.Sprintf("copy offset=%d size=%d out of bounds for source length %d and target size %d",
+				offset, size, expectedSourceLength, originalDeltaSize),
+		}
 	}
 
 	change := DeltaChange{
@@ -162,7 +291,9 @@ func parseCopyCommand(cmd byte, payload []byte, expectedSourceLength, originalDe
 // parseAddCommand parses an add data instruction from delta command
 func parseAddCommand(cmd byte, payload []byte, originalDeltaSize uint64) (DeltaChange, []byte, uint64, error) {
 	if uint64(cmd) > originalDeltaSize {
-		return DeltaChange{}, payload, 0, nil
+		return DeltaChange{}, payload, 0, &MalformedDeltaInstructionError{
+			Reason: fmt.Sprintf("add length %d exceeds target size %d", cmd, originalDeltaSize),
+		}
 	}
 	if len(payload) < int(cmd) {
 		return DeltaChange{}, payload, 0, strError("missing data bytes")

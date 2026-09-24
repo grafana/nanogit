@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"math"
 )
 
 // ApplyDelta applies delta changes to a base object's data to reconstruct the full object.
@@ -10,6 +11,11 @@ import (
 // The delta format consists of two types of instructions:
 //  1. Copy from source: Copy a range of bytes from the base data
 //  2. Insert new data: Insert bytes directly from the delta
+//
+// The Delta carries its raw instruction bytes (see parseDelta) and ApplyDelta
+// streams them one at a time, so reconstruction never holds more than the
+// output buffer plus a single decoded instruction — a delta cannot amplify a
+// small payload into a large []DeltaChange.
 //
 // Parameters:
 //   - baseData: The source/base object data to apply the delta to
@@ -28,38 +34,74 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 			len(baseData), delta.ExpectedSourceLength)
 	}
 
-	// Pre-allocate result buffer with estimated size
-	// This is an optimization to reduce allocations during delta application
-	var result []byte
-	estimatedSize := delta.ExpectedSourceLength
-	if len(delta.Changes) > 0 {
-		// Rough estimate: add space for new data in delta
-		estimatedSize += uint64(len(delta.Changes) * 64) // Conservative estimate
+	// Preallocate to the declared target (parseDelta validated it against the
+	// decoded-object cap), not to the possibly-larger base. A target above
+	// math.MaxInt cannot be a slice capacity (int is 32-bit on armv7) and would
+	// panic in make, so reject it with the same ObjectTooLargeError the
+	// standard-object path uses, saturating Size to int64.
+	if delta.TargetLength > math.MaxInt {
+		size := int64(delta.TargetLength)
+		if delta.TargetLength > math.MaxInt64 {
+			size = math.MaxInt64
+		}
+		return nil, &ObjectTooLargeError{Size: size, Limit: math.MaxInt}
 	}
-	result = make([]byte, 0, estimatedSize)
 
-	// Apply each delta change sequentially
-	for i, change := range delta.Changes {
-		if change.DeltaData != nil {
-			// Instruction type 1: Insert new data from the delta
-			result = append(result, change.DeltaData...)
-		} else {
-			// Instruction type 2: Copy data from the base object
-			// Validate that the copy operation is within bounds
-			if change.SourceOffset+change.Length > uint64(len(baseData)) {
-				return nil, fmt.Errorf("delta change %d: copy operation out of bounds (offset=%d, length=%d, base_size=%d)",
-					i, change.SourceOffset, change.Length, len(baseData))
-			}
+	result := make([]byte, 0, delta.TargetLength)
 
-			if change.Length == 0 {
-				return nil, fmt.Errorf("delta change %d: invalid zero-length copy operation", i)
-			}
+	// walkDeltaCommands guarantees the instructions fill exactly TargetLength, so
+	// appendChange just appends each chunk. idx is only for diagnostics.
+	idx := 0
+	appendChange := func(change DeltaChange) error {
+		chunk, err := deltaChunk(idx, change, baseData)
+		if err != nil {
+			return err
+		}
+		result = append(result, chunk...)
+		idx++
+		return nil
+	}
 
-			// Copy the specified range from base data
-			copyData := baseData[change.SourceOffset : change.SourceOffset+change.Length]
-			result = append(result, copyData...)
+	if err := walkDeltaCommands(delta.ExpectedSourceLength, delta.TargetLength, delta.instructions, appendChange); err != nil {
+		return nil, err
+	}
+
+	// Defense in depth: walkDeltaCommands already guarantees this.
+	if uint64(len(result)) != delta.TargetLength {
+		return nil, &DeltaSizeError{
+			Declared: delta.TargetLength,
+			Actual:   uint64(len(result)),
+			Reason:   "reconstructed output size does not match declared target",
 		}
 	}
 
 	return result, nil
+}
+
+// deltaChunk returns the bytes one delta instruction contributes to the rebuilt
+// object. A Git delta reconstructs an object from a base using just two kinds of
+// instruction, and each DeltaChange is one of them:
+//
+//   - insert: literal new bytes carried inline in the delta (change.DeltaData).
+//   - copy:   a range copied from the base object (change.SourceOffset/Length),
+//     bounds-checked here against baseData.
+//
+// idx is used only for diagnostics.
+//
+// See https://git-scm.com/docs/pack-format#_deltified_representation
+func deltaChunk(idx int, change DeltaChange, baseData []byte) ([]byte, error) {
+	// Instruction type 1: insert new data carried in the delta.
+	if change.DeltaData != nil {
+		return change.DeltaData, nil
+	}
+
+	// Instruction type 2: copy a range from the base object.
+	if change.SourceOffset+change.Length > uint64(len(baseData)) {
+		return nil, fmt.Errorf("delta change %d: copy operation out of bounds (offset=%d, length=%d, base_size=%d)",
+			idx, change.SourceOffset, change.Length, len(baseData))
+	}
+	if change.Length == 0 {
+		return nil, fmt.Errorf("delta change %d: invalid zero-length copy operation", idx)
+	}
+	return baseData[change.SourceOffset : change.SourceOffset+change.Length], nil
 }

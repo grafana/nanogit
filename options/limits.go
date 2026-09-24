@@ -2,11 +2,8 @@ package options
 
 import "fmt"
 
-// WithLimits installs DoS-protection caps on response sizes, classified by
-// operation. Embedders that don't call WithLimits (or pass a zero Limits)
-// keep nanogit's historic unbounded behavior.
-//
-// A zero value in any field means "no limit". Negative values are rejected.
+// WithLimits installs the DoS-protection caps described on Limits. Negative
+// values are rejected.
 func WithLimits(l Limits) Option {
 	return func(o *Options) error {
 		if l.SingleObjectFetchMaxBytes < 0 {
@@ -20,6 +17,9 @@ func WithLimits(l Limits) Option {
 		}
 		if l.ReceivePackResponseMaxBytes < 0 {
 			return fmt.Errorf("Limits.ReceivePackResponseMaxBytes is negative: %d", l.ReceivePackResponseMaxBytes)
+		}
+		if l.MaxObjectDecodedBytes < 0 {
+			return fmt.Errorf("Limits.MaxObjectDecodedBytes is negative: %d", l.MaxObjectDecodedBytes)
 		}
 		o.Limits = l
 		return nil

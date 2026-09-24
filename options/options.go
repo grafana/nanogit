@@ -44,9 +44,9 @@ type Options struct {
 	// advertised on receive-pack ref update commands. When nil or empty,
 	// protocol.DefaultReceivePackCapabilities() is used.
 	ReceivePackCapabilities []protocol.Capability
-	// Limits caps the bytes nanogit will read from the server per HTTP
-	// response, classified by operation. The zero value disables every cap
-	// so embedders that don't opt in keep today's unbounded behavior.
+	// Limits caps how much data nanogit reads from the server. Its zero value
+	// leaves the wire caps disabled but keeps decoded-object protection on; see
+	// Limits.
 	Limits Limits
 	// NegotiateCapabilities, when true, makes the client fetch the server's
 	// receive-pack capability advertisement once per client lifetime and
@@ -55,16 +55,10 @@ type Options struct {
 	NegotiateCapabilities bool
 }
 
-// Limits caps the total bytes nanogit will read from the server in a single
-// HTTP response, broken down by operation class. A zero value for any field
-// means "no limit" so the zero Limits preserves nanogit's historic behavior.
-//
-// Negative values are rejected at construction time (see WithLimits).
-// All three read-side caps govern the git-upload-pack endpoint (which
-// carries both the fetch and ls-refs commands in protocol v2); they are
-// split by operation rather than by endpoint because their expected
-// response sizes differ by orders of magnitude. ReceivePackResponseMaxBytes
-// is the lone write-side cap and governs git-receive-pack.
+// Limits caps how much data nanogit reads from the server. The four *MaxBytes
+// fields cap a single HTTP response (wire bytes) and default to no limit;
+// MaxObjectDecodedBytes caps a single object's decoded size and stays on by
+// default. Negative values are rejected by WithLimits.
 type Limits struct {
 	// SingleObjectFetchMaxBytes caps the git-upload-pack response for
 	// fetches that target a single object (GetBlob, GetTree, GetCommit, ...).
@@ -80,6 +74,14 @@ type Limits struct {
 	// ReceivePackResponseMaxBytes caps the git-receive-pack reply to a
 	// push (CreateRef, UpdateRef, DeleteRef, staged Push).
 	ReceivePackResponseMaxBytes int64
+	// MaxObjectDecodedBytes caps the decoded (inflated) size of any single
+	// object read from a packfile, checked against its declared size before
+	// allocation — this is what defeats decompression bombs. Unlike the wire
+	// caps, a zero value does not disable it: it keeps the built-in default
+	// (protocol.MaxUnpackedObjectSize, nanogit's historical hardcoded limit, so
+	// leaving this unset preserves prior behavior). Oversized objects surface as
+	// *protocol.ObjectTooLargeError.
+	MaxObjectDecodedBytes int64
 }
 
 // Option mutates Options during Resolve. An Option returns an error to
