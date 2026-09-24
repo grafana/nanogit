@@ -78,9 +78,17 @@ func ApplyDelta(baseData []byte, delta *Delta) ([]byte, error) {
 	return result, nil
 }
 
-// deltaChunk resolves a single decoded change to the bytes it contributes to
-// the reconstruction: literal data carried in the delta, or a bounds-checked
-// range copied from the base object. idx is used only for diagnostics.
+// deltaChunk returns the bytes one delta instruction contributes to the rebuilt
+// object. A Git delta reconstructs an object from a base using just two kinds of
+// instruction, and each DeltaChange is one of them:
+//
+//   - insert: literal new bytes carried inline in the delta (change.DeltaData).
+//   - copy:   a range copied from the base object (change.SourceOffset/Length),
+//     bounds-checked here against baseData.
+//
+// idx is used only for diagnostics.
+//
+// See https://git-scm.com/docs/pack-format#_deltified_representation
 func deltaChunk(idx int, change DeltaChange, baseData []byte) ([]byte, error) {
 	// Instruction type 1: insert new data carried in the delta.
 	if change.DeltaData != nil {
