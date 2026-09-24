@@ -35,10 +35,6 @@ const (
 var (
 	errMissingOffsetByte = strError("missing offset byte")
 	errMissingSizeByte   = strError("missing size byte")
-	// errMalformedDeltaInstruction is the sentinel wrapped by the concrete
-	// errors parseDeltaCommand returns for an instruction that cannot consume
-	// any target bytes; match it with errors.Is.
-	errMalformedDeltaInstruction = strError("malformed delta instruction")
 )
 
 // ErrDeltaSize is the sentinel wrapped by *DeltaSizeError; match it with
@@ -64,6 +60,26 @@ func (e *DeltaSizeError) Error() string {
 }
 
 func (e *DeltaSizeError) Unwrap() error { return ErrDeltaSize }
+
+// ErrMalformedDeltaInstruction is the sentinel wrapped by
+// *MalformedDeltaInstructionError; match it with errors.Is. It means a delta
+// command cannot consume any target bytes — an out-of-bounds copy or an add
+// whose length exceeds the declared target.
+var ErrMalformedDeltaInstruction = strError("malformed delta instruction")
+
+// MalformedDeltaInstructionError reports a delta command that cannot consume any
+// target bytes. It wraps ErrMalformedDeltaInstruction.
+type MalformedDeltaInstructionError struct {
+	// Reason describes the concrete situation (e.g. the offending offset, size,
+	// source length, and target size).
+	Reason string
+}
+
+func (e *MalformedDeltaInstructionError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrMalformedDeltaInstruction, e.Reason)
+}
+
+func (e *MalformedDeltaInstructionError) Unwrap() error { return ErrMalformedDeltaInstruction }
 
 // Delta represents a delta, which is a way to describe the changes to a file between two commits.
 //
@@ -256,8 +272,10 @@ func parseCopyCommand(cmd byte, payload []byte, expectedSourceLength, originalDe
 	}
 
 	if size > originalDeltaSize || offset+size > expectedSourceLength || offset+size < offset {
-		return DeltaChange{}, payload, 0, fmt.Errorf("%w: copy offset=%d size=%d out of bounds for source length %d and target size %d",
-			errMalformedDeltaInstruction, offset, size, expectedSourceLength, originalDeltaSize)
+		return DeltaChange{}, payload, 0, &MalformedDeltaInstructionError{
+			Reason: fmt.Sprintf("copy offset=%d size=%d out of bounds for source length %d and target size %d",
+				offset, size, expectedSourceLength, originalDeltaSize),
+		}
 	}
 
 	change := DeltaChange{
@@ -271,8 +289,9 @@ func parseCopyCommand(cmd byte, payload []byte, expectedSourceLength, originalDe
 // parseAddCommand parses an add data instruction from delta command
 func parseAddCommand(cmd byte, payload []byte, originalDeltaSize uint64) (DeltaChange, []byte, uint64, error) {
 	if uint64(cmd) > originalDeltaSize {
-		return DeltaChange{}, payload, 0, fmt.Errorf("%w: add length %d exceeds target size %d",
-			errMalformedDeltaInstruction, cmd, originalDeltaSize)
+		return DeltaChange{}, payload, 0, &MalformedDeltaInstructionError{
+			Reason: fmt.Sprintf("add length %d exceeds target size %d", cmd, originalDeltaSize),
+		}
 	}
 	if len(payload) < int(cmd) {
 		return DeltaChange{}, payload, 0, strError("missing data bytes")
