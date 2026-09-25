@@ -1,0 +1,191 @@
+name: slash command /run-provider-tests
+
+# Ergonomic front-end to provider-tests.yml for FORK pull requests.
+#
+# Prior art — this mirrors the `/run-cloud-tests` slash command in
+# terraform-provider-grafana, adapted to nanogit's fork-safe dispatch model:
+#   - Inspiration PR:
+#     https://github.com/grafana/terraform-provider-grafana/pull/2966
+#   - Reference workflow:
+#     https://github.com/grafana/terraform-provider-grafana/blob/main/.github/workflows/slash-run-cloud-tests.yml
+# Key difference: that workflow dispatches on the PR's head *branch*, which does
+# not exist in the base repo for forks. We instead dispatch provider-tests.yml
+# with the PR number so it checks out refs/pull/<n>/merge (and we pin the
+# reviewed head SHA), never executing fork code in this comment-triggered job.
+#
+# Provider tests run repository code with real provider credentials (see
+# provider-tests.yml), so they never run automatically on fork PRs. A
+# maintainer who has reviewed the diff can trigger them from the PR itself by
+# commenting `/run-provider-tests`. This workflow then
+# dispatches provider-tests.yml with the PR number, which checks out the PR's
+# `refs/pull/<n>/merge` ref — the same safe, maintainer-gated path documented
+# in CONTRIBUTING.md, just without leaving the PR to run `gh workflow run`.
+#
+# Security model:
+#   - issue_comment always runs in the trusted base-repo context using the
+#     workflow definition from the default branch, never fork-supplied YAML.
+#   - The trust gate is *write access to this repo*. The cheap `if:` guard only
+#     pre-filters obvious non-starters; the authoritative check is the
+#     "Require write access" step below, which asks the API for the commenter's
+#     actual permission. We deliberately do NOT trust `author_association`:
+#     `MEMBER` merely means "belongs to the grafana org", not "can write to
+#     nanogit", so it would let any org member run fork code against the
+#     provider credentials. The reviewing maintainer remains the trust gate,
+#     exactly as when running `gh workflow run` by hand.
+#   - This job never checks out or executes PR code; it only calls the GitHub
+#     API. The untrusted code runs in provider-tests.yml against the merge ref.
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  # Serialize dispatcher jobs per PR. We do NOT cancel in progress: once a job
+  # has dispatched provider-tests.yml that run cannot be recalled, so canceling
+  # a job mid-flight would strand a privileged run and skip its status comment.
+  # A second comment therefore waits and then dispatches its own run.
+  group: slash-run-provider-tests-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+# Least privilege: read the API by default, escalate per-job below.
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch provider tests
+    # Cheap pre-filter only: a PR comment in this repo whose body *starts with*
+    # the slash command. startsWith (not contains) avoids firing when someone
+    # merely quotes or discusses the command (e.g. "do not run
+    # /run-provider-tests yet"). This is NOT the authorization check — that is
+    # the "Require write access" step below, which verifies the commenter's
+    # real repo permission.
+    if: >-
+      github.repository == 'grafana/nanogit'
+      && github.event.issue.pull_request
+      && startsWith(github.event.comment.body, '/run-provider-tests')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # dispatch provider-tests.yml
+      pull-requests: write # react to the comment and post the run link
+    steps:
+      - name: Require write access
+        # Authoritative trust gate: only someone who can actually write to this
+        # repo may run fork code against the provider credentials. Ask the API
+        # for the commenter's permission rather than trusting author_association
+        # (MEMBER = org member, not necessarily a nanogit maintainer).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          # Decide on the `permissions.push` boolean, which is the canonical
+          # "can write to this repo" signal. It is true for the admin, maintain
+          # and write roles (plus any custom role that grants push) and false
+          # for triage, read and non-collaborators — so we don't have to
+          # enumerate role names or rely on how the legacy `.permission` field
+          # collapses "maintain" into "write" and "triage" into "read".
+          # `role_name` is read only for the log/error message. A non-
+          # collaborator (incl. an org member without repo access) reports
+          # push=false; an unknown login 404s -> the command fails under set -e.
+          resp=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission")
+          can_push=$(printf '%s' "$resp" | jq -r '.user.permissions.push')
+          role=$(printf '%s' "$resp" | jq -r '.role_name // .permission')
+          if [ "$can_push" = "true" ]; then
+            echo "${ACTOR} has '${role}' access (can push); proceeding."
+          else
+            echo "::error::${ACTOR} lacks write access to ${REPO} (role=${role}). Only maintainers can trigger provider tests on a PR."
+            exit 1
+          fi
+
+      - name: Resolve PR head
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.issue.pull_request.url }}
+        run: |
+          set -euo pipefail
+          # Read the head label (for the confirmation comment) and, critically,
+          # the head SHA *now* — the moment a maintainer vouched for this PR.
+          # We pass that SHA to provider-tests.yml so it can refuse to run if
+          # the PR head has moved since (see the TOCTOU note in that workflow).
+          # Both are drawn from a single API read so they describe one state.
+          pr_json=$(gh api "$PR_URL" --jq '{label: .head.label, sha: .head.sha}')
+          # .head.label is "owner:branch" (e.g. "MissingRoberto:fix-oss-ci").
+          head_label=$(echo "$pr_json" | jq -r '.label')
+          head_sha=$(echo "$pr_json" | jq -r '.sha')
+          echo "head_label=$head_label" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Acknowledge with a reaction
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_URL: ${{ github.event.comment.url }}
+        run: |
+          set -euo pipefail
+          gh api "$COMMENT_URL/reactions" --method POST --field content='rocket'
+
+      - name: Dispatch provider tests for the PR merge ref
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          # Record the time just before dispatch so we can find the new run.
+          before=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          # Dispatch on the default branch (main) so the trusted workflow
+          # definition runs; the `pr` input makes it check out
+          # refs/pull/<n>/merge — the contributor's changes merged into main.
+          # `head_sha` pins the exact commit the maintainer vouched for so the
+          # run aborts if the PR head moved between the comment and the checkout.
+          gh workflow run provider-tests.yml \
+            --repo "$REPO" \
+            --ref main \
+            --field pr="$PR_NUMBER" \
+            --field head_sha="$HEAD_SHA"
+
+          # Find the run we just dispatched. Correlate on the run title
+          # (provider-tests.yml sets run-name to include the PR number) rather
+          # than taking the newest dispatch, so a concurrent dispatch for a
+          # different PR can't make us link to the wrong privileged run.
+          want_title="Provider Tests (PR #${PR_NUMBER})"
+          run_url=""
+          for _ in $(seq 1 10); do
+            sleep 3
+            runs_json=$(gh api \
+              "repos/${REPO}/actions/workflows/provider-tests.yml/runs?event=workflow_dispatch&created=>=${before}&per_page=20")
+            # $t is a jq variable bound with --arg, not a shell variable.
+            # shellcheck disable=SC2016
+            run_url=$(printf '%s' "$runs_json" | jq -r --arg t "$want_title" \
+              'first(.workflow_runs[] | select(.display_title == $t or .name == $t) | .html_url) // empty')
+            if [ -n "$run_url" ]; then
+              echo "Found run: $run_url"
+              break
+            fi
+          done
+
+          if [ -z "$run_url" ]; then
+            echo "::warning::Dispatched, but could not resolve the run URL yet."
+          fi
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Post the run link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          HEAD_LABEL: ${{ steps.pr.outputs.head_label }}
+          RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RUN_URL" ]; then
+            body="Provider tests dispatched for \`${HEAD_LABEL}\`: [view run](${RUN_URL})"
+          else
+            actions_url="${GITHUB_SERVER_URL}/${REPO}/actions/workflows/provider-tests.yml"
+            body="Provider tests dispatched for \`${HEAD_LABEL}\`, but the run URL could not be determined yet. Check the [workflow runs](${actions_url}) page."
+          fi
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body"
