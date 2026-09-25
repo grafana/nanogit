@@ -79,19 +79,24 @@ jobs:
           ACTOR: ${{ github.event.comment.user.login }}
         run: |
           set -euo pipefail
-          # The legacy `.permission` field only ever returns admin/write/read/
-          # none: the "maintain" role collapses to write and "triage" to read,
-          # so `admin|write` is the complete set that means "can push". A
-          # non-collaborator (incl. an org member without repo access) returns
-          # "none", and an unknown login 404s -> the command fails under set -e.
-          perm=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
-          case "$perm" in
-            admin | write)
-              echo "${ACTOR} has '${perm}' access; proceeding." ;;
-            *)
-              echo "::error::${ACTOR} lacks write access to ${REPO} (permission=${perm}). Only maintainers can trigger provider tests on a PR."
-              exit 1 ;;
-          esac
+          # Decide on the `permissions.push` boolean, which is the canonical
+          # "can write to this repo" signal. It is true for the admin, maintain
+          # and write roles (plus any custom role that grants push) and false
+          # for triage, read and non-collaborators — so we don't have to
+          # enumerate role names or rely on how the legacy `.permission` field
+          # collapses "maintain" into "write" and "triage" into "read".
+          # `role_name` is read only for the log/error message. A non-
+          # collaborator (incl. an org member without repo access) reports
+          # push=false; an unknown login 404s -> the command fails under set -e.
+          resp=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission")
+          can_push=$(printf '%s' "$resp" | jq -r '.user.permissions.push')
+          role=$(printf '%s' "$resp" | jq -r '.role_name // .permission')
+          if [ "$can_push" = "true" ]; then
+            echo "${ACTOR} has '${role}' access (can push); proceeding."
+          else
+            echo "::error::${ACTOR} lacks write access to ${REPO} (role=${role}). Only maintainers can trigger provider tests on a PR."
+            exit 1
+          fi
 
       - name: Resolve PR head
         id: pr
