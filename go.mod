@@ -20,3 +20,8 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 )
+
+// v0.0.0 was created in 2025-11 as a semantic-release baseline tag, not a
+// usable release: it points at a pre-v0.5 snapshot that predates the current
+// API. Retracted so version selection and pkg.go.dev never offer it.
+retract v0.0.0
