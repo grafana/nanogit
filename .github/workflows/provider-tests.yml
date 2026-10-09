@@ -1,5 +1,11 @@
 name: Provider Tests
 
+# For PR-targeted manual runs, put the PR number in the run title so the
+# slash-command dispatcher can correlate the run it just triggered (and link to
+# the right one) instead of guessing by timestamp.
+run-name: >-
+  ${{ (github.event_name == 'workflow_dispatch' && inputs.pr != '') && format('Provider Tests (PR #{0})', inputs.pr) || 'Provider Tests' }}
+
 # Provider tests exercise nanogit against real hosted Git providers
 # (GitHub, GitLab, Bitbucket) and require credentials pulled from Vault.
 # Because the tests run repository code with those secrets in scope, they must
@@ -27,6 +33,13 @@ on:
         description: >-
           PR number to test (use for fork PRs, after reviewing the diff).
           Leave blank to test the branch selected above.
+        required: false
+        default: ""
+      head_sha:
+        description: >-
+          Optional. The PR head commit SHA you reviewed. When set (the slash
+          command always sets it), the run aborts if the PR head has moved
+          since, so it never executes code you did not vouch for.
         required: false
         default: ""
   schedule:
@@ -87,6 +100,32 @@ jobs:
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
+      - name: Verify PR head matches the reviewed commit
+        # Closes the review-to-run TOCTOU: refs/pull/<n>/merge is recomputed by
+        # GitHub whenever the PR changes, so without this a contributor could
+        # push new code after the maintainer triggered the run and have it
+        # execute with the provider credentials in scope. We compare the PR's
+        # *current* head (refs/pull/<n>/head, read straight from the remote — no
+        # dependency on how checkout fetched the tree) against the SHA the
+        # maintainer vouched for at dispatch. If it moved, refuse to run, and do
+        # so before any secrets are fetched below.
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.pr != '' && inputs.head_sha != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ inputs.pr }}
+          EXPECTED_SHA: ${{ inputs.head_sha }}
+        run: |
+          current_head=$(git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "refs/pull/${PR_NUMBER}/head" | cut -f1)
+          if [ -z "$current_head" ]; then
+            echo "::error::Could not resolve refs/pull/${PR_NUMBER}/head."
+            exit 1
+          fi
+          if [ "$current_head" != "$EXPECTED_SHA" ]; then
+            echo "::error::PR head moved since dispatch (reviewed ${EXPECTED_SHA}, now ${current_head}). Re-review the new commits and trigger again."
+            exit 1
+          fi
+          echo "PR head matches the reviewed commit ${EXPECTED_SHA}."
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@2e3743a1f8abfd3e921e53a7726ec0744c11bb01 # get-vault-secrets/v2.0.1
         with:
