@@ -9,10 +9,8 @@ fmt:
 
 .PHONY: lint
 
-lint-staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run
 
 # Pinned for reproducible CI runs; the vulnerability database is fetched live
 # at run time, so pinning the binary does not stale the scan.
@@ -131,7 +129,7 @@ cli-fmt:
 .PHONY: cli-lint
 cli-lint:
 	@echo "Linting CLI code..."
-	cd cli && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run
+	cd cli && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run
 
 # Release
 .PHONY: release-snapshot
