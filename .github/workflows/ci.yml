@@ -23,7 +23,7 @@ jobs:
     name: Generated Files
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -44,7 +44,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -63,7 +63,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -75,14 +75,14 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg gpg-agent gpgsm openssh-keygen
       - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/go/pkg/mod
@@ -101,7 +101,7 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     # These permissions are needed to assume roles from Github's OIDC.
     permissions:
       contents: read
@@ -121,7 +121,7 @@ jobs:
           repo_secrets: |
             CODECOV_TOKEN=codecov:CODECOV_TOKEN
       - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/go/pkg/mod
@@ -148,14 +148,14 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
       - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/go/pkg/mod
@@ -179,7 +179,7 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -204,7 +204,7 @@ jobs:
     name: Dependencies
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -222,7 +222,7 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -236,14 +236,14 @@ jobs:
     name: Clone Performance Tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/go/pkg/mod
@@ -262,14 +262,14 @@ jobs:
     name: Full Clone Performance Test (1 minute limit)
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl
       - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/go/pkg/mod
@@ -292,7 +292,7 @@ jobs:
     name: CLI Build
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -310,7 +310,7 @@ jobs:
     name: CLI Format
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
@@ -329,7 +329,7 @@ jobs:
     name: CLI Lint
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
+      image: golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install build dependencies
