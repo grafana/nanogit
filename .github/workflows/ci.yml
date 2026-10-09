@@ -115,7 +115,7 @@ jobs:
         # Vault OIDC is unavailable on fork PRs, so only fetch the Codecov
         # token for pushes and same-repo PRs. Forks still run the tests below.
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-        uses: grafana/shared-workflows/actions/get-vault-secrets@2e3743a1f8abfd3e921e53a7726ec0744c11bb01 # get-vault-secrets/v2.0.1
+        uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3 # get-vault-secrets/v2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
