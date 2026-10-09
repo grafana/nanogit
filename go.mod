@@ -3,7 +3,7 @@ module github.com/grafana/nanogit
 go 1.26.6
 
 require (
-	github.com/ProtonMail/go-crypto v1.4.1
+	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/klauspost/compress v1.19.2
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.12.2
 	github.com/smallstep/pkcs7 v0.2.3
