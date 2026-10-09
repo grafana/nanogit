@@ -218,20 +218,6 @@ jobs:
             exit 1
           fi
 
-  staticcheck:
-    name: Static Analysis
-    runs-on: ubuntu-latest
-    container:
-      image: golang:1.27.2-alpine@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Install build dependencies
-        run: apk add --no-cache git make
-      - name: Check for staticcheck issues
-        # Pinned in the Makefile (single source of truth for tool versions),
-        # so CI and `make lint-staticcheck` always run the same version
-        run: make lint-staticcheck
-
   test-clone-perf:
     name: Clone Performance Tests
     runs-on: ubuntu-latest

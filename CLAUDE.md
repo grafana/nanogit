@@ -18,7 +18,6 @@ make generate          # Generate mocks using counterfeiter
 ```bash
 make fmt               # Format code with goimports
 make lint              # Run golangci-lint
-make lint-staticcheck  # Run staticcheck
 ```
 
 ### Testing
@@ -99,7 +98,7 @@ cd perf && make profile-compare    # Compare current vs baseline performance
 
 ### Code Style
 - Standard Go formatting enforced via `goimports`
-- Comprehensive linting with `golangci-lint` and `staticcheck`
+- Comprehensive linting with `golangci-lint` (includes staticcheck)
 - Error wrapping with context for debugging
 - Godoc required for all exported APIs
 
