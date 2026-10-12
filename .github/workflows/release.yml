@@ -122,7 +122,7 @@ jobs:
         with:
           distribution: goreleaser
           # Pin to specific version to prevent runtime artifact poisoning
-          version: 'v2.6.1'
+          version: 'v2.18.2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
