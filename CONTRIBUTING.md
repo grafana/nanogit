@@ -443,7 +443,20 @@ tests are validated by a maintainer as part of review.
 
 A maintainer with write access runs them manually **after reviewing the PR
 diff** — because doing so executes the contributor's code against real provider
-credentials, the review is the trust gate. To trigger a run for PR `<number>`:
+credentials, the review is the trust gate.
+
+The easiest way is to **comment `/run-provider-tests` on the PR**. The
+[`slash-run-provider-tests.yml`](.github/workflows/slash-run-provider-tests.yml)
+workflow reacts with a 🚀, dispatches Provider Tests against the PR's merge ref,
+and replies with a link to the run. It only proceeds if the commenter has
+**write access to the repo** (verified against the GitHub API, not just org
+membership), so the maintainer's review remains the trust gate. The
+slash-command workflow itself only calls the GitHub API — it never checks out
+or runs the PR's code; that happens in the dispatched Provider Tests run. It
+also pins the PR head commit you vouched for, so the run aborts if the
+contributor pushes new code between your comment and the checkout.
+
+You can also trigger it by hand for PR `<number>`:
 
 ```bash
 # Reviewed the diff first? Then dispatch Provider Tests against the PR's merge ref:
@@ -453,14 +466,17 @@ gh workflow run "Provider Tests" -f pr=<number>
 gh run watch "$(gh run list --workflow 'Provider Tests' --limit 1 --json databaseId --jq '.[0].databaseId')"
 ```
 
-You can also trigger it from the GitHub UI: **Actions → Provider Tests → Run
-workflow**, and enter the PR number in the `pr` field (leave it blank to test
-the branch you select in the dropdown instead).
+Or from the GitHub UI: **Actions → Provider Tests → Run workflow**, and enter
+the PR number in the `pr` field (leave it blank to test the branch you select
+in the dropdown instead).
 
 The `pr` input makes the workflow check out `refs/pull/<number>/merge`, so the
-tests run the contributor's changes merged into `main`. Results are visible in
-the workflow run itself; note that because manual runs are decoupled from the
-PR's own checks, they will not appear as a status check on the PR.
+tests run the contributor's changes merged into `main`. For a manual run you
+can optionally add `-f head_sha=<sha>` to pin the exact commit you reviewed;
+the run then aborts if the PR head has moved since. The slash command sets this
+automatically. Results are visible in the workflow run itself; note that
+because manual runs are decoupled from the PR's own checks, they will not
+appear as a status check on the PR.
 
 #### Writing Tests
 
