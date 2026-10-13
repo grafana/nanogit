@@ -61,18 +61,16 @@ See [Why Git Protocol v2 Only?](architecture/protocol-v2.md) for the rationale b
 | Use case       | Cloud services, multitenant backends                    | General purpose        |
 | Resource usage | Minimal footprint                                       | Full Git features      |
 
-Because it never materializes a full repository, nanogit is dramatically faster and lighter for typical server-side operations. From the [benchmark suite](https://github.com/grafana/nanogit/tree/main/perf) comparing both libraries across repository sizes:
+Because it never materializes a full repository, nanogit is dramatically faster and lighter for typical server-side operations. From the July 2025 run of the [benchmark suite](https://github.com/grafana/nanogit/tree/main/perf), on the XL repository tier (15,000 files, 3,000 commits), nanogit vs go-git:
 
-| Scenario                                  | Speed       | Memory usage |
-| ----------------------------------------- | ----------- | ------------ |
-| CreateFile (XL repo)                      | 306x faster | 186x less    |
-| UpdateFile (XL repo)                      | 291x faster | 178x less    |
-| DeleteFile (XL repo)                      | 302x faster | 175x less    |
-| BulkCreateFiles (1000 files, medium repo) | 607x faster | 11x less     |
-| CompareCommits (XL repo)                  | 60x faster  | 96x less     |
-| GetFlatTree (XL repo)                     | 258x faster | 160x less    |
+| Scenario             | Speed         | Memory usage |
+| -------------------- | ------------- | ------------ |
+| CreateFile (XL repo) | 281.6x faster | 198.4x less  |
+| UpdateFile (XL repo) | 297.3x faster | 189.2x less  |
+| DeleteFile (XL repo) | 280.5x faster | 200.5x less  |
+| GetFlatTree (XL repo) | 260.8x faster | 154.3x less  |
 
-See the [performance analysis](architecture/performance.md) for methodology and full results.
+(go-git did not complete the bulk-create and commit-comparison scenarios in that run, so no multipliers are quoted for them; nanogit bulk-created 1,000 files in ~103ms.) See the [performance analysis](architecture/performance.md) for methodology and complete results.
 
 ## Is it production-ready?
 

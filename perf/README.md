@@ -22,10 +22,12 @@ make help                  # See all available targets
 - **Client-Specific**: Focus on individual Git implementations
 
 ### Repository Sizes
-- **Small**: 50 files, 32 commits
-- **Medium**: 500 files, 165 commits  
-- **Large**: 2000 files, 692 commits
-- **XLarge**: 10000 files, 2602 commits
+- **Small**: 100 files, 50 commits
+- **Medium**: 750 files, 200 commits
+- **Large**: 3000 files, 800 commits
+- **XLarge**: 15000 files, 3000 commits
+
+(Defined in `cmd/generate_repo/main.go`; the generated archives land in `testdata/`.)
 
 ## Common Targets
 
