@@ -4,7 +4,7 @@ go 1.26.6
 
 require (
 	github.com/ProtonMail/go-crypto v1.5.2
-	github.com/klauspost/compress v1.20.1
+	github.com/klauspost/compress v1.20.3
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.14.0
 	github.com/smallstep/pkcs7 v0.2.3
 	github.com/stretchr/testify v1.12.1
