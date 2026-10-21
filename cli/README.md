@@ -34,6 +34,10 @@ See the [releases page](https://github.com/grafana/nanogit/releases/latest) for 
 go install github.com/grafana/nanogit/cli/cmd/nanogit@latest
 ```
 
+`@latest` is the supported form: the CLI lives in a nested module that is
+intentionally untagged, so `go install` always builds the tip of `main`. For a
+specific version, download the release binary for that version.
+
 ### Build from Source
 
 ```bash
