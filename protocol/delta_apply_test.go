@@ -1,19 +1,75 @@
 package protocol
 
 import (
+	"bytes"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// encCopy encodes a copy instruction: the command byte's low nibble selects
+// which offset bytes follow and bits 4-6 which size bytes follow, each in
+// ascending significance. Only non-zero bytes are emitted, matching git.
+func encCopy(offset, size uint64) []byte {
+	cmd := byte(0x80)
+	var body []byte
+	for i := 0; i < 4; i++ {
+		if b := byte(offset >> (8 * uint(i))); b != 0 {
+			cmd |= 1 << uint(i)
+			body = append(body, b)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if b := byte(size >> (8 * uint(i))); b != 0 {
+			cmd |= 1 << uint(4+i)
+			body = append(body, b)
+		}
+	}
+	return append([]byte{cmd}, body...)
+}
+
+// encAdd encodes one or more add (insert) instructions for data, splitting into
+// the 127-byte maximum a single add command can carry.
+func encAdd(data []byte) []byte {
+	var out []byte
+	for len(data) > 0 {
+		n := len(data)
+		if n > 127 {
+			n = 127
+		}
+		out = append(out, byte(n))
+		out = append(out, data[:n]...)
+		data = data[n:]
+	}
+	return out
+}
+
+// encodeChanges encodes changes into a raw delta instruction stream, exactly as
+// parseDelta would leave on a Delta. Tests set it on the unexported instructions
+// field so ApplyDelta exercises its real streaming path.
+func encodeChanges(changes []DeltaChange) []byte {
+	var instr []byte
+	for _, c := range changes {
+		if c.DeltaData != nil {
+			instr = append(instr, encAdd(c.DeltaData)...)
+		} else {
+			instr = append(instr, encCopy(c.SourceOffset, c.Length)...)
+		}
+	}
+	return instr
+}
 
 func TestApplyDelta(t *testing.T) {
 	t.Run("simple insert operation", func(t *testing.T) {
 		baseData := []byte("Hello")
 		delta := &Delta{
 			ExpectedSourceLength: 5,
-			Changes: []DeltaChange{
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{DeltaData: []byte("World")},
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -25,12 +81,13 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("Hello World")
 		delta := &Delta{
 			ExpectedSourceLength: 11,
-			Changes: []DeltaChange{
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{
 					SourceOffset: 0,
 					Length:       5,
 				},
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -42,7 +99,8 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("Hello World")
 		delta := &Delta{
 			ExpectedSourceLength: 11,
-			Changes: []DeltaChange{
+			TargetLength:         13,
+			instructions: encodeChanges([]DeltaChange{
 				// Copy "Hello"
 				{SourceOffset: 0, Length: 5},
 				// Insert ", "
@@ -51,7 +109,7 @@ func TestApplyDelta(t *testing.T) {
 				{SourceOffset: 6, Length: 5},
 				// Insert "!"
 				{DeltaData: []byte("!")},
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -63,13 +121,14 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("ABCDEFGH")
 		delta := &Delta{
 			ExpectedSourceLength: 8,
-			Changes: []DeltaChange{
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 7, Length: 1}, // H
 				{SourceOffset: 4, Length: 1}, // E
 				{SourceOffset: 2, Length: 1}, // C
 				{SourceOffset: 1, Length: 1}, // B
 				{SourceOffset: 0, Length: 1}, // A
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -81,9 +140,10 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("")
 		delta := &Delta{
 			ExpectedSourceLength: 0,
-			Changes: []DeltaChange{
+			TargetLength:         11,
+			instructions: encodeChanges([]DeltaChange{
 				{DeltaData: []byte("New content")},
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -95,7 +155,6 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("Hello")
 		delta := &Delta{
 			ExpectedSourceLength: 5,
-			Changes:              []DeltaChange{},
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -112,14 +171,15 @@ func TestApplyDelta(t *testing.T) {
 
 		delta := &Delta{
 			ExpectedSourceLength: 10000,
-			Changes: []DeltaChange{
+			TargetLength:         10008,
+			instructions: encodeChanges([]DeltaChange{
 				// Copy first 5000 bytes
 				{SourceOffset: 0, Length: 5000},
 				// Insert some new data
 				{DeltaData: []byte("INSERTED")},
 				// Copy last 5000 bytes
 				{SourceOffset: 5000, Length: 5000},
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -135,57 +195,16 @@ func TestApplyDelta(t *testing.T) {
 	t.Run("error: base size mismatch", func(t *testing.T) {
 		baseData := []byte("Hello")
 		delta := &Delta{
-			ExpectedSourceLength: 10, // Expects 10 but base is 5
-			Changes: []DeltaChange{
+			ExpectedSourceLength: 10, // expects 10 but base is 5
+			TargetLength:         5,
+			instructions: encodeChanges([]DeltaChange{
 				{DeltaData: []byte("World")},
-			},
+			}),
 		}
 
 		_, err := ApplyDelta(baseData, delta)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "base data size mismatch")
-	})
-
-	t.Run("error: copy out of bounds", func(t *testing.T) {
-		baseData := []byte("Hello")
-		delta := &Delta{
-			ExpectedSourceLength: 5,
-			Changes: []DeltaChange{
-				{SourceOffset: 3, Length: 10}, // Tries to copy beyond end
-			},
-		}
-
-		_, err := ApplyDelta(baseData, delta)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "out of bounds")
-	})
-
-	t.Run("error: invalid offset", func(t *testing.T) {
-		baseData := []byte("Hello")
-		delta := &Delta{
-			ExpectedSourceLength: 5,
-			Changes: []DeltaChange{
-				{SourceOffset: 100, Length: 1}, // Offset way beyond base
-			},
-		}
-
-		_, err := ApplyDelta(baseData, delta)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "out of bounds")
-	})
-
-	t.Run("error: zero length copy", func(t *testing.T) {
-		baseData := []byte("Hello")
-		delta := &Delta{
-			ExpectedSourceLength: 5,
-			Changes: []DeltaChange{
-				{SourceOffset: 0, Length: 0}, // Zero-length copy
-			},
-		}
-
-		_, err := ApplyDelta(baseData, delta)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "zero-length copy")
 	})
 
 	t.Run("realistic git delta scenario - modify text", func(t *testing.T) {
@@ -195,14 +214,15 @@ func TestApplyDelta(t *testing.T) {
 		// Delta that replaces "Line 2" with "Modified Line 2"
 		delta := &Delta{
 			ExpectedSourceLength: uint64(len(baseData)),
-			Changes: []DeltaChange{
+			TargetLength:         37,
+			instructions: encodeChanges([]DeltaChange{
 				// Copy "Line 1\n"
 				{SourceOffset: 0, Length: 7},
 				// Insert modified line
 				{DeltaData: []byte("Modified Line 2\n")},
 				// Copy remaining lines starting from "Line 3"
 				{SourceOffset: 14, Length: uint64(len(baseData) - 14)},
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -216,13 +236,14 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("The quick brown fox jumps over the lazy dog")
 		delta := &Delta{
 			ExpectedSourceLength: uint64(len(baseData)),
-			Changes: []DeltaChange{
+			TargetLength:         52,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 0, Length: 4},   // "The "
 				{DeltaData: []byte("very ")},   // Insert "very "
 				{SourceOffset: 4, Length: 6},   // "quick "
 				{DeltaData: []byte("and ")},    // Insert "and "
 				{SourceOffset: 10, Length: 33}, // rest of string (43 - 10 = 33)
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -234,11 +255,12 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte("AB")
 		delta := &Delta{
 			ExpectedSourceLength: 2,
-			Changes: []DeltaChange{
+			TargetLength:         6,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 0, Length: 2}, // AB
 				{SourceOffset: 0, Length: 2}, // AB again
 				{SourceOffset: 0, Length: 2}, // AB again
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -250,11 +272,12 @@ func TestApplyDelta(t *testing.T) {
 		baseData := []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD}
 		delta := &Delta{
 			ExpectedSourceLength: 7,
-			Changes: []DeltaChange{
+			TargetLength:         9,
+			instructions: encodeChanges([]DeltaChange{
 				{SourceOffset: 4, Length: 3}, // 0xFF, 0xFE, 0xFD
 				{DeltaData: []byte{0xAA, 0xBB}},
 				{SourceOffset: 0, Length: 4}, // 0x00, 0x01, 0x02, 0x03
-			},
+			}),
 		}
 
 		result, err := ApplyDelta(baseData, delta)
@@ -262,4 +285,250 @@ func TestApplyDelta(t *testing.T) {
 		expected := []byte{0xFF, 0xFE, 0xFD, 0xAA, 0xBB, 0x00, 0x01, 0x02, 0x03}
 		require.Equal(t, expected, result)
 	})
+
+	t.Run("preallocation is bounded to the declared target", func(t *testing.T) {
+		// A delta made of many tiny changes must not drive a preallocation
+		// larger than the declared output: the buffer is preallocated to
+		// TargetLength no matter how many instructions there are.
+		const target = 1000
+		changes := make([]DeltaChange, target)
+		for i := range changes {
+			changes[i] = DeltaChange{DeltaData: []byte("y")}
+		}
+		delta := &Delta{
+			ExpectedSourceLength: 1,
+			TargetLength:         target,
+			instructions:         encodeChanges(changes),
+		}
+
+		result, err := ApplyDelta([]byte("x"), delta)
+		require.NoError(t, err)
+		require.Len(t, result, target)
+		require.Equal(t, target, cap(result),
+			"buffer must be preallocated to the target, not an inflatable estimate")
+	})
+}
+
+func TestParseDelta_StreamsInsteadOfMaterializingChanges(t *testing.T) {
+	t.Parallel()
+
+	// A delta made of many tiny add instructions, all within a small target and
+	// a small payload. The metadata-bomb concern is that decoding these into a
+	// []DeltaChange up front costs ~40 bytes each; parseDelta must instead retain
+	// only the raw instruction bytes, so its footprint is independent of the
+	// instruction count.
+	const target = 4096
+	source := []byte("x")
+	payload := []byte{
+		byte(len(source)), // source size 1
+		0x80, 0x20,        // target size 4096 (7-bit little-endian varint)
+	}
+	for i := 0; i < target; i++ {
+		payload = append(payload, 0x01, 'a') // add one byte
+	}
+
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
+	require.NoError(t, err)
+	require.EqualValues(t, target, delta.TargetLength)
+	require.NotNil(t, delta.instructions,
+		"a parsed delta must retain its raw instruction bytes for streaming apply")
+
+	// And the retained instructions must still reconstruct the object exactly.
+	result, err := ApplyDelta(source, delta)
+	require.NoError(t, err)
+	require.Len(t, result, target)
+	require.Equal(t, []byte(strings.Repeat("a", target)), result)
+}
+
+func TestApplyDelta_ParsedZeroTargetDoesNotAllocateBase(t *testing.T) {
+	t.Parallel()
+
+	// A parsed delta that legitimately declares a zero-byte target against a
+	// non-trivial base must reconstruct an empty object WITHOUT preallocating
+	// the base size. Regression guard: reading TargetLength==0 as "unknown"
+	// used to fall back to ExpectedSourceLength, turning repeated tiny deltas
+	// against a large base into an allocation/GC DoS.
+	const baseLen = 16384
+	base := bytes.Repeat([]byte("x"), baseLen)
+
+	// Header only: source size 16384 (0x80,0x80,0x01), target size 0 (0x00).
+	// The source varint is three bytes, so the header alone meets the 4-byte
+	// minimum without any (now-rejected) trailing instruction padding.
+	payload := []byte{0x80, 0x80, 0x01, 0x00}
+
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
+	require.NoError(t, err)
+	require.EqualValues(t, baseLen, delta.ExpectedSourceLength)
+	require.EqualValues(t, 0, delta.TargetLength)
+
+	got, err := ApplyDelta(base, delta)
+	require.NoError(t, err)
+	require.Empty(t, got)
+	require.Equal(t, 0, cap(got),
+		"a parsed zero-target delta must not preallocate the base size")
+}
+
+func TestApplyDelta_TargetExceedingPlatformMaxErrorsNotPanics(t *testing.T) {
+	t.Parallel()
+
+	// A declared target above the platform's int range must surface an error
+	// rather than panic inside make (slice capacities are int, 32-bit on armv7).
+	// math.MaxUint64 exceeds MaxInt on every supported platform. It must be the
+	// same typed error the standard-object path uses, so 413 handling still
+	// matches, with Size saturated to MaxInt64.
+	delta := &Delta{
+		ExpectedSourceLength: 0,
+		TargetLength:         math.MaxUint64,
+	}
+
+	require.NotPanics(t, func() {
+		_, err := ApplyDelta([]byte{}, delta)
+		require.Error(t, err)
+		var tooLarge *ObjectTooLargeError
+		require.ErrorAs(t, err, &tooLarge)
+		require.Equal(t, int64(math.MaxInt64), tooLarge.Size)
+		require.Equal(t, int64(math.MaxInt), tooLarge.Limit)
+		require.ErrorIs(t, err, ErrObjectTooLarge)
+	})
+}
+
+func TestDelta_DecodeChanges(t *testing.T) {
+	t.Parallel()
+
+	t.Run("decodes a parsed delta's instructions on demand", func(t *testing.T) {
+		t.Parallel()
+
+		// base "Hello, world!" -> copy "Hello, ", add "DELTA ", copy "world!".
+		base := []byte("Hello, world!")
+		payload := []byte{
+			0x0D,       // source size 13
+			0x13,       // target size 19
+			0x90, 0x07, // copy base[0:7]
+			0x06, 'D', 'E', 'L', 'T', 'A', ' ', // add 6 bytes
+			0x91, 0x07, 0x06, // copy base[7:13]
+		}
+
+		delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
+		require.NoError(t, err)
+
+		changes, err := delta.DecodeChanges()
+		require.NoError(t, err)
+		require.Len(t, changes, 3)
+		require.Equal(t, DeltaChange{SourceOffset: 0, Length: 7}, changes[0])
+		require.Equal(t, []byte("DELTA "), changes[2-1].DeltaData)
+		require.Equal(t, DeltaChange{SourceOffset: 7, Length: 6}, changes[2])
+
+		// Decoded changes reconstruct the same object ApplyDelta produces.
+		resolved, err := ApplyDelta(base, delta)
+		require.NoError(t, err)
+		require.Equal(t, []byte("Hello, DELTA world!"), resolved)
+	})
+
+	t.Run("returns nil for a delta with no instruction stream", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := (&Delta{}).DecodeChanges()
+		require.NoError(t, err)
+		require.Nil(t, got)
+	})
+}
+
+func TestParseDelta_RejectsCommandThatWouldOverrunTarget(t *testing.T) {
+	t.Parallel()
+
+	// Header: source size 10, target size 10. Then a 7-byte add (fits) and a
+	// 5-byte add that would consume more than the 3 bytes still remaining in
+	// the target. The overrunning command is unambiguously malformed (a
+	// well-formed delta's instructions sum to exactly the target), so parseDelta
+	// must reject it up front rather than silently dropping it and leaning on
+	// ApplyDelta's downstream length check — and rather than underflowing the
+	// unsigned remaining-size counter.
+	payload := []byte{
+		0x0A,                                    // source size 10
+		0x0A,                                    // target size 10
+		0x07, 'a', 'b', 'c', 'd', 'e', 'f', 'g', // add 7 bytes
+		0x05, 'h', 'i', 'j', 'k', 'l', // add 5 bytes -> would overrun, rejected
+	}
+
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
+	require.Nil(t, delta)
+	require.Error(t, err)
+	var sizeErr *DeltaSizeError
+	require.ErrorAs(t, err, &sizeErr)
+	require.EqualValues(t, 10, sizeErr.Declared)
+	// 7 bytes already consumed + the 5-byte command = 12, past the 10 target.
+	require.EqualValues(t, 12, sizeErr.Actual)
+	require.ErrorIs(t, err, ErrDeltaSize)
+}
+
+func TestParseDelta_RejectsOutOfBoundsInstruction(t *testing.T) {
+	t.Parallel()
+
+	// A copy whose size (20) exceeds the declared target (10) is malformed;
+	// parseDeltaCommand reports zero consumption for it. parseDelta must reject
+	// it up front rather than tolerating it and leaving a short delta — which
+	// would push the full cap-sized allocation and rejection down into
+	// ApplyDelta, where resolveDeltas retries it on every pass (a DoS vector).
+	payload := []byte{
+		0x04,       // source size 4
+		0x0A,       // target size 10
+		0x90, 0x14, // copy offset 0, size 20 (> target) -> zero consumption
+	}
+
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
+	require.Nil(t, delta)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "malformed delta instruction")
+}
+
+func TestParseDelta_RejectsTrailingCommands(t *testing.T) {
+	t.Parallel()
+
+	// A target of 1 followed by two one-byte adds: the first add fills the
+	// target, and Git requires the stream to end there. The trailing second add
+	// must be rejected, not silently ignored (which would reconstruct only the
+	// first byte).
+	payload := []byte{
+		0x00,      // source size 0
+		0x01,      // target size 1
+		0x01, 'a', // add 1 byte -> fills the target
+		0x01, 'b', // trailing add -> malformed
+	}
+
+	delta, err := parseDelta("parent", payload, MaxUnpackedObjectSize)
+	require.Nil(t, delta)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "trailing bytes")
+}
+
+func TestParseDelta_RejectsOversizedTargetBeforeCommandLoop(t *testing.T) {
+	t.Parallel()
+
+	// Header: source size 5, target size 1 MiB, then a long run of 1-byte add
+	// commands. With a small cap, parseDelta must reject on the declared target
+	// immediately — before materializing any DeltaChange for those commands.
+	payload := []byte{
+		0x05,             // source size 5
+		0x80, 0x80, 0x40, // target size 1<<20 (1 MiB)
+	}
+	for i := 0; i < 100; i++ {
+		payload = append(payload, 0x01, 'a') // add 1 byte
+	}
+
+	const cap = 4096
+	delta, err := parseDelta("parent", payload, cap)
+	require.Nil(t, delta)
+	require.ErrorIs(t, err, ErrObjectTooLarge)
+
+	var tooLarge *ObjectTooLargeError
+	require.ErrorAs(t, err, &tooLarge)
+	require.Equal(t, int64(1<<20), tooLarge.Size)
+	require.Equal(t, int64(cap), tooLarge.Limit)
+
+	// With a cap above the declared target the oversized-target check passes, so
+	// parsing proceeds to the command stream — which is truncated relative to
+	// that target, so parsing still fails, but not with ErrObjectTooLarge.
+	_, err = parseDelta("parent", payload, 2<<20)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrObjectTooLarge)
 }

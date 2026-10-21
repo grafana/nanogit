@@ -1,4 +1,5 @@
 # CLAUDE.md
+- Security issues should be reported via [Grafana's security issue reporting page](https://grafana.com/legal/report-a-security-issue/) and not directly in this repository.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -17,7 +18,6 @@ make generate          # Generate mocks using counterfeiter
 ```bash
 make fmt               # Format code with goimports
 make lint              # Run golangci-lint
-make lint-staticcheck  # Run staticcheck
 ```
 
 ### Testing
@@ -87,18 +87,18 @@ cd perf && make profile-compare    # Compare current vs baseline performance
 - Multiple repository sizes and operation types
 - Network latency simulation capabilities
 - Comprehensive metrics collection and reporting
-- See `tests/performance/README.md` for detailed documentation
+- See `perf/README.md` for detailed documentation
 
 ## Development Notes
 
 ### Dependencies
-- **Go 1.25+** required
+- **Go 1.26+** required
 - Minimal external dependencies, heavy use of standard library
 - Key test frameworks: Ginkgo/Gomega, testify, counterfeiter
 
 ### Code Style
 - Standard Go formatting enforced via `goimports`
-- Comprehensive linting with `golangci-lint` and `staticcheck`
+- Comprehensive linting with `golangci-lint` (includes staticcheck)
 - Error wrapping with context for debugging
 - Godoc required for all exported APIs
 

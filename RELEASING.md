@@ -149,22 +149,52 @@ In rare cases where automatic release fails, you can trigger a manual release:
 
 ### Option 2: Manual Tag (Not Recommended)
 
-Only use this as a last resort:
+Only use this as a last resort. Note that pushing a tag does **not** build
+binaries or refresh the docs site — neither is tag-triggered — so the last
+two steps dispatch them explicitly:
 
 ```bash
 # Determine next version
 git fetch --tags
-git describe --tags --abbrev=0  # Shows last tag
+git describe --tags --abbrev=0 --match 'v[0-9]*'  # Shows last release tag
 
-# Create and push tag
-git tag v0.1.1
-git push origin v0.1.1
+# Create and push the release tags
+git tag v1.4.1
+git push origin v1.4.1
+git tag gittest/v1.4.1 v1.4.1^{}
+git push origin gittest/v1.4.1
 
-# Manually create GitHub release
-gh release create v0.1.1 --generate-notes
+# Manually create the GitHub release
+gh release create v1.4.1 --generate-notes
+
+# Build and upload the CLI binaries for the new tag
+gh workflow run goreleaser.yml --ref main -f tag=v1.4.1
+
+# Rebuild the docs site so the changelog page reflects the new release
+gh workflow run docs.yml --ref main
 ```
 
 **Note**: `--generate-notes` produces basic notes from PR titles rather than the conventional-commit sections semantic-release creates. Prefer fixing the automated process.
+
+## Recovering a Failed Release
+
+If `release.yml` fails **after** semantic-release created the tag and GitHub
+release (e.g. the GoReleaser step errored), do not re-run the workflow
+expecting a rebuild: semantic-release will find no new commits, report
+`new_tag == last_tag`, and skip every post-release step.
+
+Instead:
+
+1. **Missing binaries**: dispatch the "Rebuild Release Binaries" workflow with
+   the existing tag — `gh workflow run goreleaser.yml --ref main -f tag=v1.4.1`.
+   Re-uploads are safe (`replace_existing_artifacts` is enabled).
+2. **Missing gittest tag**: create it manually at the release commit —
+   `git tag gittest/v1.4.1 v1.4.1^{} && git push origin gittest/v1.4.1`.
+   The automated step only creates the tag for the version it is currently
+   releasing — it does not scan for or backfill tags missed by earlier
+   releases, so a later release will **not** self-heal this for you.
+3. **Stale changelog page**: dispatch the docs workflow —
+   `gh workflow run docs.yml --ref main`.
 
 ## Best Practices
 

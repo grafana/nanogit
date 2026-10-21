@@ -14,6 +14,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ExampleFakeClient configures the generated Client fake and exercises code
+// that depends on nanogit.Client without any network access.
+func ExampleFakeClient() {
+	mockClient := &mocks.FakeClient{}
+
+	testHash, _ := hash.FromHex("abcdef1234567890abcdef1234567890abcdef12")
+	mockClient.GetRefReturns(nanogit.Ref{
+		Name: "refs/heads/main",
+		Hash: testHash,
+	}, nil)
+
+	ref, _ := mockClient.GetRef(context.Background(), "refs/heads/main")
+	fmt.Println(ref.Name)
+	fmt.Println(mockClient.GetRefCallCount())
+	// Output:
+	// refs/heads/main
+	// 1
+}
+
 // Example test showing how to use the Client mock
 func TestServiceWithMockedClient(t *testing.T) {
 	// Create a mock client
@@ -27,7 +46,7 @@ func TestServiceWithMockedClient(t *testing.T) {
 	}
 
 	mockClient.GetRefReturns(expectedRef, nil)
-	mockClient.IsAuthorizedReturns(true, nil)
+	mockClient.CanReadReturns(true, nil)
 
 	// Test your service that uses the client
 	service := &MyService{client: mockClient}
@@ -41,7 +60,7 @@ func TestServiceWithMockedClient(t *testing.T) {
 
 	// Verify the mock was called as expected
 	assert.Equal(t, 1, mockClient.GetRefCallCount())
-	assert.Equal(t, 1, mockClient.IsAuthorizedCallCount())
+	assert.Equal(t, 1, mockClient.CanReadCallCount())
 
 	// Verify the arguments passed to the mock
 	_, refName := mockClient.GetRefArgsForCall(0)
@@ -104,7 +123,7 @@ func TestServiceErrorHandling(t *testing.T) {
 	mockClient := &mocks.FakeClient{}
 
 	// Simulate an authorization error
-	mockClient.IsAuthorizedReturns(false, assert.AnError)
+	mockClient.CanReadReturns(false, assert.AnError)
 
 	service := &MyService{client: mockClient}
 
@@ -123,7 +142,7 @@ type MyService struct {
 
 func (s *MyService) GetMainBranch(ctx context.Context) (nanogit.Ref, error) {
 	// Check authorization first
-	authorized, err := s.client.IsAuthorized(ctx)
+	authorized, err := s.client.CanRead(ctx)
 	if err != nil {
 		return nanogit.Ref{}, fmt.Errorf("authorization failed: %w", err)
 	}

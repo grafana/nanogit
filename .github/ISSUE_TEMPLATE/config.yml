@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Grafana Community Forums
+    url: https://community.grafana.com
+    about: Ask questions and discuss nanogit with the community.
+  - name: Security policy
+    url: https://github.com/grafana/.github/blob/main/SECURITY.md
+    about: Report security vulnerabilities privately.
+  - name: Documentation
+    url: https://grafana.github.io/nanogit
+    about: Guides, architecture docs, and links to the API reference.

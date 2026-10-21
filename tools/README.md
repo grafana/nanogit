@@ -1,26 +1,6 @@
 # Nanogit Tools
 
-Diagnostic and debugging tools for nanogit development and troubleshooting.
-
-## Available Tools
-
-### missing-tree-in-collection
-
-Diagnostic tool for testing and verifying the fix for GitHub issue #116880 - the "tree object not found in collection" bug.
-
-**Purpose**: Validates that the verification fix correctly fetches all tree objects before the flatten operation begins when working with complex repository structures.
-
-**Usage**:
-```bash
-TEST_GITHUB_TOKEN=token \
-TEST_REPO_URL=https://github.com/your/repo.git \
-TEST_COMMIT_SHA=abc123... \
-./tools/missing-tree-in-collection/test.sh
-```
-
-See [`missing-tree-in-collection/README.md`](./missing-tree-in-collection/README.md) for details.
-
----
+Diagnostic and debugging tools for nanogit development and troubleshooting. The directory is currently empty; the guidelines below apply when adding new tools.
 
 ## Tool Development Guidelines
 

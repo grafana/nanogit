@@ -1,3 +1,10 @@
+// Package client implements the low-level Git Smart HTTP protocol version 2
+// transport used by the root nanogit package: the info/refs handshake,
+// upload-pack and receive-pack exchanges, authentication headers, retries,
+// and typed errors for common HTTP failures.
+//
+// It is low-level plumbing. Most users should use the root nanogit package
+// instead of this one directly.
 package client
 
 import (
@@ -8,7 +15,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/grafana/nanogit/metrics"
 	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
@@ -19,15 +29,36 @@ import (
 //
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../../internal/tools/fake_header.txt -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
+	// CanRead reports whether the credentials grant read (fetch) access to
+	// the repository.
 	CanRead(ctx context.Context) (bool, error)
+	// CanWrite reports whether the credentials grant repository-level write
+	// (push) access.
 	CanWrite(ctx context.Context) (bool, error)
-	IsAuthorized(ctx context.Context) (bool, error) // Deprecated: Use CanRead instead
+	// IsAuthorized reports whether the client can read from the repository.
+	//
+	// Deprecated: Use CanRead instead.
+	IsAuthorized(ctx context.Context) (bool, error)
+	// SmartInfo performs the GET info/refs handshake for the given service
+	// ("git-upload-pack" or "git-receive-pack").
 	SmartInfo(ctx context.Context, service string) error
+	// IsServerCompatible reports whether the server supports Git protocol
+	// v2, which nanogit requires.
 	IsServerCompatible(ctx context.Context) (bool, error)
+	// UploadPack posts a raw git-upload-pack request body and returns the
+	// response stream. The caller must close it.
 	UploadPack(ctx context.Context, data io.Reader) (io.ReadCloser, error)
+	// ReceivePack posts a raw git-receive-pack request body and checks the
+	// server's status response.
 	ReceivePack(ctx context.Context, data io.Reader) error
+	// FetchReceivePackCapabilities returns the capabilities the server
+	// advertises for git-receive-pack.
 	FetchReceivePackCapabilities(ctx context.Context) ([]protocol.Capability, error)
+	// Fetch requests the objects named in opts.Want and returns the parsed
+	// pack-file objects keyed by hash.
 	Fetch(ctx context.Context, opts FetchOptions) (map[string]*protocol.PackfileObject, error)
+	// LsRefs lists the server's refs via the ls-refs command, optionally
+	// filtered by opts.Prefix.
 	LsRefs(ctx context.Context, opts LsRefsOptions) ([]protocol.RefLine, error)
 }
 
@@ -157,7 +188,11 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 //
 // The response body is automatically closed if the server is unavailable.
 // The context is automatically wrapped with an HTTP retrier that wraps any existing retrier.
-func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, error) {
+//
+// operation identifies the Git protocol operation for the Recorder resolved
+// from ctx (e.g. "smart-info", "upload-pack"); it has no effect on request
+// behavior.
+func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *http.Request) (*http.Response, error) {
 	// Wrap the context with a temporary error retrier unless retries are disabled
 	baseRetrier := retry.FromContext(ctx)
 	if _, ok := baseRetrier.(*retry.NoopRetrier); !ok {
@@ -165,17 +200,86 @@ func (c *rawClient) do(ctx context.Context, req *http.Request) (*http.Response, 
 		ctx = retry.ToContext(ctx, tempRetrier)
 	}
 
+	recorder := metrics.FromContext(ctx)
+	attempt := 0
 	return retry.Do(ctx, func() (*http.Response, error) {
+		attempt++
+		start := time.Now()
+
 		res, err := c.client.Do(req)
+		// Snapshot immediately after Do returns for the paths that report
+		// inline below (network failure and server-unavailable). Those
+		// discard the body without handing it to the caller, so the only
+		// meaningful duration is up to this point — and snapshotting here
+		// keeps a slow Body.Close() (e.g. draining a large unread body)
+		// from inflating it.
+		headersDuration := time.Since(start)
 		if err != nil {
+			// A non-nil res alongside a non-nil err only happens when
+			// CheckRedirect rejects a redirect (net/http guarantees
+			// res.Body is already closed in that case); preserve its
+			// status rather than reporting the zero value, which is
+			// reserved for "no response was received at all".
+			var statusCode int
+			if res != nil {
+				statusCode = res.StatusCode
+			}
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
+				Operation:  operation,
+				StatusCode: statusCode,
+				Duration:   headersDuration,
+				Attempt:    attempt,
+			})
 			return nil, err
 		}
 
 		if err := CheckServerUnavailable(res); err != nil {
 			_ = res.Body.Close()
+			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
+				Operation:  operation,
+				StatusCode: res.StatusCode,
+				Duration:   headersDuration,
+				Attempt:    attempt,
+			})
 			return nil, err
 		}
 
+		// The request got a response the caller will consume. Defer the
+		// sample until that caller closes the body so Duration covers the
+		// whole request — including reading the response body, which for
+		// upload-pack is the packfile and often the slowest part — rather
+		// than only the time to headers. Every do() caller closes the
+		// returned body exactly once (on both the success and non-2xx
+		// paths), so this fires exactly once.
+		sample := metrics.HTTPRequestSample{
+			Operation:  operation,
+			StatusCode: res.StatusCode,
+			Attempt:    attempt,
+		}
+		res.Body = &recordOnCloseBody{
+			ReadCloser: res.Body,
+			record: func() {
+				sample.Duration = time.Since(start)
+				recorder.HTTPRequest(ctx, sample)
+			},
+		}
 		return res, nil
 	})
+}
+
+// recordOnCloseBody wraps a response body so a metrics callback fires when
+// the body is closed rather than when the response headers arrived. do()
+// uses it to make HTTPRequestSample.Duration span the full request
+// (send → body read → close) for requests whose body the caller consumes.
+// record runs at most once even if Close is called more than once.
+type recordOnCloseBody struct {
+	io.ReadCloser
+	once   sync.Once
+	record func()
+}
+
+func (b *recordOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.once.Do(b.record)
+	return err
 }

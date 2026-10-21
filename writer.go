@@ -906,6 +906,22 @@ func (w *stagedWriter) Commit(ctx context.Context, message string, author Author
 		return nil, fmt.Errorf("build pending trees: %w", err)
 	}
 
+	if w.lastTree.Hash.Is(w.lastCommit.Tree) {
+		// Tree construction may have staged blobs and trees even though the
+		// resulting tree is identical to the parent. Discard those objects so a
+		// follow-up Push reports ErrNothingToPush and later commits start clean.
+		cleanupErr := w.writer.Cleanup()
+		caps, capsErr := w.client.effectiveReceivePackCapabilities(ctx)
+		if capsErr != nil {
+			return nil, fmt.Errorf("resolve receive-pack capabilities after unchanged tree: %w", capsErr)
+		}
+		w.writer = protocol.NewPackfileWriter(crypto.SHA1, w.storageMode, caps...)
+		if cleanupErr != nil {
+			return nil, fmt.Errorf("cleanup packfile after unchanged tree: %w", cleanupErr)
+		}
+		return nil, ErrNothingToCommit
+	}
+
 	if !w.writer.HasObjects() {
 		return nil, ErrNothingToCommit
 	}
@@ -1026,10 +1042,11 @@ func (w *stagedWriter) Push(ctx context.Context) error {
 	// Always reset the writer and update the ref even if cleanup fails, to maintain consistency
 	// with the successful push that already happened on the server.
 	cleanupErr := w.writer.Cleanup()
-	// Capability negotiation is cached behind sync.Once on the client; by the
-	// time we reach this post-push reset the same client has already
-	// negotiated successfully (NewStagedWriter is the first call that fires
-	// it), so this lookup hits the cached value with no extra round-trip.
+	// Successful capability negotiation is cached on the client (guarded by
+	// negotiateMu; failures are never cached); by the time we reach this
+	// post-push reset the same client has already negotiated successfully
+	// (NewStagedWriter is the first call that triggers it), so this lookup
+	// hits the cached value with no extra round-trip.
 	caps, capsErr := w.client.effectiveReceivePackCapabilities(ctx)
 	if capsErr != nil {
 		w.ref.Hash = w.lastCommit.Hash
@@ -1433,9 +1450,10 @@ func (w *stagedWriter) Cleanup(ctx context.Context) error {
 	w.dirtyPaths = make(map[string]bool)
 	w.submoduleEntries = make(map[string]*FlatTreeEntry)
 
-	// Reset writer state. Capability negotiation, if enabled, is cached
-	// behind sync.Once so this lookup reuses the result negotiated when the
-	// writer was constructed.
+	// Reset writer state. Successful capability negotiation, if enabled, is
+	// cached on the client (guarded by negotiateMu; failures are never
+	// cached), so this lookup reuses the result negotiated when the writer
+	// was constructed.
 	caps, err := w.client.effectiveReceivePackCapabilities(ctx)
 	if err != nil {
 		return fmt.Errorf("resolve receive-pack capabilities during cleanup: %w", err)
