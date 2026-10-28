@@ -25,7 +25,7 @@ jobs:
     name: Build and Upload Binaries
     runs-on: ubuntu-latest
     container:
-      image: golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd
+      image: golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb
     steps:
       - name: Install dependencies
         run: |
@@ -49,7 +49,7 @@ jobs:
           distribution: goreleaser
           # Pin to specific version to prevent runtime artifact poisoning
           # (kept in sync with release.yml)
-          version: 'v2.18.2'
+          version: 'v2.19.0'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
