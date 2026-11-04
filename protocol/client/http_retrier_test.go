@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
 )
@@ -335,10 +337,15 @@ func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 		require.True(t, tempRetrier.isRetryableOperation("", http.StatusTooManyRequests))
 	})
 
+	t.Run("retries rate-limited 403 for all operations", func(t *testing.T) {
+		require.True(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusForbidden))
+		require.True(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusForbidden))
+		require.True(t, tempRetrier.isRetryableOperation("", http.StatusForbidden))
+	})
+
 	t.Run("does not retry on other 4xx", func(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusNotFound))
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusBadRequest))
-		require.False(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusForbidden))
 	})
 
 	t.Run("retries DELETE operations on 5xx", func(t *testing.T) {
@@ -352,5 +359,67 @@ func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPut, http.StatusInternalServerError))
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPatch, http.StatusInternalServerError))
 		require.False(t, tempRetrier.isRetryableOperation("", http.StatusInternalServerError))
+	})
+}
+
+// retryAfterCapturingRetrier records the Retry-After delay carried by the error
+// that triggered each wait.
+type retryAfterCapturingRetrier struct {
+	*testRetrier
+	delays []time.Duration
+}
+
+func (r *retryAfterCapturingRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+	delay, _ := retry.RetryAfterFrom(err)
+	r.delays = append(r.delays, delay)
+	return r.Wait(ctx, attempt)
+}
+
+func TestHTTPRetrier_RateLimitedForbidden(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retries a 403 carrying Retry-After and passes the delay to the retrier", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 3 {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		base := newTestRetrier(3)
+		base.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return false }
+		capturing := &retryAfterCapturingRetrier{testRetrier: base}
+
+		ctx := retry.ToContext(context.Background(), capturing)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, 3, attempts)
+		require.Equal(t, []time.Duration{time.Second, time.Second}, capturing.delays)
+	})
+
+	t.Run("does not retry a 403 without rate-limit signals", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			w.WriteHeader(http.StatusForbidden)
+		}))
+		defer server.Close()
+
+		retrier := newTestRetrier(3)
+		ctx := retry.ToContext(context.Background(), retrier)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = client.SmartInfo(ctx, "git-upload-pack")
+		require.ErrorIs(t, err, ErrPermissionDenied)
+		require.Equal(t, 1, attempts)
 	})
 }

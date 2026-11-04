@@ -48,6 +48,29 @@ type Retrier interface {
 	MaxAttempts() int
 }
 
+// RetryAfter is implemented by errors that carry a server-requested delay before
+// the next attempt, such as an HTTP Retry-After header.
+type RetryAfter interface {
+	// RetryAfterDelay returns the requested delay and whether one was provided.
+	RetryAfterDelay() (time.Duration, bool)
+}
+
+// ErrorAwareWaiter is an optional Retrier extension. When a retrier implements
+// it, Do calls WaitAfter instead of Wait so the wait can depend on the error
+// that triggered the retry.
+type ErrorAwareWaiter interface {
+	WaitAfter(ctx context.Context, attempt int, err error) error
+}
+
+// RetryAfterFrom returns the server-requested delay carried by err, if any.
+func RetryAfterFrom(err error) (time.Duration, bool) {
+	var retryAfter RetryAfter
+	if errors.As(err, &retryAfter) {
+		return retryAfter.RetryAfterDelay()
+	}
+	return 0, false
+}
+
 // NoopRetrier is a retrier that never retries.
 // This is the default retrier used when none is provided in the context.
 type NoopRetrier struct{}
@@ -66,6 +89,10 @@ func (r *NoopRetrier) Wait(ctx context.Context, attempt int) error {
 func (r *NoopRetrier) MaxAttempts() int {
 	return 1
 }
+
+// retryAfterJitterFraction is how much jitter is added on top of a
+// server-requested Retry-After delay to desynchronize clients.
+const retryAfterJitterFraction = 0.1
 
 // ExponentialBackoffRetrier implements exponential backoff retry logic.
 // It retries on temporary network errors (timeouts, connection failures, etc.).
@@ -157,16 +184,42 @@ func (r *ExponentialBackoffRetrier) Wait(ctx context.Context, attempt int) error
 	// Predictability is acceptable here as jitter is only used to prevent
 	// thundering herd problems, not for security.
 	if r.Jitter {
-		r.rngMu.Lock()
-		jitter := r.rng.Float64() * delay
-		r.rngMu.Unlock()
-		delay = delay*0.5 + jitter*0.5 // Add 50% jitter
+		delay = delay*0.5 + r.randomFraction()*delay*0.5 // Add 50% jitter
 	}
 
-	// Convert to duration
-	duration := time.Duration(delay)
+	return r.sleep(ctx, time.Duration(delay))
+}
 
-	// Wait with context cancellation support
+// WaitAfter waits before the next retry attempt, honoring a server-requested
+// Retry-After delay when err carries one and falling back to exponential
+// backoff otherwise. Retry-After is a floor, so jitter is added on top of it
+// rather than spread around it, and the result is still capped at MaxDelay so a
+// large or hostile value cannot stall the caller past its configured ceiling.
+func (r *ExponentialBackoffRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+	delay, ok := RetryAfterFrom(err)
+	if !ok || delay <= 0 {
+		return r.Wait(ctx, attempt)
+	}
+
+	if r.Jitter {
+		delay += time.Duration(r.randomFraction() * retryAfterJitterFraction * float64(delay))
+	}
+	if delay > r.MaxDelay {
+		delay = r.MaxDelay
+	}
+
+	return r.sleep(ctx, delay)
+}
+
+// randomFraction returns a value in [0, 1) from the per-instance generator.
+func (r *ExponentialBackoffRetrier) randomFraction() float64 {
+	r.rngMu.Lock()
+	defer r.rngMu.Unlock()
+	return r.rng.Float64()
+}
+
+// sleep waits for the given duration or until the context is done.
+func (r *ExponentialBackoffRetrier) sleep(ctx context.Context, duration time.Duration) error {
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 

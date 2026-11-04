@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
@@ -31,6 +33,9 @@ type ServerUnavailableError struct {
 	Operation string
 	// Underlying is the underlying error
 	Underlying error
+	// RetryAfter is the delay the server asked for via the Retry-After header.
+	// Zero means the server did not ask for a specific delay.
+	RetryAfter time.Duration
 }
 
 func (e *ServerUnavailableError) Error() string {
@@ -56,6 +61,12 @@ func (e *ServerUnavailableError) Is(target error) bool {
 	return target == ErrServerUnavailable
 }
 
+// RetryAfterDelay implements retry.RetryAfter so retriers can honor the delay
+// the server asked for instead of their own backoff schedule.
+func (e *ServerUnavailableError) RetryAfterDelay() (time.Duration, bool) {
+	return e.RetryAfter, e.RetryAfter > 0
+}
+
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified operation, status code, and underlying error.
 // Operation can be empty if the HTTP method is unknown.
 func NewServerUnavailableError(operation string, statusCode int, underlying error) *ServerUnavailableError {
@@ -66,23 +77,76 @@ func NewServerUnavailableError(operation string, statusCode int, underlying erro
 	}
 }
 
-// CheckServerUnavailable checks if an HTTP response indicates server unavailability.
-// It checks for:
+// CheckServerUnavailable checks if an HTTP response indicates a transient
+// failure worth retrying. It checks for:
 //   - Server errors (5xx status codes)
 //   - Too Many Requests (429 status code)
+//   - Forbidden (403) carrying rate-limit signals
 //
-// If the response is server unavailable, it returns a ServerUnavailableError.
+// If the response is one of those, it returns a ServerUnavailableError carrying
+// any Retry-After delay the server asked for.
 // The HTTP method is extracted from the response's request.
 // The caller is responsible for closing the response body.
 func CheckServerUnavailable(res *http.Response) error {
-	if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
-		operation := ""
-		if res.Request != nil {
-			operation = res.Request.Method
-		}
-		return NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+	if res.StatusCode < 400 {
+		return nil
 	}
-	return nil
+
+	retryAfter, hasRetryAfter := parseRetryAfter(res.Header, time.Now())
+	if !isTransientStatus(res.StatusCode, res.Header, hasRetryAfter) {
+		return nil
+	}
+
+	operation := ""
+	if res.Request != nil {
+		operation = res.Request.Method
+	}
+	err := NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+	err.RetryAfter = retryAfter
+	return err
+}
+
+// isTransientStatus reports whether a status should be treated as a temporary
+// failure rather than a permanent one.
+func isTransientStatus(statusCode int, header http.Header, hasRetryAfter bool) bool {
+	switch {
+	case statusCode >= 500:
+		return true
+	case statusCode == http.StatusTooManyRequests:
+		return true
+	case statusCode == http.StatusForbidden:
+		// GitHub reports secondary rate limits as 403; only the rate-limit
+		// signals tell those apart from a real permission denial.
+		return hasRetryAfter || header.Get("X-RateLimit-Remaining") == "0"
+	default:
+		return false
+	}
+}
+
+// parseRetryAfter reads the Retry-After header in either RFC 9110 form: a delay
+// in seconds, or an HTTP date. The bool reports whether the header was present
+// and understood, which is a retry signal on its own even when the delay is zero.
+func parseRetryAfter(header http.Header, now time.Time) (time.Duration, bool) {
+	value := strings.TrimSpace(header.Get("Retry-After"))
+	if value == "" {
+		return 0, false
+	}
+
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds <= 0 {
+			return 0, true
+		}
+		return time.Duration(seconds) * time.Second, true
+	}
+
+	if date, err := http.ParseTime(value); err == nil {
+		if delay := date.Sub(now); delay > 0 {
+			return delay, true
+		}
+		return 0, true
+	}
+
+	return 0, false
 }
 
 // UnauthorizedError provides structured information about an authentication failure.
@@ -234,6 +298,8 @@ func NewRepositoryNotFoundError(operation, endpoint string, underlying error) *R
 //
 // If the response is a recognized client error, it returns the appropriate error type.
 // For other 4xx errors, it returns nil (caller should handle generically).
+// Rate-limited 403s are reported by CheckServerUnavailable instead, so callers
+// run that check first and never reach this one for them.
 // The HTTP method and endpoint are extracted from the response's request.
 // The caller is responsible for closing the response body.
 func CheckHTTPClientError(res *http.Response) error {

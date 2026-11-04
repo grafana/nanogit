@@ -38,7 +38,7 @@ func newTemporaryErrorRetrier(wrapped retry.Retrier) *temporaryErrorRetrier {
 // A server unavailable error is retryable if:
 //   - POST operations are not retried on 5xx because request body is consumed
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
-//   - HTTP 429 (Too Many Requests) can be retried for all operations
+//   - HTTP 429 (Too Many Requests) and rate-limited 403s can be retried for all operations
 //
 // Max attempts are handled by retry.Do, not by this method.
 func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -64,8 +64,10 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
 func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCode int) bool {
-	// HTTP 429 (Too Many Requests) can be retried for all operations
-	if statusCode == http.StatusTooManyRequests {
+	// Rate limiting is enforced before the request body is consumed, so these
+	// can be retried for all operations. A 403 only reaches here when
+	// CheckServerUnavailable already matched it as a rate limit.
+	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusForbidden {
 		return true
 	}
 	// Check for specific 5xx status codes
@@ -84,6 +86,15 @@ func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCod
 
 // Wait waits before the next retry attempt by delegating to the wrapped retrier.
 func (r *temporaryErrorRetrier) Wait(ctx context.Context, attempt int) error {
+	return r.wrapped.Wait(ctx, attempt)
+}
+
+// WaitAfter delegates to the wrapped retrier's error-aware wait when it has one,
+// so a server's Retry-After is not lost to the wrapping.
+func (r *temporaryErrorRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+	if waiter, ok := r.wrapped.(retry.ErrorAwareWaiter); ok {
+		return waiter.WaitAfter(ctx, attempt, err)
+	}
 	return r.wrapped.Wait(ctx, attempt)
 }
 

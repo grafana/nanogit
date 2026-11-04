@@ -59,6 +59,7 @@ The `ExponentialBackoffRetrier` provides configurable exponential backoff retry 
 - **Jitter**: Random jitter prevents thundering herd problems
 - **Configurable attempts**: Set maximum number of retry attempts
 - **Configurable delays**: Set initial delay, maximum delay, and multiplier
+- **Retry-After aware**: Honors a server-requested delay in place of the backoff schedule
 - **Context-aware**: Respects context cancellation and deadlines
 
 #### Default Configuration
@@ -118,6 +119,26 @@ retrier := retry.NewExponentialBackoffRetrier().
 ctx = retry.ToContext(ctx, retrier)
 ```
 
+### Retry-After
+
+When a response carries a `Retry-After` header, the `ExponentialBackoffRetrier` waits for the
+delay the server asked for instead of its own backoff schedule. Both RFC 9110 forms are
+understood: a delay in seconds, and an HTTP date.
+
+Because `Retry-After` is a floor rather than a target, jitter is added on top of it rather than
+spread around it. The result is still capped at `MaxDelay`, so a large or hostile value cannot
+stall the caller past its configured ceiling:
+
+```go
+retrier := retry.NewExponentialBackoffRetrier().
+    WithMaxAttempts(5).
+    WithInitialDelay(2 * time.Second).
+    WithMaxDelay(60 * time.Second) // Also caps how long a Retry-After can hold the caller
+```
+
+Custom retriers opt in by implementing `WaitAfter` (see below). Those that only implement `Wait`
+keep their own schedule and ignore `Retry-After`.
+
 ## Custom Retriers
 
 You can implement custom retry logic by implementing the `Retrier` interface:
@@ -136,6 +157,22 @@ type Retrier interface {
 
     // MaxAttempts returns the maximum number of attempts (including the initial attempt).
     MaxAttempts() int
+}
+```
+
+To honor server-requested delays, also implement the optional `ErrorAwareWaiter` extension.
+`Do` calls `WaitAfter` in preference to `Wait` whenever the retrier provides it:
+
+```go
+type ErrorAwareWaiter interface {
+    WaitAfter(ctx context.Context, attempt int, err error) error
+}
+
+func (r *MyRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+    if delay, ok := retry.RetryAfterFrom(err); ok {
+        return r.sleep(ctx, delay)
+    }
+    return r.Wait(ctx, attempt)
 }
 ```
 
@@ -243,13 +280,16 @@ The retry mechanism automatically retries on:
   > **Note:** "Connection refused" errors are not retried by the default implementation unless they are also timeout errors.
 - **5xx server errors**: Server unavailable errors (for GET and DELETE requests only)
 - **429 Too Many Requests**: Rate limiting errors (can be retried for all request types)
+- **403 secondary rate limits**: Only when the response carries `Retry-After` or
+  `x-ratelimit-remaining: 0`, which is how GitHub reports a secondary rate limit. A 403 without
+  those signals is a permission denial and is not retried.
 - **Temporary errors**: Any error marked as temporary by the error type
 
 ### What Does NOT Get Retried
 
 The retry mechanism does **not** retry on:
 
-- **4xx client errors**: Bad requests (400), authentication failures (401), not found (404), etc. (except 429)
+- **4xx client errors**: Bad requests (400), authentication failures (401), permission denials (403), not found (404), etc. (except 429 and rate-limited 403s)
 - **Context cancellation**: When the context is cancelled or deadline exceeded
 - **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body is consumed (429 can be retried)
 
@@ -264,6 +304,7 @@ GET requests can retry on network errors, 5xx status codes, and 429 (Too Many Re
 // - Network errors (connection refused, timeouts)
 // - 5xx server errors (500, 502, 503, 504)
 // - 429 Too Many Requests (rate limiting)
+// - 403 carrying rate-limit signals (secondary rate limiting)
 // Does NOT retry on:
 // - Other 4xx client errors
 // - Context cancellation
@@ -277,6 +318,7 @@ POST requests can retry on network errors and 429 (Too Many Requests), but not o
 // Retries on:
 // - Network errors before response (connection refused, timeouts)
 // - 429 Too Many Requests (rate limiting - can be retried even for POST)
+// - 403 carrying rate-limit signals (secondary rate limiting)
 // Does NOT retry on:
 // - 5xx server errors (request body is consumed)
 // - Other 4xx client errors
@@ -365,10 +407,11 @@ The retry mechanism respects context cancellation:
 ## Best Practices
 
 1. **Use retries for transient failures**: Network errors, temporary server issues
-2. **Don't retry on client errors**: 4xx errors indicate client-side issues that won't be fixed by retrying
-3. **Set appropriate timeouts**: Use context timeouts to prevent indefinite retries
-4. **Monitor retry patterns**: Log retry attempts to identify persistent issues
-5. **Configure per operation**: Different operations may need different retry strategies
+2. **Don't retry on client errors**: 4xx errors indicate client-side issues that won't be fixed by retrying, with rate limiting (429, and 403 with rate-limit signals) as the exception
+3. **Respect the server's pacing**: let `Retry-After` override your backoff rather than racing it
+4. **Set appropriate timeouts**: Use context timeouts to prevent indefinite retries
+5. **Monitor retry patterns**: Log retry attempts to identify persistent issues
+6. **Configure per operation**: Different operations may need different retry strategies
 
 ## Migration Notes
 

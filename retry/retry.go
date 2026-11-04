@@ -59,7 +59,7 @@ func Do[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 				"error", err.Error())
 
 			// Wait before retrying
-			if waitErr := retrier.Wait(ctx, attempt); waitErr != nil {
+			if waitErr := waitBeforeRetry(ctx, retrier, attempt, err); waitErr != nil {
 				// Context was cancelled during wait
 				return zero, fmt.Errorf("context cancelled during retry wait: %w", waitErr)
 			}
@@ -80,4 +80,13 @@ func DoVoid(ctx context.Context, fn func() error) error {
 		return struct{}{}, fn()
 	})
 	return err
+}
+
+// waitBeforeRetry waits using the retrier's error-aware wait when it has one,
+// so a server-requested Retry-After can override the backoff schedule.
+func waitBeforeRetry(ctx context.Context, retrier Retrier, attempt int, err error) error {
+	if waiter, ok := retrier.(ErrorAwareWaiter); ok {
+		return waiter.WaitAfter(ctx, attempt, err)
+	}
+	return retrier.Wait(ctx, attempt)
 }
