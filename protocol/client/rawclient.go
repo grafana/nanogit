@@ -167,7 +167,7 @@ func (c *rawClient) addDefaultHeaders(req *http.Request) {
 	req.Header.Add("Git-Protocol", "version=2")
 	userAgent := c.userAgent
 	if userAgent == "" {
-		userAgent = "nanogit/0"
+		userAgent = defaultUserAgent()
 	}
 
 	req.Header.Add("User-Agent", userAgent)

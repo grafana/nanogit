@@ -23,7 +23,9 @@ func WithHTTPClient(httpClient *http.Client) Option {
 
 // WithUserAgent sets a custom User-Agent header for Git protocol requests.
 // This can be useful for identifying your application in server logs and metrics.
-// If empty, a default User-Agent will be used.
+// If empty, the default "nanogit/<version>" is used, where <version> is the
+// nanogit module version from the binary's build info (or just "nanogit" when
+// no released version is known, e.g. under go.work or a local replace).
 func WithUserAgent(userAgent string) Option {
 	return func(o *Options) error {
 		o.UserAgent = userAgent

@@ -39,8 +39,8 @@ func TestAuthentication(t *testing.T) {
 					t.Errorf("expected Git-Protocol header 'version=2', got %s", gitProtocol)
 					return
 				}
-				if userAgent := r.Header.Get("User-Agent"); userAgent != "nanogit/0" {
-					t.Errorf("expected User-Agent header 'nanogit/0', got %s", userAgent)
+				if userAgent := r.Header.Get("User-Agent"); userAgent != defaultUserAgent() {
+					t.Errorf("expected User-Agent header %q, got %s", defaultUserAgent(), userAgent)
 					return
 				}
 
