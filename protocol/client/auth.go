@@ -11,15 +11,11 @@ import (
 //
 // Returns:
 //   - true if the client can read from the repository (can access git-upload-pack)
-//   - false if the server returns 401 Unauthorized or 403 Forbidden (no access)
-//   - error if there are any other connection or protocol issues
+//   - false and an error otherwise. A 401 Unauthorized or 403 Forbidden response
+//     matches ErrUnauthorized or ErrPermissionDenied with errors.Is, and its
+//     UnauthorizedError or PermissionDeniedError carries the status code.
 func (c *rawClient) CanRead(ctx context.Context) (bool, error) {
-	err := c.SmartInfo(ctx, "git-upload-pack")
-	if err != nil {
-		// Check for authentication and permission errors
-		if errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrPermissionDenied) {
-			return false, nil
-		}
+	if err := c.SmartInfo(ctx, "git-upload-pack"); err != nil {
 		return false, fmt.Errorf("check read permission: %w", err)
 	}
 	return true, nil
@@ -27,8 +23,13 @@ func (c *rawClient) CanRead(ctx context.Context) (bool, error) {
 
 // IsAuthorized is deprecated. Use CanRead instead.
 // It checks if the client can successfully communicate with the Git server.
+// Unlike CanRead, it reports a 401 or 403 as false without an error.
 func (c *rawClient) IsAuthorized(ctx context.Context) (bool, error) {
-	return c.CanRead(ctx)
+	ok, err := c.CanRead(ctx)
+	if errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrPermissionDenied) {
+		return false, nil
+	}
+	return ok, err
 }
 
 // CanWrite checks if the client has repository-level write access to the Git server.

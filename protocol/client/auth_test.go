@@ -171,6 +171,7 @@ func TestCanRead(t *testing.T) {
 		responseBody  string
 		expectedRead  bool
 		expectedError string
+		expectedIs    error
 	}{
 		{
 			name:          "can read - 200 OK",
@@ -184,14 +185,16 @@ func TestCanRead(t *testing.T) {
 			statusCode:    http.StatusUnauthorized,
 			responseBody:  "unauthorized",
 			expectedRead:  false,
-			expectedError: "",
+			expectedError: "status code 401",
+			expectedIs:    ErrUnauthorized,
 		},
 		{
 			name:          "cannot read - 403 Forbidden",
 			statusCode:    http.StatusForbidden,
 			responseBody:  "forbidden",
 			expectedRead:  false,
-			expectedError: "",
+			expectedError: "status code 403",
+			expectedIs:    ErrPermissionDenied,
 		},
 		{
 			name:          "server error - 500",
@@ -239,6 +242,10 @@ func TestCanRead(t *testing.T) {
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
+				require.False(t, canRead)
+				if tt.expectedIs != nil {
+					require.ErrorIs(t, err, tt.expectedIs)
+				}
 				return
 			}
 			require.NoError(t, err)

@@ -55,10 +55,14 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Calling CanRead should return false")
+			By("Calling CanRead should return false with UnauthorizedError")
 			canRead, err := client.CanRead(ctx)
-			Expect(err).NotTo(HaveOccurred())
 			Expect(canRead).To(BeFalse())
+			Expect(errors.Is(err, nanogit.ErrUnauthorized)).To(BeTrue(), "error should be ErrUnauthorized")
+
+			var authErr *nanogit.UnauthorizedError
+			Expect(errors.As(err, &authErr)).To(BeTrue(), "error should be UnauthorizedError type")
+			Expect(authErr.StatusCode).To(Equal(http.StatusUnauthorized))
 		})
 
 		It("should return UnauthorizedError on CanWrite", func() {
@@ -120,10 +124,14 @@ var _ = Describe("Authentication and Permission Error Handling", func() {
 			client, err := nanogit.NewHTTPClient(server.URL + "/test.git")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Calling CanRead should return false")
+			By("Calling CanRead should return false with PermissionDeniedError")
 			canRead, err := client.CanRead(ctx)
-			Expect(err).NotTo(HaveOccurred())
 			Expect(canRead).To(BeFalse())
+			Expect(errors.Is(err, nanogit.ErrPermissionDenied)).To(BeTrue(), "error should be ErrPermissionDenied")
+
+			var permErr *nanogit.PermissionDeniedError
+			Expect(errors.As(err, &permErr)).To(BeTrue(), "error should be PermissionDeniedError type")
+			Expect(permErr.StatusCode).To(Equal(http.StatusForbidden))
 		})
 
 		It("should return PermissionDeniedError on CanWrite", func() {

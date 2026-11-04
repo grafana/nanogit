@@ -79,6 +79,8 @@ type StagedWriter interface {
 type Client interface {
 	// CanRead reports whether the client can read from the repository, by
 	// probing the git-upload-pack service with the configured credentials.
+	// When it can't, the error tells why: a 401 or 403 response matches
+	// ErrUnauthorized or ErrPermissionDenied with errors.Is.
 	CanRead(ctx context.Context) (bool, error)
 
 	// CanWrite reports whether the client has repository-level write access,

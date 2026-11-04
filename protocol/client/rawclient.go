@@ -30,7 +30,8 @@ import (
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -header ../../internal/tools/fake_header.txt -o ../../mocks/raw_client.go . RawClient
 type RawClient interface {
 	// CanRead reports whether the credentials grant read (fetch) access to
-	// the repository.
+	// the repository. A 401 or 403 response is returned as an error matching
+	// ErrUnauthorized or ErrPermissionDenied.
 	CanRead(ctx context.Context) (bool, error)
 	// CanWrite reports whether the credentials grant repository-level write
 	// (push) access.
