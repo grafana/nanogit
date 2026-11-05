@@ -63,10 +63,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: GitHub
-            provider: github
-            vault: github
-            repo_var: GH_REPO_NAME
+          # Disabled: the security team disabled PATs org-wide, so the GitHub
+          # provider credentials no longer authenticate.
+          # - name: GitHub
+          #   provider: github
+          #   vault: github
+          #   repo_var: GH_REPO_NAME
           - name: GitLab
             provider: gitlab
             vault: gitlab
