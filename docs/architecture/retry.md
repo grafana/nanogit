@@ -140,6 +140,51 @@ retrier := retry.NewExponentialBackoffRetrier().
 Custom retriers opt in by implementing `WaitAfter` (see below). Those that only implement `Wait`
 keep their own schedule and ignore `Retry-After`.
 
+### Provider rate-limit signalling
+
+Rate limiting reaches the retrier the same way for every provider: the response is classified
+as a rate-limit rejection, and the retry is attempted for any method whose body can be replayed.
+What differs between providers is only *how they say it*, and the built-in rules cover the cases
+in use today:
+
+| Provider | Status | Delay | Needs configuration |
+| --- | --- | --- | --- |
+| GitHub | 429, and 403 for secondary limits | `Retry-After`, `x-ratelimit-remaining` | No |
+| GitLab | 429 | `Retry-After` on throttled responses | No |
+| Bitbucket Cloud | 429 | `Retry-After` when present, otherwise backoff | No |
+| Self-hosted (Gitea, Forgejo, …) | 429 if rate limited at all | `Retry-After` if sent | No |
+
+A provider needs no header at all to be retried: **429 is retried whether or not any header is
+present**, falling back to the backoff schedule for pacing. The headers only refine *when* the
+retry happens, and the 403 case exists solely because GitHub reports secondary limits that way.
+
+For a provider that signals differently — a reset timestamp instead of a delay, a vendor header,
+or a status nanogit treats as permanent — supply a detector instead of waiting for a nanogit
+release:
+
+```go
+client, err := nanogit.NewHTTPClient(repo,
+    options.WithRateLimitDetector(func(res *http.Response) options.RateLimitSignal {
+        if res.StatusCode != http.StatusTooManyRequests {
+            return options.RateLimitSignal{}
+        }
+        epoch, err := strconv.ParseInt(res.Header.Get("X-RateLimit-Reset"), 10, 64)
+        if err != nil {
+            return options.RateLimitSignal{RateLimited: true}
+        }
+        return options.RateLimitSignal{
+            RateLimited: true,
+            RetryAfter:  time.Until(time.Unix(epoch, 0)),
+        }
+    }))
+```
+
+The detector is merged with the built-in rules rather than replacing them. It can classify a
+response they call permanent and supply a delay for one they already classified, but it cannot
+un-classify a response they call transient, and it does not override the replayable-body rule —
+a request whose body cannot be rewound is still never retried. `RetryAfter` is still capped at
+the retrier's `MaxDelay`.
+
 ## Custom Retriers
 
 You can implement custom retry logic by implementing the `Retrier` interface:
@@ -281,10 +326,11 @@ The retry mechanism automatically retries on:
   > **Note:** "Connection refused" errors are not retried by the default implementation unless they are also timeout errors.
 - **5xx server errors**: Server unavailable errors (for GET and DELETE requests only)
 - **429 Too Many Requests**: Rate limiting errors (can be retried for all request types)
-- **403 secondary rate limits**: Only when the response carries `Retry-After`,
-  `x-ratelimit-remaining: 0` (GitHub) or `ratelimit-remaining: 0` (GitLab's IETF-draft
-  spelling). A 403 without those signals is a permission denial and is not retried. Header
-  lookup is case-insensitive, so the lowercase spellings providers send on the wire match.
+- **403 secondary rate limits**: Only when the response carries `Retry-After` or a
+  `*ratelimit-remaining: 0` header — GitHub's `x-ratelimit-remaining` and GitLab's IETF-draft
+  `ratelimit-remaining` both match. A 403 without those signals is a permission denial and is
+  not retried. Header lookup is case-insensitive, so the lowercase spellings providers send on
+  the wire match.
 - **Temporary errors**: Any error marked as temporary by the error type
 
 ### What Does NOT Get Retried

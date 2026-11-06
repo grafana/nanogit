@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/grafana/nanogit/options"
 )
 
 // ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
@@ -37,6 +39,10 @@ type ServerUnavailableError struct {
 	// RetryAfter is the delay the server asked for via the Retry-After header.
 	// Zero means the server did not ask for a specific delay.
 	RetryAfter time.Duration
+	// RateLimited reports that the server rejected the request for rate
+	// limiting rather than failing it, which makes it retryable for any method
+	// whose body can be replayed.
+	RateLimited bool
 }
 
 func (e *ServerUnavailableError) Error() string {
@@ -89,12 +95,30 @@ func NewServerUnavailableError(operation string, statusCode int, underlying erro
 // The HTTP method is extracted from the response's request.
 // The caller is responsible for closing the response body.
 func CheckServerUnavailable(res *http.Response) error {
-	if res.StatusCode < 400 {
+	return checkServerUnavailable(res, nil)
+}
+
+// checkServerUnavailable is CheckServerUnavailable with a caller-supplied
+// detector merged into the built-in rules. A detector may classify a response
+// the built-in rules call permanent, and may supply a delay for one they
+// already classified, but may not un-classify one they call transient.
+func checkServerUnavailable(res *http.Response, detect options.RateLimitDetector) error {
+	var signal options.RateLimitSignal
+	if detect != nil {
+		signal = detect(res)
+	}
+
+	if res.StatusCode < 400 && !signal.RateLimited {
 		return nil
 	}
 
 	retryAfter, hasRetryAfter := parseRetryAfter(res.Header, time.Now())
-	if !isTransientStatus(res.StatusCode, res.Header, hasRetryAfter) {
+	if signal.RetryAfter > 0 {
+		retryAfter = signal.RetryAfter
+	}
+
+	rateLimited := signal.RateLimited || isRateLimitStatus(res.StatusCode, res.Header, hasRetryAfter)
+	if !rateLimited && !isServerErrorStatus(res.StatusCode) {
 		return nil
 	}
 
@@ -104,27 +128,34 @@ func CheckServerUnavailable(res *http.Response) error {
 	}
 	err := NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
 	err.RetryAfter = retryAfter
+	err.RateLimited = rateLimited
 	return err
 }
 
-// rateLimitRemainingHeaders name the response header that reports how much
-// rate-limit budget is left. GitHub sends the x-prefixed spelling, GitLab the
-// IETF draft one; header lookup is case-insensitive, so only spelling varies.
-var rateLimitRemainingHeaders = []string{"X-RateLimit-Remaining", "RateLimit-Remaining"}
+// rateLimitRemainingSuffix matches the canonicalized name of the header that
+// reports remaining rate-limit budget, under either convention in use: GitHub's
+// x-ratelimit-remaining and the IETF draft's ratelimit-remaining (GitLab).
+// Matching the suffix rather than a fixed list means a provider following
+// either convention needs no change here.
+const rateLimitRemainingSuffix = "Ratelimit-Remaining"
 
 // maxRetryAfterSeconds is the largest Retry-After value representable as a
 // time.Duration. Larger values saturate instead of wrapping negative.
 const maxRetryAfterSeconds = int64(math.MaxInt64 / int64(time.Second))
 
-// isTransientStatus reports whether a status should be treated as a temporary
-// failure rather than a permanent one.
-func isTransientStatus(statusCode int, header http.Header, hasRetryAfter bool) bool {
-	switch {
-	case statusCode >= 500:
+// isServerErrorStatus reports whether a status is a server-side failure, which
+// is transient but not rate limiting.
+func isServerErrorStatus(statusCode int) bool {
+	return statusCode >= 500
+}
+
+// isRateLimitStatus reports whether a response is a rate-limit rejection under
+// the signalling nanogit recognises without a detector.
+func isRateLimitStatus(statusCode int, header http.Header, hasRetryAfter bool) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests:
 		return true
-	case statusCode == http.StatusTooManyRequests:
-		return true
-	case statusCode == http.StatusForbidden:
+	case http.StatusForbidden:
 		// GitHub reports secondary rate limits as 403; only the rate-limit
 		// signals tell those apart from a real permission denial.
 		return hasRetryAfter || rateLimitExhausted(header)
@@ -135,9 +166,14 @@ func isTransientStatus(statusCode int, header http.Header, hasRetryAfter bool) b
 
 // rateLimitExhausted reports whether the response says the rate-limit budget is spent.
 func rateLimitExhausted(header http.Header) bool {
-	for _, name := range rateLimitRemainingHeaders {
-		if header.Get(name) == "0" {
-			return true
+	for name, values := range header {
+		if !strings.HasSuffix(name, rateLimitRemainingSuffix) {
+			continue
+		}
+		for _, value := range values {
+			if strings.TrimSpace(value) == "0" {
+				return true
+			}
 		}
 	}
 	return false

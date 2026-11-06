@@ -64,5 +64,5 @@ If you cap response sizes with `options.WithLimits`, operations that exceed a ca
 
 - **Wrap, don't replace**: `fmt.Errorf("sync dashboards for %s: %w", tenant, err)` keeps `errors.Is`/`errors.As` working up the stack.
 - **Retryability**: `ErrServerUnavailable` and timeouts are the transient category — the [retry mechanism](../architecture/retry.md) already handles them for GET/DELETE, 429s and rate-limited 403s if you enable it; treat the other 4xx categories as permanent.
-- **Rate limits**: a 403 carrying `Retry-After`, `x-ratelimit-remaining: 0` (GitHub) or `ratelimit-remaining: 0` (GitLab) is a secondary rate limit, so it surfaces as `ErrServerUnavailable` rather than `ErrPermissionDenied`. `*client.ServerUnavailableError` exposes the server's requested delay in `RetryAfter`.
+- **Rate limits**: a 403 carrying `Retry-After` or a `*ratelimit-remaining: 0` header is a secondary rate limit, so it surfaces as `ErrServerUnavailable` rather than `ErrPermissionDenied`. `*client.ServerUnavailableError` reports it via `RateLimited` and exposes the server's requested delay in `RetryAfter`. For a provider that signals differently, see `options.WithRateLimitDetector`.
 - **Writer flows**: after a failed `Push`, the writer keeps its staged state — you can retry `Push` directly (see [Writing](writing.md#errors-retries-and-cleanup)).

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
@@ -332,22 +333,11 @@ func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusGatewayTimeout))
 	})
 
-	t.Run("retries 429 for all operations", func(t *testing.T) {
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusTooManyRequests))
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusTooManyRequests))
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodPut, http.StatusTooManyRequests))
-		require.True(t, tempRetrier.isRetryableOperation("", http.StatusTooManyRequests))
-	})
-
-	t.Run("retries rate-limited 403 for all operations", func(t *testing.T) {
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusForbidden))
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusForbidden))
-		require.True(t, tempRetrier.isRetryableOperation("", http.StatusForbidden))
-	})
-
-	t.Run("does not retry on other 4xx", func(t *testing.T) {
+	t.Run("does not retry on 4xx", func(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusNotFound))
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusBadRequest))
+		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusTooManyRequests),
+			"rate limiting is classified on the error, not by status here")
 	})
 
 	t.Run("retries DELETE operations on 5xx", func(t *testing.T) {
@@ -535,5 +525,126 @@ func TestHTTPRetrier_RateLimitedPOSTBodyReplay(t *testing.T) {
 		require.ErrorIs(t, err, ErrServerUnavailable)
 		require.Len(t, received, 1, "a body that cannot be rewound must not be retried")
 		require.Equal(t, payload, received[0])
+	})
+}
+
+func TestHTTPRetrier_RateLimitedErrors(t *testing.T) {
+	t.Parallel()
+
+	rateLimited := func(operation string, statusCode int) *ServerUnavailableError {
+		err := NewServerUnavailableError(operation, statusCode, errors.New("rate limited"))
+		err.RateLimited = true
+		return err
+	}
+
+	t.Run("retries any method when the body can be replayed", func(t *testing.T) {
+		tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), true)
+		ctx := context.Background()
+
+		// Any status: a detector may flag one nanogit treats as permanent.
+		for _, statusCode := range []int{http.StatusTooManyRequests, http.StatusForbidden, http.StatusTeapot} {
+			for _, operation := range []string{http.MethodGet, http.MethodPost, http.MethodPut, ""} {
+				require.True(t, tempRetrier.ShouldRetry(ctx, rateLimited(operation, statusCode), 1),
+					"status %d operation %q", statusCode, operation)
+			}
+		}
+	})
+
+	t.Run("does not retry when the body cannot be replayed", func(t *testing.T) {
+		tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), false)
+		ctx := context.Background()
+
+		require.False(t, tempRetrier.ShouldRetry(ctx, rateLimited(http.MethodPost, http.StatusTooManyRequests), 1))
+	})
+}
+
+func TestRateLimitDetector(t *testing.T) {
+	t.Parallel()
+
+	t.Run("classifies a status the built-in rules call permanent", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 3 {
+				w.Header().Set("X-Quota-Exceeded", "true")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL+"/repo", options.WithRateLimitDetector(
+			func(res *http.Response) options.RateLimitSignal {
+				return options.RateLimitSignal{
+					RateLimited: res.Header.Get("X-Quota-Exceeded") == "true",
+					RetryAfter:  time.Millisecond,
+				}
+			}))
+		require.NoError(t, err)
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, 3, attempts, "a 404 is permanent to the built-in rules but the detector overrides it")
+	})
+
+	t.Run("supplies a delay for a response the built-in rules already classified", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 2 {
+				// A reset timestamp rather than a delay: no Retry-After to parse.
+				w.Header().Set("X-RateLimit-Reset", "1799999999")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL+"/repo", options.WithRateLimitDetector(
+			func(res *http.Response) options.RateLimitSignal {
+				if res.Header.Get("X-RateLimit-Reset") == "" {
+					return options.RateLimitSignal{}
+				}
+				return options.RateLimitSignal{RateLimited: true, RetryAfter: 7 * time.Millisecond}
+			}))
+		require.NoError(t, err)
+
+		base := newTestRetrier(3)
+		base.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return false }
+		capturing := &retryAfterCapturingRetrier{testRetrier: base}
+		ctx := retry.ToContext(context.Background(), capturing)
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, []time.Duration{7 * time.Millisecond}, capturing.delays)
+	})
+
+	t.Run("cannot un-classify a response the built-in rules call transient", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 2 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL+"/repo", options.WithRateLimitDetector(
+			func(res *http.Response) options.RateLimitSignal { return options.RateLimitSignal{} }))
+		require.NoError(t, err)
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, 2, attempts)
 	})
 }

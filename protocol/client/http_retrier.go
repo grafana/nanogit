@@ -50,8 +50,8 @@ func requestReplayable(req *http.Request) bool {
 // A server unavailable error is retryable if:
 //   - POST operations are not retried on 5xx because request body is consumed
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
-//   - HTTP 429 (Too Many Requests) and rate-limited 403s can be retried for any
-//     operation whose body can be replayed
+//   - a rate-limit rejection can be retried for any operation whose body can be
+//     replayed, whatever status carried it
 //
 // Max attempts are handled by retry.Do, not by this method.
 func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -62,6 +62,13 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 	// Check for server unavailable errors that are retryable
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) {
+		// Rate limiting is rejected before the body is consumed server-side, so
+		// it is retryable for any method — but only when the body can be
+		// replayed client-side. Keyed off the classification rather than the
+		// status, so a detector-supplied signal on any status is honored.
+		if serverErr.RateLimited {
+			return r.replayableBody
+		}
 		if r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode) {
 			return true
 		}
@@ -75,15 +82,9 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 	return r.wrapped.ShouldRetry(ctx, err, attempt)
 }
 
-// isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
+// isRetryableOperation determines if a server error should be retried based on
+// HTTP method and status code. Rate limiting is handled by ShouldRetry.
 func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCode int) bool {
-	// Rate limiting is rejected before the body is consumed server-side, so it
-	// is retryable for any method — but only when the body can be replayed
-	// client-side. A 403 only reaches here when CheckServerUnavailable already
-	// matched it as a rate limit.
-	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusForbidden {
-		return r.replayableBody
-	}
 	// Check for specific 5xx status codes
 	switch statusCode {
 	case http.StatusInternalServerError,
