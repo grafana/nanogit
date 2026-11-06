@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -390,4 +391,27 @@ func TestRetryAfterFrom(t *testing.T) {
 		require.False(t, ok)
 		require.Zero(t, delay)
 	})
+}
+
+func TestExponentialBackoffRetrier_WaitAfterOverflow(t *testing.T) {
+	t.Parallel()
+
+	// A Retry-After near the Duration limit overflows negative if jitter is
+	// added before the cap, which skips the wait instead of applying MaxDelay.
+	for _, delay := range []time.Duration{math.MaxInt64, math.MaxInt64 - 1000, 9223372036 * time.Second} {
+		t.Run(delay.String(), func(t *testing.T) {
+			t.Parallel()
+			retrier := NewExponentialBackoffRetrier().
+				WithInitialDelay(time.Hour).
+				WithMaxDelay(40 * time.Millisecond).
+				WithJitter()
+
+			start := time.Now()
+			err := retrier.WaitAfter(context.Background(), 1, &retryAfterError{delay: delay})
+			elapsed := time.Since(start)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, elapsed, 40*time.Millisecond, "must still wait MaxDelay, not return immediately")
+			require.Less(t, elapsed, time.Second)
+		})
+	}
 }

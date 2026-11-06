@@ -19,16 +19,28 @@ type temporaryErrorRetrier struct {
 	// wrapped is the underlying retrier that provides the retry logic
 	// (backoff timing, max attempts, etc.)
 	wrapped retry.Retrier
+	// replayableBody reports whether the request body can be sent again in
+	// full, which gates retrying rate-limited requests that carry one.
+	replayableBody bool
 }
 
 // newTemporaryErrorRetrier creates a new temporaryErrorRetrier that wraps the given retrier.
-func newTemporaryErrorRetrier(wrapped retry.Retrier) *temporaryErrorRetrier {
+// replayableBody must report whether the request can be re-sent with its full body.
+func newTemporaryErrorRetrier(wrapped retry.Retrier, replayableBody bool) *temporaryErrorRetrier {
 	if wrapped == nil {
 		wrapped = &retry.NoopRetrier{}
 	}
 	return &temporaryErrorRetrier{
-		wrapped: wrapped,
+		wrapped:        wrapped,
+		replayableBody: replayableBody,
 	}
+}
+
+// requestReplayable reports whether req can be sent again with its full body.
+// A streamed body (io.Pipe, an arbitrary io.Reader) has no GetBody, so net/http
+// cannot rewind it: a second attempt would send a truncated or empty payload.
+func requestReplayable(req *http.Request) bool {
+	return req.Body == nil || req.Body == http.NoBody || req.GetBody != nil
 }
 
 // ShouldRetry determines if an error should be retried.
@@ -38,7 +50,8 @@ func newTemporaryErrorRetrier(wrapped retry.Retrier) *temporaryErrorRetrier {
 // A server unavailable error is retryable if:
 //   - POST operations are not retried on 5xx because request body is consumed
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
-//   - HTTP 429 (Too Many Requests) and rate-limited 403s can be retried for all operations
+//   - HTTP 429 (Too Many Requests) and rate-limited 403s can be retried for any
+//     operation whose body can be replayed
 //
 // Max attempts are handled by retry.Do, not by this method.
 func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -64,11 +77,12 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 
 // isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
 func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCode int) bool {
-	// Rate limiting is enforced before the request body is consumed, so these
-	// can be retried for all operations. A 403 only reaches here when
-	// CheckServerUnavailable already matched it as a rate limit.
+	// Rate limiting is rejected before the body is consumed server-side, so it
+	// is retryable for any method — but only when the body can be replayed
+	// client-side. A 403 only reaches here when CheckServerUnavailable already
+	// matched it as a rate limit.
 	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusForbidden {
-		return true
+		return r.replayableBody
 	}
 	// Check for specific 5xx status codes
 	switch statusCode {

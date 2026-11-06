@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,7 +25,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -42,7 +44,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodDelete, http.StatusInternalServerError, errors.New("internal server error"))
@@ -54,7 +56,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors with POST operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -65,7 +67,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors with POST operation and 500 status", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, errors.New("internal server error"))
@@ -76,7 +78,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors without operation (conservative)", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError("", http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -91,7 +93,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		underlying := errors.New("underlying error")
@@ -107,7 +109,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusTooManyRequests, errors.New("too many requests"))
@@ -122,7 +124,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusTooManyRequests, errors.New("too many requests"))
@@ -133,7 +135,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on other 4xx status codes", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusNotFound, errors.New("not found"))
@@ -144,7 +146,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on 4xx client errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := fmt.Errorf("got status code %d: Not Found", http.StatusNotFound)
@@ -154,7 +156,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on nil errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		require.False(t, tempRetrier.ShouldRetry(ctx, nil, 1))
@@ -162,7 +164,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates context cancellation to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := context.Canceled
@@ -173,7 +175,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates context deadline exceeded to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := context.DeadlineExceeded
@@ -184,7 +186,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates server unavailable error with context cancellation to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		// Wrap context.Canceled in ServerUnavailableError
@@ -198,7 +200,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates server unavailable error with context deadline exceeded to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		// Wrap context.DeadlineExceeded in ServerUnavailableError
@@ -215,7 +217,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusInternalServerError, errors.New("internal server error"))
@@ -238,7 +240,7 @@ func TestHTTPRetrier_Wait(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().
 			WithInitialDelay(10 * time.Millisecond).
 			WithoutJitter()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 
@@ -254,7 +256,7 @@ func TestHTTPRetrier_Wait(t *testing.T) {
 	t.Run("respects context cancellation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().
 			WithInitialDelay(1 * time.Second)
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -270,20 +272,20 @@ func TestHTTPRetrier_MaxAttempts(t *testing.T) {
 
 	t.Run("delegates max attempts to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(5)
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		require.Equal(t, 5, tempRetrier.MaxAttempts())
 	})
 
 	t.Run("uses default when wrapped retrier has default", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		require.Equal(t, 3, tempRetrier.MaxAttempts())
 	})
 
 	t.Run("handles nil wrapped retrier", func(t *testing.T) {
-		tempRetrier := newTemporaryErrorRetrier(nil)
+		tempRetrier := newTemporaryErrorRetrier(nil, true)
 
 		// Should use NoopRetrier which returns 1
 		require.Equal(t, 1, tempRetrier.MaxAttempts())
@@ -295,14 +297,14 @@ func TestNewHTTPRetrier(t *testing.T) {
 
 	t.Run("creates retrier with wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		require.NotNil(t, tempRetrier)
 		require.Equal(t, baseRetrier, tempRetrier.wrapped)
 	})
 
 	t.Run("handles nil wrapped retrier", func(t *testing.T) {
-		tempRetrier := newTemporaryErrorRetrier(nil)
+		tempRetrier := newTemporaryErrorRetrier(nil, true)
 
 		require.NotNil(t, tempRetrier)
 		require.NotNil(t, tempRetrier.wrapped)
@@ -314,7 +316,7 @@ func TestNewHTTPRetrier(t *testing.T) {
 func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 	t.Parallel()
 
-	tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier())
+	tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), true)
 
 	t.Run("retries GET operations on 5xx", func(t *testing.T) {
 		require.True(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusInternalServerError))
@@ -421,5 +423,117 @@ func TestHTTPRetrier_RateLimitedForbidden(t *testing.T) {
 		err = client.SmartInfo(ctx, "git-upload-pack")
 		require.ErrorIs(t, err, ErrPermissionDenied)
 		require.Equal(t, 1, attempts)
+	})
+}
+
+// writeRawResponse writes a response with header names spelled exactly as given,
+// bypassing the canonicalization http.Header.Set would apply on the way out.
+func writeRawResponse(t *testing.T, w http.ResponseWriter, status, headers string) {
+	t.Helper()
+	conn, buf, err := w.(http.Hijacker).Hijack()
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	_, err = buf.WriteString("HTTP/1.1 " + status + "\r\n" + headers + "Content-Length: 0\r\nConnection: close\r\n\r\n")
+	require.NoError(t, err)
+	require.NoError(t, buf.Flush())
+}
+
+func TestHTTPRetrier_LowercaseRateLimitHeaders(t *testing.T) {
+	t.Parallel()
+
+	// GitLab spells these in lowercase on the wire; net/http canonicalizes
+	// incoming header names, so the lookups find them either way.
+	tests := []struct {
+		name    string
+		headers string
+	}{
+		{name: "lowercase retry-after", headers: "retry-after: 1\r\n"},
+		{name: "lowercase x-ratelimit-remaining", headers: "x-ratelimit-remaining: 0\r\n"},
+		{name: "lowercase ratelimit-remaining", headers: "ratelimit-remaining: 0\r\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			attempts := 0
+			successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				if attempts < 2 {
+					writeRawResponse(t, w, "403 Forbidden", tt.headers)
+					return
+				}
+				_, _ = w.Write([]byte(successResponse))
+			}))
+			defer server.Close()
+
+			retrier := newTestRetrier(3)
+			retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return false }
+			ctx := retry.ToContext(context.Background(), retrier)
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+			require.Equal(t, 2, attempts)
+		})
+	}
+}
+
+func TestHTTPRetrier_RateLimitedPOSTBodyReplay(t *testing.T) {
+	t.Parallel()
+
+	payload := bytes.Repeat([]byte("x"), 64)
+
+	newRateLimitingServer := func(t *testing.T, received *[][]byte) *httptest.Server {
+		attempts := 0
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			*received = append(*received, body)
+			if attempts < 2 {
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+	}
+
+	t.Run("replayable body is resent in full", func(t *testing.T) {
+		var received [][]byte
+		server := newRateLimitingServer(t, &received)
+		defer server.Close()
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		body, err := client.UploadPack(ctx, bytes.NewReader(payload))
+		require.NoError(t, err)
+		require.NoError(t, body.Close())
+
+		require.Len(t, received, 2)
+		require.Equal(t, payload, received[0])
+		require.Equal(t, payload, received[1], "the retry must carry the full payload, not a truncated one")
+	})
+
+	t.Run("streamed body is not retried rather than resent empty", func(t *testing.T) {
+		var received [][]byte
+		server := newRateLimitingServer(t, &received)
+		defer server.Close()
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		// An opaque ReadCloser gives net/http no GetBody to rewind.
+		_, err = client.UploadPack(ctx, io.NopCloser(bytes.NewReader(payload)))
+		require.ErrorIs(t, err, ErrServerUnavailable)
+		require.Len(t, received, 1, "a body that cannot be rewound must not be retried")
+		require.Equal(t, payload, received[0])
 	})
 }

@@ -192,20 +192,25 @@ func (r *ExponentialBackoffRetrier) Wait(ctx context.Context, attempt int) error
 
 // WaitAfter waits before the next retry attempt, honoring a server-requested
 // Retry-After delay when err carries one and falling back to exponential
-// backoff otherwise. Retry-After is a floor, so jitter is added on top of it
-// rather than spread around it, and the result is still capped at MaxDelay so a
-// large or hostile value cannot stall the caller past its configured ceiling.
+// backoff otherwise. The delay is capped at MaxDelay so a large or hostile
+// value cannot stall the caller past its configured ceiling.
 func (r *ExponentialBackoffRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
 	delay, ok := RetryAfterFrom(err)
 	if !ok || delay <= 0 {
 		return r.Wait(ctx, attempt)
 	}
 
-	if r.Jitter {
-		delay += time.Duration(r.randomFraction() * retryAfterJitterFraction * float64(delay))
-	}
+	// Cap before adding jitter: a Retry-After near the Duration limit would
+	// otherwise overflow negative and skip the wait altogether.
 	if delay > r.MaxDelay {
 		delay = r.MaxDelay
+	}
+
+	// Retry-After is a floor, so jitter goes on top of it rather than around
+	// it, bounded by whatever headroom MaxDelay leaves.
+	if r.Jitter {
+		jitter := time.Duration(r.randomFraction() * retryAfterJitterFraction * float64(delay))
+		delay += min(jitter, r.MaxDelay-delay)
 	}
 
 	return r.sleep(ctx, delay)

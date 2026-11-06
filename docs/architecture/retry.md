@@ -123,7 +123,8 @@ ctx = retry.ToContext(ctx, retrier)
 
 When a response carries a `Retry-After` header, the `ExponentialBackoffRetrier` waits for the
 delay the server asked for instead of its own backoff schedule. Both RFC 9110 forms are
-understood: a delay in seconds, and an HTTP date.
+understood: a delay in seconds, and an HTTP date. A value too large for a `time.Duration`
+saturates rather than wrapping, so it is still bounded by `MaxDelay`.
 
 Because `Retry-After` is a floor rather than a target, jitter is added on top of it rather than
 spread around it. The result is still capped at `MaxDelay`, so a large or hostile value cannot
@@ -280,9 +281,10 @@ The retry mechanism automatically retries on:
   > **Note:** "Connection refused" errors are not retried by the default implementation unless they are also timeout errors.
 - **5xx server errors**: Server unavailable errors (for GET and DELETE requests only)
 - **429 Too Many Requests**: Rate limiting errors (can be retried for all request types)
-- **403 secondary rate limits**: Only when the response carries `Retry-After` or
-  `x-ratelimit-remaining: 0`, which is how GitHub reports a secondary rate limit. A 403 without
-  those signals is a permission denial and is not retried.
+- **403 secondary rate limits**: Only when the response carries `Retry-After`,
+  `x-ratelimit-remaining: 0` (GitHub) or `ratelimit-remaining: 0` (GitLab's IETF-draft
+  spelling). A 403 without those signals is a permission denial and is not retried. Header
+  lookup is case-insensitive, so the lowercase spellings providers send on the wire match.
 - **Temporary errors**: Any error marked as temporary by the error type
 
 ### What Does NOT Get Retried
@@ -319,6 +321,7 @@ POST requests can retry on network errors and 429 (Too Many Requests), but not o
 // - Network errors before response (connection refused, timeouts)
 // - 429 Too Many Requests (rate limiting - can be retried even for POST)
 // - 403 carrying rate-limit signals (secondary rate limiting)
+// Both only when the request body can be rewound (see below).
 // Does NOT retry on:
 // - 5xx server errors (request body is consumed)
 // - Other 4xx client errors
@@ -330,6 +333,12 @@ POST requests can retry on network errors and 429 (Too Many Requests), but not o
 When an HTTP POST request is made with an `io.Reader` body, the HTTP client reads from the reader to send the request body. Once `client.Do(req)` completes (even if it returns a 5xx error), the `io.Reader` has been consumed and cannot be re-read. To retry, we would need to recreate the request with a fresh body, but the original `io.Reader` is already consumed and most `io.Reader` implementations (like `io.Pipe`) cannot be reset. This limitation applies to streaming request bodies, which is how `UploadPack` and `ReceivePack` operate.
 
 **Note:** 429 (Too Many Requests) can be retried even for POST requests because rate limiting is typically enforced before the server consumes the request body. In most cases, the server responds with 429 before reading or processing the body, so the body remains unconsumed and can be safely re-sent on retry. This is not due to any special handling of the request body, but rather the timing of the rate limiting response.
+
+This still requires the body to be replayable on the *client* side. A body backed by a
+`*bytes.Reader` (`UploadPack`, and `ReceivePack` for ref create/update/delete) gives `net/http`
+a `GetBody` to rewind, so the retry carries the full payload. A streamed body — the `io.Pipe`
+that `StagedWriter.Push` uses — cannot be rewound, so those requests are not retried on rate
+limits at all; retrying them would send a truncated or empty payload.
 
 ## Integration Points
 

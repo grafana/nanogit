@@ -197,7 +197,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 	// Wrap the context with a temporary error retrier unless retries are disabled
 	baseRetrier := retry.FromContext(ctx)
 	if _, ok := baseRetrier.(*retry.NoopRetrier); !ok {
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, requestReplayable(req))
 		ctx = retry.ToContext(ctx, tempRetrier)
 	}
 
@@ -205,6 +205,13 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 	attempt := 0
 	return retry.Do(ctx, func() (*http.Response, error) {
 		attempt++
+		if attempt > 1 && req.GetBody != nil {
+			body, bodyErr := req.GetBody()
+			if bodyErr != nil {
+				return nil, fmt.Errorf("rewinding request body for retry: %w", bodyErr)
+			}
+			req.Body = body
+		}
 		start := time.Now()
 
 		res, err := c.client.Do(req)

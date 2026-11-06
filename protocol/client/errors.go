@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -106,6 +107,15 @@ func CheckServerUnavailable(res *http.Response) error {
 	return err
 }
 
+// rateLimitRemainingHeaders name the response header that reports how much
+// rate-limit budget is left. GitHub sends the x-prefixed spelling, GitLab the
+// IETF draft one; header lookup is case-insensitive, so only spelling varies.
+var rateLimitRemainingHeaders = []string{"X-RateLimit-Remaining", "RateLimit-Remaining"}
+
+// maxRetryAfterSeconds is the largest Retry-After value representable as a
+// time.Duration. Larger values saturate instead of wrapping negative.
+const maxRetryAfterSeconds = int64(math.MaxInt64 / int64(time.Second))
+
 // isTransientStatus reports whether a status should be treated as a temporary
 // failure rather than a permanent one.
 func isTransientStatus(statusCode int, header http.Header, hasRetryAfter bool) bool {
@@ -117,10 +127,20 @@ func isTransientStatus(statusCode int, header http.Header, hasRetryAfter bool) b
 	case statusCode == http.StatusForbidden:
 		// GitHub reports secondary rate limits as 403; only the rate-limit
 		// signals tell those apart from a real permission denial.
-		return hasRetryAfter || header.Get("X-RateLimit-Remaining") == "0"
+		return hasRetryAfter || rateLimitExhausted(header)
 	default:
 		return false
 	}
+}
+
+// rateLimitExhausted reports whether the response says the rate-limit budget is spent.
+func rateLimitExhausted(header http.Header) bool {
+	for _, name := range rateLimitRemainingHeaders {
+		if header.Get(name) == "0" {
+			return true
+		}
+	}
+	return false
 }
 
 // parseRetryAfter reads the Retry-After header in either RFC 9110 form: a delay
@@ -132,13 +152,20 @@ func parseRetryAfter(header http.Header, now time.Time) (time.Duration, bool) {
 		return 0, false
 	}
 
-	if seconds, err := strconv.Atoi(value); err == nil {
-		if seconds <= 0 {
+	// On ErrRange ParseInt still yields the nearest bound, which is exactly the
+	// saturation the switch below wants.
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil || errors.Is(err, strconv.ErrRange) {
+		switch {
+		case seconds <= 0:
 			return 0, true
+		case seconds > maxRetryAfterSeconds:
+			return time.Duration(math.MaxInt64), true
+		default:
+			return time.Duration(seconds) * time.Second, true
 		}
-		return time.Duration(seconds) * time.Second, true
 	}
 
+	// Time.Sub already saturates at the Duration bounds.
 	if date, err := http.ParseTime(value); err == nil {
 		if delay := date.Sub(now); delay > 0 {
 			return delay, true

@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -489,6 +490,12 @@ func TestCheckServerUnavailable(t *testing.T) {
 			wantErr:    true,
 		},
 		{
+			name:       "403 with exhausted GitLab-spelled rate limit budget",
+			statusCode: http.StatusForbidden,
+			header:     http.Header{"Ratelimit-Remaining": []string{"0"}},
+			wantErr:    true,
+		},
+		{
 			name:       "403 with remaining rate limit budget is a permission denial",
 			statusCode: http.StatusForbidden,
 			header:     http.Header{"X-Ratelimit-Remaining": []string{"4999"}},
@@ -555,6 +562,9 @@ func TestParseRetryAfter(t *testing.T) {
 		{name: "future http date", value: "Wed, 04 Nov 2026 12:01:00 GMT", wantDelay: time.Minute, wantOK: true},
 		{name: "past http date", value: "Wed, 04 Nov 2026 11:59:00 GMT", wantOK: true},
 		{name: "unparseable", value: "tomorrow"},
+		{name: "largest representable seconds", value: "9223372036", wantDelay: 9223372036 * time.Second, wantOK: true},
+		{name: "seconds beyond duration range saturate", value: "9223372037", wantDelay: math.MaxInt64, wantOK: true},
+		{name: "seconds beyond int64 range saturate", value: "99999999999999999999", wantDelay: math.MaxInt64, wantOK: true},
 	}
 
 	for _, tt := range tests {
