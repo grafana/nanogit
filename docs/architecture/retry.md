@@ -222,6 +222,10 @@ func (r *MyRetrier) WaitAfter(ctx context.Context, attempt int, err error) error
 }
 ```
 
+A custom retrier cannot retry a request whose body `net/http` cannot rewind. That guard sits
+ahead of delegation, so a permissive `ShouldRetry` like the one below cannot cause a second
+attempt to go out with a truncated or empty payload.
+
 ### Example: Fixed Delay Retrier
 
 ```go
@@ -383,8 +387,9 @@ When an HTTP POST request is made with an `io.Reader` body, the HTTP client read
 This still requires the body to be replayable on the *client* side. A body backed by a
 `*bytes.Reader` (`UploadPack`, and `ReceivePack` for ref create/update/delete) gives `net/http`
 a `GetBody` to rewind, so the retry carries the full payload. A streamed body — the `io.Pipe`
-that `StagedWriter.Push` uses — cannot be rewound, so those requests are not retried on rate
-limits at all; retrying them would send a truncated or empty payload.
+that `StagedWriter.Push` uses — cannot be rewound, so **those requests are never retried, on any
+error**: not on rate limits, not on 5xx, and not by a custom retrier, because a second attempt
+would silently send an empty payload rather than fail.
 
 ## Integration Points
 

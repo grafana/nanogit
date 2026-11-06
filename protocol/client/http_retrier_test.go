@@ -648,3 +648,77 @@ func TestRateLimitDetector(t *testing.T) {
 		require.Equal(t, 2, attempts)
 	})
 }
+
+// permissiveRetrier mirrors the FixedDelayRetrier documented in
+// docs/architecture/retry.md: it retries on any error.
+type permissiveRetrier struct{}
+
+func (p *permissiveRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+	return err != nil
+}
+func (p *permissiveRetrier) Wait(ctx context.Context, attempt int) error { return nil }
+func (p *permissiveRetrier) MaxAttempts() int                            { return 3 }
+
+func TestHTTPRetrier_NonReplayableBodyIsNeverRetried(t *testing.T) {
+	t.Parallel()
+
+	payload := bytes.Repeat([]byte("x"), 64)
+
+	// A permissive wrapped retrier must not reach past the replayability guard,
+	// whatever the failure: the retry would send an empty body, not fail.
+	tests := []struct {
+		name   string
+		status int
+		header string
+	}{
+		{name: "rate limit", status: http.StatusTooManyRequests, header: "Retry-After"},
+		{name: "server error", status: http.StatusInternalServerError},
+		{name: "gateway timeout", status: http.StatusGatewayTimeout},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var received [][]byte
+			attempts := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				received = append(received, body)
+				if attempts < 2 {
+					if tt.header != "" {
+						w.Header().Set(tt.header, "0")
+					}
+					w.WriteHeader(tt.status)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			ctx := retry.ToContext(context.Background(), &permissiveRetrier{})
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			// io.NopCloser leaves net/http no GetBody to rewind.
+			_, err = client.UploadPack(ctx, io.NopCloser(bytes.NewReader(payload)))
+			require.Error(t, err)
+			require.Len(t, received, 1, "a body that cannot be rewound must not be retried")
+			require.Equal(t, payload, received[0])
+		})
+	}
+}
+
+func TestHTTPRetrier_NonReplayableBodySkipsDelegation(t *testing.T) {
+	t.Parallel()
+
+	wrapped := newTestRetrier(3)
+	wrapped.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return true }
+	tempRetrier := newTemporaryErrorRetrier(wrapped, false)
+
+	ctx := context.Background()
+	require.False(t, tempRetrier.ShouldRetry(ctx, errors.New("network blip"), 1))
+	require.False(t, tempRetrier.ShouldRetry(ctx, NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, nil), 1))
+	require.Zero(t, wrapped.ShouldRetryCallCount(), "the wrapped policy must not be consulted at all")
+}

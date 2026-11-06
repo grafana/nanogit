@@ -20,7 +20,7 @@ type temporaryErrorRetrier struct {
 	// (backoff timing, max attempts, etc.)
 	wrapped retry.Retrier
 	// replayableBody reports whether the request body can be sent again in
-	// full, which gates retrying rate-limited requests that carry one.
+	// full. When false no retry is safe, so none is attempted.
 	replayableBody bool
 }
 
@@ -47,11 +47,12 @@ func requestReplayable(req *http.Request) bool {
 // If the error is a retryable server unavailable error, returns true (always retry).
 // Otherwise, delegates to the wrapped retrier (which handles network errors and context cancellation).
 //
-// A server unavailable error is retryable if:
-//   - POST operations are not retried on 5xx because request body is consumed
+// A request whose body cannot be replayed is never retried, whatever the error
+// and whatever the wrapped retrier's policy. Otherwise a server unavailable
+// error is retryable if:
+//   - POST operations are not retried on 5xx because the server may already have acted on the body
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
-//   - a rate-limit rejection can be retried for any operation whose body can be
-//     replayed, whatever status carried it
+//   - a rate-limit rejection can be retried for any operation, whatever status carried it
 //
 // Max attempts are handled by retry.Do, not by this method.
 func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -59,15 +60,22 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 		return false
 	}
 
+	// do() re-sends the same request, so a body net/http cannot rewind goes out
+	// truncated or empty on a second attempt — a silent corruption rather than a
+	// failure. No policy, built-in or wrapped, can make that safe, so the guard
+	// sits ahead of every other decision including delegation.
+	if !r.replayableBody {
+		return false
+	}
+
 	// Check for server unavailable errors that are retryable
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) {
 		// Rate limiting is rejected before the body is consumed server-side, so
-		// it is retryable for any method — but only when the body can be
-		// replayed client-side. Keyed off the classification rather than the
-		// status, so a detector-supplied signal on any status is honored.
+		// it is retryable for any method. Keyed off the classification rather
+		// than the status, so a detector-supplied signal on any status is honored.
 		if serverErr.RateLimited {
-			return r.replayableBody
+			return true
 		}
 		if r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode) {
 			return true
