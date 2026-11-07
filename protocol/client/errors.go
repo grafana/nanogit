@@ -3,8 +3,13 @@ package client
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/grafana/nanogit/options"
 )
 
 // ErrServerUnavailable is returned when the Git server is unavailable (HTTP 5xx status codes).
@@ -31,6 +36,14 @@ type ServerUnavailableError struct {
 	Operation string
 	// Underlying is the underlying error
 	Underlying error
+	// RetryAfter is the delay the server asked for via the Retry-After header.
+	// Zero means the server did not ask for a specific delay.
+	RetryAfter time.Duration
+	// RateLimited reports that the server rejected the request for rate
+	// limiting rather than failing it, which makes it retryable for any method
+	// whose body can be replayed. Read it through IsRateLimited, which also
+	// covers a 429 built without this set.
+	RateLimited bool
 }
 
 func (e *ServerUnavailableError) Error() string {
@@ -56,6 +69,20 @@ func (e *ServerUnavailableError) Is(target error) bool {
 	return target == ErrServerUnavailable
 }
 
+// RetryAfterDelay implements retry.RetryAfter so retriers can honor the delay
+// the server asked for instead of their own backoff schedule.
+func (e *ServerUnavailableError) RetryAfterDelay() (time.Duration, bool) {
+	return e.RetryAfter, e.RetryAfter > 0
+}
+
+// IsRateLimited reports whether the server rejected the request for rate
+// limiting rather than failing it. A 429 is one by definition, however the
+// error was built; any other status needs RateLimited set, since nothing in the
+// status alone says so.
+func (e *ServerUnavailableError) IsRateLimited() bool {
+	return e.RateLimited || e.StatusCode == http.StatusTooManyRequests
+}
+
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified operation, status code, and underlying error.
 // Operation can be empty if the HTTP method is unknown.
 func NewServerUnavailableError(operation string, statusCode int, underlying error) *ServerUnavailableError {
@@ -66,23 +93,132 @@ func NewServerUnavailableError(operation string, statusCode int, underlying erro
 	}
 }
 
-// CheckServerUnavailable checks if an HTTP response indicates server unavailability.
-// It checks for:
+// CheckServerUnavailable checks if an HTTP response indicates a transient
+// failure worth retrying. It checks for:
 //   - Server errors (5xx status codes)
 //   - Too Many Requests (429 status code)
+//   - Forbidden (403) carrying rate-limit signals
 //
-// If the response is server unavailable, it returns a ServerUnavailableError.
+// If the response is one of those, it returns a ServerUnavailableError carrying
+// any Retry-After delay the server asked for.
 // The HTTP method is extracted from the response's request.
 // The caller is responsible for closing the response body.
 func CheckServerUnavailable(res *http.Response) error {
-	if res.StatusCode >= 500 || res.StatusCode == http.StatusTooManyRequests {
-		operation := ""
-		if res.Request != nil {
-			operation = res.Request.Method
-		}
-		return NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+	return checkServerUnavailable(res, nil)
+}
+
+// checkServerUnavailable is CheckServerUnavailable with a caller-supplied
+// detector merged into the built-in rules. A detector may classify a response
+// the built-in rules call permanent, and may supply a delay for one they
+// already classified, but may not un-classify one they call transient.
+func checkServerUnavailable(res *http.Response, detect options.RateLimitDetector) error {
+	var signal options.RateLimitSignal
+	if detect != nil {
+		signal = detect(res)
 	}
-	return nil
+
+	if res.StatusCode < 400 && !signal.RateLimited {
+		return nil
+	}
+
+	// Both delays are floors, so the longer wins; shortening one is MaxDelay's
+	// job, not the detector's.
+	retryAfter, hasRetryAfter := parseRetryAfter(res.Header, time.Now())
+	retryAfter = max(retryAfter, signal.RetryAfter)
+
+	rateLimited := signal.RateLimited || isRateLimitStatus(res.StatusCode, res.Header, hasRetryAfter)
+	if !rateLimited && !isServerErrorStatus(res.StatusCode) {
+		return nil
+	}
+
+	operation := ""
+	if res.Request != nil {
+		operation = res.Request.Method
+	}
+	err := NewServerUnavailableError(operation, res.StatusCode, fmt.Errorf("got status code %d: %s", res.StatusCode, res.Status))
+	err.RetryAfter = retryAfter
+	err.RateLimited = rateLimited
+	return err
+}
+
+// rateLimitRemainingSuffix matches the canonicalized name of the header that
+// reports remaining rate-limit budget, under either convention in use: GitHub's
+// x-ratelimit-remaining and the IETF draft's ratelimit-remaining (GitLab).
+// Matching the suffix rather than a fixed list means a provider following
+// either convention needs no change here.
+const rateLimitRemainingSuffix = "Ratelimit-Remaining"
+
+// maxRetryAfterSeconds is the largest Retry-After value representable as a
+// time.Duration. Larger values saturate instead of wrapping negative.
+const maxRetryAfterSeconds = int64(math.MaxInt64 / int64(time.Second))
+
+// isServerErrorStatus reports whether a status is a server-side failure, which
+// is transient but not rate limiting.
+func isServerErrorStatus(statusCode int) bool {
+	return statusCode >= 500
+}
+
+// isRateLimitStatus reports whether a response is a rate-limit rejection under
+// the signalling nanogit recognises without a detector.
+func isRateLimitStatus(statusCode int, header http.Header, hasRetryAfter bool) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusForbidden:
+		// GitHub reports secondary rate limits as 403; only the rate-limit
+		// signals tell those apart from a real permission denial.
+		return hasRetryAfter || rateLimitExhausted(header)
+	default:
+		return false
+	}
+}
+
+// rateLimitExhausted reports whether the response says the rate-limit budget is spent.
+func rateLimitExhausted(header http.Header) bool {
+	for name, values := range header {
+		if !strings.HasSuffix(name, rateLimitRemainingSuffix) {
+			continue
+		}
+		for _, value := range values {
+			if strings.TrimSpace(value) == "0" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// parseRetryAfter reads the Retry-After header in either RFC 9110 form: a delay
+// in seconds, or an HTTP date. The bool reports whether the header was present
+// and understood, which is a retry signal on its own even when the delay is zero.
+func parseRetryAfter(header http.Header, now time.Time) (time.Duration, bool) {
+	value := strings.TrimSpace(header.Get("Retry-After"))
+	if value == "" {
+		return 0, false
+	}
+
+	// On ErrRange ParseInt still yields the nearest bound, which is exactly the
+	// saturation the switch below wants.
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil || errors.Is(err, strconv.ErrRange) {
+		switch {
+		case seconds <= 0:
+			return 0, true
+		case seconds > maxRetryAfterSeconds:
+			return time.Duration(math.MaxInt64), true
+		default:
+			return time.Duration(seconds) * time.Second, true
+		}
+	}
+
+	// Time.Sub already saturates at the Duration bounds.
+	if date, err := http.ParseTime(value); err == nil {
+		if delay := date.Sub(now); delay > 0 {
+			return delay, true
+		}
+		return 0, true
+	}
+
+	return 0, false
 }
 
 // UnauthorizedError provides structured information about an authentication failure.
@@ -234,6 +370,8 @@ func NewRepositoryNotFoundError(operation, endpoint string, underlying error) *R
 //
 // If the response is a recognized client error, it returns the appropriate error type.
 // For other 4xx errors, it returns nil (caller should handle generically).
+// Rate-limited 403s are reported by CheckServerUnavailable instead, so callers
+// run that check first and never reach this one for them.
 // The HTTP method and endpoint are extracted from the response's request.
 // The caller is responsible for closing the response body.
 func CheckHTTPClientError(res *http.Response) error {

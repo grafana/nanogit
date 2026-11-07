@@ -59,6 +59,7 @@ The `ExponentialBackoffRetrier` provides configurable exponential backoff retry 
 - **Jitter**: Random jitter prevents thundering herd problems
 - **Configurable attempts**: Set maximum number of retry attempts
 - **Configurable delays**: Set initial delay, maximum delay, and multiplier
+- **Retry-After aware**: Honors a server-requested delay in place of the backoff schedule
 - **Context-aware**: Respects context cancellation and deadlines
 
 #### Default Configuration
@@ -118,6 +119,75 @@ retrier := retry.NewExponentialBackoffRetrier().
 ctx = retry.ToContext(ctx, retrier)
 ```
 
+### Retry-After
+
+When a response carries a `Retry-After` header, the `ExponentialBackoffRetrier` waits for the
+delay the server asked for instead of its own backoff schedule. Both RFC 9110 forms are
+understood: a delay in seconds, and an HTTP date. A value too large for a `time.Duration`
+saturates rather than wrapping, so it is still bounded by `MaxDelay`.
+
+Because `Retry-After` is a floor rather than a target, jitter is added on top of it rather than
+spread around it. The result is still capped at `MaxDelay`, so a large or hostile value cannot
+stall the caller past its configured ceiling:
+
+```go
+retrier := retry.NewExponentialBackoffRetrier().
+    WithMaxAttempts(5).
+    WithInitialDelay(2 * time.Second).
+    WithMaxDelay(60 * time.Second) // Also caps how long a Retry-After can hold the caller
+```
+
+Custom retriers opt in by implementing `WaitAfter` (see below). Those that only implement `Wait`
+keep their own schedule and ignore `Retry-After`.
+
+### Provider rate-limit signalling
+
+Rate limiting reaches the retrier the same way for every provider: the response is classified
+as a rate-limit rejection, and the retry is attempted for any method whose body can be replayed.
+What differs between providers is only *how they say it*, and the built-in rules cover the cases
+in use today:
+
+| Provider | Status | Delay | Needs configuration |
+| --- | --- | --- | --- |
+| GitHub | 429, and 403 for secondary limits | `Retry-After`, `x-ratelimit-remaining` | No |
+| GitLab | 429 | `Retry-After` on throttled responses | No |
+| Bitbucket Cloud | 429 | `Retry-After` when present, otherwise backoff | No |
+| Self-hosted (Gitea, Forgejo, …) | 429 if rate limited at all | `Retry-After` if sent | No |
+
+A provider needs no header at all to be retried: **429 is retried whether or not any header is
+present**, falling back to the backoff schedule for pacing. The headers only refine *when* the
+retry happens, and the 403 case exists solely because GitHub reports secondary limits that way.
+
+For a provider that signals differently — a reset timestamp instead of a delay, a vendor header,
+or a status nanogit treats as permanent — supply a detector instead of waiting for a nanogit
+release:
+
+```go
+client, err := nanogit.NewHTTPClient(repo,
+    options.WithRateLimitDetector(func(res *http.Response) options.RateLimitSignal {
+        if res.StatusCode != http.StatusTooManyRequests {
+            return options.RateLimitSignal{}
+        }
+        epoch, err := strconv.ParseInt(res.Header.Get("X-RateLimit-Reset"), 10, 64)
+        if err != nil {
+            return options.RateLimitSignal{RateLimited: true}
+        }
+        return options.RateLimitSignal{
+            RateLimited: true,
+            RetryAfter:  time.Until(time.Unix(epoch, 0)),
+        }
+    }))
+```
+
+The detector is merged with the built-in rules rather than replacing them. It can classify a
+response they call permanent and supply a delay for one they already classified, but it cannot
+un-classify a response they call transient, and it does not override the replayable-body rule —
+a request whose body cannot be rewound is still never retried.
+
+When the response also carries a `Retry-After` header, the **longer** of the two delays is used.
+Both are floors, so a detector cannot shorten the wait a server asked for; capping it is the
+retrier's `MaxDelay` to decide.
+
 ## Custom Retriers
 
 You can implement custom retry logic by implementing the `Retrier` interface:
@@ -138,6 +208,26 @@ type Retrier interface {
     MaxAttempts() int
 }
 ```
+
+To honor server-requested delays, also implement the optional `ErrorAwareWaiter` extension.
+`Do` calls `WaitAfter` in preference to `Wait` whenever the retrier provides it:
+
+```go
+type ErrorAwareWaiter interface {
+    WaitAfter(ctx context.Context, attempt int, err error) error
+}
+
+func (r *MyRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+    if delay, ok := retry.RetryAfterFrom(err); ok {
+        return r.sleep(ctx, delay)
+    }
+    return r.Wait(ctx, attempt)
+}
+```
+
+A custom retrier cannot retry a request whose body `net/http` cannot rewind. That guard sits
+ahead of delegation, so a permissive `ShouldRetry` like the one below cannot cause a second
+attempt to go out with a truncated or empty payload.
 
 ### Example: Fixed Delay Retrier
 
@@ -243,13 +333,18 @@ The retry mechanism automatically retries on:
   > **Note:** "Connection refused" errors are not retried by the default implementation unless they are also timeout errors.
 - **5xx server errors**: Server unavailable errors (for GET and DELETE requests only)
 - **429 Too Many Requests**: Rate limiting errors (can be retried for all request types)
+- **403 secondary rate limits**: Only when the response carries `Retry-After` or a
+  `*ratelimit-remaining: 0` header — GitHub's `x-ratelimit-remaining` and GitLab's IETF-draft
+  `ratelimit-remaining` both match. A 403 without those signals is a permission denial and is
+  not retried. Header lookup is case-insensitive, so the lowercase spellings providers send on
+  the wire match.
 - **Temporary errors**: Any error marked as temporary by the error type
 
 ### What Does NOT Get Retried
 
 The retry mechanism does **not** retry on:
 
-- **4xx client errors**: Bad requests (400), authentication failures (401), not found (404), etc. (except 429)
+- **4xx client errors**: Bad requests (400), authentication failures (401), permission denials (403), not found (404), etc. (except 429 and rate-limited 403s)
 - **Context cancellation**: When the context is cancelled or deadline exceeded
 - **POST request 5xx errors**: POST requests cannot retry 5xx errors because the request body is consumed (429 can be retried)
 
@@ -264,6 +359,7 @@ GET requests can retry on network errors, 5xx status codes, and 429 (Too Many Re
 // - Network errors (connection refused, timeouts)
 // - 5xx server errors (500, 502, 503, 504)
 // - 429 Too Many Requests (rate limiting)
+// - 403 carrying rate-limit signals (secondary rate limiting)
 // Does NOT retry on:
 // - Other 4xx client errors
 // - Context cancellation
@@ -277,6 +373,8 @@ POST requests can retry on network errors and 429 (Too Many Requests), but not o
 // Retries on:
 // - Network errors before response (connection refused, timeouts)
 // - 429 Too Many Requests (rate limiting - can be retried even for POST)
+// - 403 carrying rate-limit signals (secondary rate limiting)
+// Both only when the request body can be rewound (see below).
 // Does NOT retry on:
 // - 5xx server errors (request body is consumed)
 // - Other 4xx client errors
@@ -288,6 +386,13 @@ POST requests can retry on network errors and 429 (Too Many Requests), but not o
 When an HTTP POST request is made with an `io.Reader` body, the HTTP client reads from the reader to send the request body. Once `client.Do(req)` completes (even if it returns a 5xx error), the `io.Reader` has been consumed and cannot be re-read. To retry, we would need to recreate the request with a fresh body, but the original `io.Reader` is already consumed and most `io.Reader` implementations (like `io.Pipe`) cannot be reset. This limitation applies to streaming request bodies, which is how `UploadPack` and `ReceivePack` operate.
 
 **Note:** 429 (Too Many Requests) can be retried even for POST requests because rate limiting is typically enforced before the server consumes the request body. In most cases, the server responds with 429 before reading or processing the body, so the body remains unconsumed and can be safely re-sent on retry. This is not due to any special handling of the request body, but rather the timing of the rate limiting response.
+
+This still requires the body to be replayable on the *client* side. A body backed by a
+`*bytes.Reader` (`UploadPack`, and `ReceivePack` for ref create/update/delete) gives `net/http`
+a `GetBody` to rewind, so the retry carries the full payload. A streamed body — the `io.Pipe`
+that `StagedWriter.Push` uses — cannot be rewound, so **those requests are never retried, on any
+error**: not on rate limits, not on 5xx, and not by a custom retrier, because a second attempt
+would silently send an empty payload rather than fail.
 
 ## Integration Points
 
@@ -365,10 +470,11 @@ The retry mechanism respects context cancellation:
 ## Best Practices
 
 1. **Use retries for transient failures**: Network errors, temporary server issues
-2. **Don't retry on client errors**: 4xx errors indicate client-side issues that won't be fixed by retrying
-3. **Set appropriate timeouts**: Use context timeouts to prevent indefinite retries
-4. **Monitor retry patterns**: Log retry attempts to identify persistent issues
-5. **Configure per operation**: Different operations may need different retry strategies
+2. **Don't retry on client errors**: 4xx errors indicate client-side issues that won't be fixed by retrying, with rate limiting (429, and 403 with rate-limit signals) as the exception
+3. **Respect the server's pacing**: let `Retry-After` override your backoff rather than racing it
+4. **Set appropriate timeouts**: Use context timeouts to prevent indefinite retries
+5. **Monitor retry patterns**: Log retry attempts to identify persistent issues
+6. **Configure per operation**: Different operations may need different retry strategies
 
 ## Migration Notes
 
