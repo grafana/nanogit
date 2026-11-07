@@ -41,7 +41,8 @@ type ServerUnavailableError struct {
 	RetryAfter time.Duration
 	// RateLimited reports that the server rejected the request for rate
 	// limiting rather than failing it, which makes it retryable for any method
-	// whose body can be replayed.
+	// whose body can be replayed. Read it through IsRateLimited, which also
+	// covers a 429 built without this set.
 	RateLimited bool
 }
 
@@ -72,6 +73,14 @@ func (e *ServerUnavailableError) Is(target error) bool {
 // the server asked for instead of their own backoff schedule.
 func (e *ServerUnavailableError) RetryAfterDelay() (time.Duration, bool) {
 	return e.RetryAfter, e.RetryAfter > 0
+}
+
+// IsRateLimited reports whether the server rejected the request for rate
+// limiting rather than failing it. A 429 is one by definition, however the
+// error was built; any other status needs RateLimited set, since nothing in the
+// status alone says so.
+func (e *ServerUnavailableError) IsRateLimited() bool {
+	return e.RateLimited || e.StatusCode == http.StatusTooManyRequests
 }
 
 // NewServerUnavailableError creates a new ServerUnavailableError with the specified operation, status code, and underlying error.
@@ -112,10 +121,10 @@ func checkServerUnavailable(res *http.Response, detect options.RateLimitDetector
 		return nil
 	}
 
+	// Both delays are floors, so the longer wins; shortening one is MaxDelay's
+	// job, not the detector's.
 	retryAfter, hasRetryAfter := parseRetryAfter(res.Header, time.Now())
-	if signal.RetryAfter > 0 {
-		retryAfter = signal.RetryAfter
-	}
+	retryAfter = max(retryAfter, signal.RetryAfter)
 
 	rateLimited := signal.RateLimited || isRateLimitStatus(res.StatusCode, res.Header, hasRetryAfter)
 	if !rateLimited && !isServerErrorStatus(res.StatusCode) {

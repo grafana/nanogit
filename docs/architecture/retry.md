@@ -182,8 +182,11 @@ client, err := nanogit.NewHTTPClient(repo,
 The detector is merged with the built-in rules rather than replacing them. It can classify a
 response they call permanent and supply a delay for one they already classified, but it cannot
 un-classify a response they call transient, and it does not override the replayable-body rule —
-a request whose body cannot be rewound is still never retried. `RetryAfter` is still capped at
-the retrier's `MaxDelay`.
+a request whose body cannot be rewound is still never retried.
+
+When the response also carries a `Retry-After` header, the **longer** of the two delays is used.
+Both are floors, so a detector cannot shorten the wait a server asked for; capping it is the
+retrier's `MaxDelay` to decide.
 
 ## Custom Retriers
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -578,6 +579,57 @@ func TestParseRetryAfter(t *testing.T) {
 			delay, ok := parseRetryAfter(header, now)
 			require.Equal(t, tt.wantOK, ok)
 			require.Equal(t, tt.wantDelay, delay)
+		})
+	}
+}
+
+func TestCheckServerUnavailable_DetectorDelay(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		header         http.Header
+		signal         options.RateLimitSignal
+		wantRetryAfter time.Duration
+	}{
+		{
+			name:           "detector delay is used when the header has none",
+			signal:         options.RateLimitSignal{RateLimited: true, RetryAfter: 5 * time.Second},
+			wantRetryAfter: 5 * time.Second,
+		},
+		{
+			name:           "header delay is kept when it is the longer floor",
+			header:         http.Header{"Retry-After": []string{"120"}},
+			signal:         options.RateLimitSignal{RateLimited: true, RetryAfter: 5 * time.Second},
+			wantRetryAfter: 2 * time.Minute,
+		},
+		{
+			name:           "detector delay is used when it is the longer floor",
+			header:         http.Header{"Retry-After": []string{"5"}},
+			signal:         options.RateLimitSignal{RateLimited: true, RetryAfter: 2 * time.Minute},
+			wantRetryAfter: 2 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			res := &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     tt.header,
+				Request:    &http.Request{Method: http.MethodGet},
+			}
+			if res.Header == nil {
+				res.Header = http.Header{}
+			}
+
+			signal := tt.signal
+			err := checkServerUnavailable(res, func(*http.Response) options.RateLimitSignal { return signal })
+
+			var serverErr *ServerUnavailableError
+			require.ErrorAs(t, err, &serverErr)
+			require.Equal(t, tt.wantRetryAfter, serverErr.RetryAfter)
+			require.True(t, serverErr.IsRateLimited())
 		})
 	}
 }

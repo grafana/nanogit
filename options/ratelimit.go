@@ -11,7 +11,9 @@ type RateLimitSignal struct {
 	// rejection rather than a permanent failure, so the request may be retried.
 	RateLimited bool
 	// RetryAfter is how long the server asked the client to wait. Zero leaves
-	// the retrier's own backoff schedule in charge.
+	// the retrier's own backoff schedule in charge. When the response also
+	// carries a Retry-After header, the longer of the two is used: both are
+	// floors, and shortening a wait is the retrier's MaxDelay to decide.
 	RetryAfter time.Duration
 }
 

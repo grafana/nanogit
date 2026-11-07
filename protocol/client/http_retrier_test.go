@@ -722,3 +722,29 @@ func TestHTTPRetrier_NonReplayableBodySkipsDelegation(t *testing.T) {
 	require.False(t, tempRetrier.ShouldRetry(ctx, NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, nil), 1))
 	require.Zero(t, wrapped.ShouldRetryCallCount(), "the wrapped policy must not be consulted at all")
 }
+
+func TestHTTPRetrier_RateLimitedWithStrictWrappedRetrier(t *testing.T) {
+	t.Parallel()
+
+	// A strict wrapped retrier must not be what makes rate limits retryable:
+	// ExponentialBackoffRetrier declines everything but network timeouts, so a
+	// permissive one would mask a regression here.
+	tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), true)
+	ctx := context.Background()
+
+	t.Run("429 built by the constructor is retried", func(t *testing.T) {
+		err := NewServerUnavailableError(http.MethodPost, http.StatusTooManyRequests, errors.New("rate limited"))
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 1))
+	})
+
+	t.Run("429 built as a struct literal is retried", func(t *testing.T) {
+		err := &ServerUnavailableError{Operation: http.MethodGet, StatusCode: http.StatusTooManyRequests}
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 1))
+	})
+
+	t.Run("403 without the flag stays a permission denial", func(t *testing.T) {
+		err := NewServerUnavailableError(http.MethodGet, http.StatusForbidden, errors.New("forbidden"))
+		require.False(t, tempRetrier.ShouldRetry(ctx, err, 1),
+			"only the classification, not the status, makes a 403 retryable")
+	})
+}

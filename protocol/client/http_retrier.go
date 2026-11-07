@@ -74,7 +74,7 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 		// Rate limiting is rejected before the body is consumed server-side, so
 		// it is retryable for any method. Keyed off the classification rather
 		// than the status, so a detector-supplied signal on any status is honored.
-		if serverErr.RateLimited {
+		if serverErr.IsRateLimited() {
 			return true
 		}
 		if r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode) {
