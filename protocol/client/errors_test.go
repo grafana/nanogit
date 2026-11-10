@@ -3,11 +3,14 @@ package client
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
+	"github.com/grafana/nanogit/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -433,4 +436,200 @@ func TestCheckHTTPClientError_EdgeCases(t *testing.T) {
 		// Error message should use "unknown" for empty endpoint
 		assert.Contains(t, err.Error(), "endpoint unknown")
 	})
+}
+
+func TestCheckServerUnavailable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		statusCode     int
+		header         http.Header
+		wantErr        bool
+		wantRetryAfter time.Duration
+	}{
+		{
+			name:       "200 OK",
+			statusCode: http.StatusOK,
+		},
+		{
+			name:       "500 without Retry-After",
+			statusCode: http.StatusInternalServerError,
+			wantErr:    true,
+		},
+		{
+			name:           "503 with Retry-After in seconds",
+			statusCode:     http.StatusServiceUnavailable,
+			header:         http.Header{"Retry-After": []string{"120"}},
+			wantErr:        true,
+			wantRetryAfter: 2 * time.Minute,
+		},
+		{
+			name:           "429 with Retry-After in seconds",
+			statusCode:     http.StatusTooManyRequests,
+			header:         http.Header{"Retry-After": []string{"30"}},
+			wantErr:        true,
+			wantRetryAfter: 30 * time.Second,
+		},
+		{
+			name:       "429 with unparseable Retry-After",
+			statusCode: http.StatusTooManyRequests,
+			header:     http.Header{"Retry-After": []string{"soon"}},
+			wantErr:    true,
+		},
+		{
+			name:           "403 with Retry-After is a secondary rate limit",
+			statusCode:     http.StatusForbidden,
+			header:         http.Header{"Retry-After": []string{"60"}},
+			wantErr:        true,
+			wantRetryAfter: time.Minute,
+		},
+		{
+			name:       "403 with exhausted rate limit budget",
+			statusCode: http.StatusForbidden,
+			header:     http.Header{"X-Ratelimit-Remaining": []string{"0"}},
+			wantErr:    true,
+		},
+		{
+			name:       "403 with exhausted GitLab-spelled rate limit budget",
+			statusCode: http.StatusForbidden,
+			header:     http.Header{"Ratelimit-Remaining": []string{"0"}},
+			wantErr:    true,
+		},
+		{
+			name:       "403 with remaining rate limit budget is a permission denial",
+			statusCode: http.StatusForbidden,
+			header:     http.Header{"X-Ratelimit-Remaining": []string{"4999"}},
+		},
+		{
+			name:       "403 without rate-limit signals is a permission denial",
+			statusCode: http.StatusForbidden,
+		},
+		{
+			name:       "404 with Retry-After stays permanent",
+			statusCode: http.StatusNotFound,
+			header:     http.Header{"Retry-After": []string{"60"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			res := &http.Response{
+				StatusCode: tt.statusCode,
+				Header:     tt.header,
+				Request:    &http.Request{Method: http.MethodGet},
+			}
+			if res.Header == nil {
+				res.Header = http.Header{}
+			}
+
+			err := CheckServerUnavailable(res)
+			if !tt.wantErr {
+				require.NoError(t, err)
+				return
+			}
+
+			require.ErrorIs(t, err, ErrServerUnavailable)
+
+			var serverErr *ServerUnavailableError
+			require.ErrorAs(t, err, &serverErr)
+			require.Equal(t, tt.statusCode, serverErr.StatusCode)
+			require.Equal(t, tt.wantRetryAfter, serverErr.RetryAfter)
+
+			delay, ok := serverErr.RetryAfterDelay()
+			require.Equal(t, tt.wantRetryAfter > 0, ok)
+			require.Equal(t, tt.wantRetryAfter, delay)
+		})
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		value     string
+		wantDelay time.Duration
+		wantOK    bool
+	}{
+		{name: "absent"},
+		{name: "seconds", value: "30", wantDelay: 30 * time.Second, wantOK: true},
+		{name: "surrounding whitespace", value: "  30  ", wantDelay: 30 * time.Second, wantOK: true},
+		{name: "zero seconds", value: "0", wantOK: true},
+		{name: "negative seconds", value: "-5", wantOK: true},
+		{name: "future http date", value: "Wed, 04 Nov 2026 12:01:00 GMT", wantDelay: time.Minute, wantOK: true},
+		{name: "past http date", value: "Wed, 04 Nov 2026 11:59:00 GMT", wantOK: true},
+		{name: "unparseable", value: "tomorrow"},
+		{name: "largest representable seconds", value: "9223372036", wantDelay: 9223372036 * time.Second, wantOK: true},
+		{name: "seconds beyond duration range saturate", value: "9223372037", wantDelay: math.MaxInt64, wantOK: true},
+		{name: "seconds beyond int64 range saturate", value: "99999999999999999999", wantDelay: math.MaxInt64, wantOK: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			header := http.Header{}
+			if tt.value != "" {
+				header.Set("Retry-After", tt.value)
+			}
+
+			delay, ok := parseRetryAfter(header, now)
+			require.Equal(t, tt.wantOK, ok)
+			require.Equal(t, tt.wantDelay, delay)
+		})
+	}
+}
+
+func TestCheckServerUnavailable_DetectorDelay(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		header         http.Header
+		signal         options.RateLimitSignal
+		wantRetryAfter time.Duration
+	}{
+		{
+			name:           "detector delay is used when the header has none",
+			signal:         options.RateLimitSignal{RateLimited: true, RetryAfter: 5 * time.Second},
+			wantRetryAfter: 5 * time.Second,
+		},
+		{
+			name:           "header delay is kept when it is the longer floor",
+			header:         http.Header{"Retry-After": []string{"120"}},
+			signal:         options.RateLimitSignal{RateLimited: true, RetryAfter: 5 * time.Second},
+			wantRetryAfter: 2 * time.Minute,
+		},
+		{
+			name:           "detector delay is used when it is the longer floor",
+			header:         http.Header{"Retry-After": []string{"5"}},
+			signal:         options.RateLimitSignal{RateLimited: true, RetryAfter: 2 * time.Minute},
+			wantRetryAfter: 2 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			res := &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     tt.header,
+				Request:    &http.Request{Method: http.MethodGet},
+			}
+			if res.Header == nil {
+				res.Header = http.Header{}
+			}
+
+			signal := tt.signal
+			err := checkServerUnavailable(res, func(*http.Response) options.RateLimitSignal { return signal })
+
+			var serverErr *ServerUnavailableError
+			require.ErrorAs(t, err, &serverErr)
+			require.Equal(t, tt.wantRetryAfter, serverErr.RetryAfter)
+			require.True(t, serverErr.IsRateLimited())
+		})
+	}
 }

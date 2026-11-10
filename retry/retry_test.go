@@ -304,3 +304,50 @@ func TestDo_NegativeMaxAttempts(t *testing.T) {
 	require.Equal(t, "", result)
 	require.LessOrEqual(t, attempts, 3) // Should use default of 3
 }
+
+// errorAwareTestRetrier records the errors Do hands to WaitAfter.
+type errorAwareTestRetrier struct {
+	waitErrors []error
+	waitCalls  int
+}
+
+func (r *errorAwareTestRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+	return err != nil
+}
+
+func (r *errorAwareTestRetrier) Wait(ctx context.Context, attempt int) error {
+	r.waitCalls++
+	return nil
+}
+
+func (r *errorAwareTestRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+	r.waitErrors = append(r.waitErrors, err)
+	return nil
+}
+
+func (r *errorAwareTestRetrier) MaxAttempts() int { return 3 }
+
+func TestDo_PrefersErrorAwareWait(t *testing.T) {
+	t.Parallel()
+
+	retrier := &errorAwareTestRetrier{}
+	ctx := ToContext(context.Background(), retrier)
+
+	first := errors.New("first failure")
+	second := errors.New("second failure")
+	errs := []error{first, second}
+
+	attempts := 0
+	result, err := Do(ctx, func() (string, error) {
+		attempts++
+		if attempts <= len(errs) {
+			return "", errs[attempts-1]
+		}
+		return "success", nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "success", result)
+	require.Equal(t, []error{first, second}, retrier.waitErrors)
+	require.Zero(t, retrier.waitCalls, "Wait should not be used when WaitAfter is available")
+}

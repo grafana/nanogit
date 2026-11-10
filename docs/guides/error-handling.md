@@ -11,9 +11,9 @@ The root package exports sentinels for the common categories:
 | `ErrObjectNotFound` | An object (blob, tree, commit, **or ref/path** — see below) doesn't exist |
 | `ErrObjectAlreadyExists` | Creating something that already exists (e.g. `CreateBlob` on an existing path, `CreateRef` on an existing ref) |
 | `ErrUnauthorized` | Missing or invalid credentials (HTTP 401) |
-| `ErrPermissionDenied` | Valid credentials, insufficient rights (HTTP 403) |
+| `ErrPermissionDenied` | Valid credentials, insufficient rights (HTTP 403 without rate-limit signals) |
 | `ErrRepositoryNotFound` | The repository itself doesn't exist (HTTP 404) |
-| `ErrServerUnavailable` | The server failed or is unreachable (5xx, network) |
+| `ErrServerUnavailable` | The server failed, is unreachable, or is rate limiting (5xx, network, 429, rate-limited 403) |
 | `ErrNothingToCommit` / `ErrNothingToPush` | Writer misuse: nothing staged / nothing committed |
 | `ErrWriterCleanedUp` | Using a `StagedWriter` after `Cleanup` |
 | `ErrUnexpectedObjectType` / `ErrUnexpectedObjectCount` | Protocol-level surprises in the server's response |
@@ -63,5 +63,6 @@ If you cap response sizes with `options.WithLimits`, operations that exceed a ca
 ## Practical guidance
 
 - **Wrap, don't replace**: `fmt.Errorf("sync dashboards for %s: %w", tenant, err)` keeps `errors.Is`/`errors.As` working up the stack.
-- **Retryability**: `ErrServerUnavailable` and timeouts are the transient category — the [retry mechanism](../architecture/retry.md) already handles them for GET/DELETE and 429s if you enable it; treat 4xx categories as permanent.
+- **Retryability**: `ErrServerUnavailable` and timeouts are the transient category — the [retry mechanism](../architecture/retry.md) already handles them for GET/DELETE, 429s and rate-limited 403s if you enable it; treat the other 4xx categories as permanent.
+- **Rate limits**: a 403 carrying `Retry-After` or a `*ratelimit-remaining: 0` header is a secondary rate limit, so it surfaces as `ErrServerUnavailable` rather than `ErrPermissionDenied`. `*client.ServerUnavailableError` reports it via `RateLimited` and exposes the server's requested delay in `RetryAfter`. For a provider that signals differently, see `options.WithRateLimitDetector`.
 - **Writer flows**: after a failed `Push`, the writer keeps its staged state — you can retry `Push` directly (see [Writing](writing.md#errors-retries-and-cleanup)).

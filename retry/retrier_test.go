@@ -3,6 +3,8 @@ package retry
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -290,3 +292,126 @@ type temporaryError struct{}
 func (e *temporaryError) Error() string   { return "temporary" }
 func (e *temporaryError) Timeout() bool   { return false }
 func (e *temporaryError) Temporary() bool { return true }
+
+type retryAfterError struct {
+	delay time.Duration
+}
+
+func (e *retryAfterError) Error() string { return "retry after " + e.delay.String() }
+
+func (e *retryAfterError) RetryAfterDelay() (time.Duration, bool) {
+	return e.delay, e.delay > 0
+}
+
+func TestExponentialBackoffRetrier_WaitAfter(t *testing.T) {
+	t.Parallel()
+
+	t.Run("honors a server-requested delay instead of the backoff schedule", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier().
+			WithInitialDelay(time.Millisecond).
+			WithMaxDelay(time.Second).
+			WithoutJitter()
+
+		start := time.Now()
+		err := retrier.WaitAfter(context.Background(), 1, &retryAfterError{delay: 50 * time.Millisecond})
+		duration := time.Since(start)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, duration, 50*time.Millisecond)
+		require.Less(t, duration, 250*time.Millisecond)
+	})
+
+	t.Run("caps a server-requested delay at max delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier().
+			WithInitialDelay(time.Millisecond).
+			WithMaxDelay(20 * time.Millisecond).
+			WithoutJitter()
+
+		start := time.Now()
+		err := retrier.WaitAfter(context.Background(), 1, &retryAfterError{delay: time.Hour})
+		duration := time.Since(start)
+		require.NoError(t, err)
+		require.Less(t, duration, 500*time.Millisecond)
+	})
+
+	t.Run("adds jitter on top of a server-requested delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier().
+			WithMaxDelay(time.Second).
+			WithJitter()
+
+		start := time.Now()
+		err := retrier.WaitAfter(context.Background(), 1, &retryAfterError{delay: 50 * time.Millisecond})
+		duration := time.Since(start)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, duration, 50*time.Millisecond)
+	})
+
+	t.Run("falls back to backoff when the error carries no delay", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier().
+			WithInitialDelay(30 * time.Millisecond).
+			WithMaxDelay(time.Second).
+			WithoutJitter()
+
+		start := time.Now()
+		err := retrier.WaitAfter(context.Background(), 1, errors.New("boom"))
+		duration := time.Since(start)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, duration, 30*time.Millisecond)
+	})
+
+	t.Run("respects context cancellation", func(t *testing.T) {
+		retrier := NewExponentialBackoffRetrier().WithMaxDelay(time.Minute)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		err := retrier.WaitAfter(ctx, 1, &retryAfterError{delay: 30 * time.Second})
+		require.ErrorIs(t, err, context.Canceled)
+	})
+}
+
+func TestRetryAfterFrom(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reads the delay from a wrapped error", func(t *testing.T) {
+		err := fmt.Errorf("fetching refs: %w", &retryAfterError{delay: 5 * time.Second})
+
+		delay, ok := RetryAfterFrom(err)
+		require.True(t, ok)
+		require.Equal(t, 5*time.Second, delay)
+	})
+
+	t.Run("reports no delay for unrelated errors", func(t *testing.T) {
+		delay, ok := RetryAfterFrom(errors.New("boom"))
+		require.False(t, ok)
+		require.Zero(t, delay)
+	})
+
+	t.Run("reports no delay for a nil error", func(t *testing.T) {
+		delay, ok := RetryAfterFrom(nil)
+		require.False(t, ok)
+		require.Zero(t, delay)
+	})
+}
+
+func TestExponentialBackoffRetrier_WaitAfterOverflow(t *testing.T) {
+	t.Parallel()
+
+	// A Retry-After near the Duration limit overflows negative if jitter is
+	// added before the cap, which skips the wait instead of applying MaxDelay.
+	for _, delay := range []time.Duration{math.MaxInt64, math.MaxInt64 - 1000, 9223372036 * time.Second} {
+		t.Run(delay.String(), func(t *testing.T) {
+			t.Parallel()
+			retrier := NewExponentialBackoffRetrier().
+				WithInitialDelay(time.Hour).
+				WithMaxDelay(40 * time.Millisecond).
+				WithJitter()
+
+			start := time.Now()
+			err := retrier.WaitAfter(context.Background(), 1, &retryAfterError{delay: delay})
+			elapsed := time.Since(start)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, elapsed, 40*time.Millisecond, "must still wait MaxDelay, not return immediately")
+			require.Less(t, elapsed, time.Second)
+		})
+	}
+}

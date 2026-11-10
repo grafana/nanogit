@@ -48,6 +48,9 @@ type Options struct {
 	// leaves the wire caps disabled but keeps decoded-object protection on; see
 	// Limits.
 	Limits Limits
+	// RateLimitDetector reads provider-specific rate-limit signalling off a
+	// response, supplementing nanogit's built-in rules. Nil uses those alone.
+	RateLimitDetector RateLimitDetector
 	// NegotiateCapabilities, when true, makes the client fetch the server's
 	// receive-pack capability advertisement once per client lifetime and
 	// advertise the intersection with its desired set on subsequent ref
