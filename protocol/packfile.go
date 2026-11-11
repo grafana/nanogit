@@ -270,6 +270,9 @@ func (e *PackfileObject) parseTree() error {
 			return eofIsUnexpected(err)
 		}
 		name = name[:len(name)-1] // ReadString includes delim
+		if err := validateTreeEntryName(name); err != nil {
+			return err
+		}
 
 		var hash [20]byte
 		if _, err := io.ReadFull(reader, hash[:]); err != nil {
@@ -285,6 +288,26 @@ func (e *PackfileObject) parseTree() error {
 		})
 	}
 
+	return nil
+}
+
+// ErrInvalidTreeEntryName is returned when a tree object contains an entry
+// whose name is not a single, safe path component. Such entries are rejected
+// because joining them onto a parent path could escape the repository root
+// (e.g. "..") or shadow repository metadata (e.g. ".git").
+const ErrInvalidTreeEntryName = strError("invalid tree entry name")
+
+// validateTreeEntryName reports whether name is acceptable as a tree entry.
+// It mirrors the portable subset of Git's own verify_path / fsck checks:
+// the name must be non-empty, must not be "." or "..", must not contain a
+// path separator, and must not be ".git" in any letter case.
+func validateTreeEntryName(name string) error {
+	switch {
+	case name == "", name == ".", name == "..",
+		strings.ContainsRune(name, '/'),
+		strings.EqualFold(name, ".git"):
+		return fmt.Errorf("%w: %q", ErrInvalidTreeEntryName, name)
+	}
 	return nil
 }
 
