@@ -74,8 +74,8 @@ var (
 
 	// ErrInvalidTreeEntryName is returned when a tree received from the server
 	// contains an entry name that is not a single, safe path component (for
-	// example "", ".", "..", a name containing "/", or ".git"), or when a path
-	// would resolve outside the destination directory during Clone.
+	// example "", ".", "..", a name containing "/", or ".git"), or when Clone
+	// is given a path that is not lexically local to the destination directory.
 	// This error should only be used with errors.Is() for comparison, not for type assertions.
 	// It is re-exported from the protocol package.
 	ErrInvalidTreeEntryName error = protocol.ErrInvalidTreeEntryName

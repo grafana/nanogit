@@ -90,9 +90,13 @@ type CloneResult struct {
 //
 // All writes are confined to opts.Path. Tree entries whose names are not a
 // single, safe path component (for example "..", names containing "/", or
-// ".git"), or whose paths would resolve outside opts.Path, cause Clone to fail
-// with ErrInvalidTreeEntryName before any file is written. Existing symlinks
-// inside opts.Path are not followed outside of it.
+// ".git"), or whose paths are not lexically local to opts.Path, cause Clone
+// to fail with ErrInvalidTreeEntryName before any file is written.
+//
+// If opts.Path already exists and contains symlinks, Clone does not follow
+// them outside opts.Path: such a write fails with a filesystem error (not
+// ErrInvalidTreeEntryName). As with any other filesystem error during Clone,
+// files written before the failure are left in place.
 //
 // Parameters:
 //   - ctx: Context for the operation
@@ -275,7 +279,9 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 	}
 
 	// All writes go through an os.Root so they cannot escape basePath, even
-	// via ".." components or pre-existing symlinks.
+	// via pre-existing symlinks the lexical check above cannot see. Such a
+	// failure surfaces as a plain filesystem error and may follow earlier
+	// successful writes.
 	root, err := os.OpenRoot(basePath)
 	if err != nil {
 		return fmt.Errorf("open base directory %s: %w", basePath, err)

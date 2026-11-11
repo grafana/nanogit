@@ -529,8 +529,12 @@ func (c *rawClient) resolveSingleDelta(ctx context.Context, delta *protocol.Pack
 		Hash: resolvedHash,
 	}
 
+	// A resolved object must be just as well-formed as one sent in full:
+	// non-delta objects already fail the fetch on parse errors in ReadObject.
+	// Caching a partially parsed object here would silently truncate trees
+	// (e.g. one containing an invalid entry name) for every later reader.
 	if err := c.parseResolvedObject(ctx, resolvedObj); err != nil {
-		logger.Debug("Warning: failed to parse resolved object", "hash", resolvedHash.String(), "error", err)
+		return fmt.Errorf("parse resolved object %s: %w", resolvedHash.String(), err)
 	}
 
 	// Add to objects map and storage
