@@ -175,3 +175,60 @@ func TestFetchSurfacesDeltaApplyError(t *testing.T) {
 	require.NotContains(t, err.Error(), "missing base",
 		"a present-but-unappliable base must not be reported as missing")
 }
+
+// TestFetchRejectsInvalidTreeEntryInDelta proves that a tree reconstructed
+// from a REF_DELTA goes through the same entry-name validation as a tree sent
+// in full. Previously a parse failure on a resolved delta was only logged and
+// the partially parsed object was still cached, so a tree containing an
+// invalid entry name would silently surface with its later entries dropped.
+func TestFetchRejectsInvalidTreeEntryInDelta(t *testing.T) {
+	t.Parallel()
+
+	treeEntry := func(name string) []byte {
+		e := []byte("100644 " + name + "\x00")
+		return append(e, bytes.Repeat([]byte{0xab}, 20)...)
+	}
+
+	base := treeEntry("a.txt")
+	var target []byte
+	for _, name := range []string{"a.txt", ".git", "z.txt"} {
+		target = append(target, treeEntry(name)...)
+	}
+
+	baseHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, base)
+	require.NoError(t, err)
+	targetHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, target)
+	require.NoError(t, err)
+
+	delta := addOnlyDelta(len(base), target)
+
+	pack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x02")
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeTree, len(base))...)
+	pack = append(pack, zlibBytes(t, base)...)
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(delta))...)
+	pack = append(pack, baseHash[:]...)
+	pack = append(pack, zlibBytes(t, delta)...)
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	writePkt(append([]byte{1}, pack...))
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body.Bytes())
+	}))
+	t.Cleanup(server.Close)
+
+	rc, err := NewRawClient(server.URL + "/repo")
+	require.NoError(t, err)
+
+	objects, err := rc.Fetch(context.Background(), FetchOptions{Want: []hash.Hash{targetHash}, Done: true})
+	require.Error(t, err)
+	require.ErrorIs(t, err, protocol.ErrInvalidTreeEntryName)
+	require.Nil(t, objects, "no objects must be returned for a pack with an invalid tree")
+}
