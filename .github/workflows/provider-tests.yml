@@ -65,7 +65,7 @@ jobs:
         include:
           - name: GitHub
             provider: github
-            repo: https://github.com/grafana-experimental/nanogit-test.git
+            repo_var: GH_REPO_NAME
           - name: GitLab
             provider: gitlab
             vault: gitlab
@@ -85,7 +85,7 @@ jobs:
           ref: ${{ (github.event_name == 'workflow_dispatch' && inputs.pr != '') && format('refs/pull/{0}/merge', inputs.pr) || '' }}
       - name: Install build dependencies
         run: |
-          apk add --no-cache git make gcc musl-dev bash curl gpg
+          apk add --no-cache git make gcc musl-dev bash curl gpg jq
       - id: provider-secrets
         if: matrix.provider != 'github'
         uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3
@@ -114,9 +114,6 @@ jobs:
             ${{ runner.os }}-go-
       - name: Sync vendor directory
         run: go work vendor
-      - name: Install jq for the token broker
-        if: matrix.provider == 'github'
-        run: apk add --no-cache jq
       - id: github-token
         if: matrix.provider == 'github'
         uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0
@@ -127,7 +124,7 @@ jobs:
         env:
           CGO_ENABLED: 1
           TEST_PROVIDER: ${{ matrix.provider }}
-          TEST_REPO: ${{ matrix.repo || vars[matrix.repo_var] }}
+          TEST_REPO: ${{ vars[matrix.repo_var] }}
           TEST_USER: ${{ matrix.provider == 'github' && 'x-access-token' || fromJSON(steps.provider-secrets.outputs.secrets).REPO_USER }}
           TEST_TOKEN: ${{ steps.github-token.outputs.token || fromJSON(steps.provider-secrets.outputs.secrets || '{}').REPO_TOKEN }}
           TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
