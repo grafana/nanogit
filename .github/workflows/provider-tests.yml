@@ -63,12 +63,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Disabled: the security team disabled PATs org-wide, so the GitHub
-          # provider credentials no longer authenticate.
-          # - name: GitHub
-          #   provider: github
-          #   vault: github
-          #   repo_var: GH_REPO_NAME
+          - name: GitHub
+            provider: github
+            repo: https://github.com/grafana-experimental/nanogit-test.git
           - name: GitLab
             provider: gitlab
             vault: gitlab
@@ -89,13 +86,18 @@ jobs:
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
+      - id: provider-secrets
+        if: matrix.provider != 'github'
+        uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3
+        with:
+          repo_secrets: |
+            REPO_USER=${{ matrix.vault }}:REPO_USER
+            REPO_TOKEN=${{ matrix.vault }}:REPO_TOKEN
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3 # get-vault-secrets/v2.1
         with:
           # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
-            REPO_USER=${{ matrix.vault }}:REPO_USER
-            REPO_TOKEN=${{ matrix.vault }}:REPO_TOKEN
             SIGN_EMAIL=signing:EMAIL
             SIGN_GPG_KEY=signing:GPG_KEY
             SIGN_SSH_KEY=signing:SSH_KEY
@@ -112,13 +114,22 @@ jobs:
             ${{ runner.os }}-go-
       - name: Sync vendor directory
         run: go work vendor
+      - name: Install jq for the token broker
+        if: matrix.provider == 'github'
+        run: apk add --no-cache jq
+      - id: github-token
+        if: matrix.provider == 'github'
+        uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0
+        with:
+          github_app: grafana-nanogit-ci
+          permission_set: ${{ github.event_name }}
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
           TEST_PROVIDER: ${{ matrix.provider }}
-          TEST_REPO: ${{ vars[matrix.repo_var] }}
-          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
-          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
+          TEST_REPO: ${{ matrix.repo || vars[matrix.repo_var] }}
+          TEST_USER: ${{ matrix.provider == 'github' && 'x-access-token' || fromJSON(steps.provider-secrets.outputs.secrets).REPO_USER }}
+          TEST_TOKEN: ${{ steps.github-token.outputs.token || fromJSON(steps.provider-secrets.outputs.secrets || '{}').REPO_TOKEN }}
           TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
           TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
           TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
