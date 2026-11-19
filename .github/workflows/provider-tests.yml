@@ -22,13 +22,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      pr:
-        description: >-
-          PR number to test (use for fork PRs, after reviewing the diff).
-          Leave blank to test the branch selected above.
-        required: false
-        default: ""
   schedule:
     - cron: "0 3 * * *"
 
@@ -63,12 +56,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Disabled: the security team disabled PATs org-wide, so the GitHub
-          # provider credentials no longer authenticate.
-          # - name: GitHub
-          #   provider: github
-          #   vault: github
-          #   repo_var: GH_REPO_NAME
+          - name: GitHub
+            provider: github
+            repo: https://github.com/grafana-experimental/nanogit-test.git
           - name: GitLab
             provider: gitlab
             vault: gitlab
@@ -79,23 +69,20 @@ jobs:
             repo_var: BITBUCKET_REPO_NAME
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # For a manual run targeting a PR (typically a fork PR that the
-          # automatic guard skips), check out that PR's merge ref. A maintainer
-          # with write access must trigger this and is responsible for having
-          # reviewed the diff — the tests run the contributor's code with real
-          # provider credentials. For all other events, use the default ref.
-          ref: ${{ (github.event_name == 'workflow_dispatch' && inputs.pr != '') && format('refs/pull/{0}/merge', inputs.pr) || '' }}
       - name: Install build dependencies
         run: |
           apk add --no-cache git make gcc musl-dev bash curl gpg
-      - id: get-secrets
-        uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3 # get-vault-secrets/v2.1
+      - id: provider-secrets
+        if: matrix.provider != 'github'
+        uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3
         with:
-          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             REPO_USER=${{ matrix.vault }}:REPO_USER
             REPO_TOKEN=${{ matrix.vault }}:REPO_TOKEN
+      - id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3 # get-vault-secrets/v2.1
+        with:
+          repo_secrets: |
             SIGN_EMAIL=signing:EMAIL
             SIGN_GPG_KEY=signing:GPG_KEY
             SIGN_SSH_KEY=signing:SSH_KEY
@@ -112,19 +99,28 @@ jobs:
             ${{ runner.os }}-go-
       - name: Sync vendor directory
         run: go work vendor
+      - id: github-token
+        if: matrix.provider == 'github'
+        uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0
+        with:
+          github_app: grafana-nanogit-ci
+          permission_set: ${{ github.event_name }}
       - name: Run provider tests
         env:
           CGO_ENABLED: 1
           TEST_PROVIDER: ${{ matrix.provider }}
-          TEST_REPO: ${{ vars[matrix.repo_var] }}
-          TEST_USER: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_USER }}
-          TEST_TOKEN: ${{ fromJSON(steps.get-secrets.outputs.secrets).REPO_TOKEN }}
+          TEST_REPO: ${{ matrix.repo || vars[matrix.repo_var] }}
+          TEST_USER: ${{ matrix.provider == 'github' && 'x-access-token' || fromJSON(steps.provider-secrets.outputs.secrets).REPO_USER }}
+          TEST_TOKEN: ${{ steps.github-token.outputs.token || fromJSON(steps.provider-secrets.outputs.secrets || '{}').REPO_TOKEN }}
           TEST_SIGN_EMAIL: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_EMAIL }}
           TEST_GPG_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_GPG_KEY }}
           TEST_SSH_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SSH_KEY }}
           TEST_SMIME_KEY: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_KEY }}
           TEST_SMIME_CERT: ${{ fromJSON(steps.get-secrets.outputs.secrets).SIGN_SMIME_CERT }}
         run: |
+          if [ "$TEST_PROVIDER" = github ]; then
+            : "${TEST_TOKEN:?GitHub App token is required}"
+          fi
           if [ -z "$TEST_REPO" ] || [ -z "$TEST_TOKEN" ] || [ -z "$TEST_USER" ]; then
             echo "Skipping provider tests: TEST_REPO or TEST_TOKEN or TEST_USER not set"
             exit 0
