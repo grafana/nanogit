@@ -1,27 +1,18 @@
 name: Provider Tests
 
-# Provider tests exercise nanogit against real hosted Git providers
-# (GitHub, GitLab, Bitbucket) and require credentials pulled from Vault.
-# Because the tests run repository code with those secrets in scope, they must
-# NEVER execute untrusted code from forks — a malicious change could otherwise
-# exfiltrate the tokens and signing keys.
-#
-# GitHub only exposes secrets and an OIDC token to workflows running in the
-# trusted base-repo context: pushes, same-repo pull requests, schedules and
-# manual dispatches. Fork pull requests get a read-only token and no OIDC, so
-# the guard below skips them entirely. (We deliberately avoid the workflow_run
-# trigger: it runs in a privileged context and is easy to misuse — flagged by
-# zizmor as a dangerous trigger — and buys us nothing here, since same-repo
-# PRs already run with the credentials these tests need.)
-#
-# Fork pull requests still get full coverage from the secret-free jobs in
-# ci.yml (unit tests, lint, and the Gitea-based integration tests).
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number for a reviewed GitHub-only run (leave blank for the normal suite)
+        type: string
+      reviewed_sha:
+        description: Full reviewed PR head SHA (required with pr)
+        type: string
   schedule:
     - cron: "0 3 * * *"
 
@@ -37,12 +28,53 @@ concurrency:
 permissions: {}
 
 jobs:
+  reviewed-pr:
+    if: >-
+      github.repository == 'grafana/nanogit' && github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' && (inputs.pr != '' || inputs.reviewed_sha != '')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      id-token: write
+    steps:
+      - name: Verify reviewed PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          [[ "$PR" =~ ^[1-9][0-9]*$ && "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          head=$(gh api "repos/grafana/nanogit/pulls/$PR" --jq 'select(.state == "open" and .base.ref == "main") | .head.sha')
+          [[ "$SHA" == "$head" ]]
+      - id: github-token
+        uses: grafana/shared-workflows/actions/create-github-app-token@580590a644e82e79bb2598bdaba0be245a14dda0
+        with:
+          github_app: grafana-nanogit-ci
+          permission_set: workflow_dispatch
+      - name: Run reviewed GitHub provider tests
+        env:
+          TEST_TOKEN: ${{ steps.github-token.outputs.token }}
+          SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          : "${TEST_TOKEN:?GitHub App token is required}"
+          docker run --rm -e SHA -e TEST_TOKEN -e TEST_USER=x-access-token -e TEST_PROVIDER=github \
+            -e TEST_REPO=https://github.com/grafana-experimental/nanogit-test.git -e CGO_ENABLED=1 -w /src \
+            golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 \
+            sh -eu -c '
+              apk add --no-cache git make gcc musl-dev bash curl gpg
+              curl -fsSL "https://codeload.github.com/grafana/nanogit/tar.gz/$SHA" -o /tmp/source.tgz
+              tar -xzf /tmp/source.tgz --strip-components=1
+              go work vendor
+              make test-providers
+            '
+
   provider-tests:
     name: ${{ matrix.name }} Provider Tests
     # Only run in a trusted context: this repository, and never a fork PR
     # (a fork's head repository differs from the base repository).
     if: >-
       github.repository == 'grafana/nanogit' &&
+      inputs.pr == '' && inputs.reviewed_sha == '' &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
