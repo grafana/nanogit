@@ -1,5 +1,21 @@
 name: Provider Tests
 
+# Provider tests exercise nanogit against real hosted Git providers
+# (GitHub, GitLab, Bitbucket) and require credentials pulled from Vault.
+# Because the tests run repository code with those secrets in scope, they must
+# NEVER execute untrusted code from forks — a malicious change could otherwise
+# exfiltrate the tokens and signing keys.
+#
+# GitHub only exposes secrets and an OIDC token to workflows running in the
+# trusted base-repo context: pushes, same-repo pull requests, schedules and
+# manual dispatches. Fork pull requests get a read-only token and no OIDC, so
+# the guard below skips them entirely. (We deliberately avoid the workflow_run
+# trigger: it runs in a privileged context and is easy to misuse — flagged by
+# zizmor as a dangerous trigger — and buys us nothing here, since same-repo
+# PRs already run with the credentials these tests need.)
+#
+# Fork pull requests still get full coverage from the secret-free jobs in
+# ci.yml (unit tests, lint, and the Gitea-based integration tests).
 on:
   push:
     branches: [main]
@@ -8,8 +24,11 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: PR number for a reviewed GitHub-only run (leave blank for the normal suite)
-        type: string
+        description: >-
+          PR number to test (use for fork PRs, after reviewing the diff).
+          Leave blank to test the branch selected above.
+        required: false
+        default: ""
   schedule:
     - cron: "0 3 * * *"
 
@@ -112,6 +131,7 @@ jobs:
       - id: get-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@2f1ddaf3ce1aa677356243d0dd584be33cfa35e3 # get-vault-secrets/v2.1
         with:
+          # Secrets placed in the ci/repo/grafana/<repo>/<path> path in Vault
           repo_secrets: |
             SIGN_EMAIL=signing:EMAIL
             SIGN_GPG_KEY=signing:GPG_KEY
