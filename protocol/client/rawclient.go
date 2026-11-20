@@ -74,6 +74,9 @@ type rawClient struct {
 	basicAuth *struct{ Username, Password string }
 	// Token-based authentication header
 	tokenAuth *string
+	// rateLimitDetector reads provider-specific rate-limit signalling off a
+	// response, supplementing the built-in rules. Nil uses those alone.
+	rateLimitDetector options.RateLimitDetector
 	// limits caps response bytes per operation class. Zero values mean
 	// "no limit", preserving historic unbounded behavior for embedders
 	// that don't opt in via options.WithLimits.
@@ -154,12 +157,13 @@ func NewRawClientFromOptions(repo string, resolved *options.Options) (*rawClient
 	}
 
 	return &rawClient{
-		base:      u,
-		client:    resolved.HTTPClient,
-		userAgent: resolved.UserAgent,
-		basicAuth: basicAuth,
-		tokenAuth: resolved.AuthToken,
-		limits:    resolved.Limits,
+		base:              u,
+		client:            resolved.HTTPClient,
+		userAgent:         resolved.UserAgent,
+		basicAuth:         basicAuth,
+		tokenAuth:         resolved.AuthToken,
+		limits:            resolved.Limits,
+		rateLimitDetector: resolved.RateLimitDetector,
 	}, nil
 }
 
@@ -197,7 +201,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 	// Wrap the context with a temporary error retrier unless retries are disabled
 	baseRetrier := retry.FromContext(ctx)
 	if _, ok := baseRetrier.(*retry.NoopRetrier); !ok {
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, requestReplayable(req))
 		ctx = retry.ToContext(ctx, tempRetrier)
 	}
 
@@ -205,6 +209,13 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 	attempt := 0
 	return retry.Do(ctx, func() (*http.Response, error) {
 		attempt++
+		if attempt > 1 && req.GetBody != nil {
+			body, bodyErr := req.GetBody()
+			if bodyErr != nil {
+				return nil, fmt.Errorf("rewinding request body for retry: %w", bodyErr)
+			}
+			req.Body = body
+		}
 		start := time.Now()
 
 		res, err := c.client.Do(req)
@@ -234,7 +245,7 @@ func (c *rawClient) do(ctx context.Context, operation metrics.Operation, req *ht
 			return nil, err
 		}
 
-		if err := CheckServerUnavailable(res); err != nil {
+		if err := checkServerUnavailable(res, c.rateLimitDetector); err != nil {
 			_ = res.Body.Close()
 			recorder.HTTPRequest(ctx, metrics.HTTPRequestSample{
 				Operation:  operation,
