@@ -9,7 +9,7 @@ require (
 	github.com/smallstep/pkcs7 v0.2.3
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.58.0
-	golang.org/x/sync v0.24.0
+	golang.org/x/sync v0.25.0
 )
 
 require (
