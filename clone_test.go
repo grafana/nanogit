@@ -1139,6 +1139,8 @@ func TestClone_SkipsUnsafePaths(t *testing.T) {
 		rootHash    = hash.MustFromHex("2222222222222222222222222222222222222222")
 		dotGitHash  = hash.MustFromHex("3333333333333333333333333333333333333333")
 		blobHash    = hash.MustFromHex("4444444444444444444444444444444444444444")
+		emptyHash   = hash.MustFromHex("5555555555555555555555555555555555555555")
+		evilHash    = hash.MustFromHex("6666666666666666666666666666666666666666")
 		blobHashStr = blobHash.String()
 	)
 	id := &protocol.Identity{Name: "t", Email: "t@example.com", Timezone: "+0000"}
@@ -1152,11 +1154,17 @@ func TestClone_SkipsUnsafePaths(t *testing.T) {
 			{FileName: "README.md", FileMode: 0o100644, Hash: blobHashStr},
 			{FileName: "../escape", FileMode: 0o100644, Hash: blobHashStr},
 			{FileName: ".git", FileMode: 0o40000, Hash: dotGitHash.String()},
+			// Its child must not be mistaken for the root README.md.
+			{FileName: "", FileMode: 0o40000, Hash: emptyHash.String()},
+		}},
+		&protocol.PackfileObject{Hash: emptyHash, Type: protocol.ObjectTypeTree, Tree: []protocol.PackfileTreeEntry{
+			{FileName: "README.md", FileMode: 0o100644, Hash: evilHash.String()},
 		}},
 		&protocol.PackfileObject{Hash: dotGitHash, Type: protocol.ObjectTypeTree, Tree: []protocol.PackfileTreeEntry{
 			{FileName: "config", FileMode: 0o100644, Hash: blobHashStr},
 		}},
 		&protocol.PackfileObject{Hash: blobHash, Type: protocol.ObjectTypeBlob, Data: []byte("hi")},
+		&protocol.PackfileObject{Hash: evilHash, Type: protocol.ObjectTypeBlob, Data: []byte("evil")},
 	)
 
 	c, err := NewHTTPClient("https://example.invalid/repo.git")
@@ -1173,7 +1181,7 @@ func TestClone_SkipsUnsafePaths(t *testing.T) {
 	}
 	require.Equal(t, []string{"README.md"}, paths)
 	require.Equal(t, 1, result.FilteredFiles)
-	require.Equal(t, []string{"../escape", ".git", ".git/config"}, skippedPaths(t, result.Skipped))
+	require.Equal(t, []string{"", "/README.md", "../escape", ".git", ".git/config"}, skippedPaths(t, result.Skipped))
 
 	got, err := os.ReadFile(filepath.Join(dest, "README.md"))
 	require.NoError(t, err)
