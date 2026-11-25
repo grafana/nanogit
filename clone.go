@@ -88,15 +88,15 @@ type CloneResult struct {
 //  3. Applies include/exclude filters to the tree structure
 //  4. Returns the filtered tree with only the requested paths
 //
-// All writes are confined to opts.Path. Tree entries whose names are not a
-// single, safe path component (for example "..", names containing "/", or
-// ".git"), or whose paths are not lexically local to opts.Path, cause Clone
-// to fail with ErrInvalidTreeEntryName before any file is written.
+// All writes are confined to opts.Path. Entries whose paths are unsafe to
+// write (not lexically local to opts.Path, e.g. containing "..", or with a
+// ".git" component in any letter case) are skipped with a warning and left
+// out of the returned FlatTree and FilteredFiles.
 //
 // If opts.Path already exists and contains symlinks, Clone does not follow
-// them outside opts.Path: such a write fails with a filesystem error (not
-// ErrInvalidTreeEntryName). As with any other filesystem error during Clone,
-// files written before the failure are left in place.
+// them outside opts.Path: such a write fails with a filesystem error. As with
+// any other filesystem error during Clone, files written before the failure
+// are left in place.
 //
 // Parameters:
 //   - ctx: Context for the operation
@@ -163,6 +163,7 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	if err != nil {
 		return nil, fmt.Errorf("filter tree: %w", err)
 	}
+	filteredTree = dropUnsafePaths(filteredTree, logger)
 
 	// Write files to filesystem
 	err = c.writeFilesToDisk(ctx, opts.Path, filteredTree, opts.BatchSize, opts.Concurrency)
@@ -185,6 +186,38 @@ func (c *httpClient) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		"output_path", opts.Path)
 
 	return result, nil
+}
+
+// dropUnsafePaths returns a copy of tree without entries that are unsafe to
+// write under the clone destination, logging a warning for each one.
+func dropUnsafePaths(tree *FlatTree, logger log.Logger) *FlatTree {
+	safe := &FlatTree{Hash: tree.Hash, Entries: make([]FlatTreeEntry, 0, len(tree.Entries))}
+	for _, entry := range tree.Entries {
+		if !isSafeClonePath(entry.Path) {
+			logger.Warn("Skipping unsafe path during clone", "path", entry.Path)
+			continue
+		}
+		safe.Entries = append(safe.Entries, entry)
+	}
+	return safe
+}
+
+// isSafeClonePath reports whether a tree path can be written under the clone
+// destination: it must be lexically local and must not contain a ".git"
+// component (in any letter case), which would shadow repository metadata.
+// shortcut: does not catch NTFS/HFS aliases of ".git" (e.g. "GIT~1", ".git."), upgrade if Windows/macOS clones of untrusted repos matter.
+func isSafeClonePath(p string) bool {
+	native := filepath.FromSlash(p)
+	if !filepath.IsLocal(native) || filepath.Clean(native) == "." {
+		return false
+	}
+	// Split on the OS separator so Windows also catches "\" in entry names.
+	for _, part := range strings.Split(native, string(filepath.Separator)) {
+		if strings.EqualFold(part, ".git") {
+			return false
+		}
+	}
+	return true
 }
 
 // filterTree applies include and exclude path patterns to filter a FlatTree.
@@ -260,17 +293,12 @@ func (c *httpClient) writeFilesToDisk(ctx context.Context, basePath string, tree
 		"batch_size", batchSize,
 		"concurrency", concurrency)
 
-	// Collect all blob entries and make sure every path stays inside basePath
-	// before anything is fetched or written.
+	// Collect all blob entries
 	var blobEntries []FlatTreeEntry
 	for _, entry := range tree.Entries {
-		if entry.Type != protocol.ObjectTypeBlob {
-			continue
+		if entry.Type == protocol.ObjectTypeBlob {
+			blobEntries = append(blobEntries, entry)
 		}
-		if !filepath.IsLocal(filepath.FromSlash(entry.Path)) {
-			return fmt.Errorf("%w: path %q escapes clone destination", ErrInvalidTreeEntryName, entry.Path)
-		}
-		blobEntries = append(blobEntries, entry)
 	}
 
 	// Create the base directory if it doesn't exist

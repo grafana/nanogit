@@ -13,34 +13,36 @@ import (
 	"github.com/grafana/nanogit/protocol"
 )
 
-func TestWriteFilesToDisk_RejectsEscapingPaths(t *testing.T) {
+func TestDropUnsafePaths(t *testing.T) {
 	t.Parallel()
 
-	for _, p := range []string{
+	safe := []string{"README.md", "a/b/c.txt", ".github/workflows/ci.yml", "a/.gitignore", "x..y"}
+	unsafe := []string{
+		"",
+		".",
+		"a/..",
 		"../escape",
 		"sub/../../escape",
 		"/abs/escape",
-		"",
-	} {
-		t.Run(p, func(t *testing.T) {
-			t.Parallel()
-			parent := t.TempDir()
-			dest := filepath.Join(parent, "dest")
-
-			c := &httpClient{}
-			tree := &FlatTree{Entries: []FlatTreeEntry{{
-				Path: p,
-				Type: protocol.ObjectTypeBlob,
-			}}}
-
-			// The check must fail before any blob is fetched, so a
-			// zero-value client (no transport) is sufficient.
-			err := c.writeFilesToDisk(context.Background(), dest, tree, 0, 0)
-			require.Error(t, err)
-			require.ErrorIs(t, err, ErrInvalidTreeEntryName)
-			require.NoFileExists(t, filepath.Join(parent, "escape"))
-		})
+		".git",
+		".git/hooks/pre-commit",
+		".GIT/config",
+		"sub/.Git/config",
 	}
+
+	tree := &FlatTree{}
+	for _, p := range append(append([]string{}, safe...), unsafe...) {
+		tree.Entries = append(tree.Entries, FlatTreeEntry{Path: p, Type: protocol.ObjectTypeBlob})
+	}
+
+	got := dropUnsafePaths(tree, &log.NoopLogger{})
+
+	var paths []string
+	for _, e := range got.Entries {
+		paths = append(paths, e.Path)
+	}
+	require.Equal(t, safe, paths)
+	require.Len(t, tree.Entries, len(safe)+len(unsafe), "input tree must not be modified")
 }
 
 func TestWriteBlobToFile_ConfinedToRoot(t *testing.T) {
