@@ -817,8 +817,10 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 	var submodules []FlatTreeEntry
 
 	// Use depth-first traversal with sorted processing to naturally produce sorted entries
-	var traverseTree func(tree *protocol.PackfileObject, basePath string) error
-	traverseTree = func(tree *protocol.PackfileObject, basePath string) error {
+	// atRoot is explicit rather than basePath == "": the children of an
+	// empty-named root directory must get "/name", not collide with root entries.
+	var traverseTree func(tree *protocol.PackfileObject, basePath string, atRoot bool) error
+	traverseTree = func(tree *protocol.PackfileObject, basePath string, atRoot bool) error {
 		// Create a sorted slice of entries to ensure consistent ordering
 		treeEntries := make([]*protocol.PackfileTreeEntry, len(tree.Tree))
 		for i := range tree.Tree {
@@ -843,7 +845,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 
 			// Build the full path for this entry using pooled string builder
 			var entryPath string
-			if basePath != "" {
+			if !atRoot {
 				pathBuilder := getPathBuilder()
 				pathBuilder.WriteString(basePath)
 				pathBuilder.WriteString("/")
@@ -913,7 +915,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 						"path", entryPath)
 				}
 				// Recursively traverse the child tree
-				if err := traverseTree(childTree, entryPath); err != nil {
+				if err := traverseTree(childTree, entryPath, false); err != nil {
 					return err
 				}
 			}
@@ -924,7 +926,7 @@ func (c *httpClient) flatten(ctx context.Context, rootTree *protocol.PackfileObj
 	logger.Debug("Traverse tree depth-first for sorted processing", "estimatedEntries", estimatedSize)
 
 	// Start depth-first traversal from root
-	if err := traverseTree(rootTree, ""); err != nil {
+	if err := traverseTree(rootTree, "", true); err != nil {
 		return nil, nil, err
 	}
 
