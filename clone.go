@@ -89,9 +89,10 @@ type CloneResult struct {
 //  4. Returns the filtered tree with only the requested paths
 //
 // Entries whose paths are unsafe to write (not lexically local to opts.Path,
-// e.g. containing "..", or with a ".git" component in any letter case) are
-// skipped with a warning and left out of the returned FlatTree and
-// FilteredFiles.
+// with an empty, ".", ".." or NUL-containing component, or with a component
+// that resolves to ".git" on Windows or macOS, e.g. ".GIT", ".git." or
+// "git~1") are skipped with a warning and left out of the returned FlatTree
+// and FilteredFiles.
 //
 // Parameters:
 //   - ctx: Context for the operation
@@ -198,21 +199,64 @@ func dropUnsafePaths(tree *FlatTree, logger log.Logger) *FlatTree {
 }
 
 // isSafeClonePath reports whether a tree path can be written under the clone
-// destination: it must be lexically local and must not contain a ".git"
-// component (in any letter case), which would shadow repository metadata.
-// shortcut: does not catch NTFS/HFS aliases of ".git" (e.g. "GIT~1", ".git."), upgrade if Windows/macOS clones of untrusted repos matter.
+// destination: it must be lexically local (no absolute paths, volume names or
+// reserved device names), and every component must be non-empty, not "." or
+// "..", free of NUL bytes, and not an alias of ".git".
 func isSafeClonePath(p string) bool {
 	native := filepath.FromSlash(p)
-	if !filepath.IsLocal(native) || filepath.Clean(native) == "." {
+	if !filepath.IsLocal(native) {
 		return false
 	}
 	// Split on the OS separator so Windows also catches "\" in entry names.
 	for _, part := range strings.Split(native, string(filepath.Separator)) {
-		if strings.EqualFold(part, ".git") {
+		if part == "" || part == "." || part == ".." || strings.ContainsRune(part, 0) || isDotGit(part) {
 			return false
 		}
 	}
 	return true
+}
+
+// isDotGit reports whether a single path component resolves to ".git" on
+// NTFS or HFS+, mirroring Git's is_ntfs_dotgit and is_hfs_dotgit
+// (CVE-2014-9390). Both are checked on every OS, as Git does by default.
+func isDotGit(name string) bool {
+	return isNTFSDotGit(name) || isHFSDotGit(name)
+}
+
+// isNTFSDotGit matches ".git" or its 8.3 short name "git~1" (any case),
+// followed only by trailing dots/spaces, an alternate data stream (":...")
+// or a backslash, all of which NTFS resolves to the same directory.
+func isNTFSDotGit(name string) bool {
+	lower := strings.ToLower(name)
+	var rest string
+	switch {
+	case strings.HasPrefix(lower, ".git"):
+		rest = lower[len(".git"):]
+	case strings.HasPrefix(lower, "git~1"):
+		rest = lower[len("git~1"):]
+	default:
+		return false
+	}
+	if i := strings.IndexAny(rest, `:\`); i >= 0 {
+		rest = rest[:i]
+	}
+	return strings.Trim(rest, ". ") == ""
+}
+
+// isHFSDotGit matches ".git" (any case) once the code points HFS+ ignores
+// when comparing names are removed.
+func isHFSDotGit(name string) bool {
+	stripped := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 0x200c && r <= 0x200f,
+			r >= 0x202a && r <= 0x202e,
+			r >= 0x206a && r <= 0x206f,
+			r == 0xfeff:
+			return -1
+		}
+		return r
+	}, name)
+	return strings.EqualFold(stripped, ".git")
 }
 
 // filterTree applies include and exclude path patterns to filter a FlatTree.

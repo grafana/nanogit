@@ -1058,18 +1058,25 @@ func TestShouldIncludePath_RealWorldScenarios(t *testing.T) {
 func TestDropUnsafePaths(t *testing.T) {
 	t.Parallel()
 
-	safe := []string{"README.md", "a/b/c.txt", ".github/workflows/ci.yml", "a/.gitignore", "x..y"}
+	safe := []string{"README.md", "a/b/c.txt", ".github/workflows/ci.yml", "a/.gitignore", "x..y", "git~2/x"}
 	unsafe := []string{
 		"",
 		".",
 		"a/..",
+		"a/../b",
+		"a/./b",
+		"a//b",
+		"a/",
 		"../escape",
 		"sub/../../escape",
 		"/abs/escape",
+		"a/x\x00y",
 		".git",
 		".git/hooks/pre-commit",
 		".GIT/config",
 		"sub/.Git/config",
+		".git./hooks/post-checkout",
+		"GIT~1/config",
 	}
 
 	tree := &FlatTree{}
@@ -1135,4 +1142,25 @@ func TestClone_SkipsUnsafePaths(t *testing.T) {
 	require.Equal(t, "hi", string(got))
 	require.NoFileExists(t, filepath.Join(parent, "escape"))
 	require.NoDirExists(t, filepath.Join(dest, ".git"))
+}
+
+func TestIsDotGit(t *testing.T) {
+	t.Parallel()
+
+	zwnj, zwj, bom := string(rune(0x200C)), string(rune(0x200D)), string(rune(0xFEFF))
+
+	for _, name := range []string{
+		".git", ".GIT", ".Git",
+		// NTFS: trailing dots/spaces, alternate data streams, backslash, 8.3 short name.
+		".git.", ".git ", ".git. .", ".git::$INDEX_ALLOCATION", `.git\config`,
+		"git~1", "GIT~1", "git~1.",
+		// HFS+: ignorable code points.
+		".g" + zwnj + "it", bom + ".git", ".gi" + zwj + "t",
+	} {
+		require.True(t, isDotGit(name), "want .git alias: %q", name)
+	}
+
+	for _, name := range []string{".gitignore", ".github", ".gitmodules", "git", "git~2", ".git.bak", "x.git", ".gitx", "a"} {
+		require.False(t, isDotGit(name), "want safe: %q", name)
+	}
 }
