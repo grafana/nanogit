@@ -4,11 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/log"
+	logmocks "github.com/grafana/nanogit/log/mocks"
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
 	"github.com/grafana/nanogit/storage"
@@ -1084,14 +1087,48 @@ func TestDropUnsafePaths(t *testing.T) {
 		tree.Entries = append(tree.Entries, FlatTreeEntry{Path: p, Type: protocol.ObjectTypeBlob})
 	}
 
-	got := dropUnsafePaths(tree, &log.NoopLogger{})
+	orig := slices.Clone(tree.Entries)
+	got, skipped := dropUnsafePaths(tree, &log.NoopLogger{})
 
 	var paths []string
 	for _, e := range got.Entries {
 		paths = append(paths, e.Path)
 	}
 	require.Equal(t, safe, paths)
-	require.Len(t, tree.Entries, len(safe)+len(unsafe), "input tree must not be modified")
+	require.Equal(t, unsafe, skippedPaths(t, skipped))
+	require.Equal(t, orig, tree.Entries, "input tree must not be modified")
+
+	// Unsafe entry between safe ones: prefix before the first rejection is kept.
+	mixed := &FlatTree{Entries: []FlatTreeEntry{{Path: "a"}, {Path: "../x"}, {Path: "b"}}}
+	got, skipped = dropUnsafePaths(mixed, &log.NoopLogger{})
+	require.Equal(t, []FlatTreeEntry{{Path: "a"}, {Path: "b"}}, got.Entries)
+	require.Equal(t, []string{"../x"}, skippedPaths(t, skipped))
+	require.Equal(t, []FlatTreeEntry{{Path: "a"}, {Path: "../x"}, {Path: "b"}}, mixed.Entries, "input tree must not be modified")
+
+	// Logged path is quoted so control characters cannot forge log lines.
+	logger := &logmocks.FakeLogger{}
+	_, skipped = dropUnsafePaths(&FlatTree{Entries: []FlatTreeEntry{{Path: "../a\nb\x1b[31m"}}}, logger)
+	require.Equal(t, 1, logger.WarnCallCount())
+	_, kv := logger.WarnArgsForCall(0)
+	require.Equal(t, []any{"path", `"../a\nb\x1b[31m"`, "reason", "path is not local"}, kv)
+	require.Equal(t, []string{"../a\nb\x1b[31m"}, skippedPaths(t, skipped), "Skipped keeps the raw path")
+
+	// All safe: the input tree is returned as is, without a copy.
+	allSafe := &FlatTree{Entries: []FlatTreeEntry{{Path: "a"}, {Path: "b"}}}
+	got, skipped = dropUnsafePaths(allSafe, &log.NoopLogger{})
+	require.Same(t, allSafe, got)
+	require.Nil(t, skipped)
+}
+
+// skippedPaths returns the paths of skipped, asserting each has a reason.
+func skippedPaths(t *testing.T, skipped []SkippedPath) []string {
+	t.Helper()
+	var paths []string
+	for _, s := range skipped {
+		require.NotEmpty(t, s.Reason, "missing reason for %q", s.Path)
+		paths = append(paths, s.Path)
+	}
+	return paths
 }
 
 func TestClone_SkipsUnsafePaths(t *testing.T) {
@@ -1136,12 +1173,61 @@ func TestClone_SkipsUnsafePaths(t *testing.T) {
 	}
 	require.Equal(t, []string{"README.md"}, paths)
 	require.Equal(t, 1, result.FilteredFiles)
+	require.Equal(t, []string{"../escape", ".git", ".git/config"}, skippedPaths(t, result.Skipped))
 
 	got, err := os.ReadFile(filepath.Join(dest, "README.md"))
 	require.NoError(t, err)
 	require.Equal(t, "hi", string(got))
 	require.NoFileExists(t, filepath.Join(parent, "escape"))
 	require.NoDirExists(t, filepath.Join(dest, ".git"))
+}
+
+func TestWriteBlobToFile_ConfinedToRoot(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	dest := filepath.Join(parent, "dest")
+	outside := filepath.Join(parent, "outside")
+	require.NoError(t, os.MkdirAll(dest, 0o755))
+	require.NoError(t, os.MkdirAll(outside, 0o755))
+
+	root, err := os.OpenRoot(dest)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = root.Close() })
+
+	c := &httpClient{}
+	write := func(p string) error {
+		return c.writeBlobToFile(context.Background(), root, FlatTreeEntry{Path: p}, []byte("x"), &log.NoopLogger{})
+	}
+
+	t.Run("valid nested path is written", func(t *testing.T) {
+		require.NoError(t, write("a/b/c.txt"))
+		got, err := os.ReadFile(filepath.Join(dest, "a", "b", "c.txt"))
+		require.NoError(t, err)
+		require.Equal(t, "x", string(got))
+	})
+
+	t.Run("dot-dot path is rejected", func(t *testing.T) {
+		require.Error(t, write("../escape"))
+		require.NoFileExists(t, filepath.Join(parent, "escape"))
+	})
+
+	t.Run("pre-existing symlinks pointing outside are not followed", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink creation requires privileges on Windows")
+		}
+		require.NoError(t, os.Symlink(outside, filepath.Join(dest, "link")))
+		require.NoError(t, os.Symlink(filepath.Join("..", "outside"), filepath.Join(dest, "rlink")))
+
+		require.Error(t, write("link/pwn"))
+		require.Error(t, write("rlink/pwn"))
+		require.NoFileExists(t, filepath.Join(outside, "pwn"))
+
+		// Symlink as the last component: only root.WriteFile can stop this one.
+		require.NoError(t, os.Symlink(filepath.Join("..", "outside", "f"), filepath.Join(dest, "flink")))
+		require.Error(t, write("flink"))
+		require.NoFileExists(t, filepath.Join(outside, "f"))
+	})
 }
 
 func TestIsDotGit(t *testing.T) {
