@@ -1,9 +1,17 @@
 package nanogit
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/nanogit/log"
+	"github.com/grafana/nanogit/protocol"
+	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 // TestShouldIncludePath_ExcludePatterns tests exclude path filtering with various patterns
@@ -1045,4 +1053,86 @@ func TestShouldIncludePath_RealWorldScenarios(t *testing.T) {
 				tt.description, tt.path, tt.includePaths, tt.excludePaths, got, tt.want)
 		})
 	}
+}
+
+func TestDropUnsafePaths(t *testing.T) {
+	t.Parallel()
+
+	safe := []string{"README.md", "a/b/c.txt", ".github/workflows/ci.yml", "a/.gitignore", "x..y"}
+	unsafe := []string{
+		"",
+		".",
+		"a/..",
+		"../escape",
+		"sub/../../escape",
+		"/abs/escape",
+		".git",
+		".git/hooks/pre-commit",
+		".GIT/config",
+		"sub/.Git/config",
+	}
+
+	tree := &FlatTree{}
+	for _, p := range append(append([]string{}, safe...), unsafe...) {
+		tree.Entries = append(tree.Entries, FlatTreeEntry{Path: p, Type: protocol.ObjectTypeBlob})
+	}
+
+	got := dropUnsafePaths(tree, &log.NoopLogger{})
+
+	var paths []string
+	for _, e := range got.Entries {
+		paths = append(paths, e.Path)
+	}
+	require.Equal(t, safe, paths)
+	require.Len(t, tree.Entries, len(safe)+len(unsafe), "input tree must not be modified")
+}
+
+func TestClone_SkipsUnsafePaths(t *testing.T) {
+	t.Parallel()
+
+	var (
+		commitHash  = hash.MustFromHex("1111111111111111111111111111111111111111")
+		rootHash    = hash.MustFromHex("2222222222222222222222222222222222222222")
+		dotGitHash  = hash.MustFromHex("3333333333333333333333333333333333333333")
+		blobHash    = hash.MustFromHex("4444444444444444444444444444444444444444")
+		blobHashStr = blobHash.String()
+	)
+	id := &protocol.Identity{Name: "t", Email: "t@example.com", Timezone: "+0000"}
+
+	// Pre-populate storage so every fetch is a cache hit and no server is needed.
+	ctx, objects := storage.FromContextOrInMemory(context.Background())
+	objects.Add(
+		&protocol.PackfileObject{Hash: commitHash, Type: protocol.ObjectTypeCommit,
+			Commit: &protocol.PackfileCommit{Tree: rootHash, Author: id, Committer: id}},
+		&protocol.PackfileObject{Hash: rootHash, Type: protocol.ObjectTypeTree, Tree: []protocol.PackfileTreeEntry{
+			{FileName: "README.md", FileMode: 0o100644, Hash: blobHashStr},
+			{FileName: "../escape", FileMode: 0o100644, Hash: blobHashStr},
+			{FileName: ".git", FileMode: 0o40000, Hash: dotGitHash.String()},
+		}},
+		&protocol.PackfileObject{Hash: dotGitHash, Type: protocol.ObjectTypeTree, Tree: []protocol.PackfileTreeEntry{
+			{FileName: "config", FileMode: 0o100644, Hash: blobHashStr},
+		}},
+		&protocol.PackfileObject{Hash: blobHash, Type: protocol.ObjectTypeBlob, Data: []byte("hi")},
+	)
+
+	c, err := NewHTTPClient("https://example.invalid/repo.git")
+	require.NoError(t, err)
+
+	parent := t.TempDir()
+	dest := filepath.Join(parent, "dest")
+	result, err := c.Clone(ctx, CloneOptions{Path: dest, Hash: commitHash})
+	require.NoError(t, err)
+
+	var paths []string
+	for _, e := range result.FlatTree.Entries {
+		paths = append(paths, e.Path)
+	}
+	require.Equal(t, []string{"README.md"}, paths)
+	require.Equal(t, 1, result.FilteredFiles)
+
+	got, err := os.ReadFile(filepath.Join(dest, "README.md"))
+	require.NoError(t, err)
+	require.Equal(t, "hi", string(got))
+	require.NoFileExists(t, filepath.Join(parent, "escape"))
+	require.NoDirExists(t, filepath.Join(dest, ".git"))
 }
