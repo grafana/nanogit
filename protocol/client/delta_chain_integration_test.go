@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/protocol/hash"
+	"github.com/grafana/nanogit/storage"
 )
 
 // deltaSizeVarint encodes n as the little-endian 7-bit varint used by a delta
@@ -174,4 +176,65 @@ func TestFetchSurfacesDeltaApplyError(t *testing.T) {
 		"the real reconstruction error must surface")
 	require.NotContains(t, err.Error(), "missing base",
 		"a present-but-unappliable base must not be reported as missing")
+}
+
+// TestFetchRejectsMalformedTreeInDelta proves that a tree reconstructed from a
+// REF_DELTA that fails to parse fails the fetch, as a tree sent in full does,
+// instead of being cached with every entry after the malformed one dropped.
+func TestFetchRejectsMalformedTreeInDelta(t *testing.T) {
+	t.Parallel()
+
+	treeEntry := func(mode, name string) []byte {
+		e := []byte(mode + " " + name + "\x00")
+		return append(e, bytes.Repeat([]byte{0xab}, 20)...)
+	}
+
+	base := treeEntry("100644", "a.txt")
+	var target []byte
+	target = append(target, treeEntry("100644", "a.txt")...)
+	target = append(target, treeEntry("999999", "bad.txt")...) // not octal
+	target = append(target, treeEntry("100644", "z.txt")...)
+
+	baseHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, base)
+	require.NoError(t, err)
+	targetHash, err := protocol.Object(crypto.SHA1, protocol.ObjectTypeTree, target)
+	require.NoError(t, err)
+
+	delta := addOnlyDelta(len(base), target)
+
+	pack := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x02")
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeTree, len(base))...)
+	pack = append(pack, zlibBytes(t, base)...)
+	pack = append(pack, encodeObjectHeader(protocol.ObjectTypeRefDelta, len(delta))...)
+	pack = append(pack, baseHash[:]...)
+	pack = append(pack, zlibBytes(t, delta)...)
+
+	var body bytes.Buffer
+	writePkt := func(b []byte) {
+		fmt.Fprintf(&body, "%04x", len(b)+4)
+		body.Write(b)
+	}
+	writePkt([]byte("packfile\n"))
+	writePkt(append([]byte{1}, pack...))
+	body.WriteString("0000")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body.Bytes())
+	}))
+	t.Cleanup(server.Close)
+
+	rc, err := NewRawClient(server.URL + "/repo")
+	require.NoError(t, err)
+
+	store := storage.NewInMemoryStorage(t.Context())
+	ctx := storage.ToContext(t.Context(), store)
+
+	objects, err := rc.Fetch(ctx, FetchOptions{Want: []hash.Hash{targetHash}, Done: true})
+	require.ErrorIs(t, err, strconv.ErrSyntax)
+	require.Contains(t, err.Error(), "parse resolved object "+targetHash.String())
+	require.Nil(t, objects, "no objects must be returned for a pack with a malformed tree")
+
+	_, cached := store.Get(targetHash)
+	require.False(t, cached, "a partially parsed tree must not be cached")
 }
