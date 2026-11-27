@@ -19,26 +19,40 @@ type temporaryErrorRetrier struct {
 	// wrapped is the underlying retrier that provides the retry logic
 	// (backoff timing, max attempts, etc.)
 	wrapped retry.Retrier
+	// replayableBody reports whether the request body can be sent again in
+	// full. When false no retry is safe, so none is attempted.
+	replayableBody bool
 }
 
 // newTemporaryErrorRetrier creates a new temporaryErrorRetrier that wraps the given retrier.
-func newTemporaryErrorRetrier(wrapped retry.Retrier) *temporaryErrorRetrier {
+// replayableBody must report whether the request can be re-sent with its full body.
+func newTemporaryErrorRetrier(wrapped retry.Retrier, replayableBody bool) *temporaryErrorRetrier {
 	if wrapped == nil {
 		wrapped = &retry.NoopRetrier{}
 	}
 	return &temporaryErrorRetrier{
-		wrapped: wrapped,
+		wrapped:        wrapped,
+		replayableBody: replayableBody,
 	}
+}
+
+// requestReplayable reports whether req can be sent again with its full body.
+// A streamed body (io.Pipe, an arbitrary io.Reader) has no GetBody, so net/http
+// cannot rewind it: a second attempt would send a truncated or empty payload.
+func requestReplayable(req *http.Request) bool {
+	return req.Body == nil || req.Body == http.NoBody || req.GetBody != nil
 }
 
 // ShouldRetry determines if an error should be retried.
 // If the error is a retryable server unavailable error, returns true (always retry).
 // Otherwise, delegates to the wrapped retrier (which handles network errors and context cancellation).
 //
-// A server unavailable error is retryable if:
-//   - POST operations are not retried on 5xx because request body is consumed
+// A request whose body cannot be replayed is never retried, whatever the error
+// and whatever the wrapped retrier's policy. Otherwise a server unavailable
+// error is retryable if:
+//   - POST operations are not retried on 5xx because the server may already have acted on the body
 //   - GET and DELETE operations can be retried on 5xx (they are idempotent)
-//   - HTTP 429 (Too Many Requests) can be retried for all operations
+//   - a rate-limit rejection can be retried for any operation, whatever status carried it
 //
 // Max attempts are handled by retry.Do, not by this method.
 func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
@@ -46,9 +60,23 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 		return false
 	}
 
+	// do() re-sends the same request, so a body net/http cannot rewind goes out
+	// truncated or empty on a second attempt — a silent corruption rather than a
+	// failure. No policy, built-in or wrapped, can make that safe, so the guard
+	// sits ahead of every other decision including delegation.
+	if !r.replayableBody {
+		return false
+	}
+
 	// Check for server unavailable errors that are retryable
 	var serverErr *ServerUnavailableError
 	if errors.As(err, &serverErr) {
+		// Rate limiting is rejected before the body is consumed server-side, so
+		// it is retryable for any method. Keyed off the classification rather
+		// than the status, so a detector-supplied signal on any status is honored.
+		if serverErr.IsRateLimited() {
+			return true
+		}
 		if r.isRetryableOperation(serverErr.Operation, serverErr.StatusCode) {
 			return true
 		}
@@ -62,12 +90,9 @@ func (r *temporaryErrorRetrier) ShouldRetry(ctx context.Context, err error, atte
 	return r.wrapped.ShouldRetry(ctx, err, attempt)
 }
 
-// isRetryableOperation determines if an operation should be retried based on HTTP method and status code.
+// isRetryableOperation determines if a server error should be retried based on
+// HTTP method and status code. Rate limiting is handled by ShouldRetry.
 func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCode int) bool {
-	// HTTP 429 (Too Many Requests) can be retried for all operations
-	if statusCode == http.StatusTooManyRequests {
-		return true
-	}
 	// Check for specific 5xx status codes
 	switch statusCode {
 	case http.StatusInternalServerError,
@@ -84,6 +109,15 @@ func (r *temporaryErrorRetrier) isRetryableOperation(operation string, statusCod
 
 // Wait waits before the next retry attempt by delegating to the wrapped retrier.
 func (r *temporaryErrorRetrier) Wait(ctx context.Context, attempt int) error {
+	return r.wrapped.Wait(ctx, attempt)
+}
+
+// WaitAfter delegates to the wrapped retrier's error-aware wait when it has one,
+// so a server's Retry-After is not lost to the wrapping.
+func (r *temporaryErrorRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+	if waiter, ok := r.wrapped.(retry.ErrorAwareWaiter); ok {
+		return waiter.WaitAfter(ctx, attempt, err)
+	}
 	return r.wrapped.Wait(ctx, attempt)
 }
 

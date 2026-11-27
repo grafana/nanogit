@@ -1,13 +1,18 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/grafana/nanogit/options"
+	"github.com/grafana/nanogit/protocol"
 	"github.com/grafana/nanogit/retry"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +26,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -40,7 +45,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodDelete, http.StatusInternalServerError, errors.New("internal server error"))
@@ -52,7 +57,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors with POST operation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -63,7 +68,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors with POST operation and 500 status", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, errors.New("internal server error"))
@@ -74,7 +79,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on server unavailable errors without operation (conservative)", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError("", http.StatusServiceUnavailable, errors.New("service unavailable"))
@@ -89,7 +94,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		underlying := errors.New("underlying error")
@@ -105,7 +110,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusTooManyRequests, errors.New("too many requests"))
@@ -120,7 +125,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodPost, http.StatusTooManyRequests, errors.New("too many requests"))
@@ -131,7 +136,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on other 4xx status codes", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusNotFound, errors.New("not found"))
@@ -142,7 +147,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on 4xx client errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := fmt.Errorf("got status code %d: Not Found", http.StatusNotFound)
@@ -152,7 +157,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("does not retry on nil errors", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		require.False(t, tempRetrier.ShouldRetry(ctx, nil, 1))
@@ -160,7 +165,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates context cancellation to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := context.Canceled
@@ -171,7 +176,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates context deadline exceeded to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := context.DeadlineExceeded
@@ -182,7 +187,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates server unavailable error with context cancellation to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		// Wrap context.Canceled in ServerUnavailableError
@@ -196,7 +201,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 
 	t.Run("delegates server unavailable error with context deadline exceeded to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		// Wrap context.DeadlineExceeded in ServerUnavailableError
@@ -213,7 +218,7 @@ func TestHTTPRetrier_ShouldRetry(t *testing.T) {
 		baseRetrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool {
 			return err != nil
 		}
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 		err := NewServerUnavailableError(http.MethodGet, http.StatusInternalServerError, errors.New("internal server error"))
@@ -236,7 +241,7 @@ func TestHTTPRetrier_Wait(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().
 			WithInitialDelay(10 * time.Millisecond).
 			WithoutJitter()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx := context.Background()
 
@@ -252,7 +257,7 @@ func TestHTTPRetrier_Wait(t *testing.T) {
 	t.Run("respects context cancellation", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().
 			WithInitialDelay(1 * time.Second)
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -268,20 +273,20 @@ func TestHTTPRetrier_MaxAttempts(t *testing.T) {
 
 	t.Run("delegates max attempts to wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier().WithMaxAttempts(5)
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		require.Equal(t, 5, tempRetrier.MaxAttempts())
 	})
 
 	t.Run("uses default when wrapped retrier has default", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		require.Equal(t, 3, tempRetrier.MaxAttempts())
 	})
 
 	t.Run("handles nil wrapped retrier", func(t *testing.T) {
-		tempRetrier := newTemporaryErrorRetrier(nil)
+		tempRetrier := newTemporaryErrorRetrier(nil, true)
 
 		// Should use NoopRetrier which returns 1
 		require.Equal(t, 1, tempRetrier.MaxAttempts())
@@ -293,14 +298,14 @@ func TestNewHTTPRetrier(t *testing.T) {
 
 	t.Run("creates retrier with wrapped retrier", func(t *testing.T) {
 		baseRetrier := retry.NewExponentialBackoffRetrier()
-		tempRetrier := newTemporaryErrorRetrier(baseRetrier)
+		tempRetrier := newTemporaryErrorRetrier(baseRetrier, true)
 
 		require.NotNil(t, tempRetrier)
 		require.Equal(t, baseRetrier, tempRetrier.wrapped)
 	})
 
 	t.Run("handles nil wrapped retrier", func(t *testing.T) {
-		tempRetrier := newTemporaryErrorRetrier(nil)
+		tempRetrier := newTemporaryErrorRetrier(nil, true)
 
 		require.NotNil(t, tempRetrier)
 		require.NotNil(t, tempRetrier.wrapped)
@@ -312,7 +317,7 @@ func TestNewHTTPRetrier(t *testing.T) {
 func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 	t.Parallel()
 
-	tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier())
+	tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), true)
 
 	t.Run("retries GET operations on 5xx", func(t *testing.T) {
 		require.True(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusInternalServerError))
@@ -328,17 +333,11 @@ func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusGatewayTimeout))
 	})
 
-	t.Run("retries 429 for all operations", func(t *testing.T) {
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusTooManyRequests))
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusTooManyRequests))
-		require.True(t, tempRetrier.isRetryableOperation(http.MethodPut, http.StatusTooManyRequests))
-		require.True(t, tempRetrier.isRetryableOperation("", http.StatusTooManyRequests))
-	})
-
-	t.Run("does not retry on other 4xx", func(t *testing.T) {
+	t.Run("does not retry on 4xx", func(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusNotFound))
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusBadRequest))
-		require.False(t, tempRetrier.isRetryableOperation(http.MethodGet, http.StatusForbidden))
+		require.False(t, tempRetrier.isRetryableOperation(http.MethodPost, http.StatusTooManyRequests),
+			"rate limiting is classified on the error, not by status here")
 	})
 
 	t.Run("retries DELETE operations on 5xx", func(t *testing.T) {
@@ -352,5 +351,400 @@ func TestHTTPRetrier_isRetryableOperation(t *testing.T) {
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPut, http.StatusInternalServerError))
 		require.False(t, tempRetrier.isRetryableOperation(http.MethodPatch, http.StatusInternalServerError))
 		require.False(t, tempRetrier.isRetryableOperation("", http.StatusInternalServerError))
+	})
+}
+
+// retryAfterCapturingRetrier records the Retry-After delay carried by the error
+// that triggered each wait.
+type retryAfterCapturingRetrier struct {
+	*testRetrier
+	delays []time.Duration
+}
+
+func (r *retryAfterCapturingRetrier) WaitAfter(ctx context.Context, attempt int, err error) error {
+	delay, _ := retry.RetryAfterFrom(err)
+	r.delays = append(r.delays, delay)
+	return r.Wait(ctx, attempt)
+}
+
+func TestHTTPRetrier_RateLimitedForbidden(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retries a 403 carrying Retry-After and passes the delay to the retrier", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 3 {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		base := newTestRetrier(3)
+		base.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return false }
+		capturing := &retryAfterCapturingRetrier{testRetrier: base}
+
+		ctx := retry.ToContext(context.Background(), capturing)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, 3, attempts)
+		require.Equal(t, []time.Duration{time.Second, time.Second}, capturing.delays)
+	})
+
+	t.Run("does not retry a 403 without rate-limit signals", func(t *testing.T) {
+		attempts := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			w.WriteHeader(http.StatusForbidden)
+		}))
+		defer server.Close()
+
+		retrier := newTestRetrier(3)
+		ctx := retry.ToContext(context.Background(), retrier)
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		err = client.SmartInfo(ctx, "git-upload-pack")
+		require.ErrorIs(t, err, ErrPermissionDenied)
+		require.Equal(t, 1, attempts)
+	})
+}
+
+// writeRawResponse writes a response with header names spelled exactly as given,
+// bypassing the canonicalization http.Header.Set would apply on the way out.
+func writeRawResponse(t *testing.T, w http.ResponseWriter, status, headers string) {
+	t.Helper()
+	conn, buf, err := w.(http.Hijacker).Hijack()
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	_, err = buf.WriteString("HTTP/1.1 " + status + "\r\n" + headers + "Content-Length: 0\r\nConnection: close\r\n\r\n")
+	require.NoError(t, err)
+	require.NoError(t, buf.Flush())
+}
+
+func TestHTTPRetrier_LowercaseRateLimitHeaders(t *testing.T) {
+	t.Parallel()
+
+	// GitLab spells these in lowercase on the wire; net/http canonicalizes
+	// incoming header names, so the lookups find them either way.
+	tests := []struct {
+		name    string
+		headers string
+	}{
+		{name: "lowercase retry-after", headers: "retry-after: 1\r\n"},
+		{name: "lowercase x-ratelimit-remaining", headers: "x-ratelimit-remaining: 0\r\n"},
+		{name: "lowercase ratelimit-remaining", headers: "ratelimit-remaining: 0\r\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			attempts := 0
+			successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				if attempts < 2 {
+					writeRawResponse(t, w, "403 Forbidden", tt.headers)
+					return
+				}
+				_, _ = w.Write([]byte(successResponse))
+			}))
+			defer server.Close()
+
+			retrier := newTestRetrier(3)
+			retrier.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return false }
+			ctx := retry.ToContext(context.Background(), retrier)
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+			require.Equal(t, 2, attempts)
+		})
+	}
+}
+
+func TestHTTPRetrier_RateLimitedPOSTBodyReplay(t *testing.T) {
+	t.Parallel()
+
+	payload := bytes.Repeat([]byte("x"), 64)
+
+	newRateLimitingServer := func(t *testing.T, received *[][]byte) *httptest.Server {
+		attempts := 0
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			*received = append(*received, body)
+			if attempts < 2 {
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+	}
+
+	t.Run("replayable body is resent in full", func(t *testing.T) {
+		var received [][]byte
+		server := newRateLimitingServer(t, &received)
+		defer server.Close()
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		body, err := client.UploadPack(ctx, bytes.NewReader(payload))
+		require.NoError(t, err)
+		require.NoError(t, body.Close())
+
+		require.Len(t, received, 2)
+		require.Equal(t, payload, received[0])
+		require.Equal(t, payload, received[1], "the retry must carry the full payload, not a truncated one")
+	})
+
+	t.Run("streamed body is not retried rather than resent empty", func(t *testing.T) {
+		var received [][]byte
+		server := newRateLimitingServer(t, &received)
+		defer server.Close()
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+		client, err := NewRawClient(server.URL + "/repo")
+		require.NoError(t, err)
+
+		// An opaque ReadCloser gives net/http no GetBody to rewind.
+		_, err = client.UploadPack(ctx, io.NopCloser(bytes.NewReader(payload)))
+		require.ErrorIs(t, err, ErrServerUnavailable)
+		require.Len(t, received, 1, "a body that cannot be rewound must not be retried")
+		require.Equal(t, payload, received[0])
+	})
+}
+
+func TestHTTPRetrier_RateLimitedErrors(t *testing.T) {
+	t.Parallel()
+
+	rateLimited := func(operation string, statusCode int) *ServerUnavailableError {
+		err := NewServerUnavailableError(operation, statusCode, errors.New("rate limited"))
+		err.RateLimited = true
+		return err
+	}
+
+	t.Run("retries any method when the body can be replayed", func(t *testing.T) {
+		tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), true)
+		ctx := context.Background()
+
+		// Any status: a detector may flag one nanogit treats as permanent.
+		for _, statusCode := range []int{http.StatusTooManyRequests, http.StatusForbidden, http.StatusTeapot} {
+			for _, operation := range []string{http.MethodGet, http.MethodPost, http.MethodPut, ""} {
+				require.True(t, tempRetrier.ShouldRetry(ctx, rateLimited(operation, statusCode), 1),
+					"status %d operation %q", statusCode, operation)
+			}
+		}
+	})
+
+	t.Run("does not retry when the body cannot be replayed", func(t *testing.T) {
+		tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), false)
+		ctx := context.Background()
+
+		require.False(t, tempRetrier.ShouldRetry(ctx, rateLimited(http.MethodPost, http.StatusTooManyRequests), 1))
+	})
+}
+
+func TestRateLimitDetector(t *testing.T) {
+	t.Parallel()
+
+	t.Run("classifies a status the built-in rules call permanent", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 3 {
+				w.Header().Set("X-Quota-Exceeded", "true")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL+"/repo", options.WithRateLimitDetector(
+			func(res *http.Response) options.RateLimitSignal {
+				return options.RateLimitSignal{
+					RateLimited: res.Header.Get("X-Quota-Exceeded") == "true",
+					RetryAfter:  time.Millisecond,
+				}
+			}))
+		require.NoError(t, err)
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, 3, attempts, "a 404 is permanent to the built-in rules but the detector overrides it")
+	})
+
+	t.Run("supplies a delay for a response the built-in rules already classified", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 2 {
+				// A reset timestamp rather than a delay: no Retry-After to parse.
+				w.Header().Set("X-RateLimit-Reset", "1799999999")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL+"/repo", options.WithRateLimitDetector(
+			func(res *http.Response) options.RateLimitSignal {
+				if res.Header.Get("X-RateLimit-Reset") == "" {
+					return options.RateLimitSignal{}
+				}
+				return options.RateLimitSignal{RateLimited: true, RetryAfter: 7 * time.Millisecond}
+			}))
+		require.NoError(t, err)
+
+		base := newTestRetrier(3)
+		base.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return false }
+		capturing := &retryAfterCapturingRetrier{testRetrier: base}
+		ctx := retry.ToContext(context.Background(), capturing)
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, []time.Duration{7 * time.Millisecond}, capturing.delays)
+	})
+
+	t.Run("cannot un-classify a response the built-in rules call transient", func(t *testing.T) {
+		attempts := 0
+		successResponse := formatTestResponse(t, protocol.PackLine("version 2\n"))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			attempts++
+			if attempts < 2 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(successResponse))
+		}))
+		defer server.Close()
+
+		client, err := NewRawClient(server.URL+"/repo", options.WithRateLimitDetector(
+			func(res *http.Response) options.RateLimitSignal { return options.RateLimitSignal{} }))
+		require.NoError(t, err)
+
+		ctx := retry.ToContext(context.Background(), retry.NewExponentialBackoffRetrier().
+			WithMaxAttempts(3).WithInitialDelay(time.Millisecond).WithoutJitter())
+
+		require.NoError(t, client.SmartInfo(ctx, "git-upload-pack"))
+		require.Equal(t, 2, attempts)
+	})
+}
+
+// permissiveRetrier mirrors the FixedDelayRetrier documented in
+// docs/architecture/retry.md: it retries on any error.
+type permissiveRetrier struct{}
+
+func (p *permissiveRetrier) ShouldRetry(ctx context.Context, err error, attempt int) bool {
+	return err != nil
+}
+func (p *permissiveRetrier) Wait(ctx context.Context, attempt int) error { return nil }
+func (p *permissiveRetrier) MaxAttempts() int                            { return 3 }
+
+func TestHTTPRetrier_NonReplayableBodyIsNeverRetried(t *testing.T) {
+	t.Parallel()
+
+	payload := bytes.Repeat([]byte("x"), 64)
+
+	// A permissive wrapped retrier must not reach past the replayability guard,
+	// whatever the failure: the retry would send an empty body, not fail.
+	tests := []struct {
+		name   string
+		status int
+		header string
+	}{
+		{name: "rate limit", status: http.StatusTooManyRequests, header: "Retry-After"},
+		{name: "server error", status: http.StatusInternalServerError},
+		{name: "gateway timeout", status: http.StatusGatewayTimeout},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var received [][]byte
+			attempts := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				received = append(received, body)
+				if attempts < 2 {
+					if tt.header != "" {
+						w.Header().Set(tt.header, "0")
+					}
+					w.WriteHeader(tt.status)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			ctx := retry.ToContext(context.Background(), &permissiveRetrier{})
+			client, err := NewRawClient(server.URL + "/repo")
+			require.NoError(t, err)
+
+			// io.NopCloser leaves net/http no GetBody to rewind.
+			_, err = client.UploadPack(ctx, io.NopCloser(bytes.NewReader(payload)))
+			require.Error(t, err)
+			require.Len(t, received, 1, "a body that cannot be rewound must not be retried")
+			require.Equal(t, payload, received[0])
+		})
+	}
+}
+
+func TestHTTPRetrier_NonReplayableBodySkipsDelegation(t *testing.T) {
+	t.Parallel()
+
+	wrapped := newTestRetrier(3)
+	wrapped.shouldRetryFunc = func(ctx context.Context, err error, attempt int) bool { return true }
+	tempRetrier := newTemporaryErrorRetrier(wrapped, false)
+
+	ctx := context.Background()
+	require.False(t, tempRetrier.ShouldRetry(ctx, errors.New("network blip"), 1))
+	require.False(t, tempRetrier.ShouldRetry(ctx, NewServerUnavailableError(http.MethodPost, http.StatusInternalServerError, nil), 1))
+	require.Zero(t, wrapped.ShouldRetryCallCount(), "the wrapped policy must not be consulted at all")
+}
+
+func TestHTTPRetrier_RateLimitedWithStrictWrappedRetrier(t *testing.T) {
+	t.Parallel()
+
+	// A strict wrapped retrier must not be what makes rate limits retryable:
+	// ExponentialBackoffRetrier declines everything but network timeouts, so a
+	// permissive one would mask a regression here.
+	tempRetrier := newTemporaryErrorRetrier(retry.NewExponentialBackoffRetrier(), true)
+	ctx := context.Background()
+
+	t.Run("429 built by the constructor is retried", func(t *testing.T) {
+		err := NewServerUnavailableError(http.MethodPost, http.StatusTooManyRequests, errors.New("rate limited"))
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 1))
+	})
+
+	t.Run("429 built as a struct literal is retried", func(t *testing.T) {
+		err := &ServerUnavailableError{Operation: http.MethodGet, StatusCode: http.StatusTooManyRequests}
+		require.True(t, tempRetrier.ShouldRetry(ctx, err, 1))
+	})
+
+	t.Run("403 without the flag stays a permission denial", func(t *testing.T) {
+		err := NewServerUnavailableError(http.MethodGet, http.StatusForbidden, errors.New("forbidden"))
+		require.False(t, tempRetrier.ShouldRetry(ctx, err, 1),
+			"only the classification, not the status, makes a 403 retryable")
 	})
 }
